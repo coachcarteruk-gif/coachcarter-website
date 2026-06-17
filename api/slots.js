@@ -406,7 +406,7 @@ async function slotFitsActiveAvailability(sql, {
     ? []
     : await sql`
         SELECT start_time::text AS start_time, end_time::text AS end_time,
-               COALESCE(transmission_type, 'both') AS transmission_type
+               COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
         FROM instructor_availability
         WHERE instructor_id = ${instructorId}
           AND school_id = ${schoolId}
@@ -546,7 +546,7 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -567,7 +567,7 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -590,7 +590,7 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -611,7 +611,7 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
@@ -1250,7 +1250,7 @@ async function handleDurationsForSlot(req, res) {
 
     let windows = await sql`
       SELECT start_time::text AS start_time, end_time::text AS end_time,
-             COALESCE(transmission_type, 'both') AS transmission_type
+             COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
       FROM instructor_availability
       WHERE instructor_id = ${instructorId}
         AND school_id = ${schoolId}
@@ -4874,7 +4874,7 @@ async function ensureReservedReplacementFitsAvailability(client, booking, {
 
   const weeklyWindows = await client.query(
     `SELECT start_time::text AS start_time, end_time::text AS end_time,
-            COALESCE(transmission_type, 'both') AS transmission_type
+            COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
        FROM instructor_availability
       WHERE instructor_id = $1
         AND school_id = $2

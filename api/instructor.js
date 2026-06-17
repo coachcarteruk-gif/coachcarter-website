@@ -154,6 +154,23 @@ function lessonBookingTransmissionColumnMissing(err) {
   return /lesson_bookings\.transmission_type|lb\.transmission_type|column .*transmission_type.* does not exist/i.test(msg);
 }
 
+async function instructorAvailabilityTransmissionColumnExists(sql) {
+  try {
+    const [row] = await sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'instructor_availability'
+          AND column_name = 'transmission_type'
+      ) AS exists
+    `;
+    return !!row?.exists;
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
@@ -721,7 +738,7 @@ async function handleAvailability(req, res) {
 
     const windows = await sql`
       SELECT id, day_of_week, start_time::text, end_time::text, active,
-             COALESCE(transmission_type, 'both') AS transmission_type
+             COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
       FROM instructor_availability
       WHERE instructor_id = ${instructor.id}
         AND school_id = ${schoolId}
@@ -795,22 +812,31 @@ async function handleSetAvailability(req, res) {
       });
     }
 
+    const hasWeeklyTransmissionColumn = await instructorAvailabilityTransmissionColumnExists(sql);
+
     // Delete existing windows
     await sql`DELETE FROM instructor_availability WHERE instructor_id = ${instructor.id} AND school_id = ${schoolId}`;
 
     // Insert new windows
     if (cleanWindows.length > 0) {
       for (const w of cleanWindows) {
-        await sql`
-          INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, transmission_type, school_id)
-          VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${w.transmission_type}, ${schoolId})
-        `;
+        if (hasWeeklyTransmissionColumn) {
+          await sql`
+            INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, transmission_type, school_id)
+            VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${w.transmission_type}, ${schoolId})
+          `;
+        } else {
+          await sql`
+            INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, school_id)
+            VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${schoolId})
+          `;
+        }
       }
     }
 
     const saved = await sql`
       SELECT id, day_of_week, start_time::text, end_time::text, active,
-             COALESCE(transmission_type, 'both') AS transmission_type
+             COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
       FROM instructor_availability
       WHERE instructor_id = ${instructor.id}
         AND school_id = ${schoolId}

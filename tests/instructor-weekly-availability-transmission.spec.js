@@ -28,10 +28,12 @@ test.describe('weekly instructor availability transmission', () => {
   test('instructor availability API round-trips and validates window transmission', () => {
     const js = read('api/instructor.js');
 
-    expect(js).toContain("COALESCE(transmission_type, 'both') AS transmission_type");
+    expect(js).toContain("COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type");
+    expect(js).toContain('instructorAvailabilityTransmissionColumnExists');
     expect(js).toContain('normaliseAvailabilityTransmissionType(w.transmission_type)');
     expect(js).toContain('instructorCanOfferAvailabilityTransmission(instructorTransmissionType, cleanTransmissionType)');
     expect(js).toContain('INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, transmission_type, school_id)');
+    expect(js).toContain('INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, school_id)');
     expect(js).toContain('VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${w.transmission_type}, ${schoolId})');
     expect(js).toContain('transmission_type must be manual, automatic, or both');
   });
@@ -40,10 +42,10 @@ test.describe('weekly instructor availability transmission', () => {
     const slots = read('api/slots.js');
     const webhook = read('api/webhook.js');
 
-    expect(slots).toContain("COALESCE(ia.transmission_type, 'both') AS transmission_type");
+    expect(slots).toContain("COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type");
     expect(slots).toContain("COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type");
     expect(slots).toContain('const windowTransmissionType = clampSlotTransmissionType(w.transmission_type, w.instructor_transmission_type)');
-    expect(slots).toContain("COALESCE(transmission_type, 'both') AS transmission_type");
+    expect(slots).toContain("COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type");
     expect(slots).toContain('transmission_type: clampSlotTransmissionType(w.transmission_type, instructorTransmissionType)');
     expect(slots).toContain('slotSupportsTransmission(w.transmission_type, transmissionType)');
     expect(slots).toContain('slotSupportsTransmission(window.transmission_type, requestedTransmissionType)');
