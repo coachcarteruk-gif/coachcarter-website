@@ -342,6 +342,7 @@ function instructorSourceLabel(sourceKey) {
     'learner-reflection': 'Learner reflection',
     'practice-drive': 'Practice Drive',
     'supervisor-reflection': 'Supervisor reflection',
+    'quiz-practice': 'Quiz practice',
     'formal-mock': 'Formal mock',
     'instructor-assessment': 'Instructor assessment',
     'mixed-signals': 'Mixed signals'
@@ -614,6 +615,177 @@ function renderTeachingSummary(summary) {
   return html;
 }
 
+function parseInstructorAlertDate(value) {
+  if (!value) return null;
+  const text = String(value);
+  const d = new Date(text.length === 10 ? text + 'T00:00:00Z' : text);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function daysBetweenDates(fromDate, toDate) {
+  return Math.floor((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function alertDateValue(value) {
+  const d = parseInstructorAlertDate(value);
+  return d ? d.getTime() : 0;
+}
+
+function addAlertFocusSignal(map, skillKey, sourceKey, weight) {
+  const label = getInstructorSkillLabel(skillKey);
+  if (!label || !sourceKey || !weight) return;
+  if (!map[label]) map[label] = { label, score: 0, sources: {} };
+  map[label].score += weight;
+  map[label].sources[sourceKey] = true;
+}
+
+function collectInstructorAlertFocus(historyData, mockData) {
+  const map = {};
+
+  ((historyData && historyData.bookings) || []).slice(0, 8).forEach(booking => {
+    (booking.learner_ratings || []).forEach(rating => {
+      if (rating.rating === 'struggled') addAlertFocusSignal(map, rating.skill_key, 'learner-reflection', 3);
+      else if (rating.rating === 'ok') addAlertFocusSignal(map, rating.skill_key, 'learner-reflection', 1);
+    });
+  });
+
+  ((historyData && historyData.private_practice) || []).slice(0, 5).forEach(row => {
+    const reflections = parsePracticeJson(row.reflections, {}) || {};
+    Object.keys(reflections).forEach(skillKey => {
+      const ref = reflections[skillKey] || {};
+      if (ref.rating === 'struggled') addAlertFocusSignal(map, skillKey, 'practice-drive', 4);
+      else if (ref.rating === 'ok') addAlertFocusSignal(map, skillKey, 'practice-drive', 1);
+    });
+  });
+
+  ((mockData && mockData.mock_tests) || []).slice(0, 3).forEach(mt => {
+    const sourceKey = mt.mode === 'instructor' ? 'instructor-assessment' : 'formal-mock';
+    (mt.faults || []).forEach(f => {
+      const weight = Number(f.dangerous_faults || 0) * 6 +
+        Number(f.serious_faults || 0) * 4 +
+        Number(f.driving_faults || 0);
+      if (weight > 0) {
+        addAlertFocusSignal(map, f.skill_key, sourceKey, weight);
+        if (mt.mode === 'instructor') addAlertFocusSignal(map, f.skill_key, 'formal-mock', 1);
+      }
+      if (f.supervisor_rating === 'concern') addAlertFocusSignal(map, f.skill_key, 'supervisor-reflection', 4);
+      else if (f.supervisor_rating === 'needs_work') addAlertFocusSignal(map, f.skill_key, 'supervisor-reflection', 2);
+    });
+  });
+
+  return Object.keys(map)
+    .map(key => map[key])
+    .filter(item => Object.keys(item.sources).length >= 2 || item.score >= 6)
+    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+}
+
+function latestInstructorActivityDate(historyData) {
+  const dates = [];
+  ((historyData && historyData.bookings) || []).forEach(booking => {
+    if (booking.status === 'chargeable' || booking.session_log_id) {
+      dates.push(alertDateValue(booking.scheduled_date));
+    }
+  });
+  ((historyData && historyData.private_practice) || []).forEach(row => {
+    dates.push(alertDateValue(row.completed_at || row.created_at || row.session_date));
+  });
+  const latest = Math.max.apply(null, dates.filter(Boolean));
+  return latest > 0 ? new Date(latest) : null;
+}
+
+function latestFormalInstructorMock(mockData) {
+  const mocks = ((mockData && mockData.mock_tests) || [])
+    .filter(mt => mt && mt.mode === 'instructor' && mt.completed_at)
+    .sort((a, b) => alertDateValue(b.completed_at || b.started_at) - alertDateValue(a.completed_at || a.started_at));
+  return mocks[0] || null;
+}
+
+function buildInstructorAlerts(historyData, notesData, mockData) {
+  const alerts = [];
+  const now = new Date();
+
+  const tellCounts = {};
+  ((historyData && historyData.private_practice) || []).slice(0, 5).forEach(row => {
+    const reflections = parsePracticeJson(row.reflections, {}) || {};
+    Object.keys(reflections).forEach(skillKey => {
+      const ref = reflections[skillKey] || {};
+      if (ref.rating !== 'struggled') return;
+      const label = getInstructorSkillLabel(skillKey);
+      if (!label) return;
+      tellCounts[label] = (tellCounts[label] || 0) + 1;
+    });
+  });
+  const repeatedTell = Object.keys(tellCounts)
+    .map(label => ({ label, count: tellCounts[label] }))
+    .filter(item => item.count >= 2)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))[0];
+  if (repeatedTell) {
+    alerts.push({
+      tone: 'attention',
+      title: 'Practice Drive flagged ' + repeatedTell.label,
+      copy: 'Worth asking about this next lesson. It has been marked Tell instructor ' + repeatedTell.count + ' times in recent Practice Drive reflections.',
+      sources: ['practice-drive', 'supervisor-reflection']
+    });
+  }
+
+  const testDate = parseInstructorAlertDate(notesData && notesData.test_date);
+  if (testDate) {
+    const daysToTest = daysBetweenDates(now, testDate);
+    const latestMock = latestFormalInstructorMock(mockData);
+    const daysSinceMock = latestMock ? daysBetweenDates(parseInstructorAlertDate(latestMock.completed_at), now) : null;
+    if (daysToTest >= 0 && daysToTest <= 28 && (!latestMock || daysSinceMock > 42)) {
+      alerts.push({
+        tone: 'planning',
+        title: 'Consider a formal mock',
+        copy: 'Test date is soon and there is no recent instructor formal mock recorded.',
+        sources: ['formal-mock', 'instructor-assessment']
+      });
+    }
+  }
+
+  const latestActivity = latestInstructorActivityDate(historyData);
+  if (!latestActivity || daysBetweenDates(latestActivity, now) >= 14) {
+    alerts.push({
+      tone: 'quiet',
+      title: 'No recent saved practice',
+      copy: 'Worth checking whether they have practised recently or need a clearer focus before the next lesson.',
+      sources: ['learner-reflection', 'practice-drive']
+    });
+  }
+
+  const repeatedFocus = collectInstructorAlertFocus(historyData, mockData)[0];
+  if (repeatedFocus) {
+    const sourceKeys = Object.keys(repeatedFocus.sources);
+    alerts.push({
+      tone: 'focus',
+      title: 'Repeated focus: ' + repeatedFocus.label,
+      copy: 'Signals from ' + sourceKeys.map(instructorSourceLabel).join(', ') + ' point to this as a useful next-lesson focus.',
+      sources: sourceKeys
+    });
+  }
+
+  return alerts.slice(0, 4);
+}
+
+function renderInstructorAlerts(alerts) {
+  if (!Array.isArray(alerts) || alerts.length === 0) return '';
+
+  let html = '<div class="section-title" style="margin-top:20px">Instructor alerts</div>';
+  html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:20px;display:flex;flex-direction:column;gap:8px;">';
+  alerts.forEach(alert => {
+    const border = alert.tone === 'attention' ? 'var(--red)' : alert.tone === 'planning' ? 'var(--blue)' : 'var(--border)';
+    html += '<div style="border:1px solid var(--border);border-left:3px solid ' + border + ';background:var(--white);border-radius:8px;padding:10px 12px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px;">';
+    html += '<div style="font-size:0.9rem;font-weight:800;">' + esc(alert.title) + '</div>';
+    html += '</div>';
+    html += '<div style="font-size:0.8rem;color:var(--muted);line-height:1.4;margin-bottom:6px;">' + esc(alert.copy) + '</div>';
+    html += '<div>' + (alert.sources || ['mixed-signals']).map(renderInstructorSourceBadge).join('') + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
 function renderDetail(data, notesData, mockData) {
   const l = data.learner;
   const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' };
@@ -648,6 +820,7 @@ function renderDetail(data, notesData, mockData) {
   html += '</div>';
 
   html += renderTeachingSummary(summarizeLearnerTeachingSignals(data, notesData, mockData));
+  html += renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData));
 
   html += renderPrivatePracticeSummaries(data.private_practice || []);
 

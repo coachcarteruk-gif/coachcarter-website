@@ -76,6 +76,7 @@ test.describe('instructor learner teaching summary', () => {
     expect(source).toContain('Lesson log');
     expect(source).toContain('Learner reflection');
     expect(source).toContain('Supervisor reflection');
+    expect(source).toContain('Quiz practice');
     expect(source).toContain('Formal mock');
     expect(source).toContain('Instructor assessment');
     expect(detail).toContain("renderInstructorSourceBadge('lesson-log') + renderInstructorSourceBadge('learner-reflection')");
@@ -92,5 +93,63 @@ test.describe('instructor learner teaching summary', () => {
     expect(openLearner).toContain("ccAuth.fetchAuthed('/api/instructor?action=learner-notes&learner_id=' + id)");
     expect(openLearner).toContain("ccAuth.fetchAuthed('/api/instructor?action=learner-mock-tests&learner_id=' + id)");
     expect((openLearner.match(/ccAuth\.fetchAuthed\('/g) || []).length).toBe(3);
+  });
+
+  test('instructor alerts render from existing learner detail data only', () => {
+    const source = read('public/instructor/learners.js');
+    const detail = functionBody(source, 'renderDetail');
+    const builder = functionBody(source, 'buildInstructorAlerts');
+    const render = functionBody(source, 'renderInstructorAlerts');
+
+    expect(source).toContain('function buildInstructorAlerts(historyData, notesData, mockData)');
+    expect(source).toContain('function renderInstructorAlerts(alerts)');
+    expect(detail).toContain('renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData))');
+    expect(detail.indexOf('renderTeachingSummary(summarizeLearnerTeachingSignals(data, notesData, mockData))')).toBeLessThan(detail.indexOf('renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData))'));
+    expect(detail.indexOf('renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData))')).toBeLessThan(detail.indexOf('renderPrivatePracticeSummaries(data.private_practice || [])'));
+
+    expect(builder).toContain('historyData && historyData.private_practice');
+    expect(builder).toContain('notesData && notesData.test_date');
+    expect(source).toContain('function latestInstructorActivityDate(historyData)');
+    expect(functionBody(source, 'latestInstructorActivityDate')).toContain('historyData && historyData.bookings');
+    expect(builder).toContain('latestFormalInstructorMock(mockData)');
+    expect(builder).toContain('collectInstructorAlertFocus(historyData, mockData)');
+    expect(source).not.toContain("ccAuth.fetchAuthed('/api/instructor?action=learner-alerts");
+
+    expect(render).toContain('Instructor alerts');
+    expect(render).toContain('renderInstructorSourceBadge');
+  });
+
+  test('instructor alerts keep source labels separate and non-automated', () => {
+    const source = read('public/instructor/learners.js');
+    const builder = functionBody(source, 'buildInstructorAlerts');
+    const render = functionBody(source, 'renderInstructorAlerts');
+    const alertText = (builder + '\n' + render).toLowerCase();
+
+    expect(builder).toContain("sources: ['practice-drive', 'supervisor-reflection']");
+    expect(builder).toContain("sources: ['formal-mock', 'instructor-assessment']");
+    expect(builder).toContain("sources: ['learner-reflection', 'practice-drive']");
+    expect(builder).toContain('sourceKeys.map(instructorSourceLabel)');
+    expect(builder).toContain('Worth asking about');
+    expect(builder).toContain('Consider a formal mock');
+    expect(builder).toContain('No recent saved practice');
+    expect(builder).toContain('Repeated focus: ');
+
+    ['email', 'sms', 'whatsapp', 'notification', 'notify', 'automation', 'background job'].forEach((term) => {
+      expect(alertText).not.toContain(term);
+    });
+  });
+
+  test('Practice Drive alerts avoid formal assessment wording', () => {
+    const source = read('public/instructor/learners.js');
+    const builder = functionBody(source, 'buildInstructorAlerts');
+    const practiceStart = builder.indexOf("title: 'Practice Drive flagged '");
+    const practiceEnd = builder.indexOf('const testDate', practiceStart);
+    const practiceBlock = builder.slice(practiceStart, practiceEnd).toLowerCase();
+
+    expect(practiceBlock).toContain('tell instructor');
+    expect(practiceBlock).toContain('practice drive reflections');
+    ['fault', 'serious', 'dangerous', 'pass', 'fail'].forEach((term) => {
+      expect(practiceBlock).not.toContain(term);
+    });
   });
 });
