@@ -720,7 +720,8 @@ async function handleAvailability(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const windows = await sql`
-      SELECT id, day_of_week, start_time::text, end_time::text, active
+      SELECT id, day_of_week, start_time::text, end_time::text, active,
+             COALESCE(transmission_type, 'both') AS transmission_type
       FROM instructor_availability
       WHERE instructor_id = ${instructor.id}
         AND school_id = ${schoolId}
@@ -750,34 +751,66 @@ async function handleSetAvailability(req, res) {
   if (!Array.isArray(windows))
     return res.status(400).json({ error: 'windows must be an array' });
 
-  // Validate each window
-  for (const w of windows) {
-    if (w.day_of_week < 0 || w.day_of_week > 6)
-      return res.status(400).json({ error: `Invalid day_of_week: ${w.day_of_week}` });
-    if (!/^\d{2}:\d{2}$/.test(w.start_time) || !/^\d{2}:\d{2}$/.test(w.end_time))
-      return res.status(400).json({ error: 'Times must be HH:MM format' });
-    if (w.start_time >= w.end_time)
-      return res.status(400).json({ error: 'start_time must be before end_time' });
-  }
-
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    const [instructorRow] = await sql`
+      SELECT COALESCE(transmission_type, 'manual') AS transmission_type
+      FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND active = true
+    `;
+    if (!instructorRow) return res.status(404).json({ error: 'Instructor not found or inactive' });
+
+    const instructorTransmissionType = normaliseAvailabilityTransmissionType(instructorRow.transmission_type) || 'manual';
+    const cleanWindows = [];
+
+    // Validate each window
+    for (const w of windows) {
+      if (w.day_of_week < 0 || w.day_of_week > 6)
+        return res.status(400).json({ error: `Invalid day_of_week: ${w.day_of_week}` });
+      if (!/^\d{2}:\d{2}$/.test(w.start_time) || !/^\d{2}:\d{2}$/.test(w.end_time))
+        return res.status(400).json({ error: 'Times must be HH:MM format' });
+      if (w.start_time >= w.end_time)
+        return res.status(400).json({ error: 'start_time must be before end_time' });
+
+      const requestedTransmissionType = w.transmission_type !== undefined && w.transmission_type !== null && String(w.transmission_type).trim() !== ''
+        ? normaliseAvailabilityTransmissionType(w.transmission_type)
+        : null;
+      if (w.transmission_type && !requestedTransmissionType) {
+        return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+      }
+
+      const cleanTransmissionType = requestedTransmissionType || (instructorTransmissionType === 'both' ? 'both' : instructorTransmissionType);
+      if (!instructorCanOfferAvailabilityTransmission(instructorTransmissionType, cleanTransmissionType)) {
+        return res.status(400).json({ error: `This instructor profile is set to ${instructorTransmissionType} transmission only` });
+      }
+
+      cleanWindows.push({
+        day_of_week: w.day_of_week,
+        start_time: w.start_time,
+        end_time: w.end_time,
+        transmission_type: cleanTransmissionType
+      });
+    }
 
     // Delete existing windows
     await sql`DELETE FROM instructor_availability WHERE instructor_id = ${instructor.id} AND school_id = ${schoolId}`;
 
     // Insert new windows
-    if (windows.length > 0) {
-      for (const w of windows) {
+    if (cleanWindows.length > 0) {
+      for (const w of cleanWindows) {
         await sql`
-          INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, school_id)
-          VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${schoolId})
+          INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, transmission_type, school_id)
+          VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${w.transmission_type}, ${schoolId})
         `;
       }
     }
 
     const saved = await sql`
-      SELECT id, day_of_week, start_time::text, end_time::text, active
+      SELECT id, day_of_week, start_time::text, end_time::text, active,
+             COALESCE(transmission_type, 'both') AS transmission_type
       FROM instructor_availability
       WHERE instructor_id = ${instructor.id}
         AND school_id = ${schoolId}

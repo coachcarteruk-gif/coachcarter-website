@@ -170,6 +170,13 @@ function parseRequestTransmissionType(value) {
   return normaliseSlotTransmissionType(value);
 }
 
+function concreteLessonTransmissionType(requestedTransmissionType, instructorTransmissionType) {
+  const requested = normaliseSlotTransmissionType(requestedTransmissionType);
+  if (requested === 'manual' || requested === 'automatic') return requested;
+  const instructorType = normaliseSlotTransmissionType(instructorTransmissionType) || 'manual';
+  return instructorType === 'automatic' ? 'automatic' : 'manual';
+}
+
 function hasBufferedSlotConflict(slotStart, slotEnd, blockStart, blockEnd, bufferMinutes = 0) {
   const buffer = Math.max(0, parseInt(bufferMinutes, 10) || 0);
   return slotStart < (blockEnd + buffer) && (slotEnd + buffer) > blockStart;
@@ -398,7 +405,8 @@ async function slotFitsActiveAvailability(sql, {
   const weeklyWindows = blackoutRows.length > 0
     ? []
     : await sql`
-        SELECT start_time::text AS start_time, end_time::text AS end_time
+        SELECT start_time::text AS start_time, end_time::text AS end_time,
+               COALESCE(transmission_type, 'both') AS transmission_type
         FROM instructor_availability
         WHERE instructor_id = ${instructorId}
           AND school_id = ${schoolId}
@@ -406,10 +414,11 @@ async function slotFitsActiveAvailability(sql, {
           AND active = true
       `;
   for (const w of weeklyWindows) {
-    w.transmission_type = instructorTransmissionType;
+    w.transmission_type = clampSlotTransmissionType(w.transmission_type, instructorTransmissionType);
   }
 
   return [...weeklyWindows, ...overrideWindows].some(w => {
+    if (!w.transmission_type) return false;
     const windowStart = timeToMinutes(w.start_time);
     const windowEnd = timeToMinutes(w.end_time);
     return slotStart >= windowStart &&
@@ -537,7 +546,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
+                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -557,7 +567,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
+                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -579,7 +590,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
+                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -599,7 +611,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
                    COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
-                   COALESCE(i.transmission_type, 'manual') AS transmission_type,
+                   COALESCE(ia.transmission_type, 'both') AS transmission_type,
+                   COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
                    i.max_travel_minutes
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
@@ -989,9 +1002,7 @@ async function handleAvailable(req, res) {
     // 3. Group windows by instructor
     const byInstructor = {};
     for (const w of [...windows, ...overrideWindows]) {
-      const windowTransmissionType = w.override_date
-        ? clampSlotTransmissionType(w.transmission_type, w.instructor_transmission_type)
-        : normaliseSlotTransmissionType(w.transmission_type);
+      const windowTransmissionType = clampSlotTransmissionType(w.transmission_type, w.instructor_transmission_type);
       if (!windowTransmissionType) continue;
       if (!byInstructor[w.instructor_id]) {
         byInstructor[w.instructor_id] = {
@@ -1238,7 +1249,8 @@ async function handleDurationsForSlot(req, res) {
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
 
     let windows = await sql`
-      SELECT start_time::text AS start_time, end_time::text AS end_time
+      SELECT start_time::text AS start_time, end_time::text AS end_time,
+             COALESCE(transmission_type, 'both') AS transmission_type
       FROM instructor_availability
       WHERE instructor_id = ${instructorId}
         AND school_id = ${schoolId}
@@ -1246,7 +1258,9 @@ async function handleDurationsForSlot(req, res) {
         AND active = true
     `;
     const instructorTransmissionType = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
-    windows = windows.map(w => ({ ...w, transmission_type: instructorTransmissionType }));
+    windows = windows
+      .map(w => ({ ...w, transmission_type: clampSlotTransmissionType(w.transmission_type, instructorTransmissionType) }))
+      .filter(w => w.transmission_type);
     const slotStart = timeToMinutes(start_time);
     let overrideWindows = [];
     try {
@@ -1513,6 +1527,7 @@ async function bookCreditFundedSlotsTransaction({
   durationMins,
   pickupAddress,
   dropoffAddress,
+  bookingTransmissionType,
   seriesId,
   sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
   blockingStatuses = BLOCKING_STATUSES,
@@ -1728,16 +1743,16 @@ async function bookCreditFundedSlotsTransaction({
         const inserted = await client.query(
           `INSERT INTO lesson_bookings
              (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-              pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id,
+              pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
               list_price_pence, list_price_source)
            VALUES
              ($1, $2, $3, $4, $5, $6,
-              $7, $8, $9, $10, $11, $12,
+              $7, $8, $9, $10, $11, $12, $13,
               0, 'live_compute_insert')
            RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
           [
             learnerId, instructorId, bd.date, startTime, endTime, SCHEDULED,
-            pickupAddress, dropoffAddress, lessonTypeId, durationMins, seriesId, schoolId,
+            pickupAddress, dropoffAddress, lessonTypeId, bookingTransmissionType || 'manual', durationMins, seriesId, schoolId,
           ]
         );
         const booking = inserted.rows[0];
@@ -1884,7 +1899,8 @@ async function getRecurringAnchorBooking(sql, { bookingId, learnerId, schoolId }
            lt.slug AS lesson_type_slug,
            lt.duration_minutes,
            i.name AS instructor_name,
-           i.offered_lesson_types
+           i.offered_lesson_types,
+           COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type
       FROM lesson_bookings lb
       JOIN instructors i ON i.id = lb.instructor_id
                         AND i.school_id = lb.school_id
@@ -2087,6 +2103,7 @@ async function buildRecurringBlockPreview(sql, {
       instructor_name: anchor.instructor_name,
       lesson_type_id: anchor.lesson_type_id,
       lesson_type_name: anchor.lesson_type_name,
+      transmission_type: concreteLessonTransmissionType(requestedTransmissionType, anchor.instructor_transmission_type),
       duration_minutes: durationMins,
       pickup_address: anchor.pickup_address || null,
       dropoff_address: anchor.dropoff_address || null,
@@ -2202,6 +2219,7 @@ async function handleRecurringBlockCommit(req, res) {
       durationMins: preview.anchor.duration_minutes,
       pickupAddress: preview.anchor.pickup_address,
       dropoffAddress: preview.anchor.dropoff_address,
+      bookingTransmissionType: preview.anchor.transmission_type,
       seriesId,
       recurringBlock: {
         anchorBookingId: preview.anchor.booking_id,
@@ -2951,7 +2969,8 @@ async function handleBook(req, res) {
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
       SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types,
-             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
+             COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
@@ -2964,6 +2983,7 @@ async function handleBook(req, res) {
     if (outOfWindowDates.length > 0) {
       return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
     }
+    const bookingTransmissionType = concreteLessonTransmissionType(requestedTransmissionType, instructor.transmission_type);
 
     const unavailableDates = [];
     for (const bd of bookingDates) {
@@ -3110,6 +3130,7 @@ async function handleBook(req, res) {
         durationMins,
         pickupAddress: bookingPickup,
         dropoffAddress: bookingDropoff,
+        bookingTransmissionType,
         seriesId,
       });
 
@@ -3139,11 +3160,11 @@ async function handleBook(req, res) {
         const [b] = await sql`
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-             pickup_address, dropoff_address, lesson_type_id, minutes_deducted, series_id, school_id,
+             pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
              list_price_pence, list_price_source)
           VALUES
             (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, ${SCHEDULED},
-             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${minsPerBooking}, ${seriesId}, ${schoolId},
+             ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${bookingTransmissionType}, ${minsPerBooking}, ${seriesId}, ${schoolId},
              ${listPricePence}, 'live_compute_insert')
           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at
         `;
@@ -3492,7 +3513,8 @@ async function handleCheckoutSlot(req, res) {
     // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
       SELECT id, name, offered_lesson_types,
-             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
+             COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
@@ -3517,6 +3539,7 @@ async function handleCheckoutSlot(req, res) {
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
     }
+    const bookingTransmissionType = concreteLessonTransmissionType(requestedTransmissionType, instructor.transmission_type);
 
     // Get learner email
     const [learner] = await sql`SELECT email, pickup_address FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
@@ -3568,7 +3591,7 @@ async function handleCheckoutSlot(req, res) {
         scheduled_date:  date,
         start_time,
         end_time,
-        transmission_type: requestedTransmissionType || '',
+        transmission_type: bookingTransmissionType,
         pickup_address:  checkoutPickupAddress,
         dropoff_address: checkoutDropoffAddress,
         lesson_type_id:  String(lessonType.id),
@@ -3757,7 +3780,8 @@ async function handleCheckoutSlotGuest(req, res) {
 
     const [instructor] = await sql`
       SELECT id, name, offered_lesson_types,
-             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
+             COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
       WHERE id = ${instructor_id}
         AND active = true
@@ -3784,6 +3808,7 @@ async function handleCheckoutSlotGuest(req, res) {
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
     }
+    const bookingTransmissionType = concreteLessonTransmissionType(requestedTransmissionType, instructor.transmission_type);
     if (await rejectIfPickupTravelConflict(res, sql, {
       instructorId: instructor_id,
       schoolId,
@@ -3874,7 +3899,7 @@ async function handleCheckoutSlotGuest(req, res) {
         scheduled_date:  date,
         start_time,
         end_time,
-        transmission_type: requestedTransmissionType || '',
+        transmission_type: bookingTransmissionType,
         pickup_address:  cleanAddr,
         dropoff_address: cleanDropoff,
         lesson_type_id:  String(lessonType.id),
@@ -4080,7 +4105,8 @@ async function handleBookFreeTrial(req, res) {
     const [instructor] = await sql`
       SELECT id, name, email, phone, COALESCE(buffer_minutes, 30) AS buffer_minutes,
              max_travel_minutes, offered_lesson_types,
-             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
+             COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
       WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
     `;
@@ -4104,6 +4130,7 @@ async function handleBookFreeTrial(req, res) {
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
     }
+    const bookingTransmissionType = concreteLessonTransmissionType(requestedTransmissionType, instructor.transmission_type);
 
     const bufferMinutes = parseInt(instructor.buffer_minutes, 10) || 0;
 
@@ -4242,12 +4269,12 @@ async function handleBookFreeTrial(req, res) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            created_by, payment_method, lesson_type_id, minutes_deducted,
-           pickup_address, school_id, guest_phone,
+           pickup_address, school_id, guest_phone, transmission_type,
            list_price_pence, list_price_source)
         VALUES
           (${learnerId}, ${instructor_id}, ${date}, ${start_time}, ${end_time}, ${SCHEDULED},
            'free_trial_self_serve', 'free', ${trialType.id}, 0,
-           ${cleanAddr}, ${schoolId}, ${cleanPhone},
+           ${cleanAddr}, ${schoolId}, ${cleanPhone}, ${bookingTransmissionType},
            0, 'live_compute_insert')
         RETURNING id, scheduled_date::text, start_time::text, end_time::text
       `;
@@ -4846,7 +4873,8 @@ async function ensureReservedReplacementFitsAvailability(client, booking, {
   }
 
   const weeklyWindows = await client.query(
-    `SELECT start_time::text AS start_time, end_time::text AS end_time
+    `SELECT start_time::text AS start_time, end_time::text AS end_time,
+            COALESCE(transmission_type, 'both') AS transmission_type
        FROM instructor_availability
       WHERE instructor_id = $1
         AND school_id = $2
@@ -4872,7 +4900,12 @@ async function ensureReservedReplacementFitsAvailability(client, booking, {
   const instructorTransmission = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
   const requestedTransmission = normaliseSlotTransmissionType(booking.transmission_type) || 'manual';
   const windows = [
-    ...weeklyWindows.rows.map(w => ({ ...w, transmission_type: instructorTransmission })),
+    ...weeklyWindows.rows
+      .map(w => ({
+        ...w,
+        transmission_type: clampSlotTransmissionType(w.transmission_type, instructorTransmission),
+      }))
+      .filter(w => w.transmission_type),
     ...overrideWindows.rows
       .map(w => ({
         ...w,

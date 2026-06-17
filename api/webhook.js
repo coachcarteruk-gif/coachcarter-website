@@ -12,6 +12,11 @@ const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { withNeonTransaction } = require('./_db-transaction');
 
 
+function concreteLessonTransmissionType(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return text === 'automatic' ? 'automatic' : 'manual';
+}
+
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
 // Order: metadata.school_id → lookup via instructor_id (instructors are
 // school-unique) → metadata.learner_id → hard fallback to 1 with an alert.
@@ -475,6 +480,7 @@ async function handleSlotBooking(session) {
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const lessonTypeId  = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins  = parseInt(metadata.duration_minutes, 10) || 90;
+  const bookingTransmissionType = concreteLessonTransmissionType(metadata.transmission_type);
 
   if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
     console.error('❌ slot_booking webhook missing required metadata', metadata);
@@ -624,13 +630,13 @@ async function handleSlotBooking(session) {
       const [b] = await sql`
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           lesson_type_id, minutes_deducted, school_id,
+           lesson_type_id, transmission_type, minutes_deducted, school_id,
            pickup_address, dropoff_address,
            stripe_fee_pence, stripe_fee_source,
            list_price_pence, list_price_source)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
-           ${lessonTypeId}, ${durationMins}, ${schoolId},
+           ${lessonTypeId}, ${bookingTransmissionType}, ${durationMins}, ${schoolId},
            ${pickupAddress || null}, ${dropoffAddress || null},
            ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
            ${amountPence}, 'stripe_metadata')

@@ -52,6 +52,18 @@
     .window-time-inputs {
       display: flex; align-items: center; gap: 8px; flex: 1;
     }
+    .window-transmission {
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 8px; font-size: 0.825rem; font-family: var(--font-body);
+      background: var(--white); color: var(--primary); outline: none;
+      min-height: 34px; min-width: 112px;
+    }
+    .window-transmission:focus { border-color: var(--accent); }
+    .window-transmission-badge {
+      font-size: 0.75rem; font-weight: 800; color: var(--accent);
+      background: var(--accent-lt, rgba(255,107,0,0.1));
+      border-radius: 999px; padding: 5px 10px; white-space: nowrap;
+    }
     input[type="time"] {
       border: 1px solid var(--border); border-radius: 6px;
       padding: 5px 8px; font-size: 0.875rem; font-family: var(--font-body);
@@ -176,6 +188,11 @@
       width: 32px; height: 32px; border: 3px solid var(--border);
       border-top-color: var(--accent); border-radius: 50%;
       animation: spin 0.7s linear infinite; margin: 0 auto 12px;
+    }
+    @media (max-width: 520px) {
+      .window-row { align-items: stretch; flex-wrap: wrap; }
+      .window-time-inputs { flex-basis: 100%; }
+      .window-transmission { flex: 1; min-width: 0; }
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
