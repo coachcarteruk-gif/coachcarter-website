@@ -124,14 +124,14 @@ function selectMode(mode) {
   var warningBox = document.querySelector('.warning-box');
   if (mode === 'supervisor') {
     warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
-      'Mobile phones must not be used while driving. The supervising driver should observe during the drive, then pull over to record ratings.';
+      'Mobile phones must not be used while driving. The supervising driver should observe during the formal mock, then pull over to record ratings.';
     document.querySelector('.start-desc').textContent =
-      'This is still a formal mock test. Drive in 10-minute sections, pull over between sections, and let your supervising driver record clear assessment notes.';
+      'This is still a formal mock assessment, not ordinary private practice. Use it only when a supervising driver is deliberately running a test-style drive; use Practice Drive for normal supervisor practice.';
   } else {
     warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
-      'Mobile phones must not be used by the driver or supervising driver during this test. Pull over safely at each 10-minute interval to record faults.';
+      'Mobile phones must not be used by the driver or assessor during this test. Pull over safely at each 10-minute interval to record faults.';
     document.querySelector('.start-desc').textContent =
-      'This mock test mirrors the real DVSA practical test. Drive in 10-minute sections, stopping briefly between each to record any faults. You can end the test at any point or continue for as many sections as you need.';
+      'This formal mock assessment mirrors the real DVSA practical test. It is best run by your instructor, with test-style faults recorded between sections.';
   }
   showScreen('screen-start');
 }
@@ -185,8 +185,8 @@ function showPartScreen() {
   var partInstruction = document.getElementById('part-instruction');
   if (partInstruction) {
     partInstruction.textContent = testMode === 'supervisor'
-      ? 'Drive for approximately 10 minutes. Your supervising driver should observe the formal mock, then you should pull over to record ratings.'
-      : 'Drive for approximately 10 minutes. Your instructor or supervising driver should observe and note any faults. Tap "Pull over" when you are ready to record faults.';
+      ? 'Drive for approximately 10 minutes. Your supervising driver should observe this formal mock, then you should pull over to record ratings.'
+      : 'Drive for approximately 10 minutes. Your instructor should observe and note any faults. Tap "Pull over" when you are ready to record faults.';
   }
   document.getElementById('timer-display').textContent = '00:00';
   document.getElementById('timer-label').textContent = 'Tap "Start Driving" to begin';
@@ -206,26 +206,6 @@ function showPartScreen() {
 }
 
 async function startDriving() {
-  // Request location permission before starting
-  if (navigator.geolocation) {
-    try {
-      if (navigator.permissions) {
-        var perm = await navigator.permissions.query({ name: 'geolocation' });
-        if (perm.state === 'prompt') {
-          // Trigger the permission dialog by requesting a single position
-          await new Promise(function(resolve) {
-            navigator.geolocation.getCurrentPosition(resolve, resolve, { timeout: 5000 });
-          });
-        }
-      } else {
-        // Fallback: just request a position to trigger the prompt
-        await new Promise(function(resolve) {
-          navigator.geolocation.getCurrentPosition(resolve, resolve, { timeout: 5000 });
-        });
-      }
-    } catch(e) { /* permission denied or unavailable — continue without GPS */ }
-  }
-
   isDriving = true;
   timerSeconds = 0;
 
@@ -237,7 +217,6 @@ async function startDriving() {
 
   document.getElementById('timer-label').textContent = 'Driving...';
 
-  startGpsTracking();
   requestWakeLock();
 
   timerInterval = setInterval(function() {
@@ -847,11 +826,6 @@ function showResults() {
     showInstructorResults();
   }
 
-  // Show map button if GPS data was recorded OR a route was selected
-  if (gpsTrack.length > 0 || selectedRoute) {
-    document.getElementById('btn-show-map').classList.remove('hidden');
-  }
-
   updateResultSaveNote();
   showScreen('screen-results');
 }
@@ -1166,11 +1140,6 @@ function showInstructorResults() {
       serious_faults: totals.serious,
       dangerous_faults: totals.dangerous
     });
-  }
-
-  // Show map button if GPS data was recorded OR a route was selected
-  if (gpsTrack.length > 0 || selectedRoute) {
-    document.getElementById('btn-show-map').classList.remove('hidden');
   }
 
   showScreen('screen-results');
@@ -1572,7 +1541,6 @@ document.addEventListener('input', function(e) {
   bindClick('btn-save-faults', saveFaults);
   bindClick('btn-continue-next', continueToNextPart);
   bindClick('btn-end-mock', endMockTest);
-  bindClick('btn-show-map', showFaultMap);
   bindClick('btn-try-again', function () { location.reload(); });
   bindClick('btn-undo-placement', undoLastPlacement);
   bindClick('link-release-wakelock', releaseWakeLock);

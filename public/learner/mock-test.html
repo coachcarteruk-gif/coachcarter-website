@@ -10,16 +10,14 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Mock Driving Test | Coach Carter</title>
-  <meta name="description" content="Take a mock driving test that mirrors the real DVSA practical test. Record faults across 3 parts and see if you'd pass. Free from Coach Carter Driving School, Reading.">
+  <title>Formal Mock Assessment | Coach Carter</title>
+  <meta name="description" content="Run a formal mock driving assessment, best with your instructor. Record test-style faults and see the pass/fail result. Use Practice Drive for ordinary private practice.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/competency-config.js"></script>
 <script src="/test-routes.js"></script>
 <script src="/sidebar.js"></script>
 <script src="/shared/learner-auth.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
@@ -1067,7 +1065,7 @@
   <header class="doc-header">
     <div class="doc-header-left">
       <span class="doc-stamp">CC</span>
-      <span>Mock test<span class="doc-meta-dot">·</span>DVSA practical drill</span>
+      <span>Mock test<span class="doc-meta-dot">·</span>Formal assessment</span>
     </div>
     <span class="step-tag" id="step-tag">Mode</span>
   </header>
@@ -1077,20 +1075,20 @@
     <div class="mode-screen">
       <div class="mode-eyebrow">Formal mock setup</div>
       <h1>Mock <em>driving test</em>.</h1>
-      <p class="mode-subtitle">Use this for a full test-style assessment. For ordinary private practice, start a Practice Drive from the practice hub.</p>
+      <p class="mode-subtitle">Best with your instructor. Use this for a full test-style assessment. For ordinary private practice, start a Practice Drive from the practice hub.</p>
       <div class="mode-cards">
-        <button class="mode-card" data-mode="supervisor">
-          <span class="mode-card-icon">👥</span>
-          <span class="mode-card-body">
-            <span class="mode-card-title">Supervisor marking a formal mock</span>
-            <span class="mode-card-desc">Simplified assessment tools for a parent or supervising driver running a test-style drive.</span>
-          </span>
-        </button>
         <button class="mode-card" data-mode="instructor">
           <span class="mode-card-icon">🎓</span>
           <span class="mode-card-body">
             <span class="mode-card-title">My instructor is running this</span>
-            <span class="mode-card-desc">Full DL25 marking sheet with detailed fault types (driving, serious, dangerous) across all 10 skill areas.</span>
+            <span class="mode-card-desc">Primary formal mock assessment with the full DL25 marking sheet and detailed fault types (driving, serious, dangerous).</span>
+          </span>
+        </button>
+        <button class="mode-card" data-mode="supervisor">
+          <span class="mode-card-icon">👥</span>
+          <span class="mode-card-body">
+            <span class="mode-card-title">Supervisor formal mock (secondary)</span>
+            <span class="mode-card-desc">Only use this when a supervising driver is deliberately running a formal test-style assessment. Use Practice Drive for normal private practice.</span>
           </span>
         </button>
       </div>
@@ -1105,10 +1103,10 @@
 
       <div class="warning-box">
         <strong>⚠️ Important</strong>
-        Mobile phones must not be used by the driver or supervising driver during this test. Pull over safely at each 10-minute interval to record faults.
+        Mobile phones must not be used by the driver or assessor during this test. Pull over safely at each 10-minute interval to record faults.
       </div>
 
-      <p class="start-desc">This mock test mirrors the real DVSA practical test. Drive in 10-minute rounds, stopping briefly between each to record any faults. You can end the test at any point or continue for as many rounds as you need.</p>
+      <p class="start-desc">This formal mock assessment mirrors the real DVSA practical test. It is best run by your instructor or a formal assessor who can record test-style faults between rounds.</p>
 
       <div class="step-indicator" id="step-indicator">
         <div class="step-item active"><span class="step-num" id="step-current">1</span> <span id="step-label">Round 1</span></div>
@@ -1124,7 +1122,7 @@
   <section id="screen-route" class="screen hidden">
     <div class="route-screen">
       <h2>Choose your <em>test route</em>.</h2>
-      <p class="route-subtitle">Select the route your supervising driver will follow, then open it in Google Maps before starting.</p>
+      <p class="route-subtitle">Select the route your instructor or formal assessor will follow, then open it in Google Maps before starting.</p>
       <div id="route-list" class="route-list"></div>
       <div id="route-actions" class="route-actions hidden">
         <a id="btn-open-maps" href="#" target="_blank" rel="noopener" class="btn-maps">📍 Open route in Google Maps</a>
@@ -1142,7 +1140,7 @@
       <p class="part-desc" id="part-desc"></p>
 
       <div class="part-instruction" id="part-instruction">
-        Drive for approximately 10 minutes. Your supervising driver should observe and note any faults. Tap "Pull over" when you're ready to record faults.
+        Drive for approximately 10 minutes. Your instructor or formal assessor should observe and note any faults. Tap "Pull over" when you're ready to record faults.
       </div>
 
       <div class="timer-display" id="timer-display">00:00</div>
@@ -1207,7 +1205,6 @@
       </div>
 
       <div class="results-actions">
-        <button class="btn-primary hidden" id="btn-show-map">📍 Place faults on map</button>
         <a href="/learner/progress.html" class="btn-secondary">View my driving plan</a>
         <button class="btn-secondary" id="btn-try-again">Try again</button>
         <a href="/learner/" class="btn-secondary">Back to dashboard</a>

@@ -100,17 +100,25 @@ test.describe('learner practice and log-session flow copy', () => {
     const html = read('public/learner/mock-test.html');
     const source = read('public/learner/mock-test.js');
 
+    expect(html).toContain('<title>Formal Mock Assessment | Coach Carter</title>');
     expect(html).toContain('Formal mock setup');
-    expect(html).toContain('Use this for a full test-style assessment.');
+    expect(html).toContain('Best with your instructor. Use this for a full test-style assessment.');
     expect(html).toContain('For ordinary private practice, start a Practice Drive from the practice hub.');
-    expect(html).toContain('Supervisor marking a formal mock');
-    expect(html).toContain('Full DL25 marking sheet');
-    expect(source).toContain('This is still a formal mock test.');
+    expect(html).toContain('My instructor is running this');
+    expect(html).toContain('Primary formal mock assessment');
+    expect(html).toContain('Supervisor formal mock (secondary)');
+    expect(html).toContain('Use Practice Drive for normal private practice.');
+    expect(html).toContain('full DL25 marking sheet');
+    expect(html.indexOf('My instructor is running this')).toBeLessThan(html.indexOf('Supervisor formal mock (secondary)'));
+    expect(source).toContain('This is still a formal mock assessment, not ordinary private practice.');
+    expect(source).toContain('best run by your instructor');
     expect(source).toContain('Record assessment notes');
     expect(source).toContain('Formal mock / supervisor assessment.');
     expect(source).toContain('Formal mock / instructor assessment.');
+    expect(source).toContain('driving, serious, dangerous');
 
     expect(html).not.toContain('Practising with a supervisor');
+    expect(html).not.toContain('ordinary private practice mode');
     expect(source).not.toContain('no exam jargon');
   });
 });
