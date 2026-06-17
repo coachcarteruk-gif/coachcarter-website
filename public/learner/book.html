@@ -355,6 +355,11 @@
       color: var(--muted);
       background: transparent;
     }
+    .date-chip.no-slots[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
     .date-chip-day {
       display: block;
       font-family: var(--font-mono);
@@ -378,6 +383,30 @@
       font-size: 0.62rem;
       font-weight: 700;
       letter-spacing: 0.04em;
+    }
+    .selected-date-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .selected-date-heading strong {
+      font-family: var(--font-head);
+      font-size: 1.15rem;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--primary);
+    }
+    .selected-date-heading span {
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
     .time-groups {
       display: grid;
@@ -1062,6 +1091,12 @@
       .time-button-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .time-slot-button { min-height: 64px; }
       .date-chip { min-width: 72px; }
+      .selected-date-heading {
+        display: grid;
+        gap: 4px;
+        align-items: start;
+      }
+      .selected-date-heading span { flex-shrink: 1; }
       .selected-slot-summary {
         align-items: stretch;
         flex-direction: column;
