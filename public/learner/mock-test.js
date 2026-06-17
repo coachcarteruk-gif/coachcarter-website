@@ -112,8 +112,8 @@ function updateResultSaveNote() {
   var note = document.getElementById('result-save-note');
   if (!note) return;
   note.textContent = mockTestCompleteSaved
-    ? 'Your weak areas have been added to your progress tracker automatically.'
-    : 'This result has not been saved to your progress tracker. Check your connection and try saving again.';
+    ? 'Your weak areas have been added to your driving plan automatically.'
+    : 'This result has not been saved to your driving plan. Check your connection and try saving again.';
 }
 
 /* ── Screen 0: Mode Selection ── */
@@ -731,7 +731,7 @@ async function saveFaults() {
     if (!res.ok) throw new Error('API error ' + res.status);
   } catch (e) {
     console.warn('Failed to save faults:', e);
-    setSaveStatus('mock-fault-save-status', 'We could not save this round, so these ratings are not in your progress tracker yet. Check your connection and try again.');
+    setSaveStatus('mock-fault-save-status', 'We could not save this round, so these ratings are not in your driving plan yet. Check your connection and try again.');
     btn.disabled = false;
     btn.textContent = 'Try saving again';
     return;

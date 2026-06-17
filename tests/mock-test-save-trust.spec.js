@@ -21,7 +21,7 @@ test.describe('mock test save trust', () => {
     const html = read('public/learner/mock-test.html');
 
     expect(source).toContain("if (!res.ok) throw new Error('API error ' + res.status);");
-    expect(source).toContain('We could not save this round, so these ratings are not in your progress tracker yet.');
+    expect(source).toContain('We could not save this round, so these ratings are not in your driving plan yet.');
     expect(source).toContain('We saved the round, but could not finish the mock test. Your results are not fully saved yet.');
     expect(source).toContain('mockTestCompleteSaved = true;');
     expect(source).toContain('mockTestCompleteSaved');

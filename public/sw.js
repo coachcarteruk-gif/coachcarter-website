@@ -8,7 +8,7 @@
 // sessions. The dynamic data already flows through /api/* (excluded below),
 // but defence-in-depth: keep auth-gated HTML out of the cache entirely.
 
-const CACHE_NAME = 'cc-v5';
+const CACHE_NAME = 'cc-v6';
 const MAX_CACHE_ITEMS = 100;
 const AUTH_PATH_PREFIXES = ['/learner/', '/instructor/', '/admin/'];
 const SHELL_ASSETS = [
@@ -30,7 +30,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(SHELL_ASSETS))
-    // New SW waits until user triggers update via SKIP_WAITING message
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -95,7 +95,22 @@ self.addEventListener('fetch', (event) => {
   // per-user JS file shouldn't survive an account switch.
   if (isAuthPath(url.pathname)) return;
 
-  // For static assets (JS, CSS, images): cache first, network fallback
+  // JS/CSS carries product copy and app behaviour; fetch it fresh first so
+  // learners do not stay pinned to old navigation after a deploy.
+  if (/\.(js|css)$/i.test(url.pathname)) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // For static media/assets: cache first, network fallback
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) {
