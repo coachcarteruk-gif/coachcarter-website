@@ -96,7 +96,7 @@ test.describe('instructor availability overrides', () => {
     expect(slots).toContain('return [...weeklyWindows, ...overrideWindows].some');
     expect(slots).toContain('const unavailableDates = []');
     expect(slots).toContain('transmissionType: requestedTransmissionType');
-    expect(slots).toContain('transmission_type: requestedTransmissionType ||');
+    expect(slots).toContain('transmission_type: bookingTransmissionType');
     expect(slots).toContain("reason: 'outside availability'");
     expect(slots).toContain('action=checkout-slot');
     expect(slots).toContain('action=checkout-slot-guest');

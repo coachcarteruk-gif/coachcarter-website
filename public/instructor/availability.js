@@ -11,11 +11,12 @@
     { label: 'Sunday',    value: 0 },
   ];
 
-  let windows       = []; // [{ day_of_week, start_time, end_time }]
+  let windows       = []; // [{ day_of_week, start_time, end_time, transmission_type }]
   let isDirty       = false;
   let blackoutRanges = []; // [{ start_date, end_date, reason }]
   let savedBlackoutRanges = []; // last known-good server state
   let blackoutsDirty = false;
+  let instructorTransmissionType = 'manual';
 
   function init() {
     if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
@@ -31,8 +32,42 @@
       endInput.min = startInput.value;
       if (endInput.value < startInput.value) endInput.value = startInput.value;
     });
-    loadAvailability();
-    loadBlackoutDates();
+    loadProfile().finally(() => {
+      loadAvailability();
+      loadBlackoutDates();
+    });
+  }
+
+  async function loadProfile() {
+    try {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=profile');
+      if (res.status === 401) { signOut(); return; }
+      const data = await res.json();
+      if (res.ok && data.instructor) {
+        instructorTransmissionType = normaliseTransmissionType(data.instructor.transmission_type) || 'manual';
+      }
+    } catch (_) {}
+  }
+
+  function normaliseTransmissionType(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return ['manual', 'automatic', 'both'].includes(text) ? text : null;
+  }
+
+  function defaultAvailabilityTransmission() {
+    return instructorTransmissionType === 'both' ? 'both' : instructorTransmissionType;
+  }
+
+  function transmissionLabel(value) {
+    switch (normaliseTransmissionType(value)) {
+      case 'automatic': return 'Automatic';
+      case 'both': return 'Both';
+      default: return 'Manual';
+    }
+  }
+
+  function canChooseTransmission() {
+    return instructorTransmissionType === 'both';
   }
 
   async function loadAvailability() {
@@ -44,7 +79,10 @@
       windows  = (data.windows || []).map(w => ({
         day_of_week: w.day_of_week,
         start_time:  w.start_time.slice(0, 5),
-        end_time:    w.end_time.slice(0, 5)
+        end_time:    w.end_time.slice(0, 5),
+        transmission_type: canChooseTransmission()
+          ? (normaliseTransmissionType(w.transmission_type) || defaultAvailabilityTransmission())
+          : defaultAvailabilityTransmission()
       }));
       isDirty  = false;
       render();
@@ -76,6 +114,12 @@
   }
 
   function renderWindow(dayValue, w, idx) {
+    const transmission = normaliseTransmissionType(w.transmission_type) || defaultAvailabilityTransmission();
+    const transmissionControl = canChooseTransmission()
+      ? `<select class="window-transmission" data-action="update-window" data-idx="${idx}" data-field="transmission_type" aria-label="Transmission">
+          ${['manual', 'automatic', 'both'].map(type => `<option value="${type}" ${transmission === type ? 'selected' : ''}>${transmissionLabel(type)}</option>`).join('')}
+        </select>`
+      : `<span class="window-transmission-badge">${transmissionLabel(transmission)}</span>`;
     return `
       <div class="window-row" id="window-row-${idx}">
         <div class="window-time-inputs">
@@ -83,12 +127,13 @@
           <span class="time-sep">to</span>
           <input type="time" value="${w.end_time}" data-action="update-window" data-idx="${idx}" data-field="end_time">
         </div>
+        ${transmissionControl}
         <button class="btn-remove-window" data-action="remove-window" data-idx="${idx}" title="Remove">✕</button>
       </div>`;
   }
 
   function addWindow(dayValue) {
-    windows.push({ day_of_week: dayValue, start_time: '09:00', end_time: '17:00' });
+    windows.push({ day_of_week: dayValue, start_time: '09:00', end_time: '17:00', transmission_type: defaultAvailabilityTransmission() });
     isDirty = true;
     render();
   }
@@ -100,7 +145,9 @@
   }
 
   function updateWindow(idx, field, value) {
-    windows[idx][field] = value;
+    windows[idx][field] = field === 'transmission_type'
+      ? (normaliseTransmissionType(value) || defaultAvailabilityTransmission())
+      : value;
     isDirty = true;
     updateSaveBar();
   }
@@ -114,6 +161,11 @@
     for (const w of windows) {
       if (w.start_time >= w.end_time) {
         showToast('Start time must be before end time for all windows', 'error');
+        return;
+      }
+      const transmission = normaliseTransmissionType(w.transmission_type);
+      if (!transmission || (instructorTransmissionType !== 'both' && transmission !== instructorTransmissionType)) {
+        showToast('Transmission choice does not match your instructor profile', 'error');
         return;
       }
     }
@@ -136,7 +188,10 @@
         windows = (data.windows || []).map(w => ({
           day_of_week: w.day_of_week,
           start_time:  w.start_time.slice(0, 5),
-          end_time:    w.end_time.slice(0, 5)
+          end_time:    w.end_time.slice(0, 5),
+          transmission_type: canChooseTransmission()
+            ? (normaliseTransmissionType(w.transmission_type) || defaultAvailabilityTransmission())
+            : defaultAvailabilityTransmission()
         }));
         isDirty = false;
         render();

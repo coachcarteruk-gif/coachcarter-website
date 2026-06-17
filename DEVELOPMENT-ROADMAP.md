@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.111 - Weekly Availability Transmission Split (17 June 2026)
+
+Dual-car instructors can now mark each recurring weekly availability window as Manual, Automatic, or Both from `/instructor/availability.html`. Existing dual-car weekly windows remain `both` until the instructor narrows them, while single-transmission instructors are clamped to their profile type.
+
+The learner slot feed, `durations-for-slot`, paid/credit booking validation, guest checkout validation, free-trial booking validation, and reserved weekly lesson moves now read the weekly window's transmission type instead of assuming the instructor's profile-wide value. This prevents a normal manual day from showing automatic learner slots, and vice versa, while keeping one-off availability override behavior intact.
+
+**Files:** `db/migration.sql`, `db/migrations/026_weekly_availability_transmission.sql`, `api/instructor.js`, `api/slots.js`, `api/webhook.js`, `public/instructor/availability.html`, `public/instructor/availability.js`, `tests/instructor-weekly-availability-transmission.spec.js`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.110 - Learner Feedback Queue (16 June 2026)
 
 Learners now have a sidebar `Feedback` action that opens a compact form for issue reports or suggestions. Submissions are stored in the new tenant-scoped `learner_feedback` table; issue reports also send an immediate staff email alert using the existing SMTP notification path. The admin portal adds a Feedback section with type/status filters and reviewed/closed/reopen actions, all school-scoped and audit-logged.

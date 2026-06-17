@@ -684,8 +684,8 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `verify-token` | POST | No | (Legacy) Consume token, return JWT. Body: `{ token }` |
 | `schedule` | GET | JWT | Instructor's upcoming scheduled bookings |
 | `schedule-range` | GET | JWT | Bookings, pending offers, and one-off availability overrides in date range for calendar views. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
-| `availability` | GET | JWT | Current weekly availability windows |
-| `set-availability` | POST | JWT | Update weekly availability windows |
+| `availability` | GET | JWT | Current weekly availability windows, including `transmission_type` (`manual`, `automatic`, or `both`) |
+| `set-availability` | POST | JWT | Update weekly availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time, transmission_type? }] }` |
 | `availability-overrides` | GET | JWT | Date-specific extra availability. Query: `from=YYYY-MM-DD&to=YYYY-MM-DD` |
 | `create-availability-override` | POST | JWT | Add a one-off available window without changing weekly availability. Body: `{ override_date, start_time, end_time, note? }` |
 | `delete-availability-override` | POST | JWT | Remove a one-off available window. Body: `{ id }` |
@@ -737,7 +737,7 @@ Two alarm triggers:
 
 **`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, learner_category (`regular`, `sporadic`, `inactive`, `passed`, or NULL), custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). `learner_users.learner_category` is the global admin/broadcast-facing category; `instructor_learner_notes.learner_category` is the instructor relationship category. Used by direct booking checkout, lesson-types/duration pricing APIs, historical credit pricing, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain historical credit-package only.
 
-**`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time)
+**`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time, transmission_type). Dual-car instructors can mark normal weekly windows as `manual`, `automatic`, or `both`; learner slot generation, duration validation, booking checkout, and reserved weekly moves clamp those values against the instructor profile's `transmission_type`.
 
 **`instructor_availability_overrides`** — date-specific extra availability per instructor. Columns: instructor_id, school_id, override_date, start_time, end_time, active, note. These rows make a single slot/window bookable without altering recurring weekly availability. The learner slot feed and `durations-for-slot` merge them with weekly windows; on blackout dates, explicit overrides are the only windows that can open that date.
 
