@@ -63,11 +63,10 @@ function sanitizeSupervisorNotesPayload(value) {
   return cleaned.parts || cleaned.summary ? cleaned : {};
 }
 
-function isMissingFocusedPracticeSchemaError(err) {
+function isMissingOptionalCompetencySchemaError(err) {
   return err && (
     err.code === '42P01' || // undefined_table
-    err.code === '42703' || // undefined_column
-    /focused_practice_sessions/i.test(err.message || '')
+    err.code === '42703'    // undefined_column
   );
 }
 
@@ -708,6 +707,12 @@ async function handleCompetency(req, res) {
       GROUP BY skill_key`;
 
     // Mock test summary (only instructor-mode or legacy tests count for pass/fail)
+    let mockSummary = { total_tests: 0, passes: 0, fails: 0 };
+    let mockFaults = [];
+    let recentMockMeta = [];
+    let recentSkillFaults = [];
+    let recentSubFaults = [];
+    try {
     const mockData = await sql`
       SELECT
         COUNT(*)::int AS total_tests,
@@ -715,9 +720,10 @@ async function handleCompetency(req, res) {
         COUNT(*) FILTER (WHERE result = 'fail')::int AS fails
       FROM mock_tests
       WHERE learner_id = ${user.id} AND school_id = ${schoolId} AND completed_at IS NOT NULL`;
+    mockSummary = mockData[0] || mockSummary;
 
     // Mock test faults aggregated by skill
-    const mockFaults = await sql`
+    mockFaults = await sql`
       SELECT f.skill_key,
         SUM(f.driving_faults)::int AS total_driving,
         SUM(f.serious_faults)::int AS total_serious,
@@ -730,7 +736,7 @@ async function handleCompetency(req, res) {
     // Most recent completed mock test — metadata + per-skill + per-sub-skill faults.
     // The progress page's skill breakdown is now scoped to this one mock test,
     // so we need the date/result for the heading and the full fault breakdown.
-    const recentMockMeta = await sql`
+    recentMockMeta = await sql`
       SELECT id, completed_at, result, mode, supervisor_notes
       FROM mock_tests
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}
@@ -740,7 +746,7 @@ async function handleCompetency(req, res) {
     const recentMockId = recentMockMeta[0] ? recentMockMeta[0].id : null;
 
     // Per-skill parent-level fault totals from the most recent mock (sub_key IS NULL)
-    const recentSkillFaults = recentMockId ? await sql`
+    recentSkillFaults = recentMockId ? await sql`
       SELECT f.skill_key,
         SUM(f.driving_faults)::int AS driving,
         SUM(f.serious_faults)::int AS serious,
@@ -750,7 +756,7 @@ async function handleCompetency(req, res) {
       GROUP BY f.skill_key` : [];
 
     // Per-sub-skill faults from the most recent mock (sub_key IS NOT NULL)
-    const recentSubFaults = recentMockId ? await sql`
+    recentSubFaults = recentMockId ? await sql`
       SELECT f.skill_key, f.sub_key,
         SUM(f.driving_faults)::int AS driving,
         SUM(f.serious_faults)::int AS serious,
@@ -758,6 +764,10 @@ async function handleCompetency(req, res) {
       FROM mock_test_faults f
       WHERE f.mock_test_id = ${recentMockId} AND f.school_id = ${schoolId} AND f.sub_key IS NOT NULL
       GROUP BY f.skill_key, f.sub_key` : [];
+    } catch (err) {
+      if (!isMissingOptionalCompetencySchemaError(err)) throw err;
+      console.warn('mock competency schema unavailable for competency response:', err.message);
+    }
 
     // Session stats
     const stats = await sql`
@@ -795,14 +805,14 @@ async function handleCompetency(req, res) {
 
       focusedPracticeCount = (fpStats[0] || {}).total_sessions || 0;
     } catch (err) {
-      if (!isMissingFocusedPracticeSchemaError(err)) throw err;
+      if (!isMissingOptionalCompetencySchemaError(err)) throw err;
       console.warn('focused practice schema unavailable for competency response:', err.message);
     }
 
     return res.json({
       lesson_ratings: lessonData,
       quiz_accuracy: quizData,
-      mock_summary: mockData[0] || { total_tests: 0, passes: 0, fails: 0 },
+      mock_summary: mockSummary,
       mock_faults: mockFaults,
       recent_mock: recentMockMeta[0] || null,
       recent_skill_faults: recentSkillFaults,

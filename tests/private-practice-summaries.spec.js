@@ -22,9 +22,20 @@ test.describe('private practice summaries', () => {
     expect(body).toContain('SELECT fp.id, fp.focus_areas, fp.reflections, fp.completed_at, fp.created_at,');
     expect(body).toContain('JOIN driving_sessions ds ON ds.id = fp.session_id AND ds.school_id = fp.school_id');
     expect(body).toContain('WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}');
-    expect(body).toContain('if (!isMissingFocusedPracticeSchemaError(err)) throw err;');
+    expect(body).toContain('if (!isMissingOptionalCompetencySchemaError(err)) throw err;');
     expect(body).toContain('focused_practice_count: focusedPracticeCount');
     expect(body).toContain('recent_focused_practice: recentFocusedPractice');
+  });
+
+  test('learner competency API keeps optional mock detail from bricking the driving plan', () => {
+    const source = read('api/learner.js');
+    const body = functionBody(source, 'handleCompetency');
+
+    expect(source).toContain('function isMissingOptionalCompetencySchemaError(err)');
+    expect(body).toContain('let mockSummary = { total_tests: 0, passes: 0, fails: 0 };');
+    expect(body).toContain('mockSummary = mockData[0] || mockSummary;');
+    expect(body).toContain("console.warn('mock competency schema unavailable for competency response:', err.message);");
+    expect(body).toContain('mock_summary: mockSummary');
   });
 
   test('instructor learner history returns recent private-practice rows with school scope', () => {
