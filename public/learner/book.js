@@ -862,6 +862,11 @@ function getVisibleSlotsFromCache(cache) {
   return allSlots;
 }
 
+function getAvailableDateStrings(cache) {
+  return getDateRangeStrings(feedFrom, feedTo)
+    .filter(ds => cache && cache[ds] && cache[ds].length > 0);
+}
+
 function filterSlotCacheByInstructor(cache, instructorId, opts) {
   opts = opts || {};
   const filtered = {};
@@ -883,10 +888,9 @@ function sortSlots(a, b) {
 }
 
 function ensureSelectedDate(cache) {
-  const dateRange = getDateRangeStrings(feedFrom, feedTo);
-  if (selectedDate && dateRange.includes(selectedDate)) return selectedDate;
-  const firstWithSlots = dateRange.find(ds => cache && cache[ds] && cache[ds].length > 0);
-  selectedDate = firstWithSlots || dateRange[0] || null;
+  const availableDates = getAvailableDateStrings(cache);
+  if (selectedDate && availableDates.includes(selectedDate)) return selectedDate;
+  selectedDate = availableDates[0] || null;
   return selectedDate;
 }
 
@@ -903,15 +907,15 @@ function dateDisplayParts(dateStr) {
 }
 
 function renderDateStrip(cache) {
-  const dates = getDateRangeStrings(feedFrom, feedTo);
+  const dates = getAvailableDateStrings(cache);
   if (!dates.length) return '';
   const buttons = dates.map(ds => {
-    const count = cache && cache[ds] ? cache[ds].length : 0;
+    const count = cache[ds].length;
     const selected = ds === selectedDate;
     const parts = dateDisplayParts(ds);
-    const state = count > 0 ? `${count} slot${count === 1 ? '' : 's'}` : 'Full';
-    const label = `${parts.full}, ${count > 0 ? state + ' available' : 'no slots available'}`;
-    return `<button class="date-chip${count === 0 ? ' no-slots' : ''}" type="button"
+    const state = `${count} slot${count === 1 ? '' : 's'}`;
+    const label = `${parts.full}, ${state} available`;
+    return `<button class="date-chip" type="button"
       data-action="select-date"
       data-date="${esc(ds)}"
       aria-pressed="${selected ? 'true' : 'false'}"

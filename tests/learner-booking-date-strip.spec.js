@@ -68,8 +68,8 @@ test.describe('learner booking date strip', () => {
     const js = read('public/learner/book.js');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const future = new Date(today);
+    future.setDate(future.getDate() + 14);
     const fmt = d => {
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -77,13 +77,26 @@ test.describe('learner booking date strip', () => {
       return `${y}-${m}-${day}`;
     };
     const todayStr = fmt(today);
-    const tomorrowStr = fmt(tomorrow);
-    const tomorrowFull = tomorrow.toLocaleDateString('en-GB', {
+    const futureStr = fmt(future);
+    const futureFull = future.toLocaleDateString('en-GB', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     });
+    const availableDates = Array.from({ length: 15 }, (_, index) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + index);
+      return fmt(d);
+    });
+    const slotPayload = Object.fromEntries(availableDates.map((date, index) => [date, [{
+      date,
+      start_time: index === 14 ? '14:00' : '09:00',
+      end_time: index === 14 ? '15:00' : '10:00',
+      instructor_id: 1,
+      instructor_name: 'Fraser Carter',
+      transmission_type: 'manual'
+    }]]));
 
     await page.route('**/*', async route => {
       const url = new URL(route.request().url());
@@ -116,24 +129,7 @@ test.describe('learner booking date strip', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            slots: {
-              [todayStr]: [{
-                date: todayStr,
-                start_time: '09:00',
-                end_time: '10:00',
-                instructor_id: 1,
-                instructor_name: 'Fraser Carter',
-                transmission_type: 'manual'
-              }],
-              [tomorrowStr]: [{
-                date: tomorrowStr,
-                start_time: '14:00',
-                end_time: '15:00',
-                instructor_id: 1,
-                instructor_name: 'Fraser Carter',
-                transmission_type: 'manual'
-              }]
-            },
+            slots: slotPayload,
             travel_hidden: 0
           })
         });
@@ -149,12 +145,15 @@ test.describe('learner booking date strip', () => {
     await page.goto('http://coachcarter.test/learner/book.html');
     await expect(page.locator('[data-selected-date-heading]')).toContainText(todayStr.slice(0, 4));
     await expect(page.locator('.time-slot-button')).toContainText('09:00');
+    await expect(page.locator('.date-chip')).toHaveCount(15);
+    await expect(page.locator('.date-chip.no-slots')).toHaveCount(0);
+    await expect(page.locator('.date-chip-state', { hasText: 'Full' })).toHaveCount(0);
 
     const scroller = page.locator('.date-strip-wrap');
     await scroller.evaluate(el => { el.scrollLeft = 40; });
-    await page.locator(`.date-chip[data-date="${tomorrowStr}"]`).click();
+    await page.locator(`.date-chip[data-date="${futureStr}"]`).click();
 
-    await expect(page.locator('[data-selected-date-heading] strong')).toHaveText(tomorrowFull);
+    await expect(page.locator('[data-selected-date-heading] strong')).toHaveText(futureFull);
     await expect(page.locator('.time-slot-button')).toContainText('14:00');
     await expect.poll(() => scroller.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
   });
