@@ -361,6 +361,8 @@ module.exports = async (req, res) => {
   if (action === 'instructor-blackouts')     return handleInstructorBlackouts(req, res);
   if (action === 'set-instructor-blackouts') return handleSetInstructorBlackouts(req, res);
   if (action === 'referral-activity')        return handleReferralActivity(req, res);
+  if (action === 'referral-relationships')   return handleReferralRelationships(req, res);
+  if (action === 'link-referral-relationship') return handleLinkReferralRelationship(req, res);
   if (action === 'referral-config')          return handleReferralConfig(req, res);
   if (action === 'update-referral-config')   return handleUpdateReferralConfig(req, res);
   if (action === 'notification-log')         return handleNotificationLog(req, res);
@@ -4238,7 +4240,217 @@ async function handleReferralActivity(req, res) {
   }
 }
 
-// ── GET /api/admin?action=referral-config ────────────────────────────────────
+// GET /api/admin?action=referral-relationships
+async function handleReferralRelationships(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const relationships = await sql`
+      SELECT
+        referrer.id AS referrer_id,
+        referrer.name AS referrer_name,
+        referrer.email AS referrer_email,
+        referral_code.code AS referral_code,
+        referee.id AS referee_id,
+        referee.name AS referee_name,
+        referee.email AS referee_email,
+        referee.phone AS referee_phone,
+        referee.created_at AS referred_at,
+        (
+          SELECT MIN(b.scheduled_date)
+          FROM lesson_bookings b
+          WHERE b.learner_id = referee.id
+            AND b.school_id = ${schoolId}
+            AND b.status IN (${SCHEDULED}, ${CHARGEABLE}, ${REFUNDED})
+        ) AS first_booking_date,
+        (
+          SELECT MIN(b.scheduled_date)
+          FROM lesson_bookings b
+          WHERE b.learner_id = referee.id
+            AND b.school_id = ${schoolId}
+            AND b.status = ${CHARGEABLE}
+            AND b.payment_method <> 'free'
+        ) AS first_paid_lesson_date,
+        EXISTS (
+          SELECT 1 FROM lesson_bookings b
+          WHERE b.learner_id = referee.id
+            AND b.school_id = ${schoolId}
+            AND b.status IN (${SCHEDULED}, ${CHARGEABLE}, ${REFUNDED})
+        ) AS has_any_booking,
+        EXISTS (
+          SELECT 1 FROM lesson_bookings b
+          WHERE b.learner_id = referee.id
+            AND b.school_id = ${schoolId}
+            AND b.status = ${CHARGEABLE}
+            AND b.payment_method <> 'free'
+        ) AS has_completed_paid,
+        COALESCE((
+          SELECT SUM(FLOOR((EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) / 3))::int
+          FROM lesson_bookings b
+          WHERE b.learner_id = referee.id
+            AND b.school_id = ${schoolId}
+            AND b.status = ${CHARGEABLE}
+            AND b.payment_method <> 'free'
+            AND b.referral_rewarded_at IS NOT NULL
+        ), 0)::int AS reward_minutes,
+        COALESCE((
+          SELECT SUM(FLOOR((EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) / 3))::int
+          FROM lesson_bookings b
+          WHERE b.learner_id = referee.id
+            AND b.school_id = ${schoolId}
+            AND b.status = ${CHARGEABLE}
+            AND b.payment_method <> 'free'
+            AND b.referral_rewarded_at IS NULL
+        ), 0)::int AS pending_reward_minutes
+      FROM learner_users referee
+      JOIN learner_users referrer
+        ON referrer.id = referee.referred_by
+       AND referrer.school_id = ${schoolId}
+      LEFT JOIN referrals referral_code
+        ON referral_code.learner_id = referrer.id
+       AND referral_code.school_id = ${schoolId}
+      WHERE referee.school_id = ${schoolId}
+        AND referee.referred_by IS NOT NULL
+      ORDER BY referee.created_at DESC
+      LIMIT 200
+    `;
+
+    const enriched = relationships.map((r) => ({
+      ...r,
+      status: r.has_completed_paid ? 'lessoned'
+            : r.has_any_booking    ? 'booked'
+            : 'joined',
+      reward_status: r.reward_minutes > 0 ? 'rewarded'
+                   : r.pending_reward_minutes > 0 ? 'pending'
+                   : 'none'
+    }));
+
+    return res.json({ ok: true, relationships: enriched });
+  } catch (err) {
+    console.error('referral-relationships error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to load referral relationships' });
+  }
+}
+
+// POST /api/admin?action=link-referral-relationship
+// Body: { referrer_learner_id, referred_learner_id }
+async function handleLinkReferralRelationship(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const { referrer_learner_id, referred_learner_id } = req.body || {};
+  const referrerId = parseInt(referrer_learner_id, 10);
+  const referredId = parseInt(referred_learner_id, 10);
+  if (!Number.isInteger(referrerId) || referrerId <= 0 ||
+      !Number.isInteger(referredId) || referredId <= 0) {
+    return res.status(400).json({ error: 'referrer_learner_id and referred_learner_id are required' });
+  }
+  if (referrerId === referredId) {
+    return res.status(400).json({ error: 'A learner cannot refer themselves' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [referrer] = await sql`
+      SELECT id, name, email, referred_by
+      FROM learner_users
+      WHERE id = ${referrerId}
+        AND school_id = ${schoolId}
+    `;
+    const [referred] = await sql`
+      SELECT id, name, email, referred_by
+      FROM learner_users
+      WHERE id = ${referredId}
+        AND school_id = ${schoolId}
+    `;
+    if (!referrer || !referred) {
+      return res.status(404).json({ error: 'Both learners must exist in this school' });
+    }
+
+    const cycleRows = await sql`
+      WITH RECURSIVE referrer_ancestors AS (
+        SELECT id, referred_by, 0 AS depth
+        FROM learner_users
+        WHERE id = ${referrerId}
+          AND school_id = ${schoolId}
+        UNION ALL
+        SELECT lu.id, lu.referred_by, ra.depth + 1
+        FROM learner_users lu
+        JOIN referrer_ancestors ra ON lu.id = ra.referred_by
+        WHERE lu.school_id = ${schoolId}
+          AND ra.referred_by IS NOT NULL
+          AND ra.depth < 25
+      )
+      SELECT 1
+      FROM referrer_ancestors
+      WHERE id = ${referredId}
+      LIMIT 1
+    `;
+    if (cycleRows.length > 0) {
+      return res.status(400).json({ error: 'This link would create a referral cycle' });
+    }
+
+    if (referred.referred_by && referred.referred_by !== referrerId) {
+      const alreadyRewarded = await sql`
+        SELECT 1
+        FROM lesson_bookings
+        WHERE learner_id = ${referredId}
+          AND school_id = ${schoolId}
+          AND status = ${CHARGEABLE}
+          AND payment_method <> 'free'
+          AND referral_rewarded_at IS NOT NULL
+        LIMIT 1
+      `;
+      if (alreadyRewarded.length > 0) {
+        return res.status(409).json({
+          error: 'This learner already has rewarded referral lessons. Changing the referrer would not move historical credit.'
+        });
+      }
+    }
+
+    const [updated] = await sql`
+      UPDATE learner_users
+         SET referred_by = ${referrerId}
+       WHERE id = ${referredId}
+         AND school_id = ${schoolId}
+      RETURNING id, name, email, referred_by
+    `;
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'admin.link_referral_relationship',
+      targetType: 'learner',
+      targetId: referredId,
+      details: {
+        referrer_learner_id: referrerId,
+        referred_learner_id: referredId,
+        previous_referrer_learner_id: referred.referred_by || null,
+        referrer_name: referrer.name || null,
+        referred_name: referred.name || null
+      },
+      schoolId,
+      req
+    });
+
+    return res.json({ ok: true, relationship: updated });
+  } catch (err) {
+    console.error('admin link-referral-relationship error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to link referral relationship', details: 'Internal server error' });
+  }
+}
+
+// GET /api/admin?action=referral-config
 async function handleReferralConfig(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const admin = verifyAdminJWT(req);

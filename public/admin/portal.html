@@ -994,6 +994,49 @@ body {
         No referral activity yet. Once referrals are enabled and learners start sharing codes, activity will appear here.
       </div>
     </div>
+
+    <!-- Link relationship card -->
+    <div class="card" style="margin-top:24px;">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:6px;">Link Learners</h3>
+      <p style="color:#888;font-size:0.85rem;line-height:1.45;margin:0 0 16px;">
+        Manually connect a referred learner to the original learner who referred them. This updates attribution only; it does not issue reward credit.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:14px;align-items:end;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label for="ref-link-referrer">Original learner</label>
+          <select id="ref-link-referrer" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+            <option value="">Loading learners...</option>
+          </select>
+          <div style="color:#888;font-size:0.76rem;margin-top:4px;">The learner whose referral should get credit.</div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label for="ref-link-referred">Referred learner</label>
+          <select id="ref-link-referred" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+            <option value="">Loading learners...</option>
+          </select>
+          <div style="color:#888;font-size:0.76rem;margin-top:4px;">The learner who came through that referral.</div>
+        </div>
+        <button class="btn btn-primary" id="btn-link-referral" type="button" style="min-width:130px;justify-content:center;">Link</button>
+      </div>
+      <div id="ref-link-status" role="alert" style="display:none;margin-top:12px;font-size:0.85rem;"></div>
+    </div>
+
+    <!-- Relationship card -->
+    <div class="card" style="margin-top:24px;">
+      <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:6px;">Referral Relationships</h3>
+      <p style="color:#888;font-size:0.85rem;line-height:1.45;margin:0 0 16px;">
+        Learners linked by a referral code before the reward has necessarily been earned.
+      </p>
+      <table class="data-table">
+        <thead><tr>
+          <th>Referrer</th><th>Referred learner</th><th>Stage</th><th>Rewards</th><th>Dates</th>
+        </tr></thead>
+        <tbody id="referral-relationships-body"><tr><td colspan="5" style="color:#888;">Loading...</td></tr></tbody>
+      </table>
+      <div id="referral-relationships-empty" style="display:none;text-align:center;padding:24px;color:#888;font-size:0.9rem;">
+        No linked referral relationships yet.
+      </div>
+    </div>
   </div>
 
 </div><!-- /main -->

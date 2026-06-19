@@ -355,7 +355,7 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | `profile-completeness` | GET | Yes | Returns profile completion steps; dashboard uses prior_experience + initial_assessment (2 steps) |
 | `validate-referral` | GET | No | Public. Validates a referral code before signup. Params: `code`, `school_id`. Returns `{ ok, valid, referrer_first_name }`. Rate-limited (10/min per IP) |
 | `referral-code` | GET | Yes | Returns learner's referral code (auto-generates on first call). `share_url` is the short form `https://coachcarter.uk/r/CODE`. Returns `{ ok, enabled, code, share_url }` |
-| `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }`. Each `recent_referrals` entry includes `status` (`joined` / `booked` / `lessoned`) computed from the referee's bookings |
+| `referral-stats` | GET | Yes | Referral dashboard data: `{ ok, total_referred, total_reward_minutes, recent_referrals[] }`. Each `recent_referrals` entry includes first-name display data, `status` (`joined` / `booked` / `lessoned`), `reward_minutes`, and `pending_reward_minutes` computed from the referee's paid bookings |
 | `submit-feedback` | POST | Yes | Stores a learner issue report or suggestion in `learner_feedback`. Body: `{ type: 'issue'|'suggestion', title, message, page_url? }`. Rate-limited per learner; issue reports also send a staff email alert. |
 | `my-availability` | GET | Yes | Returns learner's active weekly availability windows |
 | `set-availability` | POST | Yes | Replace all availability windows. Body: `{ windows: [{ day_of_week, start_time, end_time }] }` |
@@ -804,6 +804,8 @@ Admin support access can open an instructor portal session without password know
 | `learner-feedback` | GET | JWT | School-scoped learner feedback queue. Optional filters: `status=open|reviewed|closed`, `type=issue|suggestion`, `limit`. Returns learner contact fields plus feedback title/message/page/status. |
 | `update-learner-feedback` | POST | JWT | Updates a feedback row status. Body: `{ id, status: 'open'|'reviewed'|'closed' }`. Sets/clears `reviewed_at` and audit-logs `learner_feedback.update_status`. |
 | `referral-activity` | GET | JWT | Aggregated referral stats per school (referrer names, codes, counts, total rewards) |
+| `referral-relationships` | GET | JWT | Per-referee relationship rows for admin: referrer/referee details, referral code, joined/booked/lessoned stage, earned reward minutes, pending reward minutes, and first booking / first paid lesson dates |
+| `link-referral-relationship` | POST | JWT | Admin correction tool. Body: `{ referrer_learner_id, referred_learner_id }`. Sets `learner_users.referred_by` for the referred learner after same-school, self-link, cycle, and already-rewarded reassignment guards. Audit-logged as `admin.link_referral_relationship`; does not issue reward credit |
 | `referral-config` | GET | JWT | Current referral config for the school (enabled, welcome bonus, reward minutes) |
 | `update-referral-config` | POST | JWT | Update referral config. Body: `{ referral_enabled, referral_welcome_bonus_minutes, referral_reward_minutes }`. Audit-logged |
 

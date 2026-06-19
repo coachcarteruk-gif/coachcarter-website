@@ -115,11 +115,17 @@
     /* Recent referrals */
     .ref-row {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 12px 0; border-bottom: 1px solid var(--border);
+      gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border);
     }
     .ref-row:last-child { border-bottom: none; }
     .ref-row-name { font-size: 0.92rem; font-weight: 600; color: var(--primary); }
     .ref-row-sub { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+    .ref-row-right {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
+      flex-shrink: 0; text-align: right;
+    }
+    .ref-row-reward { font-size: 0.76rem; color: var(--primary); font-weight: 700; }
+    .ref-row-pending { color: #b45309; }
     .ref-badge {
       font-size: 0.68rem; font-weight: 700; padding: 3px 10px;
       border-radius: 20px; white-space: nowrap;
@@ -139,6 +145,11 @@
     .disabled-msg {
       text-align: center; padding: 40px 20px;
       color: var(--muted); font-size: 0.9rem;
+    }
+
+    @media (max-width: 420px) {
+      .ref-row { align-items: flex-start; flex-direction: column; }
+      .ref-row-right { align-items: flex-start; text-align: left; }
     }
   </style>
   <script src="/sidebar.js"></script>

@@ -80,14 +80,21 @@
     };
     var html = list.map(function (r) {
       var b = badgeMap[r.status] || badgeMap.joined;
-      var name = r.name || 'A friend';
+      var name = r.first_name || r.name || 'A friend';
+      var earned = r.reward_minutes || 0;
+      var pending = r.pending_reward_minutes || 0;
+      var rewardText = earned > 0 ? 'Earned ' + formatMinutes(earned) : 'No reward yet';
+      if (pending > 0) rewardText += ' - ' + formatMinutes(pending) + ' pending';
       return (
         '<div class="ref-row">' +
           '<div>' +
             '<div class="ref-row-name">' + escape(name) + '</div>' +
             '<div class="ref-row-sub">Joined ' + formatDate(r.created_at) + '</div>' +
           '</div>' +
-          '<span class="ref-badge ' + b.cls + '">' + b.text + '</span>' +
+          '<div class="ref-row-right">' +
+            '<span class="ref-badge ' + b.cls + '">' + b.text + '</span>' +
+            '<div class="ref-row-reward' + (pending > 0 ? ' ref-row-pending' : '') + '">' + escape(rewardText) + '</div>' +
+          '</div>' +
         '</div>'
       );
     }).join('');

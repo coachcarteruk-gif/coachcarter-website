@@ -4324,6 +4324,8 @@ document.addEventListener('input', function (e) {
 async function loadReferrals() {
   loadReferralConfig();
   loadReferralActivity();
+  loadReferralLearnerOptions();
+  loadReferralRelationships();
 }
 
 async function loadReferralConfig() {
@@ -4413,8 +4415,8 @@ async function loadReferralActivity() {
     tbody.innerHTML = rows.map(function (r) {
       var hrs = (r.total_rewards_minutes / 60).toFixed(1);
       return '<tr>' +
-        '<td><strong>' + (r.referrer_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + (r.referrer_email || '') + '</span></td>' +
-        '<td><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:0.85rem;">' + r.code + '</code></td>' +
+        '<td><strong>' + esc(r.referrer_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + esc(r.referrer_email || '') + '</span></td>' +
+        '<td><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:0.85rem;">' + esc(r.code) + '</code></td>' +
         '<td>' + r.total_referred + '</td>' +
         '<td>' + hrs + ' hrs (' + r.total_rewards_minutes + ' min)</td>' +
         '</tr>';
@@ -4425,7 +4427,162 @@ async function loadReferralActivity() {
   }
 }
 
-// ── Sidebar nav ──
+function referralLearnerLabel(learner) {
+  var name = learner.name || 'Unnamed learner';
+  var contact = learner.email || learner.phone || ('ID ' + learner.id);
+  return name + ' - ' + contact;
+}
+
+async function loadReferralLearnerOptions() {
+  var referrerSelect = document.getElementById('ref-link-referrer');
+  var referredSelect = document.getElementById('ref-link-referred');
+  if (!referrerSelect || !referredSelect) return;
+
+  try {
+    if (!allLearners || allLearners.length === 0) {
+      var res = await fetchAdmin('/api/admin?action=all-learners', { headers: HEADERS });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load learners');
+      allLearners = data.learners || [];
+    }
+
+    var sorted = allLearners.slice().sort(function (a, b) {
+      return referralLearnerLabel(a).localeCompare(referralLearnerLabel(b));
+    });
+    var options = '<option value="">Select learner</option>' + sorted.map(function (l) {
+      return '<option value="' + esc(l.id) + '">' + esc(referralLearnerLabel(l)) + '</option>';
+    }).join('');
+
+    var currentReferrer = referrerSelect.value;
+    var currentReferred = referredSelect.value;
+    referrerSelect.innerHTML = options;
+    referredSelect.innerHTML = options;
+    if (currentReferrer) referrerSelect.value = currentReferrer;
+    if (currentReferred) referredSelect.value = currentReferred;
+  } catch (e) {
+    referrerSelect.innerHTML = '<option value="">Failed to load learners</option>';
+    referredSelect.innerHTML = '<option value="">Failed to load learners</option>';
+    console.error('loadReferralLearnerOptions:', e);
+  }
+}
+
+function setReferralLinkStatus(message, type) {
+  var status = document.getElementById('ref-link-status');
+  if (!status) return;
+  status.textContent = message;
+  status.style.display = message ? 'block' : 'none';
+  status.style.color = type === 'error' ? '#ef4444' : 'var(--accent)';
+}
+
+async function linkReferralRelationship() {
+  var btn = document.getElementById('btn-link-referral');
+  var referrerSelect = document.getElementById('ref-link-referrer');
+  var referredSelect = document.getElementById('ref-link-referred');
+  if (!btn || !referrerSelect || !referredSelect) return;
+
+  var referrerId = parseInt(referrerSelect.value, 10);
+  var referredId = parseInt(referredSelect.value, 10);
+  if (!referrerId || !referredId) {
+    setReferralLinkStatus('Choose both learners first.', 'error');
+    return;
+  }
+  if (referrerId === referredId) {
+    setReferralLinkStatus('A learner cannot refer themselves.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Linking...';
+  setReferralLinkStatus('', '');
+
+  try {
+    var res = await fetchAdmin('/api/admin?action=link-referral-relationship', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        referrer_learner_id: referrerId,
+        referred_learner_id: referredId
+      })
+    });
+    var data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to link referral');
+
+    setReferralLinkStatus('Referral relationship linked.', 'success');
+    referredSelect.value = '';
+    loadReferralActivity();
+    loadReferralRelationships();
+  } catch (e) {
+    setReferralLinkStatus(e.message || 'Failed to link referral relationship.', 'error');
+    console.error('linkReferralRelationship:', e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Link';
+  }
+}
+
+// Referral relationship helpers
+function formatReferralMinutes(mins) {
+  mins = parseInt(mins, 10) || 0;
+  if (mins <= 0) return '0 min';
+  if (mins < 60) return mins + ' min';
+  var hours = Math.floor(mins / 60);
+  var rem = mins % 60;
+  return rem ? (hours + ' hr ' + rem + ' min') : (hours + ' hr');
+}
+
+function referralStageBadge(status) {
+  var label = status === 'lessoned' ? 'Driving'
+            : status === 'booked' ? 'Booked'
+            : 'Joined';
+  var cls = status === 'lessoned' ? 'badge-green'
+          : status === 'booked' ? 'badge-amber'
+          : 'badge-gray';
+  return '<span class="badge ' + cls + '">' + label + '</span>';
+}
+
+async function loadReferralRelationships() {
+  var tbody = document.getElementById('referral-relationships-body');
+  var empty = document.getElementById('referral-relationships-empty');
+  if (!tbody) return;
+
+  try {
+    var res = await fetchAdmin('/api/admin?action=referral-relationships', { headers: HEADERS });
+    var data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    var rows = data.relationships || [];
+    if (rows.length === 0) {
+      tbody.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = rows.map(function (r) {
+      var earned = formatReferralMinutes(r.reward_minutes);
+      var pending = parseInt(r.pending_reward_minutes, 10) || 0;
+      var rewardLine = pending > 0
+        ? earned + '<br><span style="font-size:0.78rem;color:#b45309;">' + formatReferralMinutes(pending) + ' pending</span>'
+        : earned;
+      var dates = 'Joined ' + (r.referred_at ? formatDateTime(r.referred_at) : '-');
+      if (r.first_booking_date) dates += '<br><span style="font-size:0.78rem;color:#888;">First booking ' + formatDate(r.first_booking_date) + '</span>';
+      if (r.first_paid_lesson_date) dates += '<br><span style="font-size:0.78rem;color:#888;">First paid lesson ' + formatDate(r.first_paid_lesson_date) + '</span>';
+
+      return '<tr>' +
+        '<td><strong>' + esc(r.referrer_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + esc(r.referrer_email || '') + '</span><br><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:0.78rem;">' + esc(r.referral_code || '-') + '</code></td>' +
+        '<td><strong>' + esc(r.referee_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + esc(r.referee_email || r.referee_phone || '') + '</span></td>' +
+        '<td>' + referralStageBadge(r.status) + '</td>' +
+        '<td>' + rewardLine + '</td>' +
+        '<td>' + dates + '</td>' +
+        '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;">Failed to load relationships</td></tr>';
+    console.error('loadReferralRelationships:', e);
+  }
+}
+
+// Sidebar nav
 document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   a.addEventListener('click', function (e) { e.preventDefault(); showSection(a.dataset.section); });
 });
@@ -4473,6 +4630,7 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
     updateRefundSourceFields();
   }
   bind('btn-save-referral-config', saveReferralConfig);
+  bind('btn-link-referral', linkReferralRelationship);
   var refEnabled = document.getElementById('ref-enabled');
   if (refEnabled) refEnabled.addEventListener('change', function () { updateRefFieldsVisibility(this.checked); });
   bind('btn-close-lt-modal', closeLTModal);

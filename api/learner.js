@@ -1164,28 +1164,54 @@ async function handleReferralStats(req, res) {
       SELECT
         lu.name,
         lu.created_at,
+        COALESCE((
+          SELECT SUM(FLOOR((EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) / 3))::int
+          FROM lesson_bookings b
+          WHERE b.learner_id = lu.id
+            AND b.school_id = ${schoolId}
+            AND b.status = ${CHARGEABLE}
+            AND b.payment_method <> 'free'
+            AND b.referral_rewarded_at IS NOT NULL
+        ), 0)::int AS reward_minutes,
+        COALESCE((
+          SELECT SUM(FLOOR((EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) / 3))::int
+          FROM lesson_bookings b
+          WHERE b.learner_id = lu.id
+            AND b.school_id = ${schoolId}
+            AND b.status = ${CHARGEABLE}
+            AND b.payment_method <> 'free'
+            AND b.referral_rewarded_at IS NULL
+        ), 0)::int AS pending_reward_minutes,
         EXISTS (
           SELECT 1 FROM lesson_bookings b
            WHERE b.learner_id = lu.id
+             AND b.school_id = ${schoolId}
              AND b.status = ${CHARGEABLE}
              AND b.payment_method <> 'free'
         ) AS has_completed_paid,
         EXISTS (
           SELECT 1 FROM lesson_bookings b
            WHERE b.learner_id = lu.id
+             AND b.school_id = ${schoolId}
              AND b.status IN (${SCHEDULED}, ${CHARGEABLE}, ${REFUNDED})
         ) AS has_any_booking
       FROM learner_users lu
       WHERE lu.referred_by = ${user.id} AND lu.school_id = ${schoolId}
       ORDER BY lu.created_at DESC LIMIT 10`;
 
-    const enriched = recentReferrals.map(r => ({
-      name: r.name,
-      created_at: r.created_at,
-      status: r.has_completed_paid ? 'lessoned'
-            : r.has_any_booking    ? 'booked'
-            : 'joined'
-    }));
+    const enriched = recentReferrals.map(r => {
+      const firstName = ((r.name || '').trim().split(/\s+/)[0] || null);
+      return {
+        name: firstName || 'A friend',
+        first_name: firstName,
+        created_at: r.created_at,
+        reward_minutes: r.reward_minutes || 0,
+        pending_reward_minutes: r.pending_reward_minutes || 0,
+        status: r.has_completed_paid ? 'lessoned'
+              : r.has_any_booking    ? 'booked'
+              : 'joined'
+      };
+    });
 
     return res.json({
       ok: true,
