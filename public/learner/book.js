@@ -1579,22 +1579,6 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
       return;
     }
 
-    document.getElementById('mdSingleType').textContent = `${validatedType.name} - ${formatHours(validatedType.duration_minutes)} - £${(validatedType.price_pence / 100).toFixed(2)}`;
-    document.getElementById('mdSingleTypeRow').style.display = 'flex';
-    const pageSelectedHint = document.getElementById('mdUsualHint');
-    if (pageSelectedHint) pageSelectedHint.style.display = 'block';
-    applyLessonTypeToModal(validatedType, isGuest, needsProfileFields);
-    window.posthog && posthog.capture('duration_selected', {
-      lesson_type_slug: validatedType.slug,
-      duration_minutes: validatedType.duration_minutes,
-      price_pence: validatedType.price_pence,
-      was_preselected: true,
-      source: requestedId ? 'page_control' : 'default',
-      fits: true,
-      all_options: durations.map(d => d.slug)
-    });
-    return;
-
     // Auto-collapse when there's only one option for the school AND only one fits.
     if (durations.length === 1 && fitting.length === 1) {
       document.getElementById('mdSingleType').textContent = `${fitting[0].name} — ${formatHours(fitting[0].duration_minutes)} — £${(fitting[0].price_pence / 100).toFixed(2)}`;

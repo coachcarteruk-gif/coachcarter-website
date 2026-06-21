@@ -1256,7 +1256,7 @@ async function handleDurationsForSlot(req, res) {
     const dayOfWeek = new Date(date + 'T00:00:00Z').getUTCDay();
     const [instructor] = await sql`
       SELECT i.id, i.offered_lesson_types,
-             COALESCE(i.social_video_opt_in, false) AS social_video_opt_in,
+             COALESCE((to_jsonb(i)->>'social_video_opt_in')::boolean, false) AS social_video_opt_in,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
              COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,

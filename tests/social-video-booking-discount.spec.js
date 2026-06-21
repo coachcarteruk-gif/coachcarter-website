@@ -46,6 +46,9 @@ test('social video discount is instructor opt-in and booking-snapshotted', () =>
   expect(guestCheckout).toContain('ageConfirmed: social_video_age_confirmed');
   expect(guestCheckout).toContain("social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false'");
 
+  const durations = functionBody(slots, 'handleDurationsForSlot');
+  expect(durations).toContain("COALESCE((to_jsonb(i)->>'social_video_opt_in')::boolean, false) AS social_video_opt_in");
+
   const webhookSlot = functionBody(webhook, 'handleSlotBooking');
   expect(webhookSlot).toContain('const socialVideoRequested = normaliseSocialVideoConsent(metadata.social_video_consent);');
   expect(webhookSlot).toContain('const socialVideoAgeConfirmed = socialVideoRequested && normaliseSocialVideoConsent(metadata.social_video_age_confirmed);');

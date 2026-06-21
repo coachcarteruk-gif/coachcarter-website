@@ -44,6 +44,17 @@ test.describe('learner per-booking pickup and drop-off locations', () => {
     expect(js).toContain("pickupMode.addEventListener('change', function () {");
   });
 
+  test('duration check keeps the multi-lesson dropdown path reachable', () => {
+    const js = read('public/learner/book.js');
+    const body = functionBody(js, 'loadDurationsForSlot');
+    const autoCollapse = body.indexOf("if (durations.length === 1 && fitting.length === 1)");
+    const dropdownRender = body.indexOf("document.getElementById('mdDurationPicker').style.display = 'flex';");
+
+    expect(autoCollapse).toBeGreaterThan(0);
+    expect(dropdownRender).toBeGreaterThan(autoCollapse);
+    expect(body.slice(0, autoCollapse)).not.toContain("document.getElementById('mdSingleTypeRow').style.display = 'flex';\n    applyLessonTypeToModal(validatedType");
+  });
+
   test('slot API gates changed pickups and carries locations into Stripe metadata', () => {
     const api = read('api/slots.js');
 
