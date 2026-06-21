@@ -64,7 +64,7 @@
       margin: 12px 0;
     }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .kv { background: #f8f8f8; border-radius: 10px; padding: 10px 12px; min-width: 0; }
+    .kv { background: var(--surface); border-radius: 10px; padding: 10px 12px; min-width: 0; }
     .kv-label { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; margin-bottom: 4px; }
     .kv-value { color: var(--primary); font-weight: 800; overflow-wrap: anywhere; }
     .btn {
@@ -84,7 +84,7 @@
       gap: 6px;
     }
     .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .btn.danger { color: #b91c1c; border-color: rgba(185,28,28,0.25); }
+    .btn.danger { color: var(--red); border-color: rgba(239,68,68,0.35); }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
     .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -94,18 +94,18 @@
       padding: 14px;
       background: var(--white);
     }
-    .swap-card.is-alert { border-color: rgba(245,131,33,0.35); background: #fffaf5; }
+    .swap-card.is-alert { border-color: rgba(245,131,33,0.35); background: var(--accent-lt); }
     .swap-title { font-family: var(--font-head); font-weight: 800; color: var(--primary); margin-bottom: 8px; }
     .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
     .chip { background: var(--accent-lt); color: var(--accent); border-radius: 20px; padding: 4px 9px; font-size: 0.74rem; font-weight: 800; }
-    .chip.gray { background: #f3f4f6; color: #6b7280; }
+    .chip.gray { background: var(--surface); color: var(--muted); }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; }
     .field label { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; font-weight: 800; margin-bottom: 4px; }
     .field input { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 10px; font: inherit; color: var(--primary); background: var(--white); }
     .empty { color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
     .status { font-size: 0.84rem; color: var(--muted); min-height: 20px; }
-    .status.error { color: #b91c1c; }
-    .status.ok { color: #166534; }
+    .status.error { color: var(--red); }
+    .status.ok { color: var(--green); }
     @media (max-width: 720px) {
       .page-header { display: block; }
       .grid, .cards, .form-grid { grid-template-columns: 1fr; }
