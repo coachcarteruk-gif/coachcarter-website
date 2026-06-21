@@ -14,6 +14,7 @@
 
   function bind() {
     byId('btnRefresh')?.addEventListener('click', loadSummary);
+    byId('btnSaveInlineTest')?.addEventListener('click', saveInlineTestDetails);
     byId('btnAddWindow')?.addEventListener('click', function () {
       windows.push({ start_date: '', end_date: '' });
       drawForm();
@@ -132,7 +133,10 @@
   function render() {
     if (!state) return;
     var prompt = byId('profilePrompt');
-    if (prompt) prompt.style.display = state.eligible ? 'none' : 'block';
+    if (prompt) {
+      prompt.style.display = state.eligible ? 'none' : 'block';
+      if (!state.eligible) populateInlineTestForm();
+    }
     var createSection = byId('createSection');
     if (createSection) createSection.style.display = state.eligible && !state.my_listing ? 'block' : 'none';
     var sub = byId('marketSubtitle');
@@ -171,7 +175,7 @@
     var listing = state.my_listing;
     if (!listing) {
       if (!state.eligible) {
-        setBody('myListingBody', '<div class="empty">Add your official test details to create a listing.</div>');
+        setBody('myListingBody', '<div class="empty">Add your official test details above to create a listing.</div>');
       } else {
         setBody('myListingBody', '<div class="empty">You do not have an active listing yet. Add replacement windows below to post your test.</div>');
       }
@@ -192,7 +196,7 @@
   function renderMarket() {
     var rows = state.listings || [];
     if (!state.eligible) {
-      setBody('marketBody', '<div class="empty">Add your official test details before browsing matching swaps.</div>');
+      setBody('marketBody', '<div class="empty">Add your official test details above before browsing matching swaps.</div>');
       return;
     }
     if (!rows.length) {
@@ -263,6 +267,48 @@
     if (!el) return;
     el.textContent = message || '';
     el.className = 'status' + (type ? ' ' + type : '');
+  }
+
+  function populateInlineTestForm() {
+    var profile = state?.profile || {};
+    var date = byId('inlineTestDate');
+    var time = byId('inlineTestTime');
+    var centre = byId('inlineTestCentre');
+    if (date && !date.value) date.value = profile.test_date || '';
+    if (time && !time.value) time.value = (profile.test_time || '').slice(0, 5);
+    if (centre && !centre.value) centre.value = profile.test_centre || '';
+  }
+
+  async function saveInlineTestDetails() {
+    var date = byId('inlineTestDate')?.value || '';
+    var time = byId('inlineTestTime')?.value || '';
+    var centre = (byId('inlineTestCentre')?.value || '').trim();
+    var btn = byId('btnSaveInlineTest');
+    if (!date || !time || !centre) {
+      setStatus('inlineTestStatus', 'Enter the test date, time and centre.', 'error');
+      return;
+    }
+    if (btn) btn.disabled = true;
+    setStatus('inlineTestStatus', 'Saving...', '');
+    try {
+      var res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          test_date: date,
+          test_time: time,
+          test_centre: centre
+        })
+      });
+      var data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || data.error || 'Could not save test details');
+      setStatus('inlineTestStatus', 'Saved. Loading matching swaps...', 'ok');
+      await loadSummary();
+    } catch (err) {
+      setStatus('inlineTestStatus', err.message || 'Could not save test details', 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   async function post(action, body) {

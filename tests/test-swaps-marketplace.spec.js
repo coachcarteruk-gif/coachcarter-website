@@ -80,7 +80,13 @@ test.describe('test swaps marketplace', () => {
     expect(sidebar).toContain('cc-test-swaps-badge');
     expect(sidebar).toContain('/api/test-swaps?action=notification-count');
     expect(learnerHtml).toContain('/learner/test-swaps.js');
+    expect(learnerHtml).toContain('id="inlineTestDate"');
+    expect(learnerHtml).toContain('id="inlineTestTime"');
+    expect(learnerHtml).toContain('id="inlineTestCentre"');
+    expect(learnerHtml).toContain('id="btnSaveInlineTest"');
     expect(learnerJs).toContain("'/api/test-swaps?action=summary'");
+    expect(learnerJs).toContain("'/api/learner?action=update-profile'");
+    expect(learnerJs).toContain('saveInlineTestDetails');
     expect(learnerJs).toContain("post('request-listing'");
     expect(learnerJs).toContain("post('accept-request'");
     expect(adminHtml).toContain('data-section="test-swaps"');

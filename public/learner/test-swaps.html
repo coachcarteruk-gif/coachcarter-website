@@ -56,7 +56,13 @@
       line-height: 1.45;
     }
     .prompt strong { display: block; font-family: var(--font-head); font-size: 1rem; margin-bottom: 4px; }
-    .prompt a { color: var(--accent); font-weight: 800; }
+    .prompt p { margin: 0 0 12px; }
+    .official-test-form {
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) minmax(120px, .8fr) minmax(220px, 2fr);
+      gap: 12px;
+      margin: 12px 0;
+    }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .kv { background: #f8f8f8; border-radius: 10px; padding: 10px 12px; min-width: 0; }
     .kv-label { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; margin-bottom: 4px; }
@@ -103,6 +109,7 @@
     @media (max-width: 720px) {
       .page-header { display: block; }
       .grid, .cards, .form-grid { grid-template-columns: 1fr; }
+      .official-test-form { grid-template-columns: 1fr; }
       .panel-head { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -118,12 +125,29 @@
       <h1>Test Swaps</h1>
       <p>Browse same-centre driving test swaps and agree a swap in principle. Admin will coordinate the DVSA swap off-platform.</p>
     </div>
-    <a class="btn" href="/learner/profile.html">Edit official test</a>
   </div>
 
   <div id="profilePrompt" class="prompt" style="display:none">
     <strong>Add your official test details first</strong>
-    Save your official test date, time and centre on your profile before posting or requesting a swap. <a href="/learner/profile.html">Update profile</a>
+    <p>Save your official test date, time and centre here before posting or requesting a swap.</p>
+    <div class="official-test-form">
+      <div class="field">
+        <label for="inlineTestDate">Test date</label>
+        <input type="date" id="inlineTestDate">
+      </div>
+      <div class="field">
+        <label for="inlineTestTime">Test time</label>
+        <input type="time" id="inlineTestTime">
+      </div>
+      <div class="field">
+        <label for="inlineTestCentre">Test centre</label>
+        <input type="text" id="inlineTestCentre" maxlength="160" placeholder="e.g. Sidcup Driving Test Centre">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="btnSaveInlineTest" type="button">Save test details</button>
+      <span class="status" id="inlineTestStatus"></span>
+    </div>
   </div>
 
   <section class="section" id="updatesSection">
