@@ -84,6 +84,7 @@ function showSection(name) {
   if (name === 'instructors')  loadInstructors();
   if (name === 'availability') loadInstructorSelect();
   if (name === 'bookings')     loadBookings();
+  if (name === 'test-swaps')   loadTestSwaps();
   if (name === 'videos')        loadVideos();
   if (name === 'learners')      loadLearners();
   if (name === 'broadcasts')    loadBroadcastHistory();
@@ -2251,6 +2252,58 @@ async function submitGoodwillCredit() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// TEST SWAP REQUESTS
+async function loadTestSwaps() {
+  var tbody = document.getElementById('test-swaps-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Loading...</td></tr>';
+  try {
+    var res = await fetchAdmin('/api/test-swaps?action=admin-accepted', { headers: HEADERS });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to load test swaps');
+    var rows = data.requests || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No accepted test swaps waiting for coordination.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function (r) {
+      return '<tr>' +
+        '<td><strong>' + esc(r.owner_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + esc(r.owner_email || '-') + '<br>' + esc(r.owner_phone || '-') + '</span></td>' +
+        '<td><strong>' + esc(r.requester_name || 'Unknown') + '</strong><br><span style="font-size:0.78rem;color:#888;">' + esc(r.requester_email || '-') + '<br>' + esc(r.requester_phone || '-') + '</span></td>' +
+        '<td>' + esc(r.test_centre || '-') + '</td>' +
+        '<td>' + esc(formatDate(r.listing_test_date)) + '<br><span style="font-size:0.78rem;color:#888;">' + esc(formatTime(r.listing_test_time)) + '</span></td>' +
+        '<td>' + esc(formatDate(r.requester_test_date_snapshot)) + '<br><span style="font-size:0.78rem;color:#888;">' + esc(formatTime(r.requester_test_time_snapshot)) + '</span></td>' +
+        '<td>' + esc(r.accepted_at ? new Date(r.accepted_at).toLocaleString('en-GB') : '-') + '</td>' +
+        '<td>' + statusBadge(r.status) + '<br><span style="font-size:0.78rem;color:#888;">Listing: ' + esc(r.listing_status || '-') + '</span></td>' +
+        '<td><button class="btn btn-sm btn-success" data-action="complete-test-swap" data-id="' + esc(r.id) + '">Mark completed</button></td>' +
+      '</tr>';
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="8" style="color:#ef4444;">Failed to load test swaps</td></tr>';
+    console.error('loadTestSwaps:', err);
+  }
+}
+
+async function completeTestSwap(id, btn) {
+  if (!confirm('Mark this test swap completed? This removes both involved learners from the active marketplace.')) return;
+  var old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Completing...'; }
+  try {
+    var res = await fetchAdmin('/api/test-swaps?action=admin-complete', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({ request_id: id })
+    });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'Failed to complete test swap');
+    toast('Test swap marked completed', 'success');
+    loadTestSwaps();
+  } catch (err) {
+    toast(err.message || 'Failed to complete test swap', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = old; }
+  }
+}
+
 // VIDEOS
 // ══════════════════════════════════════════════════════════════════
 const CF_BASE = 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com';
@@ -4297,6 +4350,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'filter-feedback-status') filterFeedbackStatus(t, t.dataset.status);
   else if (a === 'filter-feedback-type') filterFeedbackType(t, t.dataset.type);
   else if (a === 'update-feedback-status') updateFeedbackStatus(parseInt(t.dataset.id, 10), t.dataset.status);
+  else if (a === 'complete-test-swap') completeTestSwap(parseInt(t.dataset.id, 10), t);
   else if (a === 'close-modal') closeModal(t.dataset.modal);
   else if (a === 'bulk-action') bulkAction(t.dataset.op);
 });
@@ -4602,6 +4656,7 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   bind('btn-add-blackout', addBlackout);
   bind('btn-save-blackouts', saveBlackouts);
   bind('btn-refresh-bookings', loadBookings);
+  bind('btn-refresh-test-swaps', loadTestSwaps);
   bind('btn-open-retro-lesson', openAdminRetrospectiveLesson);
   bind('btn-close-admin-retro', closeAdminRetrospectiveLesson);
   bind('adminRetroSaveBtn', submitAdminRetrospectiveLesson);

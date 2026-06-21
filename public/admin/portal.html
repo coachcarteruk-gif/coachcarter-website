@@ -376,6 +376,9 @@ body {
     <a href="#" data-section="bookings">
       <span class="nav-icon">&#x1f4d6;</span> Bookings
     </a>
+    <a href="#" data-section="test-swaps">
+      <span class="nav-icon">&#8644;</span> Test Swap Requests
+    </a>
     <a href="#" data-section="learners">
       <span class="nav-icon">&#x1f9d1;&#x200d;&#x1f393;</span> Learners
     </a>
@@ -553,6 +556,38 @@ body {
   </div>
 
   <!-- ═══════════ VIDEOS SECTION ═══════════ -->
+  <div class="section" id="section-test-swaps">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Test Swap Requests</div>
+        <div class="page-subtitle">Accepted-in-principle swaps waiting for admin DVSA coordination</div>
+      </div>
+      <button class="btn" id="btn-refresh-test-swaps">Refresh</button>
+    </div>
+
+    <div class="panel-card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Owner learner</th>
+              <th>Requester</th>
+              <th>Shared centre</th>
+              <th>Owner test</th>
+              <th>Requester test</th>
+              <th>Accepted</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="test-swaps-body">
+            <tr><td colspan="8" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div class="section" id="section-videos">
     <div class="page-header">
       <div>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Test Swaps - CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
+  <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <style>
+    main { max-width: 920px; margin: 0 auto; padding: 24px 16px 100px; }
+    .page-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+    .page-header h1 { font-family: var(--font-head); font-size: 1.6rem; color: var(--primary); margin: 0; }
+    .page-header p { color: var(--muted); margin: 4px 0 0; font-size: 0.92rem; line-height: 1.45; }
+    .section { margin-bottom: 18px; }
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-family: var(--font-head); font-size: 1rem; font-weight: 800; color: var(--primary); }
+    .panel-sub { color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+    .panel-body { padding: 18px; }
+    .prompt {
+      background: var(--accent-lt);
+      border: 1px solid rgba(245,131,33,0.25);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      color: var(--primary);
+      line-height: 1.45;
+    }
+    .prompt strong { display: block; font-family: var(--font-head); font-size: 1rem; margin-bottom: 4px; }
+    .prompt a { color: var(--accent); font-weight: 800; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .kv { background: #f8f8f8; border-radius: 10px; padding: 10px 12px; min-width: 0; }
+    .kv-label { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; margin-bottom: 4px; }
+    .kv-value { color: var(--primary); font-weight: 800; overflow-wrap: anywhere; }
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--primary);
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-family: var(--font-head);
+      font-size: 0.84rem;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.danger { color: #b91c1c; border-color: rgba(185,28,28,0.25); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .swap-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: var(--white);
+    }
+    .swap-card.is-alert { border-color: rgba(245,131,33,0.35); background: #fffaf5; }
+    .swap-title { font-family: var(--font-head); font-weight: 800; color: var(--primary); margin-bottom: 8px; }
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .chip { background: var(--accent-lt); color: var(--accent); border-radius: 20px; padding: 4px 9px; font-size: 0.74rem; font-weight: 800; }
+    .chip.gray { background: #f3f4f6; color: #6b7280; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; }
+    .field label { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; font-weight: 800; margin-bottom: 4px; }
+    .field input { width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 10px; font: inherit; color: var(--primary); background: var(--white); }
+    .empty { color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+    .status { font-size: 0.84rem; color: var(--muted); min-height: 20px; }
+    .status.error { color: #b91c1c; }
+    .status.ok { color: #166534; }
+    @media (max-width: 720px) {
+      .page-header { display: block; }
+      .grid, .cards, .form-grid { grid-template-columns: 1fr; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/learner-auth.js"></script>
+  <script src="/auth-gate.js"></script>
+</head>
+<body>
+<nav class="site-nav" style="display:none"></nav>
+<main>
+  <div class="page-header">
+    <div>
+      <h1>Test Swaps</h1>
+      <p>Browse same-centre driving test swaps and agree a swap in principle. Admin will coordinate the DVSA swap off-platform.</p>
+    </div>
+    <a class="btn" href="/learner/profile.html">Edit official test</a>
+  </div>
+
+  <div id="profilePrompt" class="prompt" style="display:none">
+    <strong>Add your official test details first</strong>
+    Save your official test date, time and centre on your profile before posting or requesting a swap. <a href="/learner/profile.html">Update profile</a>
+  </div>
+
+  <section class="section" id="updatesSection">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Incoming requests and updates</div>
+          <div class="panel-sub">Learner identities stay private here. Admin sees contact details after acceptance.</div>
+        </div>
+        <button class="btn" id="btnRefresh">Refresh</button>
+      </div>
+      <div class="panel-body" id="incomingBody"><div class="empty">Loading...</div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Your listing</div>
+          <div class="panel-sub">Create one active listing using your saved official test details.</div>
+        </div>
+      </div>
+      <div class="panel-body" id="myListingBody"><div class="empty">Loading...</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="createSection">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Replacement windows</div>
+          <div class="panel-sub">Date ranges only for v1. Add dates you cannot attend separately.</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="windowsList"></div>
+        <div class="actions">
+          <button class="btn" id="btnAddWindow">Add window</button>
+        </div>
+        <div style="height:14px"></div>
+        <div id="unavailableList"></div>
+        <div class="actions">
+          <button class="btn" id="btnAddUnavailable">Add unavailable date</button>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="btnCreateListing">Create listing</button>
+          <span class="status" id="createStatus"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Available same-centre swaps</div>
+          <div class="panel-sub" id="marketSubtitle">Only matching listings are shown.</div>
+        </div>
+      </div>
+      <div class="panel-body" id="marketBody"><div class="empty">Loading...</div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Your requests</div>
+          <div class="panel-sub">Track requests you have made to other learners.</div>
+        </div>
+      </div>
+      <div class="panel-body" id="myRequestsBody"><div class="empty">Loading...</div></div>
+    </div>
+  </section>
+</main>
+<script src="/learner/test-swaps.js"></script>
+</body>
+</html>

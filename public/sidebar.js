@@ -167,6 +167,7 @@
     calendar: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
     calendarPlus: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>',
     list: '<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+    shuffle: '<svg viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>',
     clipboard: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>',
     message: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     creditCard: '<svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
@@ -196,7 +197,8 @@
       { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
       { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true }
+        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true },
+        { icon: 'shuffle', label: 'Test Swaps', href: '/learner/test-swaps.html', authOnly: true, badgeId: 'cc-test-swaps-badge' }
       ]},
       { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
         { icon: 'home', label: 'Overview', href: '/learner/practice.html' },
@@ -232,7 +234,7 @@
         { icon: 'home', label: 'Dashboard', href: '/learner/',
           activeOn: [] },
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-          activeOn: ['/learner/lessons-hub', '/learner/lessons'] },
+          activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/test-swaps'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
           activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
         { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',
@@ -305,9 +307,10 @@
             var child = item.children[j];
             if (child.authOnly && !isLoggedIn) continue;
             var cActive = isActive(child.href) ? ' active' : '';
+            var cBadge = child.badgeId ? '<span class="cc-sb-badge" id="' + escapeHtml(child.badgeId) + '" style="display:none"></span>' : '';
             html += '<a href="' + child.href + '" class="cc-sb-link cc-sb-child' + cActive + '">' +
               '<span class="cc-sb-icon">' + icons[child.icon] + '</span>' +
-              '<span>' + child.label + '</span></a>';
+              '<span>' + child.label + '</span>' + cBadge + '</a>';
           }
           html += '</div>';
         } else {
@@ -798,6 +801,22 @@
     '  .cc-sub-tab.active::after {',
     '    background: var(--brand-primary, var(--accent, #f58321));',
     '  }',
+    '}',
+
+    '.cc-sb-badge {',
+    '  margin-left: auto;',
+    '  min-width: 20px;',
+    '  height: 20px;',
+    '  padding: 0 6px;',
+    '  display: inline-flex;',
+    '  align-items: center;',
+    '  justify-content: center;',
+    '  border-radius: 999px;',
+    '  background: var(--brand-primary, var(--accent, #f58321));',
+    '  color: #fff;',
+    '  font-size: 0.68rem;',
+    '  font-weight: 800;',
+    '  line-height: 1;',
     '}'
   ].join('\n');
   document.head.appendChild(css);
@@ -847,6 +866,27 @@
   }
 
   // ── Inject HTML on DOMContentLoaded ────────────────────────────
+  function updateTestSwapsBadge() {
+    if (context !== 'learner') return;
+    var badge = document.getElementById('cc-test-swaps-badge');
+    if (!badge) return;
+    var session = getStoredSession('cc_learner');
+    if (!session) return;
+    fetch('/api/test-swaps?action=notification-count', { credentials: 'include' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        var count = data && Number(data.count || 0);
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : String(count);
+          badge.style.display = 'inline-flex';
+        } else {
+          badge.textContent = '';
+          badge.style.display = 'none';
+        }
+      })
+      .catch(function () {});
+  }
+
   function init() {
     document.body.classList.add('cc-has-sidebar');
 
@@ -877,6 +917,7 @@
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
     var feedbackModalHTML = buildFeedbackModalHTML();
     if (feedbackModalHTML) document.body.insertAdjacentHTML('beforeend', feedbackModalHTML);
+    updateTestSwapsBadge();
 
     if (context === 'instructor') {
       var supportSession = getStoredSession('cc_instructor');

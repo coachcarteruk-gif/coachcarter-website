@@ -45,6 +45,35 @@ function escapeHtml(s) {
   });
 }
 
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function fmtClock(timeStr) {
+  return timeStr ? String(timeStr).slice(0, 5) : '';
+}
+
+function renderOfficialTestSummary() {
+  const body = document.getElementById('officialTestSummaryBody');
+  if (!body || !PROGRESS) return;
+  const date = PROGRESS.test_date || '';
+  const time = PROGRESS.test_time || '';
+  const centre = PROGRESS.test_centre || '';
+  if (!date || !time || !centre) {
+    body.innerHTML = '<div class="official-test-empty">Add your official test date, time and centre to unlock test swaps.</div>';
+    return;
+  }
+  body.innerHTML =
+    '<div class="official-test-grid">' +
+      '<div class="official-test-item"><div class="official-test-label">Date</div><div class="official-test-value">' + escapeHtml(fmtDate(date)) + '</div></div>' +
+      '<div class="official-test-item"><div class="official-test-label">Time</div><div class="official-test-value">' + escapeHtml(fmtClock(time)) + '</div></div>' +
+      '<div class="official-test-item"><div class="official-test-label">Centre</div><div class="official-test-value">' + escapeHtml(centre) + '</div></div>' +
+    '</div>';
+}
+
 function render() {
   if (!PROGRESS) return;
 
@@ -53,6 +82,8 @@ function render() {
 
   // Profile card
   renderProfile();
+
+  renderOfficialTestSummary();
 
   // Driving test
   renderTestDate();
@@ -269,6 +300,7 @@ async function saveProfile() {
 function renderTestDate() {
   const dateInput = document.getElementById('testDate');
   const timeInput = document.getElementById('testTime');
+  const centreInput = document.getElementById('testCentre');
   const countdownEl = document.getElementById('testCountdown');
 
   if (PROGRESS.test_date) {
@@ -276,6 +308,9 @@ function renderTestDate() {
   }
   if (PROGRESS.test_time) {
     timeInput.value = PROGRESS.test_time;
+  }
+  if (PROGRESS.test_centre && centreInput) {
+    centreInput.value = PROGRESS.test_centre;
   }
 
   updateTestCountdown();
@@ -311,6 +346,7 @@ async function saveTest() {
   if (window.ccAuth && !window.ccAuth.requireAuth()) return;
   const testDate = document.getElementById('testDate').value;
   const testTime = document.getElementById('testTime').value;
+  const testCentre = (document.getElementById('testCentre').value || '').trim();
   const btn = document.getElementById('btnSaveTest');
   btn.disabled = true; btn.textContent = 'Saving\u2026';
 
@@ -318,12 +354,14 @@ async function saveTest() {
     const res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ test_date: testDate, test_time: testTime })
+      body: JSON.stringify({ test_date: testDate, test_time: testTime, test_centre: testCentre })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     PROGRESS.test_date = testDate;
     PROGRESS.test_time = testTime;
+    PROGRESS.test_centre = testCentre;
+    renderOfficialTestSummary();
     updateTestCountdown();
     btn.textContent = 'Saved \u2713';
     setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
@@ -549,6 +587,14 @@ document.addEventListener('click', function (e) {
   bind('btnSaveAvail', saveAvailability);
   bind('btnEditPhone', function () { showProfileEditForm('phone'); });
   bind('btnEditAddress', function () { showProfileEditForm('address'); });
+  bind('btnEditOfficialTest', function () {
+    var card = document.getElementById('test-card');
+    if (card) {
+      card.open = true;
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(function () { var el = document.getElementById('testDate'); if (el) el.focus(); }, 250);
+    }
+  });
   var addressLine = document.getElementById('addressLine');
   if (addressLine) addressLine.addEventListener('input', buildFullAddress);
   var contactToggle = document.getElementById('contactToggle');

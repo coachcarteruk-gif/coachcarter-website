@@ -258,7 +258,8 @@ async function handleProgress(req, res) {
       FROM driving_sessions WHERE user_id = ${user.id} AND school_id = ${schoolId}`;
 
     const userRow = await sql`
-      SELECT current_tier, name, phone, pickup_address, prefer_contact_before
+      SELECT current_tier, name, phone, pickup_address, prefer_contact_before,
+             test_date::text AS test_date, test_time, test_centre
       FROM learner_users
       WHERE id = ${user.id} AND school_id = ${schoolId}`;
     return res.json({
@@ -268,7 +269,10 @@ async function handleProgress(req, res) {
       name: userRow[0]?.name || '',
       phone: userRow[0]?.phone || '',
       pickup_address: userRow[0]?.pickup_address || '',
-      prefer_contact_before: userRow[0]?.prefer_contact_before || false
+      prefer_contact_before: userRow[0]?.prefer_contact_before || false,
+      test_date: userRow[0]?.test_date || '',
+      test_time: userRow[0]?.test_time || '',
+      test_centre: userRow[0]?.test_centre || ''
     });
   } catch (err) {
     reportError('/api/learner', err);
@@ -330,7 +334,8 @@ async function handleProfile(req, res) {
 
     // Columns already exist in learner_users — no migrations needed
     const [row] = await sql`
-      SELECT name, email, phone, pickup_address, prefer_contact_before, test_date, test_time
+      SELECT name, email, phone, pickup_address, prefer_contact_before,
+             test_date::text AS test_date, test_time, test_centre
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!row) return res.status(404).json({ error: 'User not found' });
@@ -373,24 +378,55 @@ async function handleUnloggedBookings(req, res) {
 }
 
 // ── POST /api/learner?action=update-profile ──────────────────────────────────
-// Body: { phone, pickup_address }
+// Body: { phone?, pickup_address?, test_date?, test_time?, test_centre? }
 async function handleUpdateProfile(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyAuth(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
 
   try {
-    const { phone, pickup_address } = req.body;
+    const { phone, pickup_address, test_date, test_time, test_centre } = req.body || {};
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = user.school_id || 1;
+    const has = (key) => Object.prototype.hasOwnProperty.call(req.body || {}, key);
 
-    // No migration needed — pickup_address column already exists in learner_users
+    const [existing] = await sql`
+      SELECT phone, pickup_address, test_date::text AS test_date, test_time, test_centre
+      FROM learner_users
+      WHERE id = ${user.id} AND school_id = ${schoolId}
+    `;
+    if (!existing) return res.status(404).json({ error: 'User not found' });
+
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const nextPhone = has('phone') ? String(phone || '').trim() || null : existing.phone;
+    const nextPickup = has('pickup_address') ? String(pickup_address || '').trim() || null : existing.pickup_address;
+    const nextTestDate = has('test_date') ? String(test_date || '').trim() || null : existing.test_date;
+    const nextTestTime = has('test_time') ? String(test_time || '').trim() || null : existing.test_time;
+    const nextTestCentre = has('test_centre')
+      ? String(test_centre || '').trim().replace(/\s+/g, ' ') || null
+      : existing.test_centre;
+
+    if (nextTestDate && !dateRe.test(nextTestDate)) {
+      return res.status(400).json({ error: 'Test date must be YYYY-MM-DD' });
+    }
+    if (nextTestTime && !timeRe.test(nextTestTime)) {
+      return res.status(400).json({ error: 'Test time must be HH:MM' });
+    }
+    if (nextTestCentre && nextTestCentre.length > 160) {
+      return res.status(400).json({ error: 'Test centre is too long' });
+    }
+
     const [updated] = await sql`
       UPDATE learner_users SET
-        phone          = COALESCE(${phone || null}, phone),
-        pickup_address = COALESCE(${pickup_address || null}, pickup_address)
+        phone          = ${nextPhone},
+        pickup_address = ${nextPickup},
+        test_date      = ${nextTestDate},
+        test_time      = ${nextTestTime},
+        test_centre    = ${nextTestCentre}
       WHERE id = ${user.id} AND school_id = ${schoolId}
-      RETURNING name, email, phone, pickup_address
+      RETURNING name, email, phone, pickup_address,
+                test_date::text AS test_date, test_time, test_centre
     `;
     return res.json({ success: true, profile: updated });
   } catch (err) {
@@ -1343,7 +1379,7 @@ async function handleExportData(req, res) {
 
     const [profile] = await sql`
       SELECT name, email, phone, pickup_address, learner_category, primary_instructor_id,
-             test_date, test_time, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
+             test_date, test_time, test_centre, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
 
     const onboarding = await sql`
@@ -1546,6 +1582,29 @@ async function handleExportData(req, res) {
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}
       ORDER BY created_at DESC`;
 
+    const testSwapListings = await sql`
+      SELECT id, test_date::text, test_time, test_centre, status,
+             created_at, updated_at, cancelled_at, completed_at
+      FROM test_swap_listings
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY created_at DESC`;
+
+    const testSwapRequests = await sql`
+      SELECT r.id, r.listing_id, r.requester_test_date_snapshot::text,
+             r.requester_test_time_snapshot, r.requester_test_centre_snapshot,
+             r.status, r.created_at, r.accepted_at, r.declined_at,
+             r.withdrawn_at, r.completed_at,
+             l.test_date::text AS listing_test_date,
+             l.test_time AS listing_test_time,
+             l.test_centre AS listing_test_centre
+      FROM test_swap_requests r
+      JOIN test_swap_listings l
+        ON l.id = r.listing_id
+       AND l.school_id = ${schoolId}
+      WHERE r.requester_learner_id = ${user.id}
+        AND r.school_id = ${schoolId}
+      ORDER BY r.created_at DESC`;
+
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
@@ -1559,6 +1618,7 @@ async function handleExportData(req, res) {
           'cookie_consents', 'deletion_requests',
           'lesson_confirmations', 'offers_received',
           'feedback_submitted',
+          'test_swap_listings', 'test_swap_requests',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
           ...(hasRefundLedger ? ['refund_events'] : []),
           ...(hasLearnerBroadcasts ? ['broadcasts_received'] : [])
@@ -1583,6 +1643,8 @@ async function handleExportData(req, res) {
       lesson_confirmations: lessonConfirmations,
       offers_received: offersReceived,
       feedback_submitted: feedbackSubmitted,
+      test_swap_listings: testSwapListings,
+      test_swap_requests: testSwapRequests,
       credit_balances: creditBalances,
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,

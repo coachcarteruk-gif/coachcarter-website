@@ -208,6 +208,66 @@
     .btn-save-profile:hover { background: var(--accent-dk); }
     .btn-save-profile:disabled { opacity: 0.6; cursor: not-allowed; }
 
+    .official-test-summary {
+      background: var(--white);
+      border: 1px solid rgba(245,131,33,0.25);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 16px rgba(245,131,33,0.08);
+    }
+    .official-test-summary-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .official-test-kicker {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .official-test-title {
+      font-family: var(--font-head);
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .official-test-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .official-test-item {
+      background: var(--accent-lt);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .official-test-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .official-test-value {
+      color: var(--primary);
+      font-weight: 800;
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+    .official-test-empty {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
     /* DRIVING TEST CARD */
     .test-card {
       background: var(--white);
@@ -444,6 +504,8 @@
     @media (max-width: 480px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
       .test-row { grid-template-columns: 1fr; }
+      .official-test-grid { grid-template-columns: 1fr; }
+      .official-test-summary-top { flex-direction: column; }
       .acc-section > summary { padding: 14px 16px; font-size: 0.9rem; gap: 8px; }
       .acc-section > summary .acc-status { font-size: 0.65rem; padding: 2px 8px; }
       .acc-body { padding: 0 16px 16px; }
@@ -468,6 +530,19 @@
   <div id="guestHint" style="display:none;background:var(--accent-lt,#fff4e6);border:1px solid var(--accent,#f58321);border-radius:10px;padding:12px 14px;margin:0 0 16px;font-size:0.9rem;line-height:1.45">
     <strong>Browsing as a guest.</strong> This is what your profile area looks like once you join — <a href="/learner/login.html?redirect=/learner/profile.html" style="color:var(--accent);font-weight:700">sign in</a> to manage your details, or <a href="/free-trial.html" style="color:var(--accent);font-weight:700">try a free lesson</a> first.
   </div>
+
+  <section class="official-test-summary" id="officialTestSummary">
+    <div class="official-test-summary-top">
+      <div>
+        <div class="official-test-kicker">Official driving test</div>
+        <div class="official-test-title">Your saved DVSA test details</div>
+      </div>
+      <button type="button" class="saved-row-edit" id="btnEditOfficialTest">Edit</button>
+    </div>
+    <div id="officialTestSummaryBody">
+      <div class="official-test-empty">Add your official test date, time and centre to unlock test swaps.</div>
+    </div>
+  </section>
 
   <!-- AVAILABILITY -->
   <details class="acc-section" id="avail-card">
@@ -566,6 +641,10 @@
             <label for="testTime">Time</label>
             <input type="time" id="testTime">
           </div>
+        </div>
+        <div class="test-field">
+          <label for="testCentre">Test centre</label>
+          <input type="text" id="testCentre" maxlength="160" placeholder="e.g. Sidcup Driving Test Centre">
         </div>
       </div>
       <div id="testCountdown"></div>
