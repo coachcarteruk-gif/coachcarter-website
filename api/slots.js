@@ -41,7 +41,13 @@ const { lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
-const { calcDirectLessonPrice } = require('./_pricing-helpers');
+const {
+  calcDirectLessonPrice,
+  applySocialVideoDiscount,
+  calcSocialVideoChargeMinutes,
+  normaliseSocialVideoConsent,
+  SOCIAL_VIDEO_DISCOUNT_PCT,
+} = require('./_pricing-helpers');
 const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
 const {
   CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
@@ -68,6 +74,20 @@ const RESERVED_MOVE_NOTICE_HOURS = 48;
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
 const SLOT_TRANSMISSION_TYPES = new Set(['manual', 'automatic', 'both']);
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function resolveSocialVideoSelection({ requested, ageConfirmed, instructor }) {
+  const wantsSocialVideo = normaliseSocialVideoConsent(requested);
+  const confirmed18 = normaliseSocialVideoConsent(ageConfirmed);
+  const instructorOptedIn = !!instructor?.social_video_opt_in;
+  const selected = wantsSocialVideo && confirmed18 && instructorOptedIn;
+  return {
+    selected,
+    rejected: wantsSocialVideo && !instructorOptedIn,
+    ageRejected: wantsSocialVideo && !confirmed18,
+    ageConfirmed: selected,
+    discountPct: selected ? SOCIAL_VIDEO_DISCOUNT_PCT : 0,
+  };
+}
 const TIME_HHMM_RE = /^\d{2}:\d{2}$/;
 
 class BookingTransactionAbort extends Error {
@@ -1236,6 +1256,7 @@ async function handleDurationsForSlot(req, res) {
     const dayOfWeek = new Date(date + 'T00:00:00Z').getUTCDay();
     const [instructor] = await sql`
       SELECT i.id, i.offered_lesson_types,
+             COALESCE(i.social_video_opt_in, false) AS social_video_opt_in,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
              COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
@@ -1493,6 +1514,9 @@ async function handleDurationsForSlot(req, res) {
         name: lt.name,
         duration_minutes: lt.duration_minutes,
         price_pence: directPrices.get(lt.id) || lt.price_pence,
+        social_video_price_pence: instructor.social_video_opt_in
+          ? applySocialVideoDiscount(directPrices.get(lt.id) || lt.price_pence, true).pricePence
+          : null,
         colour: lt.colour,
         fits,
         reason
@@ -1504,6 +1528,8 @@ async function handleDurationsForSlot(req, res) {
       date,
       start_time,
       transmission_type: slotTransmissionType,
+      social_video_opt_in: !!instructor.social_video_opt_in,
+      social_video_discount_pct: instructor.social_video_opt_in ? SOCIAL_VIDEO_DISCOUNT_PCT : 0,
       durations
     });
   } catch (err) {
@@ -1525,15 +1551,20 @@ async function bookCreditFundedSlotsTransaction({
   endTime,
   lessonTypeId,
   durationMins,
+  chargeMins,
   pickupAddress,
   dropoffAddress,
   bookingTransmissionType,
+  socialVideoConsent = false,
+  socialVideoAgeConfirmed = false,
+  socialVideoDiscountPct = 0,
   seriesId,
   sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
   blockingStatuses = BLOCKING_STATUSES,
   recurringBlock = null,
 }) {
-  const totalMins = durationMins * bookingDates.length;
+  const chargeMinutesPerBooking = Math.max(0, parseInt(chargeMins, 10) || durationMins);
+  const totalMins = chargeMinutesPerBooking * bookingDates.length;
   const dateStrings = bookingDates.map(bd => bd.date);
 
   try {
@@ -1744,20 +1775,21 @@ async function bookCreditFundedSlotsTransaction({
           `INSERT INTO lesson_bookings
              (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
               pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
-              list_price_pence, list_price_source)
+              list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
            VALUES
              ($1, $2, $3, $4, $5, $6,
               $7, $8, $9, $10, $11, $12, $13,
-              0, 'live_compute_insert')
+              0, 'live_compute_insert', $14, $15, $16)
            RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
           [
             learnerId, instructorId, bd.date, startTime, endTime, SCHEDULED,
-            pickupAddress, dropoffAddress, lessonTypeId, bookingTransmissionType || 'manual', durationMins, seriesId, schoolId,
+            pickupAddress, dropoffAddress, lessonTypeId, bookingTransmissionType || 'manual', chargeMinutesPerBooking, seriesId, schoolId,
+            !!socialVideoConsent, !!socialVideoAgeConfirmed, socialVideoDiscountPct || 0,
           ]
         );
         const booking = inserted.rows[0];
         createdBookings.push(booking);
-        bookingTargets.push({ booking_id: booking.id, minutes: durationMins });
+        bookingTargets.push({ booking_id: booking.id, minutes: chargeMinutesPerBooking });
       } catch (err) {
         if (err.code === '23505' || err.message?.includes('uq_booking_slot') || err.message?.includes('uq_instructor_slot')) {
           abortBookingTransaction({
@@ -2899,7 +2931,19 @@ async function handleBook(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
-  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, repeat_weeks, transmission_type } = req.body;
+  const {
+    instructor_id,
+    date,
+    start_time,
+    end_time,
+    lesson_type_id,
+    pickup_address,
+    dropoff_address,
+    repeat_weeks,
+    transmission_type,
+    social_video_consent,
+    social_video_age_confirmed,
+  } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
@@ -2969,6 +3013,7 @@ async function handleBook(req, res) {
     // 2. Check instructor exists and is active
     const [instructor] = await sql`
       SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types,
+             COALESCE(social_video_opt_in, false) AS social_video_opt_in,
              COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
@@ -2976,6 +3021,17 @@ async function handleBook(req, res) {
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found or unavailable' });
+    const socialVideo = resolveSocialVideoSelection({
+      requested: social_video_consent,
+      ageConfirmed: social_video_age_confirmed,
+      instructor,
+    });
+    if (socialVideo.rejected) {
+      return res.status(400).json({ error: 'This instructor is not offering social media filming discounts.' });
+    }
+    if (socialVideo.ageRejected) {
+      return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });
+    }
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
     }
@@ -3045,7 +3101,8 @@ async function handleBook(req, res) {
       }
     }
 
-    const totalMins = durationMins * weeks;
+    const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);
+    const totalMins = chargeMins * weeks;
 
     // 3. For recurring bookings, check all slots are available before booking any
     if (isRecurring) {
@@ -3108,7 +3165,7 @@ async function handleBook(req, res) {
     const seriesId = isRecurring ? crypto.randomUUID() : null;
     const bookingPickup  = pickup_address || learner.pickup_address || null;
     const bookingDropoff = dropoff_address || null;
-    const minsPerBooking = skipPayments ? 0 : durationMins;
+    const minsPerBooking = skipPayments ? 0 : chargeMins;
     let createdBookings = [];
     let transactionBalanceMinutes = null;
 
@@ -3131,6 +3188,10 @@ async function handleBook(req, res) {
         pickupAddress: bookingPickup,
         dropoffAddress: bookingDropoff,
         bookingTransmissionType,
+        chargeMins,
+        socialVideoConsent: socialVideo.selected,
+        socialVideoAgeConfirmed: socialVideo.ageConfirmed,
+        socialVideoDiscountPct: socialVideo.discountPct,
         seriesId,
       });
 
@@ -3161,11 +3222,11 @@ async function handleBook(req, res) {
           INSERT INTO lesson_bookings
             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
              pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
-             list_price_pence, list_price_source)
+             list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
           VALUES
             (${user.id}, ${instructor_id}, ${bd.date}, ${start_time}, ${end_time}, ${SCHEDULED},
              ${bookingPickup}, ${bookingDropoff}, ${lessonType.id}, ${bookingTransmissionType}, ${minsPerBooking}, ${seriesId}, ${schoolId},
-             ${listPricePence}, 'live_compute_insert')
+             ${listPricePence}, 'live_compute_insert', ${socialVideo.selected}, ${socialVideo.ageConfirmed}, ${socialVideo.discountPct})
           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at
         `;
         createdBookings.push(b);
@@ -3424,7 +3485,18 @@ async function handleCheckoutSlot(req, res) {
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
 
-  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, dropoff_address, transmission_type } = req.body;
+  const {
+    instructor_id,
+    date,
+    start_time,
+    end_time,
+    lesson_type_id,
+    pickup_address,
+    dropoff_address,
+    transmission_type,
+    social_video_consent,
+    social_video_age_confirmed,
+  } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time, end_time required' });
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
@@ -3460,7 +3532,6 @@ async function handleCheckoutSlot(req, res) {
       learnerId: user.id,
       durationMinutes: durationMins
     });
-    const pricePence   = directPrice.pricePence;
     const durationStr  = formatHours(durationMins);
 
     // Validate slot duration matches lesson type
@@ -3513,6 +3584,7 @@ async function handleCheckoutSlot(req, res) {
     // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
       SELECT id, name, offered_lesson_types,
+             COALESCE(social_video_opt_in, false) AS social_video_opt_in,
              COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
@@ -3522,6 +3594,20 @@ async function handleCheckoutSlot(req, res) {
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
+    const socialVideo = resolveSocialVideoSelection({
+      requested: social_video_consent,
+      ageConfirmed: social_video_age_confirmed,
+      instructor,
+    });
+    if (socialVideo.rejected) {
+      return res.status(400).json({ error: 'This instructor is not offering social media filming discounts.' });
+    }
+    if (socialVideo.ageRejected) {
+      return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });
+    }
+    const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);
+    const pricePence = priced.pricePence;
+    const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
     }
@@ -3596,11 +3682,16 @@ async function handleCheckoutSlot(req, res) {
         dropoff_address: checkoutDropoffAddress,
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
+        charge_minutes:   String(chargeMins),
         amount_pence:    String(pricePence),
         school_id:       String(schoolId),
+        social_video_consent: socialVideo.selected ? 'true' : 'false',
+        social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false',
+        social_video_discount_pct: String(socialVideo.discountPct),
+        social_video_discount_pence: String(priced.discountPence),
         // Step 4 / Phase 2A: derivable from pricePence/durationMins per the
         // source-of-truth rule, snapshotted for audit clarity.
-        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
+        effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0)
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
@@ -3666,7 +3757,8 @@ async function handleCheckoutSlotGuest(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { instructor_id, date, start_time, end_time, lesson_type_id,
-          guest_name, guest_email, guest_phone, guest_pickup_address, dropoff_address, transmission_type } = req.body;
+          guest_name, guest_email, guest_phone, guest_pickup_address, dropoff_address, transmission_type,
+          social_video_consent, social_video_age_confirmed } = req.body;
 
   // Validate required guest fields
   if (!guest_name || !guest_name.trim())
@@ -3780,6 +3872,7 @@ async function handleCheckoutSlotGuest(req, res) {
 
     const [instructor] = await sql`
       SELECT id, name, offered_lesson_types,
+             COALESCE(social_video_opt_in, false) AS social_video_opt_in,
              COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              COALESCE(transmission_type, 'manual') AS transmission_type
       FROM instructors
@@ -3789,6 +3882,17 @@ async function handleCheckoutSlotGuest(req, res) {
     `;
     if (!instructor)
       return res.status(404).json({ error: 'Instructor not found' });
+    const socialVideo = resolveSocialVideoSelection({
+      requested: social_video_consent,
+      ageConfirmed: social_video_age_confirmed,
+      instructor,
+    });
+    if (socialVideo.rejected) {
+      return res.status(400).json({ error: 'This instructor is not offering social media filming discounts.' });
+    }
+    if (socialVideo.ageRejected) {
+      return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });
+    }
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
     }
@@ -3870,7 +3974,9 @@ async function handleCheckoutSlotGuest(req, res) {
       learnerId,
       durationMinutes: durationMins
     });
-    const pricePence = directPrice.pricePence;
+    const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);
+    const pricePence = priced.pricePence;
+    const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);
 
     // ── Create Stripe Checkout session ──
     const origin = req.headers.origin || 'https://coachcarter.uk';
@@ -3904,10 +4010,15 @@ async function handleCheckoutSlotGuest(req, res) {
         dropoff_address: cleanDropoff,
         lesson_type_id:  String(lessonType.id),
         duration_minutes: String(durationMins),
+        charge_minutes:   String(chargeMins),
         amount_pence:    String(pricePence),
         school_id:       String(schoolId),
+        social_video_consent: socialVideo.selected ? 'true' : 'false',
+        social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false',
+        social_video_discount_pct: String(socialVideo.discountPct),
+        social_video_discount_pence: String(priced.discountPence),
         // Step 4 / Phase 2A: snapshot for audit clarity.
-        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
+        effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0)
       },
       customer_email: cleanEmail,
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
@@ -4976,6 +5087,9 @@ async function handleReservedPolicyMove(req, res) {
            lb.stripe_fee_source,
            lb.list_price_pence,
            lb.list_price_source,
+           COALESCE(lb.social_video_consent, false) AS social_video_consent,
+           COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
+           COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
            COALESCE(lb.transmission_type, 'manual') AS transmission_type,
            rsb.id AS recurring_slot_block_id,
            rsbi.id AS recurring_slot_block_item_id,
@@ -5202,13 +5316,13 @@ async function handleReservedPolicyMove(req, res) {
             rescheduled_from, reschedule_count, pickup_address, dropoff_address,
             lesson_type_id, minutes_deducted, school_id, created_by, payment_method,
             stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source,
-            transmission_type)
+            transmission_type, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
          VALUES
            ($1, $2, $3::date, $4::time, $5::time, $6,
             $7, $8, $9, $10,
             $11, $12, $13, 'learner', $14,
             $15, $16, $17, $18,
-            $19)
+            $19, $20, $21, $22)
          RETURNING id, scheduled_date::text, start_time::text, end_time::text, status`,
         [
           booking.learner_id,
@@ -5230,6 +5344,9 @@ async function handleReservedPolicyMove(req, res) {
           booking.list_price_pence != null ? booking.list_price_pence : null,
           booking.list_price_source || null,
           booking.transmission_type || 'manual',
+          !!booking.social_video_consent,
+          !!booking.social_video_age_confirmed,
+          booking.social_video_discount_pct || 0,
         ]
       );
       const newBooking = insertedBooking.rows[0];
@@ -5522,7 +5639,7 @@ async function handleReschedule(req, res) {
            rescheduled_from, reschedule_count, pickup_address, dropoff_address,
            lesson_type_id, minutes_deducted, school_id,
            stripe_fee_pence, stripe_fee_source,
-           list_price_pence, list_price_source)
+           list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
         VALUES
           (${user.id}, ${booking.instructor_id}, ${new_date}, ${new_start_time}, ${new_end_time},
            ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
@@ -5532,7 +5649,10 @@ async function handleReschedule(req, res) {
            ${booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null},
            ${booking.stripe_fee_source || null},
            ${booking.list_price_pence != null ? booking.list_price_pence : null},
-           ${booking.list_price_source || null})
+           ${booking.list_price_source || null},
+           ${!!booking.social_video_consent},
+           ${!!booking.social_video_age_confirmed},
+           ${booking.social_video_discount_pct || 0})
         RETURNING id, scheduled_date, start_time::text, end_time::text, status,
                   rescheduled_from, reschedule_count
       `;

@@ -1240,6 +1240,20 @@
         </div>
         <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">—</span></div>
       </div>
+      <div id="socialVideoOption" style="display:none;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.86rem;color:var(--primary);font-weight:700;line-height:1.35">
+          <input type="checkbox" id="mdSocialVideoConsent" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
+          <span>
+            Allow this lesson to be filmed for social media and save 5%
+            <button type="button" id="mdSocialVideoMore" style="border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;padding:0;margin-left:4px;cursor:pointer;text-decoration:underline">More info</button>
+            <span id="mdSocialVideoPrice" style="display:block;margin-top:4px;color:var(--muted);font-size:0.78rem;font-weight:400"></span>
+          </span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.8rem;color:var(--muted);font-weight:600;line-height:1.35;margin-top:10px">
+          <input type="checkbox" id="mdSocialVideoAgeConfirmed" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
+          <span>I confirm I am 18 or over.</span>
+        </label>
+      </div>
       <div id="slotTimer" style="display:none;text-align:center;font-size:0.78rem;color:var(--muted);padding:6px 0">
         Slot held for <span id="slotTimerValue" style="font-weight:600">10:00</span>
       </div>
@@ -1399,6 +1413,24 @@
 </div>
 
 <!-- ── Cancel confirmation modal ── -->
+<div class="modal-overlay" id="socialVideoInfoModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Filmed lesson discount</h2>
+      <button class="modal-close-x" aria-label="Close" id="socialVideoInfoCloseX">&times;</button>
+    </div>
+    <p class="modal-credit-note">
+      If you choose this option and confirm you are 18 or over, short clips from the lesson may be recorded and used by your driving school for social media, training examples, or marketing. Your lesson still runs for the full booked time, and the discount is applied to this booking only.
+    </p>
+    <p class="modal-credit-note">
+      Do not choose it if you are not comfortable being recorded. You can book the same slot without this discount.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="socialVideoInfoClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="recurringBlockModal">
   <div class="modal recurring-block-modal">
     <div class="modal-header">

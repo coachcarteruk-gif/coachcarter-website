@@ -2275,6 +2275,11 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS list_price_source TEXT
   CHECK (list_price_source IS NULL OR list_price_source IN
     ('stripe_metadata', 'live_compute_insert', 'live_compute_backfill', 'unknown'));
 
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS social_video_consent BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS social_video_age_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS social_video_discount_pct INTEGER NOT NULL DEFAULT 0
+  CHECK (social_video_discount_pct IN (0, 5));
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Credits Step 3a: instructors.hourly_rate_pence column (May 2026)
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -2308,6 +2313,10 @@ UPDATE instructors
      OR LOWER(name) IN ('fraser carter', 'fraser')
      OR LOWER(slug) = 'fraser'
    );
+
+-- Instructors may opt in to learner-consented social-media lesson filming.
+-- Learners can then opt in per booking for the snapshotted 5% discount.
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS social_video_opt_in BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Credits Step 1c: migration_markers table (May 2026)

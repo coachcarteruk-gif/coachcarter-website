@@ -185,6 +185,8 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 **Notable additions (June 2026):**
 - **Recurring weekly block foundation** — `recurring_slot_blocks` and `recurring_slot_block_items` represent future weekly blocks separately from ordinary bookings, 10-minute Stripe `slot_reservations`, and `lesson_offers`. `api/slots.js?action=recurring-block-preview` is a read-only authenticated learner preview for an anchor booking. `api/slots.js?action=recurring-block-commit` currently supports full same-instructor Lesson Credit only and atomically creates the confirmed block, booked item rows, future bookings, BCS rows, and scoped LCB decrement. Native booking screens should call these endpoints rather than reimplementing 12-week pattern generation, pricing, or credit sufficiency client-side.
 
+Social video filming app parity note (June 2026): `instructors.social_video_opt_in` enables a learner-selected per-booking filming discount. `lesson_bookings.social_video_consent` and `lesson_bookings.social_video_discount_pct` snapshot the choice. Native booking screens may display the `durations-for-slot` discounted price echo, but should send only `social_video_consent`; `api/slots.js` / `api/webhook.js` validate instructor opt-in and compute the 5% discount server-side. Calendar UI should badge bookings where `social_video_consent` is true.
+
 ### Critical Design Decisions Already Made
 
 **Refunds (preview/execute foundation, May 2026):**
@@ -314,7 +316,7 @@ Native buy-credits screens should mirror the web Slice B contract before creatin
 
 ---
 
-Instructor native profile screens should preserve the web profile contract: `GET /api/instructor?action=profile` returns `bulk_tiers_enabled` plus read-only `effective_hourly_rate_pence`, and `POST /api/instructor?action=update-profile` accepts a boolean `bulk_tiers_enabled`.
+Instructor native profile screens should preserve the web profile contract: `GET /api/instructor?action=profile` returns `bulk_tiers_enabled`, `social_video_opt_in`, plus read-only `effective_hourly_rate_pence`, and `POST /api/instructor?action=update-profile` accepts boolean `bulk_tiers_enabled` and `social_video_opt_in`.
 
 ## Phase 1: React Native Project Scaffolding
 

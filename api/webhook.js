@@ -10,6 +10,7 @@ const { fetchSessionFeePence } = require('./_stripe-fee');
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { withNeonTransaction } = require('./_db-transaction');
+const { normaliseSocialVideoConsent } = require('./_pricing-helpers');
 
 
 function concreteLessonTransmissionType(value) {
@@ -480,6 +481,11 @@ async function handleSlotBooking(session) {
   const amountPence   = parseInt(metadata.amount_pence, 10);
   const lessonTypeId  = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
   const durationMins  = parseInt(metadata.duration_minutes, 10) || 90;
+  const chargeMins    = parseInt(metadata.charge_minutes, 10) || durationMins;
+  const socialVideoRequested = normaliseSocialVideoConsent(metadata.social_video_consent);
+  const socialVideoAgeConfirmed = socialVideoRequested && normaliseSocialVideoConsent(metadata.social_video_age_confirmed);
+  const socialVideoConsent = socialVideoRequested && socialVideoAgeConfirmed;
+  const socialVideoDiscountPct = socialVideoConsent ? (parseInt(metadata.social_video_discount_pct, 10) || 0) : 0;
   const bookingTransmissionType = concreteLessonTransmissionType(metadata.transmission_type);
 
   if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
@@ -495,8 +501,8 @@ async function handleSlotBooking(session) {
     // amount and minutes — no live pricing recall. instructor_id comes from
     // metadata (already in scope above). payment_intent_id is captured for
     // the uq_credit_tx_payment_intent reconciliation idempotency arbiter.
-    const effectiveRatePencePerMinute = durationMins > 0
-      ? Math.round(amountPence / durationMins)
+    const effectiveRatePencePerMinute = chargeMins > 0
+      ? Math.round(amountPence / chargeMins)
       : null;
     const paymentIntentId = typeof session.payment_intent === 'string'
       ? session.payment_intent
@@ -521,7 +527,7 @@ async function handleSlotBooking(session) {
           schoolId,
           bookingId: existingBooking.id,
           creditTransaction: existingCreditTx,
-          durationMins,
+          durationMins: chargeMins,
         });
         return;
       }
@@ -552,7 +558,7 @@ async function handleSlotBooking(session) {
           (learner_id, type, credits, amount_pence, payment_method, stripe_session_id, minutes, school_id,
            stripe_fee_pence, instructor_id, effective_rate_pence_per_minute, stripe_payment_intent_id, source)
         VALUES
-          (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${durationMins}, ${schoolId},
+          (${learnerId}, 'slot_purchase', 1, ${amountPence}, 'card', ${session.id}, ${chargeMins}, ${schoolId},
            ${stripeFeePence}, ${instructorId}, ${effectiveRatePencePerMinute}, ${paymentIntentId}, 'stripe')
         RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
       `;
@@ -577,7 +583,7 @@ async function handleSlotBooking(session) {
             schoolId,
             bookingId: racedBooking.id,
             creditTransaction: racedCreditTx,
-            durationMins,
+            durationMins: chargeMins,
           });
         } else if (racedBooking && isTerminal(racedBooking.status)) {
           console.warn(`slot_booking ${session.id} hit uq_credit_tx_session with refunded booking ${racedBooking.id}; not repairing active BCS`);
@@ -596,7 +602,7 @@ async function handleSlotBooking(session) {
     // (learner, instructor) pair, serialising concurrent writers.
     const addResult = await lockBalanceAdjustLCB(sql, {
       learnerId, instructorId, schoolId,
-      delta: durationMins, creditsDelta: 1,
+      delta: chargeMins, creditsDelta: 1,
     });
     if (!addResult.ok) {
       console.error('❌ slot_booking: failed to add hours pre-deduct', addResult.code);
@@ -608,7 +614,7 @@ async function handleSlotBooking(session) {
     // same lock, but it's belt-and-braces against a misconfigured edge case.
     const deductResult = await lockBalanceAdjustLCB(sql, {
       learnerId, instructorId, schoolId,
-      delta: -durationMins, creditsDelta: -1,
+      delta: -chargeMins, creditsDelta: -1,
     });
     if (!deductResult.ok) {
       console.error('❌ slot_booking: failed to deduct hours after adding — race condition?', deductResult.code);
@@ -633,13 +639,13 @@ async function handleSlotBooking(session) {
            lesson_type_id, transmission_type, minutes_deducted, school_id,
            pickup_address, dropoff_address,
            stripe_fee_pence, stripe_fee_source,
-           list_price_pence, list_price_source)
+           list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
         VALUES
           (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
-           ${lessonTypeId}, ${bookingTransmissionType}, ${durationMins}, ${schoolId},
+           ${lessonTypeId}, ${bookingTransmissionType}, ${chargeMins}, ${schoolId},
            ${pickupAddress || null}, ${dropoffAddress || null},
            ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
-           ${amountPence}, 'stripe_metadata')
+           ${amountPence}, 'stripe_metadata', ${socialVideoConsent}, ${socialVideoAgeConfirmed}, ${socialVideoDiscountPct})
         RETURNING id, scheduled_date, start_time::text, end_time::text
       `;
       booking = b;
@@ -649,7 +655,7 @@ async function handleSlotBooking(session) {
       // alert Fraser + email the learner — see notifyBookingInsertFailed.
       await lockBalanceAdjustLCB(sql, {
         learnerId, instructorId, schoolId,
-        delta: durationMins, creditsDelta: 1,
+        delta: chargeMins, creditsDelta: 1,
       });
       console.error('❌ slot_booking: insert failed, hours refunded to learner balance', insertErr.message);
       await notifyBookingInsertFailed({
@@ -669,7 +675,7 @@ async function handleSlotBooking(session) {
       schoolId,
       bookingId: booking.id,
       creditTransaction: slotCreditTx,
-      durationMins,
+      durationMins: chargeMins,
     });
 
     // 5a. Supersede any pending broadcast offers on this slot — a learner just

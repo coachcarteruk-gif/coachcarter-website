@@ -137,6 +137,7 @@ function renderLessons() {
     var pcMatch = addr.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i);
     var detail = pcMatch ? pcMatch[1].toUpperCase() : (addr ? addr.split(',')[0].trim() : '');
     if (b.lesson_type_name) detail = b.lesson_type_name + (detail ? ' \u00B7 ' + detail : '');
+    if (b.social_video_consent) detail = (detail ? detail + ' \u00B7 ' : '') + 'Filmed lesson';
 
     var badgeCls = 'badge-confirmed';
     var badgeText = '';
@@ -455,6 +456,7 @@ function openDetail(idx) {
   rows += detailRow('Time', time);
   rows += detailRow('Status', capitalize(b.status));
   if (b.lesson_type_name) rows += detailRow('Lesson type', b.lesson_type_name);
+  if (b.social_video_consent) rows += detailRow('Filming', 'Learner agreed for this lesson to be filmed' + (b.social_video_discount_pct ? ' (' + b.social_video_discount_pct + '% discount)' : ''));
   if (b.duration_minutes) {
     var hrs = b.duration_minutes / 60;
     rows += detailRow('Duration', (hrs % 1 === 0 ? hrs + ' hour' + (hrs > 1 ? 's' : '') : hrs.toFixed(1) + ' hours'));

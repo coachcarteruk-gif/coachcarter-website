@@ -36,6 +36,7 @@ let overflowMode  = false;            // true when chosen instructor has 0 slots
 let overflowCache = null;             // { dateStr: [slot, ...] } for alternatives, or null
 let overflowFingerprint = null;       // `${ltId}|${postcode}` — invalidates cache on change
 let pendingSlot   = null;
+let socialVideoOption = { available: false, discountPct: 5 };
 let pendingCancel = null;
 let preselectedTypeSlug = null;
 let preselectedInstructorSlug = null;
@@ -105,6 +106,29 @@ function init() {
   document.getElementById('bookModalCloseX').onclick = closeBookModal;
   document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
   document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
+  const handleSocialVideoToggle = function () {
+    if (selectedLessonType) {
+      applyLessonTypeToModal(selectedLessonType, !auth, !auth && false);
+      updateDeductDisplay();
+      updateBookButtonState();
+    }
+  };
+  const socialVideoCheckbox = document.getElementById('mdSocialVideoConsent');
+  if (socialVideoCheckbox) socialVideoCheckbox.onchange = handleSocialVideoToggle;
+  const socialVideoAgeCheckbox = document.getElementById('mdSocialVideoAgeConfirmed');
+  if (socialVideoAgeCheckbox) socialVideoAgeCheckbox.onchange = handleSocialVideoToggle;
+  const socialInfoModal = document.getElementById('socialVideoInfoModal');
+  const closeSocialInfo = () => socialInfoModal && socialInfoModal.classList.remove('open');
+  const socialMore = document.getElementById('mdSocialVideoMore');
+  if (socialMore) socialMore.onclick = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (socialInfoModal) socialInfoModal.classList.add('open');
+  };
+  const socialInfoClose = document.getElementById('socialVideoInfoClose');
+  const socialInfoCloseX = document.getElementById('socialVideoInfoCloseX');
+  if (socialInfoClose) socialInfoClose.onclick = closeSocialInfo;
+  if (socialInfoCloseX) socialInfoCloseX.onclick = closeSocialInfo;
   const successRecurringBtn = document.getElementById('btnOpenRecurringFromSuccess');
   if (successRecurringBtn) successRecurringBtn.onclick = () => openRecurringBlockModal('success');
   const paidRecurringBtn = document.getElementById('btnOpenRecurringFromPaid');
@@ -132,11 +156,13 @@ function init() {
   document.getElementById('recurringBlockModal').addEventListener('click', e => { if (e.target === document.getElementById('recurringBlockModal')) closeRecurringBlockModal(); });
   document.getElementById('cancelModal').addEventListener('click', e => { if (e.target === document.getElementById('cancelModal')) closeCancelModal(); });
   document.getElementById('rescheduleModal').addEventListener('click', e => { if (e.target === document.getElementById('rescheduleModal')) closeRescheduleModal(); });
+  if (socialInfoModal) socialInfoModal.addEventListener('click', e => { if (e.target === socialInfoModal) closeSocialInfo(); });
 
   // Close modals on Escape key
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if (document.getElementById('recurringBlockModal').classList.contains('open')) closeRecurringBlockModal();
+    else if (socialInfoModal && socialInfoModal.classList.contains('open')) closeSocialInfo();
     else if (document.getElementById('bookModal').classList.contains('open')) closeBookModal();
     else if (document.getElementById('cancelModal').classList.contains('open')) closeCancelModal();
     else if (document.getElementById('rescheduleModal').classList.contains('open')) closeRescheduleModal();
@@ -1296,9 +1322,11 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
   const ltHrs = ltDuration / 60;
   const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
   document.getElementById('mdDuration').textContent = ltHrsStr;
-  document.getElementById('mdDeductHours').textContent = ltHrsStr;
+  refreshSocialVideoOption();
+  const chargeMins = socialVideoChargeMinutes(ltDuration);
+  document.getElementById('mdDeductHours').textContent = formatHours(chargeMins);
   const ltPrice = lt.price_pence != null ? lt.price_pence : DEFAULT_PRICE_PENCE;
-  const ltPriceStr = '£' + (ltPrice / 100).toFixed(2);
+  const ltPriceStr = formatMoney(socialVideoPrice(ltPrice));
   document.getElementById('mdPayAmount').textContent = ltPriceStr;
   document.getElementById('payBtnLabel').textContent = `Pay ${ltPriceStr} & book`;
   document.getElementById('paySpinner').style.display = 'none';
@@ -1316,7 +1344,7 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
     document.getElementById('bookSpinner').style.display = 'none';
     document.getElementById('btnConfirmBook').disabled = false;
   } else {
-    const hasCreds = selectedInstructorBalanceMinutes >= ltDuration;
+    const hasCreds = selectedInstructorBalanceMinutes >= chargeMins;
     document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
     document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
     if (hasCreds) {
@@ -1324,7 +1352,7 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
       document.getElementById('bookSpinner').style.display = 'none';
       document.getElementById('btnConfirmBook').disabled = false;
     }
-    updateBalanceLine(ltDuration);
+    updateBalanceLine(chargeMins);
   }
 }
 
@@ -1358,6 +1386,13 @@ function openBookModal(el) {
     transmission_type: el.dataset.transmissionType,
     instructor_name: el.dataset.instructorName
   };
+  socialVideoOption = { available: false, discountPct: 5 };
+  const socialVideoCheckbox = document.getElementById('mdSocialVideoConsent');
+  if (socialVideoCheckbox) socialVideoCheckbox.checked = false;
+  const socialVideoAgeCheckbox = document.getElementById('mdSocialVideoAgeConfirmed');
+  if (socialVideoAgeCheckbox) socialVideoAgeCheckbox.checked = false;
+  const socialVideoWrap = document.getElementById('socialVideoOption');
+  if (socialVideoWrap) socialVideoWrap.style.display = 'none';
   selectedInstructorBalanceMinutes = 0;
   const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
     .toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC' });
@@ -1459,6 +1494,10 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load durations');
     await selectedBalancePromise;
+    socialVideoOption = {
+      available: !!data.social_video_opt_in,
+      discountPct: Number(data.social_video_discount_pct || 5),
+    };
 
     const durations = (data.durations || [])
       .filter(d => d && d.slug !== 'trial')
@@ -1664,6 +1703,65 @@ function formatHours(mins) {
   return h % 1 === 0 ? `${h} hour${h !== 1 ? 's' : ''}` : `${h.toFixed(1)} hours`;
 }
 
+function formatMoney(pence) {
+  return String.fromCharCode(163) + ((Number(pence) || 0) / 100).toFixed(2);
+}
+
+function socialVideoConsentChecked() {
+  const cb = document.getElementById('mdSocialVideoConsent');
+  return !!(socialVideoOption.available && cb && cb.checked);
+}
+
+function socialVideoAgeConfirmed() {
+  const cb = document.getElementById('mdSocialVideoAgeConfirmed');
+  return !!(socialVideoOption.available && cb && cb.checked);
+}
+
+function socialVideoSelected() {
+  return socialVideoConsentChecked() && socialVideoAgeConfirmed();
+}
+
+function socialVideoPrice(pricePence) {
+  const price = Number(pricePence) || 0;
+  if (!socialVideoSelected()) return price;
+  const pct = Number(socialVideoOption.discountPct || 5);
+  return Math.max(0, Math.round(price * (100 - pct) / 100));
+}
+
+function socialVideoChargeMinutes(durationMinutes) {
+  const minutes = Number(durationMinutes) || 0;
+  if (!socialVideoSelected()) return minutes;
+  const pct = Number(socialVideoOption.discountPct || 5);
+  return Math.max(1, Math.round(minutes * (100 - pct) / 100));
+}
+
+function refreshSocialVideoOption() {
+  const wrap = document.getElementById('socialVideoOption');
+  const cb = document.getElementById('mdSocialVideoConsent');
+  const ageCb = document.getElementById('mdSocialVideoAgeConfirmed');
+  const priceEl = document.getElementById('mdSocialVideoPrice');
+  if (!wrap || !cb || !ageCb || !priceEl || !selectedLessonType) return;
+  wrap.style.display = socialVideoOption.available ? 'block' : 'none';
+  if (!socialVideoOption.available) {
+    cb.checked = false;
+    ageCb.checked = false;
+  }
+  const base = Number(selectedLessonType.price_pence || DEFAULT_PRICE_PENCE);
+  const pct = Number(socialVideoOption.discountPct || 5);
+  const discounted = Math.max(0, Math.round(base * (100 - pct) / 100));
+  priceEl.textContent = socialVideoOption.available
+    ? `Tick both boxes to make ${formatMoney(base)} become ${formatMoney(discounted)} for this booking.`
+    : '';
+}
+
+function validateSocialVideoEligibility() {
+  if (socialVideoConsentChecked() && !socialVideoAgeConfirmed()) {
+    showToast('Confirm you are 18 or over to choose the filmed lesson discount, or untick filming.', 'error');
+    return false;
+  }
+  return true;
+}
+
 function normaliseTransmissionType(value) {
   const text = String(value || '').trim().toLowerCase();
   return ['manual', 'automatic', 'both'].includes(text) ? text : null;
@@ -1851,14 +1949,15 @@ async function updateRepeatDates() {
 function updateDeductDisplay() {
   const weeks = getRepeatWeeks();
   const ltDuration = selectedLessonType ? selectedLessonType.duration_minutes : 90;
-  const totalMins = ltDuration * weeks;
+  const chargeMins = socialVideoChargeMinutes(ltDuration);
+  const totalMins = chargeMins * weeks;
   const totalHrs = totalMins / 60;
   const totalStr = totalHrs % 1 === 0 ? `${totalHrs} hours` : `${totalHrs.toFixed(1)} hours`;
 
   document.getElementById('mdDeductHours').textContent = totalStr;
 
   if (weeks > 1) {
-    const perLesson = ltDuration / 60;
+    const perLesson = chargeMins / 60;
     const perStr = perLesson % 1 === 0 ? `${perLesson} hour${perLesson !== 1 ? 's' : ''}` : `${perLesson.toFixed(1)} hours`;
     document.getElementById('repeatTotal').textContent = `Total: ${totalStr} (${weeks} × ${perStr})`;
     document.getElementById('repeatTotal').style.display = 'block';
@@ -1913,6 +2012,7 @@ async function confirmBookWithCredit() {
   if (!(await saveProfileFieldsFromModal())) return;
   const locations = validateBookingLocations(false);
   if (!locations) return;
+  if (!validateSocialVideoEligibility()) return;
 
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
@@ -1922,6 +2022,8 @@ async function confirmBookWithCredit() {
 
   try {
     const bookBody = { ...pendingSlot, pickup_address: locations.pickup_address };
+    bookBody.social_video_consent = socialVideoConsentChecked();
+    bookBody.social_video_age_confirmed = socialVideoAgeConfirmed();
     if (locations.dropoff_address) bookBody.dropoff_address = locations.dropoff_address;
     if (selectedLessonType && selectedLessonType.id) bookBody.lesson_type_id = selectedLessonType.id;
     if (weeks > 1) bookBody.repeat_weeks = weeks;
@@ -2013,6 +2115,7 @@ async function confirmPayAndBook() {
   }
   const locations = validateBookingLocations(isGuest);
   if (!locations) return;
+  if (!validateSocialVideoEligibility()) return;
 
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
   setLastLessonType(selectedLessonType);
@@ -2028,7 +2131,9 @@ async function confirmPayAndBook() {
         guest_name:           document.getElementById('mdGuestName').value.trim(),
         guest_email:          document.getElementById('mdGuestEmail').value.trim(),
         guest_phone:          document.getElementById('mdGuestPhone').value.replace(/\s+/g, '').trim(),
-        guest_pickup_address: locations.pickup_address
+        guest_pickup_address: locations.pickup_address,
+        social_video_consent: socialVideoConsentChecked(),
+        social_video_age_confirmed: socialVideoAgeConfirmed()
       };
       const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-slot-guest', {
         method: 'POST',
@@ -2041,6 +2146,8 @@ async function confirmPayAndBook() {
     } else {
       // Authenticated checkout
       const payBody = { ...pendingSlot, pickup_address: locations.pickup_address };
+      payBody.social_video_consent = socialVideoConsentChecked();
+      payBody.social_video_age_confirmed = socialVideoAgeConfirmed();
       if (locations.dropoff_address) payBody.dropoff_address = locations.dropoff_address;
       if (selectedLessonType && selectedLessonType.id) payBody.lesson_type_id = selectedLessonType.id;
       const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-slot', {
@@ -2054,7 +2161,7 @@ async function confirmPayAndBook() {
     }
   } catch (err) {
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
-    const priceStr = '£' + (ltPrice / 100).toFixed(2);
+    const priceStr = formatMoney(socialVideoPrice(ltPrice));
     btn.disabled = false; label.textContent = `Pay ${priceStr} & book`; spinner.style.display = 'none';
   }
 }

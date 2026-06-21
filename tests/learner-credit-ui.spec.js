@@ -65,7 +65,7 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
   test('booking modal uses selected instructor balance for credit eligibility and copy', () => {
     const js = read('public/learner/book.js');
 
-    expect(js).toContain('const hasCreds = selectedInstructorBalanceMinutes >= ltDuration;');
+    expect(js).toContain('const hasCreds = selectedInstructorBalanceMinutes >= chargeMins;');
     expect(js).toContain('const hasCreds = selectedInstructorBalanceMinutes >= totalMins;');
     expect(js).toContain('const balance = selectedInstructorBalanceMinutes || 0;');
     expect(js).toContain('` with ${pendingSlot.instructor_name}`');

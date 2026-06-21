@@ -48,10 +48,13 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
 
     expect(body).toContain('const directPrice  = await calcDirectLessonPrice(sql, {');
     expect(body).toContain('learnerId: user.id,');
-    expect(body).toContain('const pricePence   = directPrice.pricePence;');
+    expect(body).toContain('const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);');
+    expect(body).toContain('const pricePence = priced.pricePence;');
+    expect(body).toContain('const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);');
     expect(body).toContain('unit_amount: pricePence');
     expect(body).toContain('amount_pence:    String(pricePence)');
-    expect(body).toContain('effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)');
+    expect(body).toContain('charge_minutes:   String(chargeMins)');
+    expect(body).toContain('effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0)');
     expect(body).toContain('if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);');
   });
 
@@ -64,10 +67,13 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
     expect(learnerInsert).toBeGreaterThanOrEqual(0);
     expect(directPrice).toBeGreaterThan(learnerInsert);
     expect(body).toContain('learnerId,');
-    expect(body).toContain('const pricePence = directPrice.pricePence;');
+    expect(body).toContain('const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);');
+    expect(body).toContain('const pricePence = priced.pricePence;');
+    expect(body).toContain('const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);');
     expect(body).toContain('unit_amount: pricePence');
     expect(body).toContain('amount_pence:    String(pricePence)');
-    expect(body).toContain('effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)');
+    expect(body).toContain('charge_minutes:   String(chargeMins)');
+    expect(body).toContain('effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0)');
     expect(body).toContain('if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);');
   });
 

@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.112 - Social Video Filming Opt-In Discount (21 June 2026)
+
+Instructors can now opt in from their profile to allow learners to choose social-media filming on a per-lesson basis. When the learner checks the filming option in the booking modal, the server applies a 5% discount to that booking only; the lesson still occupies the full lesson-type duration, while direct Stripe checkout amounts and credit-funded `minutes_deducted` use the discounted charge value.
+
+The booking modal includes a More info consent popup, paid checkout metadata snapshots the filming consent/discount, and instructor agenda/dashboard views mark filmed lessons so the instructor can spot them before the lesson.
+
+**Files:** `db/migration.sql`, `api/_pricing-helpers.js`, `api/slots.js`, `api/webhook.js`, `api/instructor.js`, `public/learner/book.html`, `public/learner/book.js`, `public/instructor/profile.js`, `public/instructor/index.js`, `public/instructor/dashboard.js`, `tests/direct-booking-effective-pricing.spec.js`, `tests/learner-credit-ui.spec.js`, `tests/webhook-slot-booking.spec.js`, `tests/social-video-booking-discount.spec.js`, `PROJECT.md`, `MIGRATION-PLAN.md`, `docs/per-instructor-credits-audit.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.111 - Weekly Availability Transmission Split (17 June 2026)
 
 Dual-car instructors can now mark each recurring weekly availability window as Manual, Automatic, or Both from `/instructor/availability.html`. Existing dual-car weekly windows remain `both` until the instructor narrows them, while single-transmission instructors are clamped to their profile type.

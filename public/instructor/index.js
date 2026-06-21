@@ -67,6 +67,12 @@ function bookingTransmissionBadge(booking) {
   return `<span class="lesson-type-badge transmission-badge">${transmissionLabel(type)}</span>`;
 }
 
+function socialVideoBadge(booking) {
+  if (!booking || !booking.social_video_consent) return '';
+  const pct = Number(booking.social_video_discount_pct || 5);
+  return `<span class="lesson-type-badge" title="Learner agreed for this lesson to be filmed" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">Filmed${pct ? ` -${pct}%` : ''}</span>`;
+}
+
 // ─── State ───────────────────────────────────────────────────────────────────
 let instructor = null;
 let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
@@ -444,6 +450,7 @@ function renderWeekly() {
             </div>
             <span class="tp-lesson-type" style="background:${ltColour}18;color:${ltColour}">${esc(ltName)}</span>
             ${bookingTransmissionBadge(b)}
+            ${socialVideoBadge(b)}
           </div>`;
       }
       for (const a of overrides) {
@@ -525,7 +532,7 @@ function renderDaily() {
         `style="border-left-color:${ltColour};${isCompleted ? `background:${ltColour}08;border-color:${ltColour}40;` : `background:${ltColour}12;border-color:${ltColour}50;`}"`;
       html += `
         <div class="daily-booking-card ${isCompleted ? 'completed' : b.status === 'refunded' ? 'cancelled' : ''}" ${cardStyle}>
-          <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span> ${bookingTransmissionBadge(b)}</div>
+          <div class="daily-booking-time">${b.start_time.slice(0,5)}–${b.end_time.slice(0,5)} <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span> ${bookingTransmissionBadge(b)} ${socialVideoBadge(b)}</div>
           <div>
             <div class="daily-booking-name">${esc(b.learner_name)}${b.prefer_contact_before ? '<span class="contact-badge" title="Learner would like you to contact them before their first lesson">📞 Contact first</span>' : ''}</div>
             <div class="daily-booking-email">${esc(b.learner_email)}</div>
@@ -718,6 +725,7 @@ function renderAgenda() {
             <div class="agenda-time">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</div>
             <span class="lesson-type-badge" style="background:${ltColour}20;color:${ltColour};border:1px solid ${ltColour}40">${esc(ltName)}</span>
             ${bookingTransmissionBadge(b)}
+            ${socialVideoBadge(b)}
           </div>
           <div class="agenda-card-mid">
             <div class="agenda-learner">${esc(b.learner_name)}${b.prefer_contact_before ? ' <span class="contact-badge">📞</span>' : ''}</div>
@@ -1214,6 +1222,7 @@ function openBookingDetail(bookingId) {
     <div class="booking-detail-row"><span class="booking-detail-label">Time</span><span class="booking-detail-val">${b.start_time.slice(0,5)} – ${b.end_time.slice(0,5)}</span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Type</span><span class="booking-detail-val"><span class="lesson-type-badge" style="background:${b.lesson_type_colour || 'var(--accent)'}20;color:${b.lesson_type_colour || 'var(--accent)'};border:1px solid ${b.lesson_type_colour || 'var(--accent)'}40">${esc(b.lesson_type_name || 'Standard Lesson')}</span> ${b.duration_minutes ? `(${b.duration_minutes >= 60 ? (b.duration_minutes % 60 === 0 ? b.duration_minutes/60 + ' hr' + (b.duration_minutes/60 !== 1 ? 's' : '') : (b.duration_minutes/60).toFixed(1) + ' hrs') : b.duration_minutes + ' min'})` : ''}</span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Transmission</span><span class="booking-detail-val">${bookingTransmissionBadge(b)}</span></div>
+    ${b.social_video_consent ? `<div class="booking-detail-row"><span class="booking-detail-label">Filming</span><span class="booking-detail-val">${socialVideoBadge(b)} Learner agreed for this lesson to be filmed.</span></div>` : ''}
     <div class="booking-detail-row"><span class="booking-detail-label">Learner</span><span class="booking-detail-val"><a href="#" data-action="open-learner-history" data-id="${b.learner_id}" style="color:var(--accent);text-decoration:underline">${esc(b.learner_name)}</a></span></div>
     <div class="booking-detail-row"><span class="booking-detail-label">Email</span><span class="booking-detail-val">${esc(b.learner_email)}</span></div>
     ${b.learner_phone ? `<div class="booking-detail-row"><span class="booking-detail-label">Phone</span><span class="booking-detail-val"><a href="tel:${esc(b.learner_phone)}" style="color:var(--accent)">${esc(b.learner_phone)}</a></span></div>` : ''}

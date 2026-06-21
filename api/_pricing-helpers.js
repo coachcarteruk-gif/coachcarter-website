@@ -15,6 +15,7 @@
  */
 
 const MAX_HOURS_PER_PURCHASE = 36;
+const SOCIAL_VIDEO_DISCOUNT_PCT = 5;
 const HARD_FALLBACK_HOURLY_PENCE = 5500; // £55/hr — only used if school has neither
                                           // bulk_hourly_pence nor an active 90-min lesson type.
 
@@ -167,6 +168,29 @@ async function calcDirectLessonPrice(sql, { schoolId, instructorId, learnerId, d
     source: effective.source,
     _source: effective.source,
   };
+}
+
+function normaliseSocialVideoConsent(value) {
+  return value === true || value === 'true' || value === '1' || value === 1;
+}
+
+function applySocialVideoDiscount(pricePence, enabled) {
+  const price = Math.max(0, parseInt(pricePence, 10) || 0);
+  if (!enabled) {
+    return { pricePence: price, discountPence: 0, discountPct: 0 };
+  }
+  const discounted = Math.max(0, Math.round(price * (100 - SOCIAL_VIDEO_DISCOUNT_PCT) / 100));
+  return {
+    pricePence: discounted,
+    discountPence: price - discounted,
+    discountPct: SOCIAL_VIDEO_DISCOUNT_PCT,
+  };
+}
+
+function calcSocialVideoChargeMinutes(durationMinutes, enabled) {
+  const minutes = Math.max(0, parseInt(durationMinutes, 10) || 0);
+  if (!enabled) return minutes;
+  return Math.max(1, Math.round(minutes * (100 - SOCIAL_VIDEO_DISCOUNT_PCT) / 100));
 }
 
 /**
@@ -322,10 +346,14 @@ module.exports = {
   calcBulkTotal,
   calcDirectLessonPrice,
   calcOfferLessonPrice,
+  applySocialVideoDiscount,
+  calcSocialVideoChargeMinutes,
   getEffectiveHourlyPence,
   getEffectiveHourlyPricing,
   getEffectiveRatePencePerMinute,
   getInstructorBulkTiersEnabled,
+  normaliseSocialVideoConsent,
   validateBulkPricingConfig,
   MAX_HOURS_PER_PURCHASE,
+  SOCIAL_VIDEO_DISCOUNT_PCT,
 };

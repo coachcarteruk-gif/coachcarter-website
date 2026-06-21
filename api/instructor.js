@@ -561,6 +561,8 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
+          COALESCE(lb.social_video_consent, false) AS social_video_consent,
+          COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
           CASE
             WHEN COALESCE(i.transmission_type, 'manual') = 'both' THEN COALESCE(lb.transmission_type, 'manual')
             WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'
@@ -601,6 +603,8 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
+          COALESCE(lb.social_video_consent, false) AS social_video_consent,
+          COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
           CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END AS transmission_type,
           lb.lesson_type_id,
           lu.id    AS learner_id,
@@ -1258,7 +1262,8 @@ async function handleProfile(req, res) {
              ical_feed_url, ical_last_synced_at, ical_sync_error,
              offered_lesson_types,
              COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
-             COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
+             COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled,
+             COALESCE(social_video_opt_in, false) AS social_video_opt_in
       FROM instructors
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
@@ -1294,7 +1299,7 @@ async function handleUpdateProfile(req, res) {
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
     service_areas, languages, ical_feed_url, offered_lesson_types,
-    broadcast_offers_enabled, bulk_tiers_enabled
+    broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in
   } = req.body;
 
   // Validate broadcast_offers_enabled if provided
@@ -1303,6 +1308,9 @@ async function handleUpdateProfile(req, res) {
   }
   if (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null && typeof bulk_tiers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
+  }
+  if (social_video_opt_in !== undefined && social_video_opt_in !== null && typeof social_video_opt_in !== 'boolean') {
+    return res.status(400).json({ error: 'social_video_opt_in must be true or false' });
   }
 
   // Validate buffer_minutes if provided
@@ -1418,6 +1426,8 @@ async function handleUpdateProfile(req, res) {
       ? broadcast_offers_enabled : null;
     const bulkVal = (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null)
       ? bulk_tiers_enabled : null;
+    const socialVideoVal = (social_video_opt_in !== undefined && social_video_opt_in !== null)
+      ? social_video_opt_in : null;
     const prVal = (pass_rate !== undefined && pass_rate !== null)
       ? parseFloat(pass_rate) : null;
     const yeVal = (years_experience !== undefined && years_experience !== null)
@@ -1466,7 +1476,8 @@ async function handleUpdateProfile(req, res) {
         ical_sync_error      = CASE WHEN ${icalChanged} THEN NULL ELSE ical_sync_error END,
         offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END,
         broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled),
-        bulk_tiers_enabled = COALESCE(${bulkVal}, bulk_tiers_enabled)
+        bulk_tiers_enabled = COALESCE(${bulkVal}, bulk_tiers_enabled),
+        social_video_opt_in = COALESCE(${socialVideoVal}, social_video_opt_in)
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url,
@@ -1485,7 +1496,8 @@ async function handleUpdateProfile(req, res) {
                 ical_feed_url, ical_last_synced_at, ical_sync_error,
                 offered_lesson_types,
                 COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
-                COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled
+                COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled,
+                COALESCE(social_video_opt_in, false) AS social_video_opt_in
     `;
     if (updated) {
       updated.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {
@@ -1791,6 +1803,9 @@ async function handleRescheduleBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time, lb.end_time,
              lb.instructor_id, lb.school_id, COALESCE(lb.reschedule_count, 0) AS reschedule_count,
              lb.lesson_type_id, lb.minutes_deducted, lb.pickup_address, lb.dropoff_address,
+             COALESCE(lb.social_video_consent, false) AS social_video_consent,
+             COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
+             COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
              COALESCE(lt.duration_minutes, 90) AS type_duration_minutes
@@ -1847,12 +1862,13 @@ async function handleRescheduleBooking(req, res) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            rescheduled_from, reschedule_count, lesson_type_id, minutes_deducted,
-           pickup_address, dropoff_address, school_id)
+           pickup_address, dropoff_address, school_id, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
         VALUES
           (${booking.learner_id}, ${booking.instructor_id}, ${new_date}, ${new_start_time},
            ${new_end_time}, ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
            ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
-           ${booking.pickup_address || null}, ${booking.dropoff_address || null}, ${schoolId})
+           ${booking.pickup_address || null}, ${booking.dropoff_address || null}, ${schoolId},
+           ${!!booking.social_video_consent}, ${!!booking.social_video_age_confirmed}, ${booking.social_video_discount_pct || 0})
         RETURNING id, scheduled_date, start_time::text, end_time::text, reschedule_count
       `;
       newBooking = b;

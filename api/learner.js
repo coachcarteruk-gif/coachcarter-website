@@ -1388,7 +1388,11 @@ async function handleExportData(req, res) {
 
     const bookings = await sql`
       SELECT lb.scheduled_date, lb.start_time, lb.end_time, lb.pickup_address, lb.status, lb.created_at,
-             lb.guest_phone, i.name AS instructor_name, lt.name AS lesson_type
+             lb.guest_phone,
+             COALESCE(lb.social_video_consent, false) AS social_video_consent,
+             COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
+             COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
+             i.name AS instructor_name, lt.name AS lesson_type
       FROM lesson_bookings lb
         LEFT JOIN instructors i ON lb.instructor_id = i.id
         LEFT JOIN lesson_types lt ON lb.lesson_type_id = lt.id

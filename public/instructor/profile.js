@@ -259,6 +259,21 @@
       </div>
 
       <div class="form-card">
+        <div class="form-card-title">Social media filming</div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--primary);font-size:0.9rem;font-weight:700;">
+            <input type="checkbox" id="inputSocialVideoOptIn" ${p.social_video_opt_in ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
+            <span>
+              Offer learners a 5% discount when they agree for that lesson to be filmed
+              <span class="field-hint" style="display:block;margin-top:5px;font-weight:400">Learners choose this per booking. Filmed lessons are marked on your agenda, and the discounted booking value is what feeds payout calculations.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-card">
         <div class="form-card-title">Last-minute broadcasts</div>
 
         <div class="form-group">
@@ -535,6 +550,7 @@
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
     const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
     const bulk_tiers_enabled = document.getElementById('inputBulkTiersEnabled').checked;
+    const social_video_opt_in = document.getElementById('inputSocialVideoOptIn').checked;
 
     // New profile fields
     const adi_grade      = document.getElementById('inputAdiGrade').value.trim() || null;
@@ -567,7 +583,7 @@
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, max_booking_days_ahead, reminder_hours, daily_schedule_email,
-          broadcast_offers_enabled, bulk_tiers_enabled,
+          broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,
           service_areas, languages, ical_feed_url

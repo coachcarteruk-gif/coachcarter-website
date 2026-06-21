@@ -78,7 +78,7 @@ test.describe('webhook slot booking regressions', () => {
     const slotBody = getSlotBookingBody();
     const bcsBody = getFunctionBody('ensureSlotBookingBcs');
 
-    expect(slotBody).toContain('Math.round(amountPence / durationMins)');
+    expect(slotBody).toContain('Math.round(amountPence / chargeMins)');
     expect(slotBody).toContain('RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute');
     expect(bcsBody).toContain('rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by');
     expect(bcsBody).toContain('${creditTransaction.effective_rate_pence_per_minute}, ${creditTransaction.amount_pence}, ${bcsStripeFeePence}, NULL');
