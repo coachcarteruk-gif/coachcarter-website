@@ -99,6 +99,27 @@ test('learner modal exposes social video consent without sending prices', () => 
   expect(checkoutBody).not.toContain('amount_pence:');
 });
 
+test('learner upcoming lesson surfaces remind learners when filming was agreed', () => {
+  const slots = read('api/slots.js');
+  const bookJs = read('public/learner/book.js');
+  const indexHtml = read('public/learner/index.html');
+  const indexJs = read('public/learner/index.js');
+  const lessonsHtml = read('public/learner/lessons.html');
+  const lessonsJs = read('public/learner/lessons.js');
+  const myBookings = functionBody(slots, 'handleMyBookings');
+
+  expect(myBookings).toContain('COALESCE(lb.social_video_consent, false) AS social_video_consent');
+  expect(myBookings).toContain('COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed');
+  expect(myBookings).toContain('COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct');
+
+  expect(bookJs).toContain("next.social_video_consent === true ? ' - filmed lesson' : ''");
+  expect(indexHtml).toContain('id="nl-filming"');
+  expect(indexJs).toContain("filming.style.display = b.social_video_consent === true ? 'block' : 'none';");
+  expect(lessonsHtml).toContain('.filmed-lesson-note');
+  expect(lessonsJs).toContain('b.social_video_consent === true');
+  expect(lessonsJs).toContain('Filmed lesson: you agreed for this session to be filmed for social media.');
+});
+
 test('GDPR export includes social video consent snapshots', () => {
   const learner = read('api/learner.js');
   const exportBody = functionBody(learner, 'handleExportData');

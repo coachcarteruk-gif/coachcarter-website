@@ -280,6 +280,10 @@
         '</div>';
     }
 
+    if (!isPast && b.social_video_consent === true) {
+      html += '<div class="filmed-lesson-note">Filmed lesson: you agreed for this session to be filmed for social media.</div>';
+    }
+
     if (canAct) {
       html += '<div class="lesson-actions">';
       html += '<button class="btn-lesson calendar" data-action="download-calendar" data-booking-id="' + b.id + '">Add to Calendar</button>';

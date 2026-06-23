@@ -477,8 +477,9 @@ async function loadUpcoming() {
     const next = upcoming[0];
     const dateStr = new Date(next.scheduled_date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+    const filmingText = next.social_video_consent === true ? ' - filmed lesson' : '';
     document.getElementById('nextLessonDetail').textContent =
-      `${dateStr} at ${next.start_time.slice(0,5)} with ${next.instructor_name}`;
+      `${dateStr} at ${next.start_time.slice(0,5)} with ${next.instructor_name}${filmingText}`;
     card.style.display = 'flex';
   } catch {}
 }
