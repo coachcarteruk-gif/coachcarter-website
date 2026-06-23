@@ -1244,14 +1244,10 @@
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.86rem;color:var(--primary);font-weight:700;line-height:1.35">
           <input type="checkbox" id="mdSocialVideoConsent" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
           <span>
-            Allow this lesson to be filmed for social media and save 5%
+            I confirm I am 18 or over and allow this lesson to be filmed for social media to save 5%
             <button type="button" id="mdSocialVideoMore" style="border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;padding:0;margin-left:4px;cursor:pointer;text-decoration:underline">More info</button>
             <span id="mdSocialVideoPrice" style="display:block;margin-top:4px;color:var(--muted);font-size:0.78rem;font-weight:400"></span>
           </span>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.8rem;color:var(--muted);font-weight:600;line-height:1.35;margin-top:10px">
-          <input type="checkbox" id="mdSocialVideoAgeConfirmed" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
-          <span>I confirm I am 18 or over.</span>
         </label>
       </div>
       <div id="slotTimer" style="display:none;text-align:center;font-size:0.78rem;color:var(--muted);padding:6px 0">
@@ -1309,19 +1305,15 @@
           <label for="mdPickupMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup</label>
           <select id="mdPickupMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
             <option value="home">Saved home address</option>
-            <option value="custom">Different pickup address</option>
           </select>
           <div id="mdHomePickupPreview" style="font-size:0.76rem;color:var(--muted);margin-top:5px"></div>
-          <input type="text" id="mdPickupCustom" placeholder="e.g. School, work, test centre..." style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
         </div>
         <label for="mdDropoffMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off</label>
         <select id="mdDropoffMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
           <option value="same">Same as pickup</option>
           <option value="home">Saved home address</option>
-          <option value="custom">Different drop-off address</option>
         </select>
-        <label id="mdDropoffCustomLabel" for="mdDropoff" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:none;margin:8px 0 4px">Different drop-off address</label>
-        <input type="text" id="mdDropoff" placeholder="e.g. School, work, test centre…" style="display:none;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+        <div style="font-size:0.76rem;color:var(--muted);margin-top:6px">Need a different address? Update your profile before booking.</div>
         <div id="mdLocationCheckHint" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:6px">Checking this pickup against nearby lessons...</div>
       </div>
       <!-- Repeat weekly toggle -->
@@ -1526,21 +1518,19 @@
       <div id="reschedulePickupRow" style="margin-bottom:10px">
         <label for="rmPickupMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Pickup</label>
         <select id="rmPickupMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
+          <option value="" disabled>No saved pickup address</option>
           <option value="current">Current booking pickup</option>
           <option value="home">Saved home address</option>
-          <option value="custom">Different pickup address</option>
         </select>
         <div id="rmPickupPreview" style="font-size:0.76rem;color:var(--muted);margin-top:5px"></div>
-        <input type="text" id="rmPickupCustom" placeholder="e.g. School, work, test centre..." style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
       </div>
       <label for="rmDropoffMode" style="font-size:0.78rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Drop-off</label>
       <select id="rmDropoffMode" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;background:var(--white);color:var(--primary)">
         <option value="same">Same as pickup</option>
         <option value="current">Current booking drop-off</option>
         <option value="home">Saved home address</option>
-        <option value="custom">Different drop-off address</option>
       </select>
-      <input type="text" id="rmDropoffCustom" placeholder="e.g. School, work, test centre..." style="display:none;width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;box-sizing:border-box;">
+      <div style="font-size:0.76rem;color:var(--muted);margin-top:6px">Need a different address? Update your profile before rescheduling.</div>
     </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" id="rescheduleModalCancelBtn">Cancel</button>

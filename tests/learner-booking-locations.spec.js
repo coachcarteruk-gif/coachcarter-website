@@ -21,15 +21,19 @@ function functionBody(source, name) {
 }
 
 test.describe('learner per-booking pickup and drop-off locations', () => {
-  test('booking and reschedule modals expose pickup/drop-off selectors', () => {
+  test('booking and reschedule modals expose dropdown-only pickup/drop-off selectors', () => {
     const html = read('public/learner/book.html');
 
     expect(html).toContain('id="mdPickupMode"');
-    expect(html).toContain('Different pickup address');
     expect(html).toContain('id="mdDropoffMode"');
     expect(html).toContain('Same as pickup');
+    expect(html).toContain('Need a different address? Update your profile before booking.');
     expect(html).toContain('id="rmPickupMode"');
     expect(html).toContain('id="rmDropoffMode"');
+    expect(html).not.toContain('Different pickup address');
+    expect(html).not.toContain('Different drop-off address');
+    expect(html).not.toContain('id="mdPickupCustom"');
+    expect(html).not.toContain('id="rmPickupCustom"');
   });
 
   test('frontend uses the selected pickup for duration checks and submit payloads', () => {
@@ -40,7 +44,9 @@ test.describe('learner per-booking pickup and drop-off locations', () => {
     expect(functionBody(js, 'confirmPayAndBook')).toContain('guest_pickup_address: locations.pickup_address');
     expect(functionBody(js, 'confirmPayAndBook')).toContain('pickup_address: locations.pickup_address');
     expect(functionBody(js, 'confirmReschedule')).toContain('body.pickup_address = pickupAddress;');
-    expect(js).toContain("guestPickup.addEventListener('input', function () { scheduleLocationDurationCheck(true); });");
+    expect(js).toContain("guestPickup.addEventListener('change', function () { scheduleLocationDurationCheck(true); });");
+    expect(js).toContain("profilePickup.addEventListener('change', function () { scheduleLocationDurationCheck(false); });");
+    expect(js).not.toContain("guestPickup.addEventListener('input', function () { scheduleLocationDurationCheck(true); });");
     expect(js).toContain("pickupMode.addEventListener('change', function () {");
   });
 

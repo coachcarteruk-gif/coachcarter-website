@@ -76,7 +76,8 @@ test('learner modal exposes social video consent without sending prices', () => 
 
   expect(html).toContain('id="socialVideoOption"');
   expect(html).toContain('id="mdSocialVideoConsent"');
-  expect(html).toContain('id="mdSocialVideoAgeConfirmed"');
+  expect(html).toContain('I confirm I am 18 or over and allow this lesson to be filmed for social media to save 5%');
+  expect(html).not.toContain('id="mdSocialVideoAgeConfirmed"');
   expect(html).toContain('id="socialVideoInfoModal"');
   expect(html).toContain('used by your driving school for social media');
   expect(html).not.toContain('used by CoachCarter for social media');
@@ -84,9 +85,9 @@ test('learner modal exposes social video consent without sending prices', () => 
   expect(js).toContain('socialVideoOption = {');
   expect(js).toContain('function socialVideoConsentChecked()');
   expect(js).toContain('function socialVideoAgeConfirmed()');
-  expect(js).toContain('return socialVideoConsentChecked() && socialVideoAgeConfirmed();');
+  expect(js).toContain('return socialVideoConsentChecked();');
+  expect(js).toContain('Tick this box to make');
   expect(js).toContain('function validateSocialVideoEligibility()');
-  expect(js).toContain("Confirm you are 18 or over to choose the filmed lesson discount, or untick filming.");
   expect(js).toContain('updateDeductDisplay();');
   expect(js).toContain('updateBookButtonState();');
   expect(js).toContain('socialVideoChargeMinutes');

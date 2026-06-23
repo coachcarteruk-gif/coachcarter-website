@@ -115,8 +115,6 @@ function init() {
   };
   const socialVideoCheckbox = document.getElementById('mdSocialVideoConsent');
   if (socialVideoCheckbox) socialVideoCheckbox.onchange = handleSocialVideoToggle;
-  const socialVideoAgeCheckbox = document.getElementById('mdSocialVideoAgeConfirmed');
-  if (socialVideoAgeCheckbox) socialVideoAgeCheckbox.onchange = handleSocialVideoToggle;
   const socialInfoModal = document.getElementById('socialVideoInfoModal');
   const closeSocialInfo = () => socialInfoModal && socialInfoModal.classList.remove('open');
   const socialMore = document.getElementById('mdSocialVideoMore');
@@ -612,8 +610,6 @@ function extractPostcodeForQuery(address) {
 
 function resolveBookingPickupAddress(isGuest) {
   if (isGuest) return (document.getElementById('mdGuestPickup')?.value || '').trim();
-  const mode = document.getElementById('mdPickupMode')?.value || 'home';
-  if (mode === 'custom') return (document.getElementById('mdPickupCustom')?.value || '').trim();
   const profileInput = document.getElementById('mdProfilePickup');
   return (learnerProfile.pickup_address || profileInput?.value || '').trim();
 }
@@ -622,7 +618,6 @@ function resolveBookingDropoffAddress(isGuest) {
   const mode = document.getElementById('mdDropoffMode')?.value || 'same';
   if (mode === 'same') return null;
   if (mode === 'home' && !isGuest) return (learnerProfile.pickup_address || '').trim() || null;
-  if (mode === 'custom') return (document.getElementById('mdDropoff')?.value || '').trim() || null;
   return null;
 }
 
@@ -632,22 +627,14 @@ function getActivePickupPostcode(isGuest) {
 
 function syncBookingLocationControls(isGuest) {
   const pickupRow = document.getElementById('bookingPickupRow');
-  const pickupMode = document.getElementById('mdPickupMode');
-  const pickupCustom = document.getElementById('mdPickupCustom');
   const pickupPreview = document.getElementById('mdHomePickupPreview');
   const dropoffMode = document.getElementById('mdDropoffMode');
   const dropoffHomeOption = dropoffMode?.querySelector('option[value="home"]');
-  const dropoffInput = document.getElementById('mdDropoff');
-  const dropoffLabel = document.getElementById('mdDropoffCustomLabel');
 
   if (pickupRow) pickupRow.style.display = isGuest ? 'none' : '';
   if (pickupPreview) pickupPreview.textContent = !isGuest && learnerProfile.pickup_address ? learnerProfile.pickup_address : '';
-  if (pickupCustom) pickupCustom.style.display = (!isGuest && pickupMode?.value === 'custom') ? 'block' : 'none';
   if (dropoffHomeOption) dropoffHomeOption.hidden = isGuest || !learnerProfile.pickup_address;
   if (dropoffMode && dropoffHomeOption?.hidden && dropoffMode.value === 'home') dropoffMode.value = 'same';
-  const customDropoff = dropoffMode?.value === 'custom';
-  if (dropoffInput) dropoffInput.style.display = customDropoff ? 'block' : 'none';
-  if (dropoffLabel) dropoffLabel.style.display = customDropoff ? 'block' : 'none';
 }
 
 function scheduleLocationDurationCheck(isGuest) {
@@ -666,36 +653,31 @@ function validateBookingLocations(isGuest) {
     showToast('Please enter a pickup address.', 'error');
     return null;
   }
-  const dropoffMode = document.getElementById('mdDropoffMode')?.value || 'same';
   const dropoff = resolveBookingDropoffAddress(isGuest);
-  if (dropoffMode === 'custom' && !dropoff) {
-    showToast('Please enter the drop-off address, or choose same as pickup.', 'error');
-    return null;
-  }
   return { pickup_address: pickup, dropoff_address: dropoff };
 }
 
 function syncRescheduleLocationControls() {
   if (!pendingReschedule) return;
   const pickupMode = document.getElementById('rmPickupMode');
-  const pickupInput = document.getElementById('rmPickupCustom');
   const pickupPreview = document.getElementById('rmPickupPreview');
   const dropoffMode = document.getElementById('rmDropoffMode');
-  const dropoffInput = document.getElementById('rmDropoffCustom');
   const homePickup = learnerProfile.pickup_address || '';
 
+  const noPickupOption = pickupMode?.querySelector('option[value=""]');
   const currentPickupOption = pickupMode?.querySelector('option[value="current"]');
   const homePickupOption = pickupMode?.querySelector('option[value="home"]');
   const currentDropoffOption = dropoffMode?.querySelector('option[value="current"]');
   const homeDropoffOption = dropoffMode?.querySelector('option[value="home"]');
+  if (noPickupOption) noPickupOption.hidden = !!(pendingReschedule.pickupAddress || homePickup);
   if (currentPickupOption) currentPickupOption.hidden = !pendingReschedule.pickupAddress;
   if (homePickupOption) homePickupOption.hidden = !homePickup;
   if (currentDropoffOption) currentDropoffOption.hidden = !pendingReschedule.dropoffAddress;
   if (homeDropoffOption) homeDropoffOption.hidden = !homePickup;
-  if (pickupMode && pickupMode.selectedOptions[0]?.hidden) pickupMode.value = homePickup ? 'home' : 'custom';
+  if (pickupMode && pickupMode.selectedOptions[0]?.hidden) {
+    pickupMode.value = pendingReschedule.pickupAddress ? 'current' : (homePickup ? 'home' : '');
+  }
   if (dropoffMode && dropoffMode.selectedOptions[0]?.hidden) dropoffMode.value = 'same';
-  if (pickupInput) pickupInput.style.display = pickupMode?.value === 'custom' ? 'block' : 'none';
-  if (dropoffInput) dropoffInput.style.display = dropoffMode?.value === 'custom' ? 'block' : 'none';
   if (pickupPreview) {
     const value = pickupMode?.value === 'home' ? homePickup
       : pickupMode?.value === 'current' ? (pendingReschedule.pickupAddress || '')
@@ -707,16 +689,16 @@ function syncRescheduleLocationControls() {
 function resolveReschedulePickupAddress() {
   const mode = document.getElementById('rmPickupMode')?.value || 'current';
   if (mode === 'home') return (learnerProfile.pickup_address || '').trim();
-  if (mode === 'custom') return (document.getElementById('rmPickupCustom')?.value || '').trim();
-  return (pendingReschedule?.pickupAddress || learnerProfile.pickup_address || '').trim();
+  if (mode === 'current') return (pendingReschedule?.pickupAddress || learnerProfile.pickup_address || '').trim();
+  return '';
 }
 
 function resolveRescheduleDropoffAddress() {
   const mode = document.getElementById('rmDropoffMode')?.value || 'same';
   if (mode === 'same') return null;
   if (mode === 'home') return (learnerProfile.pickup_address || '').trim() || null;
-  if (mode === 'custom') return (document.getElementById('rmDropoffCustom')?.value || '').trim() || null;
-  return (pendingReschedule?.dropoffAddress || '').trim() || null;
+  if (mode === 'current') return (pendingReschedule?.dropoffAddress || '').trim() || null;
+  return null;
 }
 
 async function onFilterChange() {
@@ -1390,8 +1372,6 @@ function openBookModal(el) {
   socialVideoOption = { available: false, discountPct: 5 };
   const socialVideoCheckbox = document.getElementById('mdSocialVideoConsent');
   if (socialVideoCheckbox) socialVideoCheckbox.checked = false;
-  const socialVideoAgeCheckbox = document.getElementById('mdSocialVideoAgeConfirmed');
-  if (socialVideoAgeCheckbox) socialVideoAgeCheckbox.checked = false;
   const socialVideoWrap = document.getElementById('socialVideoOption');
   if (socialVideoWrap) socialVideoWrap.style.display = 'none';
   selectedInstructorBalanceMinutes = 0;
@@ -1403,11 +1383,8 @@ function openBookModal(el) {
   document.getElementById('mdTransmission').textContent = transmissionLabel(pendingSlot.transmission_type);
   const pickupMode = document.getElementById('mdPickupMode');
   if (pickupMode) pickupMode.value = 'home';
-  const pickupCustom = document.getElementById('mdPickupCustom');
-  if (pickupCustom) pickupCustom.value = '';
   const dropoffMode = document.getElementById('mdDropoffMode');
   if (dropoffMode) dropoffMode.value = 'same';
-  document.getElementById('mdDropoff').value = '';
   syncBookingLocationControls(isGuest);
 
   // Reset duration-picker UI to loading state.
@@ -1698,12 +1675,11 @@ function socialVideoConsentChecked() {
 }
 
 function socialVideoAgeConfirmed() {
-  const cb = document.getElementById('mdSocialVideoAgeConfirmed');
-  return !!(socialVideoOption.available && cb && cb.checked);
+  return socialVideoConsentChecked();
 }
 
 function socialVideoSelected() {
-  return socialVideoConsentChecked() && socialVideoAgeConfirmed();
+  return socialVideoConsentChecked();
 }
 
 function socialVideoPrice(pricePence) {
@@ -1723,27 +1699,21 @@ function socialVideoChargeMinutes(durationMinutes) {
 function refreshSocialVideoOption() {
   const wrap = document.getElementById('socialVideoOption');
   const cb = document.getElementById('mdSocialVideoConsent');
-  const ageCb = document.getElementById('mdSocialVideoAgeConfirmed');
   const priceEl = document.getElementById('mdSocialVideoPrice');
-  if (!wrap || !cb || !ageCb || !priceEl || !selectedLessonType) return;
+  if (!wrap || !cb || !priceEl || !selectedLessonType) return;
   wrap.style.display = socialVideoOption.available ? 'block' : 'none';
   if (!socialVideoOption.available) {
     cb.checked = false;
-    ageCb.checked = false;
   }
   const base = Number(selectedLessonType.price_pence || DEFAULT_PRICE_PENCE);
   const pct = Number(socialVideoOption.discountPct || 5);
   const discounted = Math.max(0, Math.round(base * (100 - pct) / 100));
   priceEl.textContent = socialVideoOption.available
-    ? `Tick both boxes to make ${formatMoney(base)} become ${formatMoney(discounted)} for this booking.`
+    ? `Tick this box to make ${formatMoney(base)} become ${formatMoney(discounted)} for this booking.`
     : '';
 }
 
 function validateSocialVideoEligibility() {
-  if (socialVideoConsentChecked() && !socialVideoAgeConfirmed()) {
-    showToast('Confirm you are 18 or over to choose the filmed lesson discount, or untick filming.', 'error');
-    return false;
-  }
   return true;
 }
 
@@ -2866,13 +2836,9 @@ function openRescheduleConfirm(newSlot) {
   const locationFields = document.getElementById('rescheduleLocationFields');
   if (locationFields) locationFields.style.display = pendingReschedule.isReservedMove ? 'none' : 'block';
   const pickupMode = document.getElementById('rmPickupMode');
-  if (pickupMode) pickupMode.value = pendingReschedule.pickupAddress ? 'current' : (learnerProfile.pickup_address ? 'home' : 'custom');
-  const pickupCustom = document.getElementById('rmPickupCustom');
-  if (pickupCustom) pickupCustom.value = '';
+  if (pickupMode) pickupMode.value = pendingReschedule.pickupAddress ? 'current' : (learnerProfile.pickup_address ? 'home' : '');
   const dropoffMode = document.getElementById('rmDropoffMode');
   if (dropoffMode) dropoffMode.value = pendingReschedule.dropoffAddress ? 'current' : 'same';
-  const dropoffCustom = document.getElementById('rmDropoffCustom');
-  if (dropoffCustom) dropoffCustom.value = '';
   syncRescheduleLocationControls();
   document.getElementById('rescheduleBtnLabel').textContent = pendingReschedule.isReservedMove ? 'Move reserved lesson' : 'Move lesson';
   document.getElementById('rescheduleSpinner').style.display = 'none';
@@ -2902,12 +2868,8 @@ async function confirmReschedule(newSlot) {
     };
     if (!isReservedMove) {
       const pickupAddress = resolveReschedulePickupAddress();
-      const dropoffMode = document.getElementById('rmDropoffMode')?.value || 'same';
       const dropoffAddress = resolveRescheduleDropoffAddress();
-      if (!pickupAddress) throw new Error('Please enter a pickup address.');
-      if (dropoffMode === 'custom' && !dropoffAddress) {
-        throw new Error('Please enter the drop-off address, or choose same as pickup.');
-      }
+      if (!pickupAddress) throw new Error('Please add a pickup address in your profile before rescheduling.');
       body.pickup_address = pickupAddress;
       body.dropoff_address = dropoffAddress;
     }
@@ -3050,16 +3012,14 @@ document.addEventListener('click', function (e) {
     if (el) el.addEventListener('input', function () { clearFieldError(el); });
   });
   var guestPickup = document.getElementById('mdGuestPickup');
-  if (guestPickup) guestPickup.addEventListener('input', function () { scheduleLocationDurationCheck(true); });
+  if (guestPickup) guestPickup.addEventListener('change', function () { scheduleLocationDurationCheck(true); });
   var pickupMode = document.getElementById('mdPickupMode');
   if (pickupMode) pickupMode.addEventListener('change', function () {
     syncBookingLocationControls(false);
     scheduleLocationDurationCheck(false);
   });
-  var pickupCustom = document.getElementById('mdPickupCustom');
-  if (pickupCustom) pickupCustom.addEventListener('input', function () { scheduleLocationDurationCheck(false); });
   var profilePickup = document.getElementById('mdProfilePickup');
-  if (profilePickup) profilePickup.addEventListener('input', function () { scheduleLocationDurationCheck(false); });
+  if (profilePickup) profilePickup.addEventListener('change', function () { scheduleLocationDurationCheck(false); });
   var dropoffMode = document.getElementById('mdDropoffMode');
   if (dropoffMode) dropoffMode.addEventListener('change', function () { syncBookingLocationControls(!auth); });
   var rmPickupMode = document.getElementById('rmPickupMode');
