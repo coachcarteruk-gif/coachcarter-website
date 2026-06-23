@@ -223,10 +223,12 @@ function renderNextLesson() {
   const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
   const card = document.getElementById('next-lesson-card');
   const empty = document.getElementById('next-lesson-empty');
+  const filming = document.getElementById('nl-filming');
 
   if (upcoming.length === 0) {
     card.classList.remove('show');
     empty.classList.add('show');
+    if (filming) filming.style.display = 'none';
     return;
   }
 
@@ -260,6 +262,9 @@ function renderNextLesson() {
   document.getElementById('nl-when').textContent = countdown;
   document.getElementById('nl-time').textContent = `${dow} ${dayNum} ${month} \u00B7 ${start} \u2013 ${end}`;
   document.getElementById('nl-instructor').textContent = `with ${b.instructor_name}`;
+  if (filming) {
+    filming.style.display = b.social_video_consent === true ? 'block' : 'none';
+  }
 }
 
 function renderUnlogged() {
