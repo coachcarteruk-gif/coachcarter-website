@@ -2871,3 +2871,18 @@ CREATE INDEX IF NOT EXISTS idx_learner_broadcast_recipients_broadcast
 CREATE INDEX IF NOT EXISTS idx_learner_broadcast_recipients_learner
   ON learner_broadcast_recipients(learner_id, created_at DESC)
   WHERE learner_id IS NOT NULL;
+
+-- Free-trial cancellation repair (June 2026)
+-- A self-serve free trial has no learner credit or instructor payout to
+-- preserve. Early versions of the shared learner cancel handler treated
+-- minutes_deducted=0 as a late no-refund cancellation, leaving already
+-- cancelled trial rows scheduled and still blocking the instructor calendar.
+UPDATE lesson_bookings
+   SET status = 'refunded',
+       credit_returned = FALSE,
+       credit_forfeited = FALSE
+ WHERE status = 'scheduled'
+   AND cancelled_at IS NOT NULL
+   AND created_by = 'free_trial_self_serve'
+   AND payment_method = 'free'
+   AND COALESCE(minutes_deducted, 0) = 0;

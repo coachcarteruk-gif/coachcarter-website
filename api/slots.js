@@ -4086,6 +4086,12 @@ async function handleCheckoutSlotGuest(req, res) {
 // (see DEVELOPMENT-ROADMAP.md). v1 ships open-access.
 const REQUIRE_REFERRAL = false;
 
+function isSelfServeFreeTrialBooking(booking) {
+  return booking?.created_by === 'free_trial_self_serve'
+    && booking?.payment_method === 'free'
+    && Number(booking?.minutes_deducted || 0) === 0;
+}
+
 async function handleBookFreeTrial(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -4740,11 +4746,18 @@ async function handleCancel(req, res) {
     const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
     // Demo bookings are free, so no hours to return
     const minsToReturn   = booking.minutes_deducted != null ? booking.minutes_deducted : DEFAULT_SLOT_MINUTES;
-    const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF && minsToReturn > 0;
+    const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);
+    const creditReturned = !isDemoBooking
+      && !isSelfServeFreeTrial
+      && hoursUntil >= CANCEL_HOURS_CUTOFF
+      && minsToReturn > 0;
+    const bookingReleased = creditReturned || isSelfServeFreeTrial;
 
     // Cancel the booking. Late-cancel (<48h) keeps status=scheduled and
     // forfeits the credit; the hourly cron flips it to chargeable so the
-    // instructor is still paid. ≥48h flips straight to refunded.
+    // instructor is still paid. Self-serve free trials have no credit/payout
+    // value, so learner cancellation always releases the calendar slot.
+    // 48h+ paid cancellations flip straight to refunded.
     if (creditReturned) {
       await sql`
         UPDATE lesson_bookings
@@ -4752,6 +4765,12 @@ async function handleCancel(req, res) {
         WHERE id = ${booking_id}
       `;
       await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
+    } else if (isSelfServeFreeTrial) {
+      await sql`
+        UPDATE lesson_bookings
+        SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = FALSE, credit_forfeited = FALSE
+        WHERE id = ${booking_id}
+      `;
     } else {
       await sql`
         UPDATE lesson_bookings
@@ -4793,6 +4812,11 @@ async function handleCancel(req, res) {
                        border-radius:8px;display:inline-block;font-weight:bold">
             Book another lesson →
           </a></p>
+        ` : isSelfServeFreeTrial ? `
+          <h1>Free trial cancelled.</h1>
+          <p>Your free trial on <strong>${lessonDateStr} at ${cancelTime}</strong>
+             with ${booking.instructor_name} has been cancelled.</p>
+          <p>No lesson credit was used.</p>
         ` : `
           <h1>Lesson cancelled.</h1>
           <p>Your lesson on <strong>${lessonDateStr} at ${cancelTime}</strong>
@@ -4814,6 +4838,7 @@ async function handleCancel(req, res) {
             <p>The lesson with <strong>${booking.learner_name}</strong> on
                <strong>${lessonDateStr} at ${cancelTime}</strong>
                has been cancelled by the learner.</p>
+            <p>${bookingReleased ? 'This slot is now free.' : 'This booking remains on your calendar under the late-cancellation policy.'}</p>
           `
         });
       }
@@ -4826,29 +4851,33 @@ async function handleCancel(req, res) {
     await sendWhatsApp(booking.learner_phone,
       creditReturned
         ? `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\n${returnedStr} returned to your balance. You now have ${balanceStr} remaining.\n\nRebook: https://coachcarter.uk/learner/book.html`
+        : isSelfServeFreeTrial
+          ? `❌ Free trial cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nNo lesson credit was used.`
         : `❌ Lesson cancelled\n\n📅 ${lessonDateStr} at ${cancelTime}\n\nAs this was less than 48 hours' notice, your hours have been forfeited.`
     );
     if (!isDemoBooking) {
       await sendWhatsApp(booking.instructor_phone,
-        `❌ Lesson cancelled\n\n👤 ${booking.learner_name}\n📅 ${lessonDateStr} at ${cancelTime}\n\nThis slot is now free.`
+        `❌ Lesson cancelled\n\n👤 ${booking.learner_name}\n📅 ${lessonDateStr} at ${cancelTime}\n\n${bookingReleased ? 'This slot is now free.' : 'This booking remains on your calendar under the late-cancellation policy.'}`
       );
     }
 
     // Notify learners with matching weekly availability (fire-and-forget).
     // <48h cancellations with the instructor opted in mint a discounted
     // broadcast offer; otherwise this fans out a plain "slot opened" message.
-    notifyAvailableLearners({
-      instructor_id:   booking.instructor_id,
-      instructor_name: booking.instructor_name,
-      scheduled_date:  String(booking.scheduled_date).slice(0, 10),
-      start_time:      booking.start_time,
-      end_time:        booking.end_time,
-      lesson_type_id:  booking.lesson_type_id,
-      school_id:       booking.school_id
-    }).catch(err => {
-      console.warn('availability notify failed:', err.message);
-      reportError('/api/slots:availability', err);
-    });
+    if (bookingReleased) {
+      notifyAvailableLearners({
+        instructor_id:   booking.instructor_id,
+        instructor_name: booking.instructor_name,
+        scheduled_date:  String(booking.scheduled_date).slice(0, 10),
+        start_time:      booking.start_time,
+        end_time:        booking.end_time,
+        lesson_type_id:  booking.lesson_type_id,
+        school_id:       booking.school_id
+      }).catch(err => {
+        console.warn('availability notify failed:', err.message);
+        reportError('/api/slots:availability', err);
+      });
+    }
 
     return res.json({
       success:          true,
@@ -4859,6 +4888,8 @@ async function handleCancel(req, res) {
       minutes_returned: creditReturned ? minsToReturn : 0,
       message: isDemoBooking
         ? 'Demo booking cancelled.'
+        : isSelfServeFreeTrial
+          ? 'Free trial cancelled.'
         : creditReturned
           ? `Booking cancelled and ${returnedStr} returned to your balance.`
           : `Booking cancelled. Hours forfeited (less than ${CANCEL_HOURS_CUTOFF} hours' notice).`

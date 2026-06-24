@@ -36,6 +36,7 @@ This is the rule the three-state model exists to encode. If you find yourself ad
 | (new) | `scheduled` | Booking created | `slots.js`, `webhook.js`, `setmore-sync.js`, `admin.js` |
 | `scheduled` | `chargeable` | `(scheduled_date + end_time) < NOW() - INTERVAL '1 hour'` | Hourly cron (`api/cron-auto-complete.js`) |
 | `scheduled` | `refunded` | Learner cancels ≥48h ahead | `slots.js?action=cancel` |
+| `scheduled` | `refunded` | Learner cancels a self-serve free trial (any time; no credit/payout value) | `slots.js?action=cancel` |
 | `scheduled` | `refunded` | Instructor cancels their own slot (any time) | `instructor.js?action=cancel-booking` |
 | `scheduled` | `refunded` | Instructor cancels on learner's behalf (any time) | `instructor.js?action=cancel-booking` |
 | `scheduled` | `refunded` | Admin cancels (any time) | `admin.js?action=cancel-booking` |
@@ -49,6 +50,8 @@ The learner-side `slots.js?action=cancel` path:
 
 1. If cancel is ≥48h before `scheduled_date + start_time`: status → `refunded`, credits returned.
 2. If cancel is <48h: status **stays** `scheduled`, `lesson_bookings.credit_forfeited = TRUE` is set. Credits are *not* returned. The hourly cron flips to `chargeable` after end-time +1h as normal. Instructor is paid.
+
+Self-serve free trials (`created_by='free_trial_self_serve'`, `payment_method='free'`, `minutes_deducted=0`) are the exception: learner cancellation always sets `status='refunded'`, with `credit_returned=FALSE` and `credit_forfeited=FALSE`, because there is no learner credit or instructor payout to preserve and the slot should return to the calendar immediately.
 
 Why not just set `chargeable` immediately on the late-cancel? Because the calendar UI would render a "chargeable" badge on a future-dated lesson, which is incoherent. The `credit_forfeited` flag is the informational signal until the cron runs.
 

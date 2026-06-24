@@ -9,6 +9,13 @@ const {
 const root = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
+function functionBody(source, name) {
+  const start = source.indexOf(`async function ${name}`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const next = source.indexOf('\nasync function ', start + 1);
+  return source.slice(start, next === -1 ? source.length : next);
+}
+
 test.describe('free trial scheduling safeguards', () => {
   test('buffer blocks an exact-touching trial before an existing lesson', () => {
     expect(_hasBufferedSlotConflict(
@@ -68,5 +75,33 @@ test.describe('free trial scheduling safeguards', () => {
     expect(page).not.toContain('lesson_type_id=37');
     expect(api).toContain('lesson_type_slug');
     expect(api).toContain('WHERE slug = ${slug} AND active = true AND school_id = ${schoolId}');
+  });
+
+  test('learner cancellation releases self-serve free trial bookings', () => {
+    const api = read('api/slots.js');
+    const cancel = functionBody(api, 'handleCancel');
+
+    expect(api).toContain('function isSelfServeFreeTrialBooking(booking)');
+    expect(api).toContain("booking?.created_by === 'free_trial_self_serve'");
+    expect(api).toContain("booking?.payment_method === 'free'");
+    expect(cancel).toContain('const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);');
+    expect(cancel).toContain('&& !isSelfServeFreeTrial');
+    expect(cancel).toContain('const bookingReleased = creditReturned || isSelfServeFreeTrial;');
+    expect(cancel).toContain('} else if (isSelfServeFreeTrial) {');
+    expect(cancel).toContain('SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = FALSE, credit_forfeited = FALSE');
+    expect(cancel).toContain('if (bookingReleased) {');
+    expect(cancel).toContain('Free trial cancelled.');
+  });
+
+  test('migration repairs already-cancelled self-serve free trial rows only', () => {
+    const migration = read('db/migration.sql');
+
+    expect(migration).toContain('Free-trial cancellation repair');
+    expect(migration).toContain("SET status = 'refunded'");
+    expect(migration).toContain("WHERE status = 'scheduled'");
+    expect(migration).toContain('AND cancelled_at IS NOT NULL');
+    expect(migration).toContain("AND created_by = 'free_trial_self_serve'");
+    expect(migration).toContain("AND payment_method = 'free'");
+    expect(migration).toContain('AND COALESCE(minutes_deducted, 0) = 0');
   });
 });

@@ -137,7 +137,10 @@ test.describe('Stage 6 Pay by Bank and Klarna contract', () => {
     expect(stripeConnect).toContain('Bank-paid Reserved Weekly Slot v1 follows the same default cancellation value rule');
 
     expect(webhook).toContain("'bank_payment', 'recurring_block_bank_checkout'");
-    expect(cancel).toContain('const creditReturned = !isDemoBooking && hoursUntil >= CANCEL_HOURS_CUTOFF && minsToReturn > 0;');
+    expect(cancel).toContain('const creditReturned = !isDemoBooking');
+    expect(cancel).toContain('&& !isSelfServeFreeTrial');
+    expect(cancel).toContain('&& hoursUntil >= CANCEL_HOURS_CUTOFF');
+    expect(cancel).toContain('&& minsToReturn > 0;');
     expect(cancel).toContain('SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = TRUE');
     expect(cancel).toContain('lockBalanceAdjustLCB(sql, {');
     expect(cancel).not.toContain('stripe.refunds.create');
