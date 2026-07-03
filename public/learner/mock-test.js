@@ -514,9 +514,9 @@ function updateSupervisorTotals() {
     else if (ratings[key] === 'concern') concern++;
   }
   var total = good + needsWork + concern;
-  var html = '<span class="ft-pill" style="background:#dcfce7;color:#166534;">' + good + ' went well</span>';
-  html += '<span class="ft-pill" style="background:#fffbeb;color:#b45309;">' + needsWork + ' needs work</span>';
-  html += '<span class="ft-pill" style="background:var(--red-lt);color:#dc2626;">' + concern + ' concern</span>';
+  var html = '<span class="ft-pill ft-pill-good">' + good + ' went well</span>';
+  html += '<span class="ft-pill ft-pill-warn">' + needsWork + ' needs work</span>';
+  html += '<span class="ft-pill ft-pill-bad">' + concern + ' concern</span>';
   document.getElementById('fault-total-pills').innerHTML = html;
 
   // Enable save button once at least one category is rated
@@ -1198,7 +1198,7 @@ function startGpsTracking() {
         if (!existing) {
           var note = document.createElement('div');
           note.id = 'gps-denied-note';
-          note.style.cssText = 'background:#fff3e0;color:#e65100;padding:8px 12px;border-radius:8px;font-size:0.82rem;margin:8px 0;text-align:center;';
+          note.style.cssText = 'background:var(--accent-lt);color:var(--accent-dk);padding:8px 12px;border-radius:8px;font-size:0.82rem;margin:8px 0;text-align:center;';
           note.textContent = 'Location access denied — the fault map will use your selected route instead of GPS tracking.';
           var timer = document.getElementById('timer-display');
           if (timer && timer.parentNode) timer.parentNode.insertAdjacentElement('afterend', note);

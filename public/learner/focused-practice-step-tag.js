@@ -2,7 +2,7 @@
 // Extracted from an inline <script> in PR-P (audit #22) because production
 // CSP blocks 'unsafe-inline'.
 //
-// Updates the doc-header step-tag and stamps the results date when screens change.
+// Updates the flow step tag and stamps the results date when screens change.
 
 (function () {
   var STEPS = {

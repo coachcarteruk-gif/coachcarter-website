@@ -582,7 +582,8 @@
     /* Mobile header */
     '.cc-mob-header { display: none; position: fixed; top: 0; left: 0; right: 0;',
     '  background: var(--white, #fff); color: var(--primary, #1a1a1a); padding: 0 16px; height: 56px;',
-    '  z-index: 998; align-items: center; gap: 12px; border-bottom: 1px solid var(--border, #e5e5e5); }',
+    '  z-index: 998; align-items: center; gap: 12px; border-bottom: 1px solid var(--border, #e5e5e5);',
+    '  box-shadow: 0 4px 14px rgba(0,0,0,0.07); }',
     '.cc-mob-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; flex: 1; }',
     '.cc-mob-brand img { height: 36px; }',
     '.cc-mob-brand span { font-family: "Bricolage Grotesque", sans-serif; font-size: 0.95rem;',
@@ -643,7 +644,9 @@
     '    overflow-y: auto;',
     '    -webkit-overflow-scrolling: touch;',
     '    margin-top: 0 !important;',
-    '    padding-top: 0 !important;',
+    /* Breathing room below the fixed mobile header — pages set their own
+       horizontal/bottom padding but the shell owns the top edge. */
+    '    padding-top: 20px !important;',
     '    box-sizing: border-box;',
     '  }',
     '}',

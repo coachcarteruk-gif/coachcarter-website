@@ -45,24 +45,6 @@
 
     .hidden { display: none !important; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 24px;
-    }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
-    }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-
     /* ── PAGE HEADER ── */
     .page-header { margin-bottom: 28px; }
     .page-eyebrow {
@@ -884,14 +866,6 @@
 <body>
 
 <main class="page">
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Driving plan<span class="doc-meta-dot">·</span>Practice notes</span>
-    </div>
-    <span id="docHeaderRight">Learner view</span>
-  </header>
-
   <!-- Loading state (skeleton) -->
   <div id="loading">
     <div class="page-header">

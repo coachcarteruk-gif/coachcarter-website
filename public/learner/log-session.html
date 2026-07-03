@@ -52,24 +52,17 @@
     @media (min-width: 960px) { main { margin-top: 0; } }
     body.cc-has-sidebar main.page { padding-top: 32px !important; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
+    /* ── FLOW HEADER ── */
+    .flow-header {
       display: flex; align-items: center; justify-content: space-between;
       gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 24px;
+      margin-bottom: 18px;
     }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
+    .flow-label {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.16em; text-transform: uppercase;
     }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-    .step-tag {
+    .flow-step-tag {
       display: inline-flex; align-items: center;
       padding: 4px 8px;
       background: var(--surface);
@@ -80,7 +73,7 @@
       letter-spacing: 0.1em;
     }
 
-    /* ── PROGRESS BAR — sits below doc-header ── */
+    /* ── PROGRESS BAR ── */
     .progress-wrap {
       display: flex; align-items: center; gap: 14px;
       margin-bottom: 28px;
@@ -751,13 +744,10 @@
 <body>
 
 <main class="page">
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Log a drive<span class="doc-meta-dot">·</span>Practice journal</span>
-    </div>
-    <span class="step-tag" id="step-tag">Details</span>
-  </header>
+  <div class="flow-header" aria-label="Log a drive progress">
+    <span class="flow-label">Log a drive</span>
+    <span class="flow-step-tag" id="step-tag">Details</span>
+  </div>
 
   <div class="progress-wrap">
     <div class="progress-bar-bg">

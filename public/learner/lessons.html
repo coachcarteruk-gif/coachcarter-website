@@ -35,24 +35,6 @@
 
     .page { max-width: 760px; margin: 0 auto; padding: 28px 24px 100px; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 24px;
-    }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
-    }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-
     /* ── HERO ── */
     .lessons-hero { margin-bottom: 24px; }
     .hero-eyebrow {
@@ -466,14 +448,6 @@
 <body>
 
 <div class="page">
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Booking log<span class="doc-meta-dot">·</span>Your driving record</span>
-    </div>
-    <span id="docHeaderRight">All lessons</span>
-  </header>
-
   <section class="lessons-hero">
     <div class="hero-eyebrow">Your schedule</div>
     <h1 class="page-title">My <em>lessons</em>.</h1>

@@ -93,7 +93,7 @@
         '</svg>' +
       '</div>' +
       '<div class="cc-auth-title">Sign in to continue</div>' +
-      '<div class="cc-auth-sub">Create a free account or sign in to access this feature. No password needed — we\'ll send you a magic link.</div>' +
+      '<div class="cc-auth-sub">Sign in with your email and password, or create a free account in seconds.</div>' +
       '<a class="cc-auth-btn" id="cc-auth-signin">Sign in or create account</a>' +
       '<button class="cc-auth-dismiss" id="cc-auth-dismiss">Maybe later</button>' +
     '</div>';

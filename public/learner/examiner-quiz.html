@@ -53,22 +53,6 @@
     /* ── START SCREEN ── */
     .start-screen { display: block; }
 
-    .doc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 28px;
-    }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em;
-    }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-
     .start-hero { margin-bottom: 36px; }
     .start-eyebrow {
       font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
@@ -614,14 +598,6 @@
 <main>
   <!-- ── START SCREEN ── -->
   <section id="start-screen" class="start-screen" aria-label="Quiz introduction">
-    <div class="doc-header">
-      <div class="doc-header-left">
-        <span class="doc-stamp">DL25</span>
-        <span>Marking sheet<span class="doc-meta-dot">·</span>Practice mode</span>
-      </div>
-      <span>50 scenarios</span>
-    </div>
-
     <header class="start-hero">
       <div class="start-eyebrow">Think you can mark a test?</div>
       <h1 class="start-title">What would the <em>examiner</em> mark?</h1>

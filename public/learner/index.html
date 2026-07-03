@@ -54,24 +54,6 @@
        on the raw `main` selector. */
     body.cc-has-sidebar main.page { padding-top: 32px !important; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 20px;
-    }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
-    }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-
     /* ── GREETING ── */
     .greeting-block { margin-bottom: 22px; }
     .greeting-eyebrow {
@@ -603,14 +585,6 @@
 <body>
 
 <main class="page">
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Dashboard<span class="doc-meta-dot">·</span>Your driving record</span>
-    </div>
-    <span id="docHeaderRight">Logged in</span>
-  </header>
-
   <!-- GREETING -->
   <section class="greeting-block">
     <div class="greeting-eyebrow">Today</div>

@@ -20,6 +20,12 @@ let selectedInstructorBalanceMinutes = 0;
 let paymentsEnabled = true; // assume true until balance API tells us otherwise
 let instructors   = [];
 let lessonTypes   = [];
+// True when lesson-type prices came back instructor-scoped (and learner-scoped
+// when signed in), i.e. the exact three-level effective price checkout will
+// charge. Only then do we show prices on the length buttons — with "All
+// instructors" the API returns school list prices that a per-instructor
+// rate override could differ from.
+let lessonTypePricesExact = false;
 let selectedLessonType = null; // current lesson type object
 let selectedDate  = null;
 let selectedSlot  = null;
@@ -190,11 +196,14 @@ function init() {
     // (it reads as broken for someone who has no account at all).
     const guestBanner = document.getElementById('guestBanner');
     if (guestBanner) guestBanner.style.display = 'flex';
+    const subtitle = document.getElementById('bookSubtitle');
+    if (subtitle) subtitle.textContent = 'Pick the lesson length, date, and time that work for you. We will only show times the instructor can cover.';
     Promise.all([loadInstructors(), loadLessonTypes()])
       .then(async () => {
         preselectInstructor();
-        // Re-load lesson types now that instructor filter is set, so offered_lesson_types filtering applies
-        if (preselectedInstructorSlug || preselectedInstructorId) await loadLessonTypes();
+        // Re-load lesson types now that instructors are known, so
+        // offered_lesson_types filtering and instructor-exact pricing apply
+        if (preselectedInstructorSlug || preselectedInstructorId || instructors.length === 1) await loadLessonTypes();
         initFeed();
         window.posthog && posthog.capture('booking_page_viewed', { is_guest: true, has_type_preselect: !!preselectedTypeSlug });
       });
@@ -204,8 +213,9 @@ function init() {
   Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
     .then(async () => {
       preselectInstructor();
-      // Re-load lesson types now that instructor filter is set, so offered_lesson_types filtering applies
-      if (preselectedInstructorSlug || preselectedInstructorId) await loadLessonTypes();
+      // Re-load lesson types now that instructors are known, so
+      // offered_lesson_types filtering and instructor-exact pricing apply
+      if (preselectedInstructorSlug || preselectedInstructorId || instructors.length === 1) await loadLessonTypes();
       initFeed();
       showPostcodePromptIfNeeded();
 
@@ -309,7 +319,10 @@ async function loadLessonTypes() {
     let url = '/api/lesson-types?action=list';
     // Pass instructor_id so the API can filter to only that instructor's offered lesson types.
     // Also pass learner_id when available for per-learner custom pricing.
-    const instrId = document.getElementById('instructorFilter')?.value;
+    // When the school only has one instructor, "All instructors" means that
+    // instructor — scope the request to them so prices are checkout-exact.
+    const instrId = document.getElementById('instructorFilter')?.value
+      || (instructors.length === 1 ? String(instructors[0].id) : '');
     if (instrId) {
       url += '&instructor_id=' + instrId;
       if (auth && auth.user && auth.user.id) url += '&learner_id=' + auth.user.id;
@@ -317,6 +330,7 @@ async function loadLessonTypes() {
     const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
+    lessonTypePricesExact = !!instrId;
     lessonTypes = data.lesson_types || [];
     hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
     availableLessonTypes = lessonTypes.filter(lt => lt && lt.slug !== 'trial');
@@ -324,6 +338,7 @@ async function loadLessonTypes() {
     renderLessonLengthControls();
   } catch (err) {
     console.error('Failed to load lesson types:', err);
+    lessonTypePricesExact = false;
     lessonTypes = [{ id: null, name: 'Standard Lesson', slug: 'standard', duration_minutes: 90, price_pence: DEFAULT_PRICE_PENCE, colour: '#3b82f6' }];
     availableLessonTypes = lessonTypes.slice();
     choosePageLessonType();
@@ -391,8 +406,8 @@ function chooseLessonTypeForExistingBooking(booking) {
 function lessonLengthLabel(lt) {
   if (!lt) return 'Lesson';
   const mins = Number(lt.duration_minutes || 0);
-  if (mins === 120) return '2 hr';
   if (mins > 0 && mins % 60 === 0) return `${mins / 60} hr`;
+  if (mins > 60 && mins % 60 === 30) return `${Math.floor(mins / 60)}½ hr`;
   return `${mins} min`;
 }
 
@@ -410,8 +425,11 @@ function renderLessonLengthControls() {
       const id = lt.id || lt.lesson_type_id;
       const selected = selectedLessonType && String(selectedLessonType.id) === String(id);
       const locked = !!pendingReschedule && !selected;
-      const label = lessonLengthLabel(lt);
-      const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}`;
+      // Only show a price when it's the exact effective price checkout will
+      // charge (instructor-scoped, per-learner rate applied when signed in).
+      const price = lessonTypePricesExact && lt.price_pence > 0 ? ` · ${formatMoneyShort(lt.price_pence)}` : '';
+      const label = `${lessonLengthLabel(lt)}${price}`;
+      const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}${price ? `, ${formatMoneyShort(lt.price_pence)}` : ''}`;
       return `<button class="lesson-length-option" type="button"
         data-action="select-lesson-type"
         data-lesson-type-id="${esc(id)}"
@@ -432,7 +450,8 @@ function selectLessonType(lessonTypeId) {
   selectedLessonType = normaliseLessonType(next);
   slotFeedDuration = selectedLessonType.duration_minutes;
   slotFeedLessonTypeId = selectedLessonType.id;
-  selectedDate = null;
+  // Keep selectedDate — ensureSelectedDate() falls back to the first
+  // available date if the kept one has no slots at the new length.
   clearSelectedSlot();
   loadedRanges = [];
   slotCache = {};
@@ -703,7 +722,9 @@ function resolveRescheduleDropoffAddress() {
 
 async function onFilterChange() {
   loadedRanges = []; slotCache = {};
-  selectedDate = null;
+  // Keep selectedDate so comparing instructors/lengths doesn't bounce the
+  // learner back to the first available date; ensureSelectedDate() falls
+  // back only when the kept date has no slots under the new filter.
   clearSelectedSlot();
   // Lesson-type / postcode filters affect alternatives too — overflow cache is per (ltId|postcode).
   // Instructor change just re-runs initFeed() which will rebuild overflow detection from scratch.
@@ -760,14 +781,14 @@ async function initFeed() {
         overflowMode = true;
       }
     }
-    renderFeed();
+    renderFeed({ scrollSelectedDate: true });
     return;
   }
 
   // No specific instructor — still fetch the complete learner window immediately.
   const ok = await fetchFeedSlots(feedFrom, feedTo);
   if (ok === false) return;
-  renderFeed();
+  renderFeed({ scrollSelectedDate: true });
 }
 
 async function fetchFeedSlots(fromDate, toDate, opts) {
@@ -935,7 +956,21 @@ function renderDateStrip(cache) {
       <span class="date-chip-state">${esc(state)}</span>
     </button>`;
   }).join('');
-  return `<div class="date-strip-wrap" aria-label="Available dates"><div class="date-strip">${buttons}</div></div>`;
+  return `<div class="date-strip-shell">
+    <button class="date-strip-arrow" type="button" data-action="scroll-date-strip" data-dir="-1" aria-label="Scroll to earlier dates">&lsaquo;</button>
+    <div class="date-strip-wrap" aria-label="Available dates"><div class="date-strip">${buttons}</div></div>
+    <button class="date-strip-arrow" type="button" data-action="scroll-date-strip" data-dir="1" aria-label="Scroll to later dates">&rsaquo;</button>
+  </div>`;
+}
+
+function scrollDateStrip(dir) {
+  const scroller = document.querySelector('.date-strip-wrap');
+  if (!scroller) return;
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  scroller.scrollBy({
+    left: dir * Math.max(120, Math.round(scroller.clientWidth * 0.8)),
+    behavior: reduceMotion ? 'auto' : 'smooth'
+  });
 }
 
 function slotStartMinutes(slot) {
@@ -1667,6 +1702,12 @@ function formatHours(mins) {
 
 function formatMoney(pence) {
   return String.fromCharCode(163) + ((Number(pence) || 0) / 100).toFixed(2);
+}
+
+// £55 rather than £55.00 — for compact UI like the length buttons
+function formatMoneyShort(pence) {
+  const p = Number(pence) || 0;
+  return p % 100 === 0 ? String.fromCharCode(163) + (p / 100) : formatMoney(p);
 }
 
 function socialVideoConsentChecked() {
@@ -2990,6 +3031,8 @@ document.addEventListener('click', function (e) {
     selectLessonType(target.dataset.lessonTypeId);
   } else if (action === 'select-date') {
     selectDate(target.dataset.date);
+  } else if (action === 'scroll-date-strip') {
+    scrollDateStrip(parseInt(target.dataset.dir, 10) || 1);
   } else if (action === 'set-repeat-weeks') {
     setRepeatWeeks(target.dataset.repeatWeeks);
   }

@@ -2,7 +2,7 @@
 // Extracted from an inline <script> in PR-P (audit #22) because production
 // CSP blocks 'unsafe-inline'.
 //
-// Updates the doc-header step-tag as the mock-test screens change and
+// Updates the flow step tag as the mock-test screens change and
 // stamps the date onto the results screen when it appears.
 
 (function () {

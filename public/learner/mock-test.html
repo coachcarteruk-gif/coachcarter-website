@@ -53,24 +53,17 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .hidden { display: none !important; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
+    /* ── FLOW HEADER ── */
+    .flow-header {
       display: flex; align-items: center; justify-content: space-between;
       gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 24px;
+      margin-bottom: 18px;
     }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
+    .flow-label {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.16em; text-transform: uppercase;
     }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-    .step-tag {
+    .flow-step-tag {
       display: inline-flex; align-items: center;
       padding: 4px 8px;
       background: var(--surface);
@@ -757,6 +750,18 @@
       color: var(--primary); font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
+    /* Reflection outcome pills — themed so they hold up in dark mode */
+    .fault-total-pills > .ft-pill-good { background: var(--green-lt); color: #166534; border-color: transparent; }
+    .fault-total-pills > .ft-pill-warn { background: #fffbeb; color: #b45309; border-color: transparent; }
+    .fault-total-pills > .ft-pill-bad  { background: var(--red-lt); color: #dc2626; border-color: transparent; }
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) body.cc-has-sidebar .ft-pill-good { color: var(--green); }
+      :root:not(.light-mode) body.cc-has-sidebar .ft-pill-warn { background: rgba(251,191,36,0.14); color: var(--amber); }
+      :root:not(.light-mode) body.cc-has-sidebar .ft-pill-bad  { color: var(--red); }
+    }
+    :root.dark-mode body.cc-has-sidebar .ft-pill-good { color: var(--green); }
+    :root.dark-mode body.cc-has-sidebar .ft-pill-warn { background: rgba(251,191,36,0.14); color: var(--amber); }
+    :root.dark-mode body.cc-has-sidebar .ft-pill-bad  { color: var(--red); }
 
     .post-save-choice {
       display: none; flex-direction: column;
@@ -1062,13 +1067,10 @@
 <body>
 
 <main class="page">
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Mock test<span class="doc-meta-dot">·</span>Formal assessment</span>
-    </div>
-    <span class="step-tag" id="step-tag">Mode</span>
-  </header>
+  <div class="flow-header" aria-label="Mock test progress">
+    <span class="flow-label">Mock test</span>
+    <span class="flow-step-tag" id="step-tag">Mode</span>
+  </div>
 
   <!-- ── SCREEN 0: MODE SELECTION ── -->
   <section id="screen-mode" class="screen">

@@ -2,7 +2,7 @@
 // Extracted from an inline <script> in PR-P (audit #22) because production
 // CSP blocks 'unsafe-inline'.
 //
-// Updates the doc-header step-tag as the log-session step changes.
+// Updates the flow step tag as the log-session step changes.
 
 (function () {
   var STEP_TAGS = { '1': 'Details', '2': 'Rate', '3': 'Notes' };

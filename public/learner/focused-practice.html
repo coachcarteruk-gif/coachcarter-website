@@ -52,24 +52,17 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .hidden { display: none !important; }
 
-    /* ── DOC HEADER ── */
-    .doc-header {
+    /* ── FLOW HEADER ── */
+    .flow-header {
       display: flex; align-items: center; justify-content: space-between;
       gap: 12px;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 24px;
+      margin-bottom: 18px;
     }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em; flex-shrink: 0;
+    .flow-label {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.16em; text-transform: uppercase;
     }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-    .step-tag {
+    .flow-step-tag {
       display: inline-flex; align-items: center;
       padding: 4px 8px;
       background: var(--surface);
@@ -542,13 +535,10 @@
 <body>
 
 <main class="page">
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Practice drive<span class="doc-meta-dot">·</span>Private practice</span>
-    </div>
-    <span class="step-tag" id="step-tag">Setup</span>
-  </header>
+  <div class="flow-header" aria-label="Practice drive progress">
+    <span class="flow-label">Practice drive</span>
+    <span class="flow-step-tag" id="step-tag">Setup</span>
+  </div>
 
   <!-- ── SCREEN 1: SETUP ── -->
   <section id="screen-setup" class="screen">

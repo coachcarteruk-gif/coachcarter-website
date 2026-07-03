@@ -33,10 +33,6 @@
   }
 
   function renderRetiredPageShell() {
-    var headerMeta = document.querySelector('.doc-header-left span:last-child');
-    if (headerMeta) headerMeta.innerHTML = 'Lesson credit<span class="doc-meta-dot">·</span>Existing balance';
-    var headerRight = document.querySelector('.doc-header > span:last-child');
-    if (headerRight) headerRight.textContent = 'Read-only';
     var eyebrow = document.querySelector('.hero-eyebrow');
     if (eyebrow) eyebrow.textContent = 'Lesson Credit';
     var selectorLabel = document.getElementById('instructorSelectorLabel');

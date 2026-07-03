@@ -313,21 +313,60 @@
     /* ── DATE STRIP + TIME GROUPS ── */
     .booking-calendar {
       display: grid;
+      /* minmax(0,1fr) so wide children (date strip) clamp to the page width
+         and scroll instead of stretching the track to max-content */
+      grid-template-columns: minmax(0, 1fr);
       gap: 18px;
     }
+    .date-strip-shell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
     .date-strip-wrap {
+      flex: 1;
+      min-width: 0;
       margin: 4px -2px 2px;
       overflow-x: auto;
       overscroll-behavior-inline: contain;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
+      scroll-snap-type: x proximity;
     }
     .date-strip {
       display: flex;
       gap: 8px;
       padding: 2px 2px 8px;
     }
+    /* Mouse users don't discover horizontal scroll — give them arrows on desktop */
+    .date-strip-arrow {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 64px;
+      flex-shrink: 0;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 1.15rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .date-strip-arrow:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-mid);
+    }
+    @media (min-width: 960px) {
+      .date-strip-arrow { display: inline-flex; }
+    }
     .date-chip {
+      scroll-snap-align: start;
+      scroll-margin-inline: 2px;
       min-width: 76px;
       min-height: 64px;
       border: 1.5px solid var(--border);
@@ -1078,7 +1117,20 @@
     @media (max-width: 700px) {
       .cal-toolbar { gap: 10px; }
       .page { padding: 24px 18px 48px; }
-      .page.has-selected-slot { padding-bottom: 184px; }
+      .page.has-selected-slot { padding-bottom: 200px; }
+      /* Inside the mobile app shell, main is an inner scroll container and
+         sticky pins against its padding box — pin the summary to the viewport
+         above the floating bottom tab bar instead. */
+      body.cc-has-bottom-bar .selected-slot-summary {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+        width: calc(100vw - 24px);
+        max-width: 712px;
+        margin: 0;
+        z-index: 90;
+      }
       .time-button-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .time-slot-button { min-height: 64px; }
       .date-chip { min-width: 72px; }
@@ -1088,11 +1140,11 @@
         align-items: start;
       }
       .selected-date-heading span { flex-shrink: 1; }
-      .selected-slot-summary {
-        align-items: stretch;
-        flex-direction: column;
-      }
-      .selected-slot-continue { width: 100%; }
+      /* Keep the summary a single compact row so it hides as few
+         time slots as possible while stuck to the bottom. */
+      .selected-slot-summary { padding: 12px; gap: 10px; }
+      .selected-slot-title { font-size: 0.92rem; }
+      .selected-slot-continue { padding: 11px 14px; font-size: 0.9rem; }
     }
   </style>
 <script src="/sidebar.js"></script>
@@ -1107,7 +1159,7 @@
   <section class="book-hero">
     <div class="hero-eyebrow">Book a lesson</div>
     <h2 class="book-title">Choose a <em>lesson time</em>.</h2>
-    <p class="book-subtitle">Pick the lesson length, date, and time that work for you. We will only show times your instructor can cover.</p>
+    <p class="book-subtitle" id="bookSubtitle">Pick the lesson length, date, and time that work for you. We will only show times your instructor can cover.</p>
   </section>
 
   <!-- Welcome banner -->

@@ -37,23 +37,6 @@
       padding: 28px 24px 64px;
     }
 
-    /* ── DOC HEADER (matches Examiner pages) ── */
-    .doc-header {
-      display: flex; align-items: center; justify-content: space-between;
-      font-family: var(--font-mono); font-size: 0.66rem;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-      padding-bottom: 14px; border-bottom: 1px dashed var(--border);
-      margin-bottom: 28px;
-    }
-    .doc-header-left { display: flex; align-items: center; gap: 10px; }
-    .doc-stamp {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 9px; border-radius: 3px;
-      background: var(--accent); color: #fff; font-weight: 700;
-      letter-spacing: 0.1em;
-    }
-    .doc-meta-dot { color: var(--accent); margin: 0 4px; }
-
     /* ── HERO ── */
     .credits-hero { margin-bottom: 32px; }
     .hero-eyebrow {
@@ -648,14 +631,6 @@
 <body>
 
 <main>
-  <header class="doc-header">
-    <div class="doc-header-left">
-      <span class="doc-stamp">CC</span>
-      <span>Lesson credit<span class="doc-meta-dot">·</span>Existing balance</span>
-    </div>
-    <span>Read-only</span>
-  </header>
-
   <section class="credits-hero">
     <div class="hero-eyebrow">Lesson Credit</div>
     <h1 id="creditsTitle">Lesson <em>Credit</em>.</h1>
