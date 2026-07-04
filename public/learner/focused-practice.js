@@ -280,20 +280,32 @@ function renderBriefing() {
 
   var g = cat.guided;
   var sections = [
-    { title: 'Why it matters', items: g.why },
-    { title: 'Try these', items: g.exercises },
-    { title: 'What good looks like', items: g.good },
-    { title: 'Common faults', items: g.faults }
+    { key: 'why', title: 'Why it matters', items: g.why },
+    { key: 'exercises', title: 'Try these', items: g.exercises },
+    { key: 'good', title: 'What good looks like', items: g.good },
+    { key: 'faults', title: 'Common faults', items: g.faults }
   ];
-  var html = '';
+  // Collapsed by default so "Start drive" is reachable right after picking
+  // a focus — reading the briefing is optional, not a gate to setting off.
+  var html = '<p class="briefing-intro">Optional reading before you set off. Tap a heading to expand it.</p>';
   sections.forEach(function(sec) {
     if (!sec.items || sec.items.length === 0) return;
-    html += '<div class="focus-guide"><h3>' + sec.title + '</h3><ul>';
+    html += '<div class="focus-guide collapsed" data-section="' + sec.key + '">' +
+      '<button type="button" class="focus-guide-toggle" data-action="toggle-briefing-section" data-section="' + sec.key + '">' +
+        '<h3>' + sec.title + '</h3>' +
+        '<span class="focus-guide-chevron">&#8250;</span>' +
+      '</button>' +
+      '<ul>';
     sec.items.forEach(function(item) { html += '<li>' + escHtml(item) + '</li>'; });
     html += '</ul></div>';
   });
   container.innerHTML = html;
   container.classList.remove('hidden');
+}
+
+function toggleBriefingSection(key) {
+  var el = document.querySelector('.focus-guide[data-section="' + key + '"]');
+  if (el) el.classList.toggle('collapsed');
 }
 
 /* ── Screen 2: Driving ── */
@@ -627,6 +639,7 @@ document.addEventListener('click', function (e) {
   if (!target) return;
   var action = target.dataset.action;
   if (action === 'pick-focus') pickFocus(target.dataset.cat);
+  else if (action === 'toggle-briefing-section') toggleBriefingSection(target.dataset.section);
   else if (action === 'set-reflection') setReflection(target.dataset.cat, target.dataset.rating);
   else if (action === 'break-pick-area') breakPickArea(target.dataset.cat);
   else if (action === 'break-pick-rating') breakPickRating(target.dataset.rating);
