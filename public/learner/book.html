@@ -267,14 +267,12 @@
       color: var(--red); letter-spacing: 0.04em;
     }
 
-    /* ── TOOLBAR (sticky mono filter strip) ── */
+    /* ── TOOLBAR (mono filter strip) ──
+       Not sticky: it used to pin over the long slot feed, but with the week
+       grid it just overlaid the dates mid-scroll. */
     .cal-toolbar {
-      position: sticky; top: 0; z-index: 50;
       display: flex; align-items: center; gap: 12px;
       padding: 12px 0;
-      background: color-mix(in srgb, var(--bg) 92%, transparent);
-      backdrop-filter: blur(16px) saturate(140%);
-      -webkit-backdrop-filter: blur(16px) saturate(140%);
       border-bottom: 1px dashed var(--border);
       margin-bottom: 8px;
       flex-wrap: wrap;
