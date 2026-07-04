@@ -7,7 +7,9 @@
 (function () {
   var STEPS = {
     'screen-setup': 'Setup',
+    'screen-focus': 'Focus',
     'screen-drive': 'Driving',
+    'screen-break': 'Parked',
     'screen-reflect': 'Reflect',
     'screen-results': 'Results'
   };
@@ -30,7 +32,7 @@
       }
     }
   }
-  ['screen-setup', 'screen-drive', 'screen-reflect', 'screen-results'].forEach(function (sid) {
+  Object.keys(STEPS).forEach(function (sid) {
     var el = document.getElementById(sid);
     if (!el) return;
     new MutationObserver(updateStepTag).observe(el, {

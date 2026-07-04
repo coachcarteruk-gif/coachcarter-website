@@ -68,29 +68,44 @@ test.describe('learner practice and log-session flow copy', () => {
     expect(practiceSection).not.toContain("label: 'Practice Drive'");
   });
 
-  test('focused-practice route is framed as Start a drive with booked lesson setup', () => {
+  test('focused-practice route offers a just-drive / guided-drive choice with auto-linked bookings', () => {
     const html = read('public/learner/focused-practice.html');
     const source = read('public/learner/focused-practice.js');
 
     expect(html).toContain('<title>Start a Drive | Coach Carter</title>');
     expect(html).toContain('Start a drive');
-    expect(html).toContain('<h1><em>Start</em> a drive.</h1>');
-    expect(html).toContain('What are you starting?');
+    expect(html).toContain('How do you want to <em>drive</em> today?');
+    expect(html).toContain('id="btn-mode-free"');
+    expect(html).toContain('id="btn-mode-guided"');
+    expect(html).toContain('Just drive');
+    expect(html).toContain('Guided drive');
     expect(html).toContain('Start drive');
     expect(html).toContain('View my driving plan');
 
     expect(source).toContain("ccAuth.fetchAuthed('/api/slots?action=' + action)");
     expect(source).toContain("slotsCall('my-bookings')");
     expect(source).toContain('function isRelevantDriveBooking(booking)');
-    expect(source).toContain('Normal drive');
-    expect(source).toContain("data-action=\"select-drive-booking\"");
+    expect(source).toContain("selectedDrive = { kind: 'booking', booking: currentDriveOptions[0] };");
     expect(source).toContain("payload.booking_id = selectedDrive.booking.id;");
-    expect(source).toContain("var scoreText = score > 0 ? 'Suggested' : 'Pick';");
+    expect(source).toContain("isSuggested ? '<span class=\"area-pick-score\" style=\"color:var(--accent);\">Suggested</span>'");
     expect(source).toContain("selectedDrive.kind === 'booking'");
     expect(source).toContain("apiCall('POST', 'focused-practice'");
     expect(source).not.toContain('take a mock test');
     expect(html).not.toContain('Targeted drill');
     expect(html).not.toContain('weakest areas');
+  });
+
+  test('guided drive collapses the area list to the chosen focus and starts briefing sections collapsed', () => {
+    const html = read('public/learner/focused-practice.html');
+    const source = read('public/learner/focused-practice.js');
+
+    expect(html).toContain('id="focus-area-chosen"');
+    expect(html).toContain('id="focus-area-list"');
+    expect(html).toContain('id="briefing"');
+    expect(source).toContain("listContainer.classList.add('hidden');");
+    expect(source).toContain('chosen-only');
+    expect(source).toContain("'<div class=\"focus-guide collapsed\" data-section=");
+    expect(source).toContain('function toggleBriefingSection(key)');
   });
 
   test('focused-practice reflection uses simple supervisor labels and prompts', () => {

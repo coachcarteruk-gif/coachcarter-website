@@ -617,8 +617,10 @@ async function handleFocusedPractice(req, res) {
   if (req.method === 'POST') {
     try {
       const { focus_areas, suggested_areas, duration_minutes, reflections, booking_id, session_date, session_type, notes } = req.body;
-      if (!focus_areas || !Array.isArray(focus_areas) || focus_areas.length === 0 || focus_areas.length > 3) {
-        return res.status(400).json({ error: 'focus_areas must be 1-3 items' });
+      // 0 areas = free drive with nothing tagged; up to 7 = one per supervisor category,
+      // tagged during parked breaks on a free drive. Guided drives send exactly 1.
+      if (!Array.isArray(focus_areas) || focus_areas.length > 7) {
+        return res.status(400).json({ error: 'focus_areas must be 0-7 items' });
       }
 
       let bookingId = null;

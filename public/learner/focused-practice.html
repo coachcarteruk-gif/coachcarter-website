@@ -11,7 +11,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Start a Drive | Coach Carter</title>
-  <meta name="description" content="Start a booked lesson or normal drive, pick a simple focus, then save what went well and what to mention to your instructor.">
+  <meta name="description" content="Just drive and note things when you pull over, or pick one focus area for a guided drive with a kerb-side briefing.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/competency-config.js"></script>
@@ -337,6 +337,124 @@
       text-align: center;
     }
 
+    /* ── BOOKING NOTE ── */
+    .booking-note {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 0.84rem; color: var(--muted); line-height: 1.4;
+    }
+    .booking-note strong { color: var(--primary); }
+    .booking-note-link {
+      background: none; border: none; padding: 0;
+      color: var(--accent); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; text-decoration: underline;
+      font-family: var(--font-body);
+      white-space: nowrap;
+    }
+
+    /* ── FOCUS PICK (compact once chosen — briefing should need no scroll) ── */
+    .focus-screen .area-pick-list { margin-bottom: 4px; }
+    .area-pick.chosen-only {
+      cursor: pointer;
+      grid-template-columns: 28px 1fr auto;
+      margin-bottom: 4px;
+    }
+    .area-pick-change {
+      font-family: var(--font-mono); font-size: 0.64rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* ── BRIEFING (collapsible, collapsed by default) ── */
+    .briefing { margin-top: 8px; }
+    .briefing-intro {
+      font-size: 0.82rem; color: var(--muted); line-height: 1.4;
+      margin: 0 0 10px;
+    }
+    .briefing .focus-guide { padding: 0; margin-bottom: 8px; overflow: hidden; }
+    .focus-guide-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%;
+      padding: 12px 16px;
+      background: none; border: none;
+      cursor: pointer;
+      text-align: left;
+    }
+    .briefing .focus-guide h3 { margin-bottom: 0; }
+    .focus-guide-chevron {
+      color: var(--accent); font-size: 1rem; font-weight: 700;
+      transform: rotate(90deg);
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .briefing .focus-guide.collapsed .focus-guide-chevron { transform: rotate(0deg); }
+    .briefing .focus-guide ul {
+      padding: 0 16px 12px;
+      max-height: 400px;
+      transition: max-height 0.2s ease, padding 0.2s ease;
+    }
+    .briefing .focus-guide.collapsed ul {
+      max-height: 0;
+      padding-top: 0; padding-bottom: 0;
+      overflow: hidden;
+    }
+    .briefing .focus-guide li { padding: 3px 0; font-size: 0.83rem; }
+
+    /* ── PARKED BREAK ── */
+    .break-chips {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 6px;
+    }
+    .break-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 13px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      color: var(--primary);
+      font-family: var(--font-body); font-size: 0.84rem; font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .break-chip:hover { border-color: var(--accent); }
+    .break-chip.selected {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+      color: var(--accent);
+    }
+    .moment-item {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 6px;
+      font-size: 0.86rem;
+    }
+    .moment-item-area { font-weight: 600; color: var(--primary); }
+    .moment-item-note { flex-basis: 100%; color: var(--muted); font-style: italic; }
+
+    /* ── FAULT CHECKLIST (guided debrief) ── */
+    .fault-checklist { margin-bottom: 12px; }
+    .fault-checklist-title {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .fault-check {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 6px 0;
+      font-size: 0.88rem; line-height: 1.45;
+      color: var(--primary);
+      cursor: pointer;
+    }
+    .fault-check input { accent-color: var(--accent); flex-shrink: 0; }
+
     /* ── DRIVING SCREEN ── */
     .drive-screen {
       text-align: center;
@@ -593,36 +711,44 @@
     <span class="flow-step-tag" id="step-tag">Setup</span>
   </div>
 
-  <!-- ── SCREEN 1: SETUP ── -->
+  <!-- ── SCREEN 1: MODE CHOICE ── -->
   <section id="screen-setup" class="screen">
     <div class="setup-screen">
       <div class="setup-hero">
-        <div class="setup-eyebrow">Start a drive</div>
-        <h1><em>Start</em> a drive.</h1>
-        <p class="setup-subtitle">Choose whether this is a current booked lesson or a normal drive. Then pick 1 to 3 focus areas before you set off.</p>
+        <h1>How do you want to <em>drive</em> today?</h1>
+        <p class="setup-subtitle">Phones stay away while the car is moving &mdash; for the driver and the supervisor. Everything here happens parked up.</p>
       </div>
 
-      <div id="drive-choice-section">
-        <div class="suggested-label">What are you starting?</div>
-        <div id="drive-choices" class="drive-choice-list"></div>
+      <div id="booking-note" class="booking-note hidden"></div>
+
+      <div class="drive-choice-list">
+        <button type="button" class="drive-choice" id="btn-mode-free">
+          <span class="drive-choice-icon">GO</span>
+          <span><span class="drive-choice-title">Just drive</span>
+          <span class="drive-choice-meta">Head out and drive. Pull over any time to note how it&rsquo;s going, then reflect at the end.</span></span>
+          <span class="drive-choice-tag">Simple</span>
+        </button>
+        <button type="button" class="drive-choice" id="btn-mode-guided">
+          <span class="drive-choice-icon">FX</span>
+          <span><span class="drive-choice-title">Guided drive</span>
+          <span class="drive-choice-meta">Pick one thing to work on, with a quick kerb-side briefing before you set off.</span></span>
+          <span class="drive-choice-tag">Focused</span>
+        </button>
       </div>
+    </div>
+  </section>
 
-      <div id="focus-setup-section" class="hidden">
-        <div id="selected-drive-summary" class="focus-guide"></div>
-
-        <div id="suggested-section">
-          <div class="suggested-label">Good areas to try</div>
-          <div id="suggested-areas" class="area-pick-list"></div>
-        </div>
-
-        <button class="browse-toggle" id="browse-toggle">Browse all areas</button>
-        <div id="all-areas" class="area-pick-list hidden"></div>
-
-        <p class="pick-count" id="pick-count">0 of 3 selected</p>
-
-        <div id="focus-guides"></div>
-
-        <button class="btn-primary" id="btn-start-practice" disabled>Start drive</button>
+  <!-- ── SCREEN 1b: GUIDED FOCUS + BRIEFING ── -->
+  <section id="screen-focus" class="screen hidden">
+    <div class="reflect-screen focus-screen">
+      <h2>Pick one thing to <em>work on</em>.</h2>
+      <p class="reflect-subtitle" id="focus-intro">One focus per drive works best. Your briefing appears once you&rsquo;ve picked.</p>
+      <div id="focus-area-chosen" class="hidden"></div>
+      <div id="focus-area-list" class="area-pick-list"></div>
+      <div id="briefing" class="briefing hidden"></div>
+      <div class="btn-group" style="margin-top:16px">
+        <button class="btn-primary" id="btn-start-guided" disabled>Start drive</button>
+        <button class="btn-secondary" id="btn-back-setup">Back</button>
       </div>
     </div>
   </section>
@@ -631,15 +757,34 @@
   <section id="screen-drive" class="screen hidden">
     <div class="drive-screen">
       <div class="drive-eyebrow">Drive in progress</div>
-      <h2 class="drive-title">Drive started</h2>
+      <h2 class="drive-title">Phones away</h2>
       <div class="focus-pills" id="focus-pills"></div>
 
       <div class="timer-display" id="timer-display">00:00</div>
-      <div class="timer-label" id="timer-label">Keep these focus areas in mind</div>
+      <div class="timer-label" id="timer-label">Pick the phone up only once you&rsquo;re parked</div>
 
       <div class="btn-group">
-        <button class="btn-primary" id="btn-reflect">We've pulled over &mdash; reflect</button>
-        <button class="btn-secondary" id="btn-end-early">End early</button>
+        <button class="btn-primary" id="btn-break">We're parked &mdash; add a note</button>
+        <button class="btn-secondary" id="btn-finish">Finish drive</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 2b: PARKED BREAK ── -->
+  <section id="screen-break" class="screen hidden">
+    <div class="reflect-screen">
+      <h2>Parked <em>up</em>.</h2>
+      <p class="reflect-subtitle">Anything worth noting from that stretch? Tag it now while it&rsquo;s fresh, then keep driving.</p>
+      <div class="suggested-label">Which area?</div>
+      <div id="break-area-chips" class="break-chips"></div>
+      <div class="suggested-label">How did it go?</div>
+      <div id="break-rating" class="reflect-btns"></div>
+      <textarea id="break-note" class="reflect-note reflect-note-wide" placeholder="What happened? (optional)" maxlength="200" style="margin-top:10px"></textarea>
+      <button class="btn-secondary" id="btn-add-moment" disabled style="margin-top:10px">Save note</button>
+      <div id="moment-list"></div>
+      <div class="btn-group" style="margin-top:20px">
+        <button class="btn-primary" id="btn-keep-driving">Keep driving</button>
+        <button class="btn-secondary" id="btn-finish-from-break">Finish drive</button>
       </div>
     </div>
   </section>
@@ -648,8 +793,11 @@
   <section id="screen-reflect" class="screen hidden">
     <div class="reflect-screen">
       <h2>Reflect on your <em>drive</em>.</h2>
-      <p class="reflect-subtitle">Choose how each focus area felt and add anything useful for the next lesson.</p>
+      <p class="reflect-subtitle" id="reflect-subtitle">Choose how each area felt and add anything useful for the next lesson.</p>
       <div id="reflect-areas"></div>
+      <div id="reflect-overall" class="hidden">
+        <textarea id="overall-note" class="reflect-note reflect-note-wide" placeholder="How did the drive go overall? (optional)" maxlength="500"></textarea>
+      </div>
       <button class="btn-primary" id="btn-save-reflect" disabled style="margin-top:16px">Save &amp; view results</button>
     </div>
   </section>

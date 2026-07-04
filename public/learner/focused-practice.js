@@ -3,16 +3,19 @@
 
 /* ── State ── */
 var AUTH;
-var selectedAreas = []; // array of supervisor category keys
-var suggestedAreas = [];
+var mode = null;              // 'free' | 'guided'
+var focusArea = null;         // guided mode: single supervisor category key
+var suggestedAreas = [];      // weakest categories, for the "Suggested" badge + payload
 var competencyData = null;
 var skillScores = {};
+var timerStart = null;        // Date.now() at drive start — survives backgrounded tabs
 var timerInterval = null;
-var timerSeconds = 0;
-var wakeLock = null;
-var reflections = {}; // { catKey: { rating, note, dl25Skills } }
+var elapsedSeconds = 0;
+var moments = [];             // free mode parked-break notes: { catKey, rating, note }
+var breakSelection = { catKey: null, rating: null };
+var reflections = {};         // { catKey: { rating, what, where, instructor, note, faultsSeen, dl25Skills } }
 var currentDriveOptions = [];
-var selectedDrive = null; // null until learner chooses booking or normal drive
+var selectedDrive = { kind: 'normal' }; // auto-linked to a booking when one is near now
 
 var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
 var PRACTICE_RATINGS = [
@@ -23,7 +26,7 @@ var PRACTICE_RATINGS = [
 
 /* ── Helpers ── */
 function showScreen(id) {
-  ['screen-setup', 'screen-drive', 'screen-reflect', 'screen-results'].forEach(function(sid) {
+  ['screen-setup', 'screen-focus', 'screen-drive', 'screen-break', 'screen-reflect', 'screen-results'].forEach(function(sid) {
     document.getElementById(sid).classList.add('hidden');
   });
   document.getElementById(id).classList.remove('hidden');
@@ -62,6 +65,7 @@ function buildPracticeNote(parts) {
   var noteParts = [];
   if (parts.what) noteParts.push('What happened: ' + parts.what);
   if (parts.where) noteParts.push('Where: ' + parts.where);
+  if (parts.faultsSeen && parts.faultsSeen.length > 0) noteParts.push('Faults spotted: ' + parts.faultsSeen.join('; '));
   if (parts.instructor) noteParts.push('For instructor: ' + parts.instructor);
   return noteParts.join('\n');
 }
@@ -131,7 +135,14 @@ async function loadCurrentDriveOptions() {
     console.warn('Failed to load current bookings:', e);
     currentDriveOptions = [];
   }
-  renderDriveChoices();
+  // Auto-link the drive to a booking happening near now — the learner
+  // shouldn't have to make this decision, just be able to undo it.
+  if (currentDriveOptions.length > 0) {
+    selectedDrive = { kind: 'booking', booking: currentDriveOptions[0] };
+  } else {
+    selectedDrive = { kind: 'normal' };
+  }
+  renderBookingNote();
 }
 
 async function loadCompetencyData() {
@@ -140,11 +151,13 @@ async function loadCompetencyData() {
     if (!res.ok) throw new Error('API error');
     competencyData = await res.json();
     buildSkillScores();
-    renderSetup();
   } catch (e) {
     console.warn('Failed to load competency data:', e);
-    renderSetup();
   }
+  var weakAreas = CC_COMPETENCY.getWeakAreas(skillScores, 3);
+  suggestedAreas = weakAreas
+    .filter(function(w) { return w.score > 0; })
+    .map(function(w) { return w.category.key; });
 }
 
 function buildSkillScores() {
@@ -175,229 +188,253 @@ function buildSkillScores() {
   }
 }
 
-/* ── Screen 1: Setup ── */
-function renderSetup() {
-  var weakAreas = CC_COMPETENCY.getWeakAreas(skillScores, 3);
-  suggestedAreas = weakAreas.map(function(w) { return w.category.key; });
-
-  // Pre-select suggested areas
-  selectedAreas = suggestedAreas.slice();
-
-  // Render suggested
-  var sugContainer = document.getElementById('suggested-areas');
-  if (weakAreas.length > 0 && weakAreas[0].score > 0) {
-    sugContainer.innerHTML = weakAreas.map(function(w) {
-      return renderAreaPick(w.category, w.score, selectedAreas.indexOf(w.category.key) >= 0);
-    }).join('');
-  } else {
-    // No data — show all areas instead
-    document.getElementById('suggested-section').classList.add('hidden');
-    document.getElementById('browse-toggle').classList.add('hidden');
-    document.getElementById('all-areas').classList.remove('hidden');
-  }
-
-  // Render all areas
-  var allContainer = document.getElementById('all-areas');
-  allContainer.innerHTML = SUP_CATS.map(function(cat) {
-    var catScore = 0;
-    var n = 0;
-    for (var j = 0; j < cat.dl25Skills.length; j++) {
-      var s = skillScores[cat.dl25Skills[j]];
-      if (typeof s === 'number') { catScore += s; n++; }
-    }
-    var avg = n > 0 ? Math.round(catScore / n) : 0;
-    return renderAreaPick(cat, avg, selectedAreas.indexOf(cat.key) >= 0);
-  }).join('');
-
-  updatePickCount();
-  updateFocusGuides();
-  renderSelectedDriveSummary();
-}
-
-function renderDriveChoices() {
-  var container = document.getElementById('drive-choices');
-  if (!container) return;
-
-  var html = '';
-  if (currentDriveOptions.length > 0) {
-    html += currentDriveOptions.map(function(booking) {
-      var selected = selectedDrive && selectedDrive.kind === 'booking' && String(selectedDrive.booking.id) === String(booking.id);
-      var title = booking.lesson_type_name || 'Booked lesson';
-      var meta = formatBookingTime(booking);
-      if (booking.instructor_name) meta += ' with ' + booking.instructor_name;
-      return '<button type="button" class="drive-choice' + (selected ? ' selected' : '') + '" data-action="select-drive-booking" data-booking-id="' + escHtml(booking.id) + '">' +
-        '<span class="drive-choice-icon">BK</span>' +
-        '<span><span class="drive-choice-title">' + escHtml(title) + '</span>' +
-        '<span class="drive-choice-meta">' + escHtml(meta) + '</span></span>' +
-        '<span class="drive-choice-tag">Booked</span>' +
-      '</button>';
-    }).join('');
-  }
-
-  var normalSelected = selectedDrive && selectedDrive.kind === 'normal';
-  html += '<button type="button" class="drive-choice' + (normalSelected ? ' selected' : '') + '" data-action="select-drive-normal">' +
-    '<span class="drive-choice-icon">DR</span>' +
-    '<span><span class="drive-choice-title">Normal drive</span>' +
-    '<span class="drive-choice-meta">' + (currentDriveOptions.length ? 'Not one of these booked lessons.' : 'No current booked lessons found near now.') + '</span></span>' +
-    '<span class="drive-choice-tag">Normal</span>' +
-  '</button>';
-
-  container.innerHTML = html;
-}
-
-function selectDriveBooking(bookingId) {
-  var found = currentDriveOptions.find(function(booking) {
-    return String(booking.id) === String(bookingId);
-  });
-  if (!found) return;
-  selectedDrive = { kind: 'booking', booking: found };
-  renderDriveChoices();
-  renderSelectedDriveSummary();
-  document.getElementById('focus-setup-section').classList.remove('hidden');
-}
-
-function selectNormalDrive() {
-  selectedDrive = { kind: 'normal' };
-  renderDriveChoices();
-  renderSelectedDriveSummary();
-  document.getElementById('focus-setup-section').classList.remove('hidden');
-}
-
-function renderSelectedDriveSummary() {
-  var el = document.getElementById('selected-drive-summary');
-  if (!el || !selectedDrive) return;
+/* ── Screen 1: Mode choice ── */
+function renderBookingNote() {
+  var el = document.getElementById('booking-note');
+  if (!el) return;
   if (selectedDrive.kind === 'booking') {
     var booking = selectedDrive.booking;
     var label = booking.lesson_type_name || 'Booked lesson';
     var meta = formatBookingTime(booking);
     if (booking.instructor_name) meta += ' with ' + booking.instructor_name;
-    el.innerHTML = '<h3>Drive selected</h3><p><strong>' + escHtml(label) + '</strong><br>' + escHtml(meta) + '</p>';
+    el.innerHTML = '<span class="booking-note-text">Linking to your lesson: <strong>' + escHtml(label) + '</strong> — ' + escHtml(meta) + '</span>' +
+      '<button type="button" class="booking-note-link" data-action="unlink-booking">Not this lesson?</button>';
+    el.classList.remove('hidden');
+  } else if (currentDriveOptions.length > 0) {
+    var b = currentDriveOptions[0];
+    el.innerHTML = '<span class="booking-note-text">This drive won’t be linked to a lesson.</span>' +
+      '<button type="button" class="booking-note-link" data-action="relink-booking">Link to ' + escHtml(formatBookingTime(b)) + '</button>';
+    el.classList.remove('hidden');
   } else {
-    el.innerHTML = '<h3>Drive selected</h3><p><strong>Normal drive</strong><br>This will save without linking to a booking.</p>';
+    el.classList.add('hidden');
   }
 }
 
-function renderAreaPick(cat, score, isSelected) {
-  var scoreColor = score > 0 ? 'var(--accent)' : 'var(--muted)';
-  var scoreBg = 'transparent';
-  var scoreText = score > 0 ? 'Suggested' : 'Pick';
-  return '<div class="area-pick' + (isSelected ? ' selected' : '') + '" data-action="toggle-area" data-cat="' + cat.key + '">' +
-    '<span class="area-pick-icon">' + cat.icon + '</span>' +
-    '<div class="area-pick-text">' +
-      '<div class="area-pick-name">' + cat.label + '</div>' +
-      '<div class="area-pick-desc">' + cat.description + '</div>' +
-    '</div>' +
-    '<span class="area-pick-score" style="background:' + scoreBg + ';color:' + scoreColor + ';">' + scoreText + '</span>' +
-    '<span class="area-pick-check">' + (isSelected ? '\u2713' : '') + '</span>' +
-  '</div>';
-}
-
-function toggleArea(catKey) {
-  var idx = selectedAreas.indexOf(catKey);
-  if (idx >= 0) {
-    selectedAreas.splice(idx, 1);
-  } else if (selectedAreas.length < 3) {
-    selectedAreas.push(catKey);
+function chooseMode(m) {
+  mode = m;
+  if (mode === 'free') {
+    startDrive();
+  } else {
+    renderFocusList();
+    showScreen('screen-focus');
   }
-  // Update all pick elements
-  document.querySelectorAll('.area-pick').forEach(function(el) {
-    var k = el.getAttribute('data-cat');
-    var sel = selectedAreas.indexOf(k) >= 0;
-    el.classList.toggle('selected', sel);
-    el.querySelector('.area-pick-check').textContent = sel ? '\u2713' : '';
-  });
-  updatePickCount();
-  updateFocusGuides();
 }
 
-function updatePickCount() {
-  document.getElementById('pick-count').textContent = selectedAreas.length + ' of 3 selected';
-  document.getElementById('btn-start-practice').disabled = selectedAreas.length === 0;
+/* ── Screen 1b: Guided focus pick + briefing ── */
+function renderFocusList() {
+  var listContainer = document.getElementById('focus-area-list');
+  var chosenContainer = document.getElementById('focus-area-chosen');
+  var introEl = document.getElementById('focus-intro');
+
+  if (focusArea) {
+    // Once a focus is picked, hide the full list and the intro copy so the
+    // briefing is the only thing left to read before setting off — no
+    // scrolling needed to get from pick to briefing.
+    var cat = CC_COMPETENCY.getSupervisorCategory(focusArea);
+    listContainer.innerHTML = '';
+    listContainer.classList.add('hidden');
+    if (introEl) introEl.classList.add('hidden');
+    if (cat) {
+      chosenContainer.innerHTML =
+        '<div class="area-pick selected chosen-only" data-action="pick-focus" data-cat="' + cat.key + '">' +
+          '<span class="area-pick-icon">' + cat.icon + '</span>' +
+          '<div class="area-pick-text">' +
+            '<div class="area-pick-name">' + cat.label + '</div>' +
+          '</div>' +
+          '<span class="area-pick-change">Change</span>' +
+        '</div>';
+    }
+    chosenContainer.classList.remove('hidden');
+  } else {
+    chosenContainer.innerHTML = '';
+    chosenContainer.classList.add('hidden');
+    if (introEl) introEl.classList.remove('hidden');
+    listContainer.classList.remove('hidden');
+    listContainer.innerHTML = SUP_CATS.map(function(cat) {
+      var isSuggested = suggestedAreas.indexOf(cat.key) >= 0;
+      return '<div class="area-pick" data-action="pick-focus" data-cat="' + cat.key + '">' +
+        '<span class="area-pick-icon">' + cat.icon + '</span>' +
+        '<div class="area-pick-text">' +
+          '<div class="area-pick-name">' + cat.label + '</div>' +
+          '<div class="area-pick-desc">' + cat.description + '</div>' +
+        '</div>' +
+        (isSuggested ? '<span class="area-pick-score" style="color:var(--accent);">Suggested</span>' : '<span></span>') +
+        '<span class="area-pick-check"></span>' +
+      '</div>';
+    }).join('');
+  }
+  renderBriefing();
 }
 
-function updateFocusGuides() {
-  var container = document.getElementById('focus-guides');
-  if (selectedAreas.length === 0) { container.innerHTML = ''; return; }
+function pickFocus(catKey) {
+  focusArea = focusArea === catKey ? null : catKey;
+  renderFocusList();
+  document.getElementById('btn-start-guided').disabled = !focusArea;
+}
 
-  var html = '';
-  selectedAreas.forEach(function(catKey) {
-    var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
-    if (!cat) return;
-    html += '<div class="focus-guide">';
-    html += '<h3>' + cat.icon + ' ' + cat.label + ' \u2014 What to focus on</h3>';
-    html += '<ul>';
-    cat.faultHints.forEach(function(hint) {
-      html += '<li>' + hint + '</li>';
-    });
+function renderBriefing() {
+  var container = document.getElementById('briefing');
+  if (!focusArea) { container.innerHTML = ''; container.classList.add('hidden'); return; }
+  var cat = CC_COMPETENCY.getSupervisorCategory(focusArea);
+  if (!cat || !cat.guided) { container.innerHTML = ''; container.classList.add('hidden'); return; }
+
+  var g = cat.guided;
+  var sections = [
+    { key: 'why', title: 'Why it matters', items: g.why },
+    { key: 'exercises', title: 'Try these', items: g.exercises },
+    { key: 'good', title: 'What good looks like', items: g.good },
+    { key: 'faults', title: 'Common faults', items: g.faults }
+  ];
+  // Collapsed by default so "Start drive" is reachable right after picking
+  // a focus — reading the briefing is optional, not a gate to setting off.
+  var html = '<p class="briefing-intro">Optional reading before you set off. Tap a heading to expand it.</p>';
+  sections.forEach(function(sec) {
+    if (!sec.items || sec.items.length === 0) return;
+    html += '<div class="focus-guide collapsed" data-section="' + sec.key + '">' +
+      '<button type="button" class="focus-guide-toggle" data-action="toggle-briefing-section" data-section="' + sec.key + '">' +
+        '<h3>' + sec.title + '</h3>' +
+        '<span class="focus-guide-chevron">&#8250;</span>' +
+      '</button>' +
+      '<ul>';
+    sec.items.forEach(function(item) { html += '<li>' + escHtml(item) + '</li>'; });
     html += '</ul></div>';
   });
   container.innerHTML = html;
+  container.classList.remove('hidden');
 }
 
-function toggleBrowseAll() {
-  var allEl = document.getElementById('all-areas');
-  var btn = document.getElementById('browse-toggle');
-  if (allEl.classList.contains('hidden')) {
-    allEl.classList.remove('hidden');
-    btn.textContent = 'Hide all areas';
-  } else {
-    allEl.classList.add('hidden');
-    btn.textContent = 'Browse all areas';
-  }
+function toggleBriefingSection(key) {
+  var el = document.querySelector('.focus-guide[data-section="' + key + '"]');
+  if (el) el.classList.toggle('collapsed');
 }
 
 /* ── Screen 2: Driving ── */
-function startPractice() {
-  if (!selectedDrive) return;
-  // Show focus pills
-  var pillsHtml = '';
-  selectedAreas.forEach(function(catKey) {
-    var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
-    if (cat) pillsHtml += '<span class="focus-pill">' + cat.icon + ' ' + cat.label + '</span>';
-  });
-  document.getElementById('focus-pills').innerHTML = pillsHtml;
+function startDrive() {
+  var pillsEl = document.getElementById('focus-pills');
+  if (mode === 'guided' && focusArea) {
+    var cat = CC_COMPETENCY.getSupervisorCategory(focusArea);
+    pillsEl.innerHTML = cat ? '<span class="focus-pill">' + cat.icon + ' ' + cat.label + '</span>' : '';
+  } else {
+    pillsEl.innerHTML = '';
+  }
 
-  // Start timer
-  timerSeconds = 0;
-  document.getElementById('timer-display').textContent = '00:00';
-  timerInterval = setInterval(function() {
-    timerSeconds++;
-    document.getElementById('timer-display').textContent = formatTime(timerSeconds);
-  }, 1000);
-
-  // Wake lock
-  requestWakeLock();
+  // Timestamp-based timer: mobile browsers throttle intervals when the
+  // phone is pocketed, so elapsed time is always recomputed from the start.
+  if (!timerStart) timerStart = Date.now();
+  renderTimer();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(renderTimer, 1000);
 
   if (typeof posthog !== 'undefined') {
-    posthog.capture('focused_practice_started', { areas: selectedAreas });
+    posthog.capture('focused_practice_started', { mode: mode, areas: mode === 'guided' ? [focusArea] : [] });
   }
 
   showScreen('screen-drive');
 }
 
-async function requestWakeLock() {
-  try {
-    if ('wakeLock' in navigator) {
-      wakeLock = await navigator.wakeLock.request('screen');
-    }
-  } catch (e) { /* ignore */ }
+function renderTimer() {
+  if (timerStart) elapsedSeconds = Math.floor((Date.now() - timerStart) / 1000);
+  var el = document.getElementById('timer-display');
+  if (el) el.textContent = formatTime(elapsedSeconds);
 }
 
-function releaseWakeLock() {
-  if (wakeLock) { try { wakeLock.release(); } catch(e) {} wakeLock = null; }
+/* ── Screen 2b: Parked break ── */
+function goToBreak() {
+  breakSelection = { catKey: mode === 'guided' ? focusArea : null, rating: null };
+  var noteEl = document.getElementById('break-note');
+  if (noteEl) noteEl.value = '';
+  renderBreakForm();
+  renderMomentList();
+  showScreen('screen-break');
+}
+
+function renderBreakForm() {
+  var chipsEl = document.getElementById('break-area-chips');
+  chipsEl.innerHTML = SUP_CATS.map(function(cat) {
+    var sel = breakSelection.catKey === cat.key;
+    return '<button type="button" class="break-chip' + (sel ? ' selected' : '') + '" data-action="break-pick-area" data-cat="' + cat.key + '">' +
+      cat.icon + ' ' + cat.label + '</button>';
+  }).join('');
+
+  var ratingEl = document.getElementById('break-rating');
+  ratingEl.innerHTML = PRACTICE_RATINGS.map(function(r) {
+    var sel = breakSelection.rating === r.key;
+    return '<button type="button" class="reflect-btn' + (sel ? ' sel-' + r.key : '') + '" data-action="break-pick-rating" data-rating="' + r.key + '">' + r.label + '</button>';
+  }).join('');
+
+  document.getElementById('btn-add-moment').disabled = !(breakSelection.catKey && breakSelection.rating);
+}
+
+function breakPickArea(catKey) {
+  breakSelection.catKey = breakSelection.catKey === catKey ? null : catKey;
+  renderBreakForm();
+}
+
+function breakPickRating(rating) {
+  breakSelection.rating = breakSelection.rating === rating ? null : rating;
+  renderBreakForm();
+}
+
+function addMoment() {
+  if (!breakSelection.catKey || !breakSelection.rating) return;
+  var noteEl = document.getElementById('break-note');
+  moments.push({
+    catKey: breakSelection.catKey,
+    rating: breakSelection.rating,
+    note: noteEl ? noteEl.value.trim() : ''
+  });
+  breakSelection = { catKey: mode === 'guided' ? focusArea : null, rating: null };
+  if (noteEl) noteEl.value = '';
+  renderBreakForm();
+  renderMomentList();
+}
+
+function renderMomentList() {
+  var el = document.getElementById('moment-list');
+  if (moments.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="suggested-label">Noted this drive</div>' + moments.map(function(m) {
+    var cat = CC_COMPETENCY.getSupervisorCategory(m.catKey);
+    var ratingObj = PRACTICE_RATINGS.find(function(r) { return r.key === m.rating; });
+    return '<div class="moment-item">' +
+      '<span class="moment-item-area">' + (cat ? cat.icon + ' ' + escHtml(cat.label) : escHtml(m.catKey)) + '</span>' +
+      '<span class="result-area-badge ' + m.rating + '">' + (ratingObj ? ratingObj.label : m.rating) + '</span>' +
+      (m.note ? '<span class="moment-item-note">' + escHtml(m.note) + '</span>' : '') +
+    '</div>';
+  }).join('');
 }
 
 /* ── Screen 3: Reflection ── */
+function reflectionAreas() {
+  if (mode === 'guided' && focusArea) return [focusArea];
+  var seen = [];
+  moments.forEach(function(m) {
+    if (seen.indexOf(m.catKey) < 0) seen.push(m.catKey);
+  });
+  return seen;
+}
+
 function goToReflection() {
+  renderTimer();
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
+  var areas = reflectionAreas();
   var container = document.getElementById('reflect-areas');
+  var overallWrap = document.getElementById('reflect-overall');
   var html = '';
+  reflections = {};
 
-  selectedAreas.forEach(function(catKey) {
+  areas.forEach(function(catKey) {
     var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
     if (!cat) return;
-    reflections[catKey] = { rating: null, what: '', where: '', instructor: '', note: '', dl25Skills: cat.dl25Skills };
+    var areaMoments = moments.filter(function(m) { return m.catKey === catKey; });
+    var prefillRating = areaMoments.length > 0 ? areaMoments[areaMoments.length - 1].rating : null;
+    var prefillWhat = areaMoments.map(function(m) { return m.note; }).filter(Boolean).join('; ');
+
+    reflections[catKey] = {
+      rating: prefillRating, what: prefillWhat, where: '', instructor: '',
+      note: '', faultsSeen: [], dl25Skills: cat.dl25Skills
+    };
+    reflections[catKey].note = buildPracticeNote(reflections[catKey]);
 
     html += '<div class="reflect-area" data-cat="' + catKey + '">';
     html += '<div class="reflect-area-header">';
@@ -406,11 +443,21 @@ function goToReflection() {
     html += '</div>';
     html += '<div class="reflect-btns">';
     PRACTICE_RATINGS.forEach(function(r) {
-      html += '<button class="reflect-btn" data-action="set-reflection" data-cat="' + catKey + '" data-rating="' + r.key + '">' + r.label + '</button>';
+      var sel = prefillRating === r.key ? ' sel-' + r.key : '';
+      html += '<button class="reflect-btn' + sel + '" data-action="set-reflection" data-cat="' + catKey + '" data-rating="' + r.key + '">' + r.label + '</button>';
     });
     html += '</div>';
+    // Guided drives get the fault checklist from the briefing — a more
+    // detailed debrief for the one area they were working on.
+    if (mode === 'guided' && cat.guided && cat.guided.faults && cat.guided.faults.length > 0) {
+      html += '<div class="fault-checklist"><div class="fault-checklist-title">Did any of these come up?</div>';
+      cat.guided.faults.forEach(function(fault, idx) {
+        html += '<label class="fault-check"><input type="checkbox" data-action="toggle-fault" data-cat="' + catKey + '" data-fault="' + escHtml(fault) + '"> <span>' + escHtml(fault) + '</span></label>';
+      });
+      html += '</div>';
+    }
     html += '<div class="reflect-note-grid">';
-    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="what" data-cat="' + catKey + '" placeholder="What happened? (optional)" maxlength="160">';
+    html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="what" data-cat="' + catKey + '" placeholder="What happened? (optional)" maxlength="160" value="' + escHtml(prefillWhat) + '">';
     html += '<input class="reflect-note" data-action="set-reflection-note" data-note-field="where" data-cat="' + catKey + '" placeholder="Where? (optional)" maxlength="120">';
     html += '<textarea class="reflect-note reflect-note-wide" data-action="set-reflection-note" data-note-field="instructor" data-cat="' + catKey + '" placeholder="What should your instructor know? (optional)" maxlength="260"></textarea>';
     html += '</div>';
@@ -418,6 +465,18 @@ function goToReflection() {
   });
 
   container.innerHTML = html;
+
+  // Free drive with nothing tagged: just an optional overall note.
+  if (areas.length === 0) {
+    overallWrap.classList.remove('hidden');
+    document.getElementById('reflect-subtitle').textContent =
+      'Nothing was noted during this drive. Add an overall note if you like, then save.';
+  } else {
+    overallWrap.classList.add('hidden');
+    document.getElementById('reflect-subtitle').textContent =
+      'Choose how each area felt and add anything useful for the next lesson.';
+  }
+
   checkReflectionComplete();
   showScreen('screen-reflect');
 }
@@ -441,6 +500,15 @@ function setReflectionNote(catKey, field, value) {
   reflections[catKey].note = buildPracticeNote(reflections[catKey]);
 }
 
+function toggleFault(catKey, fault, checked) {
+  var r = reflections[catKey];
+  if (!r) return;
+  var idx = r.faultsSeen.indexOf(fault);
+  if (checked && idx < 0) r.faultsSeen.push(fault);
+  if (!checked && idx >= 0) r.faultsSeen.splice(idx, 1);
+  r.note = buildPracticeNote(r);
+}
+
 function checkReflectionComplete() {
   var allRated = true;
   for (var key in reflections) {
@@ -455,34 +523,42 @@ async function saveReflection() {
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
-  releaseWakeLock();
-
   // Build API payload keyed by the skill_key expected by the existing endpoint.
   var apiReflections = {};
   for (var catKey in reflections) {
     var r = reflections[catKey];
+    if (!r.rating) continue;
     for (var i = 0; i < r.dl25Skills.length; i++) {
       apiReflections[r.dl25Skills[i]] = { rating: r.rating, note: r.note };
     }
   }
 
+  var focusAreas = reflectionAreas();
+
   try {
-    var durationMinutes = Math.ceil(timerSeconds / 60);
+    renderTimer();
+    var durationMinutes = Math.ceil(elapsedSeconds / 60);
     var payload = {
-      focus_areas: selectedAreas,
+      focus_areas: focusAreas,
       suggested_areas: suggestedAreas,
       duration_minutes: durationMinutes,
       reflections: apiReflections,
       session_date: new Date().toISOString().slice(0, 10),
       session_type: 'focused_practice'
     };
+    var noteParts = [];
+    var overallEl = document.getElementById('overall-note');
+    if (focusAreas.length === 0 && overallEl && overallEl.value.trim()) {
+      noteParts.push(overallEl.value.trim());
+    }
     if (selectedDrive && selectedDrive.kind === 'booking') {
       payload.booking_id = selectedDrive.booking.id;
       payload.session_date = selectedDrive.booking.scheduled_date;
       payload.session_type = 'instructor';
       payload.duration_minutes = selectedDrive.booking.duration_minutes || durationMinutes;
-      payload.notes = selectedDriveNotes();
+      noteParts.push(selectedDriveNotes());
     }
+    if (noteParts.length > 0) payload.notes = noteParts.join('\n');
     await apiCall('POST', 'focused-practice', payload);
   } catch (e) {
     console.warn('Failed to save practice session:', e);
@@ -490,8 +566,9 @@ async function saveReflection() {
 
   if (typeof posthog !== 'undefined') {
     posthog.capture('focused_practice_completed', {
-      areas: selectedAreas,
-      duration_minutes: Math.ceil(timerSeconds / 60)
+      mode: mode,
+      areas: focusAreas,
+      duration_minutes: Math.ceil(elapsedSeconds / 60)
     });
   }
 
@@ -501,10 +578,10 @@ async function saveReflection() {
 function showResultsScreen() {
   var durationMin = selectedDrive && selectedDrive.kind === 'booking' && selectedDrive.booking.duration_minutes
     ? selectedDrive.booking.duration_minutes
-    : Math.ceil(timerSeconds / 60);
+    : Math.ceil(elapsedSeconds / 60);
   var driveLabel = selectedDrive && selectedDrive.kind === 'booking'
     ? 'booked lesson'
-    : 'normal drive';
+    : (mode === 'guided' ? 'guided drive' : 'drive');
   document.getElementById('results-subtitle').textContent =
     durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' ' + driveLabel + ' completed. Saved to your driving plan.';
 
@@ -512,10 +589,10 @@ function showResultsScreen() {
   var needsWork = [];
   var tellInstructor = [];
 
-  selectedAreas.forEach(function(catKey) {
+  reflectionAreas().forEach(function(catKey) {
     var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
     var r = reflections[catKey];
-    if (!cat || !r) return;
+    if (!cat || !r || !r.rating) return;
 
     var ratingObj = PRACTICE_RATINGS.find(function(rt) { return rt.key === r.rating; });
     var ratingLabel = ratingObj ? ratingObj.label : r.rating;
@@ -545,8 +622,10 @@ function showResultsScreen() {
     nextHtml += '<p>Ask your instructor about <strong>' + escHtml(tellInstructor.join(', ')) + '</strong> next lesson so they can help with it.</p>';
   } else if (needsWork.length > 0) {
     nextHtml += '<p>Keep practising <strong>' + escHtml(needsWork.join(', ')) + '</strong> on another drive, or ask your instructor for tips next lesson.</p>';
+  } else if (mode === 'guided') {
+    nextHtml += '<p>Great drive. Pick a new focus next time, or open your driving plan to see what else is worth practising.</p>';
   } else {
-    nextHtml += '<p>Great drive. Pick a new focus area next time, or open your driving plan to see what else is worth practising.</p>';
+    nextHtml += '<p>Drive logged. Next time, try a guided drive to work on one specific area.</p>';
   }
   nextHtml += '</div>';
   document.getElementById('result-next').innerHTML = nextHtml;
@@ -559,10 +638,20 @@ document.addEventListener('click', function (e) {
   var target = e.target.closest('[data-action]');
   if (!target) return;
   var action = target.dataset.action;
-  if (action === 'toggle-area') toggleArea(target.dataset.cat);
+  if (action === 'pick-focus') pickFocus(target.dataset.cat);
+  else if (action === 'toggle-briefing-section') toggleBriefingSection(target.dataset.section);
   else if (action === 'set-reflection') setReflection(target.dataset.cat, target.dataset.rating);
-  else if (action === 'select-drive-booking') selectDriveBooking(target.dataset.bookingId);
-  else if (action === 'select-drive-normal') selectNormalDrive();
+  else if (action === 'break-pick-area') breakPickArea(target.dataset.cat);
+  else if (action === 'break-pick-rating') breakPickRating(target.dataset.rating);
+  else if (action === 'unlink-booking') { selectedDrive = { kind: 'normal' }; renderBookingNote(); }
+  else if (action === 'relink-booking') {
+    if (currentDriveOptions.length > 0) selectedDrive = { kind: 'booking', booking: currentDriveOptions[0] };
+    renderBookingNote();
+  }
+});
+document.addEventListener('change', function (e) {
+  var target = e.target.closest('[data-action="toggle-fault"]');
+  if (target) toggleFault(target.dataset.cat, target.dataset.fault, target.checked);
 });
 document.addEventListener('input', function (e) {
   var target = e.target.closest('[data-action="set-reflection-note"]');
@@ -570,17 +659,20 @@ document.addEventListener('input', function (e) {
 });
 // ── Static handlers previously inline in HTML ──
 (function wire() {
-  var browseToggle = document.getElementById('browse-toggle');
-  if (browseToggle) browseToggle.addEventListener('click', toggleBrowseAll);
-  var startBtn = document.getElementById('btn-start-practice');
-  if (startBtn) startBtn.addEventListener('click', startPractice);
-  var reflectBtn = document.getElementById('btn-reflect');
-  if (reflectBtn) reflectBtn.addEventListener('click', goToReflection);
-  var endEarlyBtn = document.getElementById('btn-end-early');
-  if (endEarlyBtn) endEarlyBtn.addEventListener('click', goToReflection);
-  var saveReflectBtn = document.getElementById('btn-save-reflect');
-  if (saveReflectBtn) saveReflectBtn.addEventListener('click', saveReflection);
-  var startAnotherBtn = document.getElementById('btn-start-another');
-  if (startAnotherBtn) startAnotherBtn.addEventListener('click', function () { location.reload(); });
+  function on(id, fn) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', fn);
+  }
+  on('btn-mode-free', function () { chooseMode('free'); });
+  on('btn-mode-guided', function () { chooseMode('guided'); });
+  on('btn-back-setup', function () { showScreen('screen-setup'); });
+  on('btn-start-guided', startDrive);
+  on('btn-break', goToBreak);
+  on('btn-keep-driving', function () { showScreen('screen-drive'); });
+  on('btn-add-moment', addMoment);
+  on('btn-finish', goToReflection);
+  on('btn-finish-from-break', goToReflection);
+  on('btn-save-reflect', saveReflection);
+  on('btn-start-another', function () { location.reload(); });
 })();
 })();
