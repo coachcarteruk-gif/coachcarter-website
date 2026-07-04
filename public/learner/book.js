@@ -189,8 +189,6 @@ function init() {
     // (it reads as broken for someone who has no account at all).
     const guestBanner = document.getElementById('guestBanner');
     if (guestBanner) guestBanner.style.display = 'flex';
-    const subtitle = document.getElementById('bookSubtitle');
-    if (subtitle) subtitle.textContent = 'Pick the lesson length, date, and time that work for you. We will only show times the instructor can cover.';
     Promise.all([loadInstructors(), loadLessonTypes()])
       .then(async () => {
         preselectInstructor();

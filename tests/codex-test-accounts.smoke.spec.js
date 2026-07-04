@@ -23,7 +23,7 @@ test.describe('Codex seeded test accounts', () => {
   test('learner opens booking page authenticated', async ({ learnerPage }) => {
     await learnerPage.goto('/learner/book.html');
 
-    await expect(learnerPage.locator('.book-title')).toContainText('Book');
+    await expect(learnerPage.locator('h1')).toContainText('Book a driving lesson');
     await expect(learnerPage.locator('#calContent')).toBeVisible();
 
     const authBlob = await learnerPage.evaluate(() => JSON.parse(localStorage.getItem('cc_learner') || '{}'));
