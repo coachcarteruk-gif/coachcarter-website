@@ -11,6 +11,8 @@ var timerInterval = null;
 var timerSeconds = 0;
 var wakeLock = null;
 var reflections = {}; // { catKey: { rating, note, dl25Skills } }
+var currentDriveOptions = [];
+var selectedDrive = null; // null until learner chooses booking or normal drive
 
 var SUP_CATS = CC_COMPETENCY.SUPERVISOR_CATEGORIES;
 var PRACTICE_RATINGS = [
@@ -43,6 +45,10 @@ function apiCall(method, action, body) {
   return ccAuth.fetchAuthed('/api/learner?action=' + action, opts);
 }
 
+function slotsCall(action) {
+  return ccAuth.fetchAuthed('/api/slots?action=' + action);
+}
+
 function escHtml(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -60,6 +66,51 @@ function buildPracticeNote(parts) {
   return noteParts.join('\n');
 }
 
+function parseBookingDateTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) return null;
+  var time = String(timeValue).slice(0, 8);
+  var dt = new Date(String(dateValue).slice(0, 10) + 'T' + time);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function bookingWindowEnd(booking, start) {
+  var end = parseBookingDateTime(booking.scheduled_date, booking.end_time);
+  if (end && start && end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  if (!end && start && booking.duration_minutes) {
+    end = new Date(start.getTime() + Number(booking.duration_minutes) * 60 * 1000);
+  }
+  return end;
+}
+
+function isRelevantDriveBooking(booking) {
+  var start = parseBookingDateTime(booking.scheduled_date, booking.start_time);
+  if (!start) return false;
+  var end = bookingWindowEnd(booking, start) || start;
+  var now = new Date();
+  var open = new Date(start.getTime() - 2 * 60 * 60 * 1000);
+  var close = new Date(end.getTime() + 2 * 60 * 60 * 1000);
+  return now >= open && now <= close;
+}
+
+function formatBookingTime(booking) {
+  var start = parseBookingDateTime(booking.scheduled_date, booking.start_time);
+  var end = parseBookingDateTime(booking.scheduled_date, booking.end_time);
+  if (!start) return 'Booked lesson';
+  var dateLabel = start.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  var startLabel = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  var endLabel = end ? end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+  return dateLabel + ', ' + startLabel + (endLabel ? '-' + endLabel : '');
+}
+
+function selectedDriveNotes() {
+  if (!selectedDrive || selectedDrive.kind !== 'booking') return null;
+  var booking = selectedDrive.booking;
+  var parts = ['Started from learner Start a drive flow.'];
+  if (booking.instructor_name) parts.push('Instructor: ' + booking.instructor_name + '.');
+  if (booking.lesson_type_name) parts.push('Lesson type: ' + booking.lesson_type_name + '.');
+  return parts.join(' ');
+}
+
 /* ── Init ── */
 window.addEventListener('DOMContentLoaded', async function() {
   AUTH = ccAuth.getAuth();
@@ -67,8 +118,21 @@ window.addEventListener('DOMContentLoaded', async function() {
     window.location.href = '/learner/login.html?redirect=/learner/focused-practice.html';
     return;
   }
-  await loadCompetencyData();
+  await Promise.all([loadCompetencyData(), loadCurrentDriveOptions()]);
 });
+
+async function loadCurrentDriveOptions() {
+  try {
+    var res = await slotsCall('my-bookings');
+    if (!res.ok) throw new Error('API error');
+    var data = await res.json();
+    currentDriveOptions = (data.upcoming || []).filter(isRelevantDriveBooking);
+  } catch (e) {
+    console.warn('Failed to load current bookings:', e);
+    currentDriveOptions = [];
+  }
+  renderDriveChoices();
+}
 
 async function loadCompetencyData() {
   try {
@@ -147,6 +211,70 @@ function renderSetup() {
 
   updatePickCount();
   updateFocusGuides();
+  renderSelectedDriveSummary();
+}
+
+function renderDriveChoices() {
+  var container = document.getElementById('drive-choices');
+  if (!container) return;
+
+  var html = '';
+  if (currentDriveOptions.length > 0) {
+    html += currentDriveOptions.map(function(booking) {
+      var selected = selectedDrive && selectedDrive.kind === 'booking' && String(selectedDrive.booking.id) === String(booking.id);
+      var title = booking.lesson_type_name || 'Booked lesson';
+      var meta = formatBookingTime(booking);
+      if (booking.instructor_name) meta += ' with ' + booking.instructor_name;
+      return '<button type="button" class="drive-choice' + (selected ? ' selected' : '') + '" data-action="select-drive-booking" data-booking-id="' + escHtml(booking.id) + '">' +
+        '<span class="drive-choice-icon">BK</span>' +
+        '<span><span class="drive-choice-title">' + escHtml(title) + '</span>' +
+        '<span class="drive-choice-meta">' + escHtml(meta) + '</span></span>' +
+        '<span class="drive-choice-tag">Booked</span>' +
+      '</button>';
+    }).join('');
+  }
+
+  var normalSelected = selectedDrive && selectedDrive.kind === 'normal';
+  html += '<button type="button" class="drive-choice' + (normalSelected ? ' selected' : '') + '" data-action="select-drive-normal">' +
+    '<span class="drive-choice-icon">DR</span>' +
+    '<span><span class="drive-choice-title">Normal drive</span>' +
+    '<span class="drive-choice-meta">' + (currentDriveOptions.length ? 'Not one of these booked lessons.' : 'No current booked lessons found near now.') + '</span></span>' +
+    '<span class="drive-choice-tag">Normal</span>' +
+  '</button>';
+
+  container.innerHTML = html;
+}
+
+function selectDriveBooking(bookingId) {
+  var found = currentDriveOptions.find(function(booking) {
+    return String(booking.id) === String(bookingId);
+  });
+  if (!found) return;
+  selectedDrive = { kind: 'booking', booking: found };
+  renderDriveChoices();
+  renderSelectedDriveSummary();
+  document.getElementById('focus-setup-section').classList.remove('hidden');
+}
+
+function selectNormalDrive() {
+  selectedDrive = { kind: 'normal' };
+  renderDriveChoices();
+  renderSelectedDriveSummary();
+  document.getElementById('focus-setup-section').classList.remove('hidden');
+}
+
+function renderSelectedDriveSummary() {
+  var el = document.getElementById('selected-drive-summary');
+  if (!el || !selectedDrive) return;
+  if (selectedDrive.kind === 'booking') {
+    var booking = selectedDrive.booking;
+    var label = booking.lesson_type_name || 'Booked lesson';
+    var meta = formatBookingTime(booking);
+    if (booking.instructor_name) meta += ' with ' + booking.instructor_name;
+    el.innerHTML = '<h3>Drive selected</h3><p><strong>' + escHtml(label) + '</strong><br>' + escHtml(meta) + '</p>';
+  } else {
+    el.innerHTML = '<h3>Drive selected</h3><p><strong>Normal drive</strong><br>This will save without linking to a booking.</p>';
+  }
 }
 
 function renderAreaPick(cat, score, isSelected) {
@@ -220,6 +348,7 @@ function toggleBrowseAll() {
 
 /* ── Screen 2: Driving ── */
 function startPractice() {
+  if (!selectedDrive) return;
   // Show focus pills
   var pillsHtml = '';
   selectedAreas.forEach(function(catKey) {
@@ -338,12 +467,23 @@ async function saveReflection() {
   }
 
   try {
-    await apiCall('POST', 'focused-practice', {
+    var durationMinutes = Math.ceil(timerSeconds / 60);
+    var payload = {
       focus_areas: selectedAreas,
       suggested_areas: suggestedAreas,
-      duration_minutes: Math.ceil(timerSeconds / 60),
-      reflections: apiReflections
-    });
+      duration_minutes: durationMinutes,
+      reflections: apiReflections,
+      session_date: new Date().toISOString().slice(0, 10),
+      session_type: 'focused_practice'
+    };
+    if (selectedDrive && selectedDrive.kind === 'booking') {
+      payload.booking_id = selectedDrive.booking.id;
+      payload.session_date = selectedDrive.booking.scheduled_date;
+      payload.session_type = 'instructor';
+      payload.duration_minutes = selectedDrive.booking.duration_minutes || durationMinutes;
+      payload.notes = selectedDriveNotes();
+    }
+    await apiCall('POST', 'focused-practice', payload);
   } catch (e) {
     console.warn('Failed to save practice session:', e);
   }
@@ -359,9 +499,14 @@ async function saveReflection() {
 }
 
 function showResultsScreen() {
-  var durationMin = Math.ceil(timerSeconds / 60);
+  var durationMin = selectedDrive && selectedDrive.kind === 'booking' && selectedDrive.booking.duration_minutes
+    ? selectedDrive.booking.duration_minutes
+    : Math.ceil(timerSeconds / 60);
+  var driveLabel = selectedDrive && selectedDrive.kind === 'booking'
+    ? 'booked lesson'
+    : 'normal drive';
   document.getElementById('results-subtitle').textContent =
-    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' practice drive completed. Saved to your driving plan.';
+    durationMin + ' minute' + (durationMin !== 1 ? 's' : '') + ' ' + driveLabel + ' completed. Saved to your driving plan.';
 
   var cardsHtml = '';
   var needsWork = [];
@@ -399,7 +544,7 @@ function showResultsScreen() {
   if (tellInstructor.length > 0) {
     nextHtml += '<p>Ask your instructor about <strong>' + escHtml(tellInstructor.join(', ')) + '</strong> next lesson so they can help with it.</p>';
   } else if (needsWork.length > 0) {
-    nextHtml += '<p>Keep practising <strong>' + escHtml(needsWork.join(', ')) + '</strong> on another practice drive, or ask your instructor for tips next lesson.</p>';
+    nextHtml += '<p>Keep practising <strong>' + escHtml(needsWork.join(', ')) + '</strong> on another drive, or ask your instructor for tips next lesson.</p>';
   } else {
     nextHtml += '<p>Great drive. Pick a new focus area next time, or open your driving plan to see what else is worth practising.</p>';
   }
@@ -416,6 +561,8 @@ document.addEventListener('click', function (e) {
   var action = target.dataset.action;
   if (action === 'toggle-area') toggleArea(target.dataset.cat);
   else if (action === 'set-reflection') setReflection(target.dataset.cat, target.dataset.rating);
+  else if (action === 'select-drive-booking') selectDriveBooking(target.dataset.bookingId);
+  else if (action === 'select-drive-normal') selectNormalDrive();
 });
 document.addEventListener('input', function (e) {
   var target = e.target.closest('[data-action="set-reflection-note"]');

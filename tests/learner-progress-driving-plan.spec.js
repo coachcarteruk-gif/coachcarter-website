@@ -19,7 +19,7 @@ test.describe('learner progress driving plan flow copy', () => {
     expect(html).toContain('<title>My Driving Plan | Coach Carter</title>');
     expect(html).toContain('My <em>driving plan</em>.');
     expect(html).toContain('Start your driving plan');
-    expect(html).toContain('Log a drive');
+    expect(html).toContain('Start a drive');
     expect(html).toContain('Recent activity');
     expect(html).toContain('Detailed skill view');
     expect(html).toContain('Open this if you want more detail');
@@ -41,7 +41,7 @@ test.describe('learner progress driving plan flow copy', () => {
     expect(source).toContain('function renderNextActions()');
     expect(source).toContain("'<h2 class=\"section-title\">Practise next</h2>'");
     expect(source).toContain('for (var a = 0; a < actions.length && a < 3; a++)');
-    expect(source).toContain('Log a drive with this focus');
+    expect(source).toContain('Start a drive with this focus');
     expect(source).toContain('renderNextActions();');
     expect(source.indexOf('renderNextActions();')).toBeLessThan(source.indexOf('renderStats();'));
   });
@@ -112,7 +112,7 @@ test.describe('learner progress driving plan flow copy', () => {
     expect(body).toContain('Not enough saved practice yet.');
     expect(body).toContain('This is based on what you saved.');
     expect(body).toContain('Based on the drives and practice you saved.');
-    expect(body).toContain('Log a drive or save a Practice Drive');
+    expect(body).toContain('Start a drive to give next week');
     expect(body).not.toContain('saved progress');
   });
 

@@ -550,7 +550,7 @@ function renderWeeklySummary() {
     : 'No saved practice this week yet.';
   var practiceCopy = sessions.length > 0
     ? 'Based on the drives and practice you saved.'
-    : 'Log a drive or save a Practice Drive to give next week a clearer starting point.';
+    : 'Start a drive to give next week a clearer starting point.';
 
   var strongestValue = strongest
     ? 'Your strongest area looks like ' + strongest.skill.label + '.'
@@ -564,7 +564,7 @@ function renderWeeklySummary() {
     : 'Next week, choose one simple focus.';
   var focusCopy = focus
     ? 'Keep it practical: pick a short route or lesson moment where this skill comes up.'
-    : 'Start with a quick drive note or a Practice Drive focus area.';
+    : 'Start with a drive and one simple focus area.';
 
   var askValue = ask
     ? 'Ask your instructor about ' + ask.skill.label + '.'
@@ -1011,8 +1011,8 @@ function renderNextActions() {
       title: 'Practise ' + item.skill.label,
       copy: latestReflectionCopy(item.skill.key),
       source: latestReflectionSource(item.skill.key),
-      href: '/learner/log-session.html',
-      cta: 'Log a drive with this focus'
+      href: '/learner/focused-practice.html',
+      cta: 'Start a drive with this focus'
     });
   }
 
@@ -1034,8 +1034,8 @@ function renderNextActions() {
         title: 'Revisit ' + skillObj.label,
         copy: 'Your mock test showed this is worth practising.',
         source: 'formal-mock',
-        href: '/learner/log-session.html',
-        cta: 'Log practice on this skill'
+        href: '/learner/focused-practice.html',
+        cta: 'Start a drive on this skill'
       });
     }
   }
@@ -1043,11 +1043,11 @@ function renderNextActions() {
   if (actions.length === 0) {
     actions = [
       {
-        title: 'Log your next drive',
+        title: 'Start your next drive',
         copy: 'Add a quick note after practice so your plan can suggest sharper next steps.',
         source: 'learner-reflection',
-        href: '/learner/log-session.html',
-        cta: 'Log a drive'
+        href: '/learner/focused-practice.html',
+        cta: 'Start a drive'
       },
       {
         title: 'Try the Examiner Quiz',
