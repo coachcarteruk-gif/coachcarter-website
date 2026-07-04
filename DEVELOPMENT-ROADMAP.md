@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.113 - Two-Mode Drive Start: Just Drive / Guided Drive (4 July 2026)
+
+The learner "Start a drive" flow (`/learner/focused-practice.html`) is rebuilt around one question: **Just drive** (head out with no setup, tag areas during parked breaks, quick reflection at the end) or **Guided drive** (pick exactly one focus area and get a kerb-side briefing before setting off). The old setup screen — booking-vs-normal choice, three pre-selected areas, 3-of-3 counter, three fault-hint lists — is gone.
+
+Because neither the learner nor the supervising passenger may legally use a phone while the car is moving, the whole flow is structured as brief (parked) → drive (phones away) → debrief (parked). A new parked-break screen lets either mode log "moments" (area + rating + note) mid-drive; these prefill the final reflection. Guided drives get a per-area briefing (`guided` blocks in `competency-config.js`: why it matters / try these / what good looks like / common faults) and a fault checklist in the debrief. Booking linkage is now automatic when a booking is near now, with a one-tap "Not this lesson?" undo. The drive timer is timestamp-based so pocketed phones report correct duration, and the wake lock was removed (the screen is meant to be away). API: `focus_areas` validation relaxed from 1–3 to 0–7 items.
+
+**Files:** `public/learner/focused-practice.html`, `public/learner/focused-practice.js`, `public/learner/focused-practice-step-tag.js`, `public/competency-config.js`, `api/learner.js`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.112 - Social Video Filming Opt-In Discount (21 June 2026)
 
 Instructors can now opt in from their profile to allow learners to choose social-media filming on a per-lesson basis. When the learner checks the filming option in the booking modal, the server applies a 5% discount to that booking only; the lesson still occupies the full lesson-type duration, while direct Stripe checkout amounts and credit-funded `minutes_deducted` use the discounted charge value.

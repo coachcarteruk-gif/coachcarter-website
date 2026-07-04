@@ -158,7 +158,25 @@ window.CC_COMPETENCY = (function () {
         'Missing other road users when pulling out or changing lanes',
         'Reacting late to hazards like pedestrians or cyclists'
       ],
-      reflectionQ: 'How were their mirror checks and awareness of other road users?' },
+      reflectionQ: 'How were their mirror checks and awareness of other road users?',
+      guided: {
+        why: [
+          'Most serious faults on the driving test are observation faults',
+          'A missed mirror check before braking or changing lane is how rear-end and side-swipe collisions happen'
+        ],
+        exercises: [
+          'Drive a familiar route and say each mirror check out loud before signalling, braking, or changing position',
+          'At every hazard (parked cars, pedestrians, cyclists), name it out loud as soon as you spot it'
+        ],
+        good: [
+          'Mirror checks happen before every change of speed or direction, not after',
+          'Hazards are spotted and named early, with time to plan around them'
+        ],
+        faults: [
+          'Braking or changing lane without checking mirrors first',
+          'Reacting late to pedestrians, cyclists, or cars pulling out'
+        ]
+      } },
 
     { key: 'speed_control', label: 'Speed & Control',
       icon: '🚗', colour: '#6366f1',
@@ -169,7 +187,26 @@ window.CC_COMPETENCY = (function () {
         'Driving too fast or too slow for the road conditions',
         'Hesitating unnecessarily or not making progress when safe'
       ],
-      reflectionQ: 'How smooth was their control of the car and choice of speed?' },
+      reflectionQ: 'How smooth was their control of the car and choice of speed?',
+      guided: {
+        why: [
+          'Losing control of speed is what turns a small mistake into a dangerous one',
+          'Driving too slowly or hesitating causes other drivers to overtake dangerously'
+        ],
+        exercises: [
+          'Practise smooth stops: aim to brake so gently a passenger barely feels the car stop',
+          'On a mix of 20, 30, and 40 roads, keep to the limit without watching the speedo constantly',
+          'Practise gear changes on a quiet road until the car never jerks'
+        ],
+        good: [
+          'Braking is early and gentle, gears change smoothly without looking down',
+          'Speed matches the road and conditions — confident but never rushed'
+        ],
+        faults: [
+          'Harsh braking, stalling, or rough gear changes',
+          'Too fast for the conditions, or too slow and holding up traffic'
+        ]
+      } },
 
     { key: 'junctions',    label: 'Junctions & Roundabouts',
       icon: '🔀', colour: '#ef4444',
@@ -180,7 +217,26 @@ window.CC_COMPETENCY = (function () {
         'Pulling out when it\u2019s not safe to do so',
         'Wrong lane or position at roundabouts'
       ],
-      reflectionQ: 'How did they handle junctions and roundabouts?' },
+      reflectionQ: 'How did they handle junctions and roundabouts?',
+      guided: {
+        why: [
+          'Junctions are where most learner collisions happen — usually pulling out on something they didn’t see',
+          'Approaching too fast leaves no time to look properly, so everything else goes wrong'
+        ],
+        exercises: [
+          'Find a quiet mini-roundabout and take every exit, including going all the way round',
+          'Practise a mix of left and right turns at T-junctions, saying "look left, look right, look left again" out loud',
+          'Approach each junction slow enough that stopping would be easy'
+        ],
+        good: [
+          'Slow, planned approach with the car in the right position and gear early',
+          'Only pulls out when there’s a gap that doesn’t make anyone else slow down'
+        ],
+        faults: [
+          'Approaching too fast or not looking properly before emerging',
+          'Wrong lane or position at roundabouts, or pulling out into too small a gap'
+        ]
+      } },
 
     { key: 'positioning',  label: 'Road Positioning',
       icon: '🛣️', colour: '#0d9488',
@@ -191,7 +247,26 @@ window.CC_COMPETENCY = (function () {
         'Following the car in front too closely',
         'Not leaving enough room when passing parked cars'
       ],
-      reflectionQ: 'How was their lane position and following distance?' },
+      reflectionQ: 'How was their lane position and following distance?',
+      guided: {
+        why: [
+          'Following too closely is the leading cause of rear-end crashes — no reaction time',
+          'Passing parked cars too tightly risks a door opening or a pedestrian stepping out'
+        ],
+        exercises: [
+          'On a main road, keep a 2-second gap: pick a lamppost, count "one thousand one, one thousand two" after the car in front passes it',
+          'On a street with parked cars, aim to leave a full door’s width when passing',
+          'Practise lane discipline on a dual carriageway: stay left unless overtaking'
+        ],
+        good: [
+          'Steady central lane position without drifting or hugging the kerb',
+          'A gap you could comfortably stop in, doubled in the wet'
+        ],
+        faults: [
+          'Drifting across lanes or straddling lane markings',
+          'Following too closely, or squeezing past parked cars with no clearance'
+        ]
+      } },
 
     { key: 'signals',      label: 'Signals & Communication',
       icon: '🔶', colour: '#f59e0b',
@@ -202,7 +277,26 @@ window.CC_COMPETENCY = (function () {
         'Missing road signs, traffic lights, or road markings',
         'Confusing other road users with wrong or no signals'
       ],
-      reflectionQ: 'How well did they use signals and respond to road signs?' },
+      reflectionQ: 'How well did they use signals and respond to road signs?',
+      guided: {
+        why: [
+          'A wrong or missing signal makes other drivers act on bad information — that’s how junctions go wrong',
+          'Missing a sign (speed limit, no entry, lane closed) can put you somewhere genuinely dangerous'
+        ],
+        exercises: [
+          'Drive a route with plenty of turns and signal early — a good rule is signal, then check it’s cancelled after the turn',
+          'Have your supervisor ask "what was the last sign we passed?" a few times during the drive',
+          'Practise approaching traffic lights: call out the colour early and what you’ll do'
+        ],
+        good: [
+          'Signals go on early enough to help others, and never mislead',
+          'Speed limit and lane signs are noticed and acted on without prompting'
+        ],
+        faults: [
+          'Forgetting to indicate, indicating too late, or leaving a signal on',
+          'Missing signs, lights, or road markings until the last moment'
+        ]
+      } },
 
     { key: 'manoeuvres',   label: 'Manoeuvres',
       icon: '🅿️', colour: '#10b981',
@@ -213,7 +307,26 @@ window.CC_COMPETENCY = (function () {
         'Not checking all around the car before and during the manoeuvre',
         'Mounting the kerb or ending up far from it'
       ],
-      reflectionQ: 'How did their manoeuvres (parking, reversing) go?' },
+      reflectionQ: 'How did their manoeuvres (parking, reversing) go?',
+      guided: {
+        why: [
+          'Reversing is when the car moves where you can’t naturally see — pedestrians and children are the risk',
+          'One manoeuvre comes up on every driving test, so this is guaranteed marks to win or lose'
+        ],
+        exercises: [
+          'In a quiet car park, practise bay parking (forward in and reverse in) three times each',
+          'On a quiet road, practise pulling up on the right and reversing two car lengths',
+          'Do one parallel park behind a single parked car'
+        ],
+        good: [
+          'Slow, controlled speed with constant all-round observation — pausing to look is fine',
+          'Finishes reasonably close to the kerb or centred in the bay, and corrects calmly if not'
+        ],
+        faults: [
+          'Steering or moving without checking all around first',
+          'Mounting the kerb, ending up wide, or rushing the manoeuvre'
+        ]
+      } },
 
     { key: 'moving_off',   label: 'Moving Off',
       icon: '🟢', colour: '#22c55e',
@@ -224,7 +337,26 @@ window.CC_COMPETENCY = (function () {
         'Stalling or rolling back on a hill',
         'Pulling out into traffic without enough gap'
       ],
-      reflectionQ: 'How confident were they when moving off and pulling away?' }
+      reflectionQ: 'How confident were they when moving off and pulling away?',
+      guided: {
+        why: [
+          'Moving off without a blind spot check is one of the most common serious test faults',
+          'Rolling back on a hill or stalling in traffic puts the car exactly where you don’t want it'
+        ],
+        exercises: [
+          'Practise five moves-off on a flat quiet road: mirrors, blind spot, signal if needed, away',
+          'Find a hill and practise moving off without rolling back, three times',
+          'Practise moving off from behind a parked car (an angled start)'
+        ],
+        good: [
+          'Blind spot checked every single time, even when it feels unnecessary',
+          'Pulls away smoothly into a gap without making anyone slow down'
+        ],
+        faults: [
+          'Skipping the blind spot check before moving off',
+          'Stalling, rolling back on hills, or pulling out into too small a gap'
+        ]
+      } }
   ];
 
   // ── Supervisor Ratings (simplified for parents) ────────────────
