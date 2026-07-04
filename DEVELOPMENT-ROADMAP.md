@@ -1,5 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.114 - Removed Overflow Lead Routing on book.html (4 July 2026)
+
+Reverses 2.67. When a learner picks a specific instructor on `book.html` and that instructor has zero slots in the 4-week window, the page now just shows "No slots with [FirstName] in the next 4 weeks." — no alternative-instructor slots are surfaced underneath. Fraser's call: showing other instructors' slots after the learner deliberately picked one was confusing them, not routing leads. Also switched instructor name display from full name to first name only on the filter dropdown and on slot cards (grid buttons + feed cards); full name is kept in `data-instructor-name`, the accessible `aria-label`, and the booking confirmation summary/modal.
+
+**Files:** `public/learner/book.js` (removed `overflowMode`/`overflowCache`/`overflowFingerprint` state, the alternatives-fetch branch in `initFeed`, the overflow branch in `renderFeed`, and the now-unused `filterSlotCacheByInstructor` helper; `fetchFeedSlots` simplified back to a plain 2-arg function; added `firstName()` helper used in the instructor filter, slot cards, and the empty-state message; `transmissionLabel()` shortened to "Auto"/"Manual"/"Manual or auto"), `public/learner/buy-credits.js` (instructor select also first-name-only for consistency), `public/learner/book.html` (removed dead `.overflow-section`/`.overflow-heading`/`.overflow-subhead` CSS).
+
+**Franchise note:** the original spec (`docs/franchise/spec-overflow-routing-book-html.md`) framed this as the platform-side delivery of the "Lead Floor" commitment (agreement clause 4.4). In practice the impact of removing it is negligible: leads reach instructors through normal browsing, the free-trial signup, and direct intros — not through this feature. Overflow was only a small conversion nudge for the picked-instructor-has-no-slots dead-end, and it never counted or attributed leads (clause 4.4 reconciliation was always intended to be manual/human, per the year-one franchise principle). So this is a UX tidy-up, not the removal of a contractual delivery mechanism.
+
 ## 2.113 - Two-Mode Drive Start: Just Drive / Guided Drive (4 July 2026)
 
 The learner "Start a drive" flow (`/learner/focused-practice.html`) is rebuilt around one question: **Just drive** (head out with no setup, tag areas during parked breaks, quick reflection at the end) or **Guided drive** (pick exactly one focus area and get a kerb-side briefing before setting off). The old setup screen — booking-vs-normal choice, three pre-selected areas, 3-of-3 counter, three fault-hint lists — is gone.
