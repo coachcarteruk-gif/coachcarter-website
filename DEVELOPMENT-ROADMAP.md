@@ -1,5 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.115 - Week-Grid Date Selector on book.html (4 July 2026)
+
+Replaces the horizontally scrolling date-chip strip on `book.html` with a fixed week-by-week Mon–Sun grid (4–5 rows) covering the whole 28-day booking window. Rationale: users think in weekly routines ("my usual Tuesday"), and a horizontal strip gives no spatial anchor for that; it also skipped dates with no availability, hiding fully-booked weeks entirely. In the grid, days without slots stay visible but dimmed/disabled, available days carry a dot indicator, today is underlined, and month labels appear on the 1st and the first cell. Phone-first: 7 equal columns give ~45px touch targets at 375px; the grid caps at 420px wide so desktop stays compact. Selecting a day keeps the exact same time-group slot list below — this changes only the date *selector*, not the slot-first feed, so the "do NOT re-add calendar views" rule is untouched.
+
+Deleted with the strip: desktop scroll arrows, `scrollDateStrip`, scrollLeft save/restore, and `scrollSelectedDateIntoView` (a static grid needs none of them; `renderFeed`/`selectDate` lost their options plumbing).
+
+**Files:** `public/learner/book.js` (`renderDateStrip` → `renderDateGrid`, scroll helpers removed), `public/learner/book.html` (`.date-strip-*`/`.date-chip-*` CSS → `.date-grid`/`.date-cell-*`), `docs/navigation.md`.
+
 ## 2.114 - Removed Overflow Lead Routing on book.html (4 July 2026)
 
 Reverses 2.67. When a learner picks a specific instructor on `book.html` and that instructor has zero slots in the 4-week window, the page now just shows "No slots with [FirstName] in the next 4 weeks." — no alternative-instructor slots are surfaced underneath. Fraser's call: showing other instructors' slots after the learner deliberately picked one was confusing them, not routing leads. Also switched instructor name display from full name to first name only on the filter dropdown and on slot cards (grid buttons + feed cards); full name is kept in `data-instructor-name`, the accessible `aria-label`, and the booking confirmation summary/modal.
