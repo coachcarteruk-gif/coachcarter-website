@@ -310,110 +310,88 @@
       color: var(--muted); letter-spacing: 0.04em;
     }
 
-    /* ── DATE STRIP + TIME GROUPS ── */
+    /* ── DATE GRID + TIME GROUPS ── */
     .booking-calendar {
       display: grid;
-      /* minmax(0,1fr) so wide children (date strip) clamp to the page width
-         and scroll instead of stretching the track to max-content */
       grid-template-columns: minmax(0, 1fr);
       gap: 18px;
     }
-    .date-strip-shell {
+    /* Week-by-week Mon–Sun grid covering the 28-day booking window.
+       Phone-first: 7 equal columns fit a 375px viewport with ~44px cells. */
+    .date-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+      max-width: 420px;
+    }
+    .date-grid-head {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding-bottom: 2px;
+    }
+    .date-cell {
+      position: relative;
       display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-    }
-    .date-strip-wrap {
-      flex: 1;
-      min-width: 0;
-      margin: 4px -2px 2px;
-      overflow-x: auto;
-      overscroll-behavior-inline: contain;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin;
-      scroll-snap-type: x proximity;
-    }
-    .date-strip {
-      display: flex;
-      gap: 8px;
-      padding: 2px 2px 8px;
-    }
-    /* Mouse users don't discover horizontal scroll — give them arrows on desktop */
-    .date-strip-arrow {
-      display: none;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      width: 34px;
-      height: 64px;
-      flex-shrink: 0;
-      border: 1.5px solid var(--border);
+      min-height: 48px;
       border-radius: 10px;
-      background: var(--surface);
-      color: var(--muted);
-      font-size: 1.15rem;
+      padding: 0;
+    }
+    .date-cell-num {
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
       line-height: 1;
-      cursor: pointer;
-      transition: border-color 0.2s, color 0.2s, background 0.2s;
     }
-    .date-strip-arrow:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: var(--accent-mid);
+    .date-cell-month {
+      position: absolute;
+      top: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.52rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
-    @media (min-width: 960px) {
-      .date-strip-arrow { display: inline-flex; }
+    .date-cell-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-top: 5px;
     }
-    .date-chip {
-      scroll-snap-align: start;
-      scroll-margin-inline: 2px;
-      min-width: 76px;
-      min-height: 64px;
+    .date-cell-off {
+      color: var(--muted);
+      opacity: 0.4;
+    }
+    .date-cell-open {
       border: 1.5px solid var(--border);
-      border-radius: 12px;
       background: var(--surface);
       color: var(--primary);
-      padding: 8px 10px;
-      text-align: left;
       cursor: pointer;
       touch-action: manipulation;
-      flex: 0 0 auto;
       transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s;
     }
-    .date-chip:hover {
+    .date-cell-open:hover {
       border-color: var(--accent);
       background: var(--accent-mid);
     }
-    .date-chip:active { transform: scale(0.98); }
-    .date-chip[aria-pressed="true"] {
+    .date-cell-open:active { transform: scale(0.96); }
+    .date-cell-open[aria-pressed="true"] {
       border-color: var(--accent);
       background: var(--accent);
       color: #fff;
     }
-    .date-chip-day {
-      display: block;
-      font-family: var(--font-mono);
-      font-size: 0.64rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .date-chip-date {
-      display: block;
-      margin-top: 3px;
-      font-family: var(--font-head);
-      font-size: 1.05rem;
-      font-weight: 800;
-      line-height: 1;
-    }
-    .date-chip-state {
-      display: block;
-      margin-top: 6px;
-      font-family: var(--font-mono);
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
+    .date-cell-open[aria-pressed="true"] .date-cell-dot { background: #fff; }
+    .date-cell-open[aria-pressed="true"] .date-cell-month { color: rgba(255,255,255,0.75); }
+    .date-cell-today .date-cell-num { text-decoration: underline; text-underline-offset: 3px; }
     .selected-date-heading {
       display: flex;
       align-items: baseline;

@@ -742,14 +742,14 @@ async function initFeed() {
     const ok = await fetchFeedSlots(feedFrom, fullTo);
     if (ok === false) return;
     feedTo = fullTo;
-    renderFeed({ scrollSelectedDate: true });
+    renderFeed();
     return;
   }
 
   // No specific instructor — still fetch the complete learner window immediately.
   const ok = await fetchFeedSlots(feedFrom, feedTo);
   if (ok === false) return;
-  renderFeed({ scrollSelectedDate: true });
+  renderFeed();
 }
 
 async function fetchFeedSlots(fromDate, toDate) {
@@ -873,41 +873,53 @@ function dateDisplayParts(dateStr) {
   };
 }
 
-function renderDateStrip(cache) {
-  const dates = getAvailableDateStrings(cache);
+/* Week-by-week date grid (Mon–Sun) covering the whole booking window.
+   Days without availability stay visible but disabled so learners can map
+   slots onto their weekly routine and see fully-booked days at a glance. */
+function renderDateGrid(cache) {
+  const dates = getDateRangeStrings(feedFrom, feedTo);
   if (!dates.length) return '';
-  const buttons = dates.map(ds => {
-    const count = cache[ds].length;
+  const todayStr = fmtDate(new Date());
+  const cells = [];
+
+  const firstDay = new Date(dates[0] + 'T00:00:00');
+  const leadBlanks = (firstDay.getDay() + 6) % 7; // Monday-first column index
+  for (let i = 0; i < leadBlanks; i++) {
+    cells.push('<span class="date-cell date-cell-blank" aria-hidden="true"></span>');
+  }
+
+  for (const ds of dates) {
+    const d = new Date(ds + 'T00:00:00');
+    const count = (cache && cache[ds] && cache[ds].length) || 0;
+    const dayNum = d.getDate();
+    const showMonth = dayNum === 1 || ds === dates[0];
+    const monthLabel = showMonth ? `<span class="date-cell-month">${esc(MON_SHORT[d.getMonth()])}</span>` : '';
+    const todayClass = ds === todayStr ? ' date-cell-today' : '';
+
+    if (!count) {
+      cells.push(`<span class="date-cell date-cell-off${todayClass}">${monthLabel}<span class="date-cell-num">${dayNum}</span></span>`);
+      continue;
+    }
     const selected = ds === selectedDate;
     const parts = dateDisplayParts(ds);
-    const state = `${count} slot${count === 1 ? '' : 's'}`;
-    const label = `${parts.full}, ${state} available`;
-    return `<button class="date-chip" type="button"
+    const label = `${parts.full}, ${count} slot${count === 1 ? '' : 's'} available`;
+    cells.push(`<button class="date-cell date-cell-open${todayClass}" type="button"
       data-action="select-date"
       data-date="${esc(ds)}"
       aria-pressed="${selected ? 'true' : 'false'}"
       ${selected ? 'aria-current="date"' : ''}
       aria-label="${esc(label)}">
-      <span class="date-chip-day">${esc(parts.day)}</span>
-      <span class="date-chip-date">${esc(parts.date)}</span>
-      <span class="date-chip-state">${esc(state)}</span>
-    </button>`;
-  }).join('');
-  return `<div class="date-strip-shell">
-    <button class="date-strip-arrow" type="button" data-action="scroll-date-strip" data-dir="-1" aria-label="Scroll to earlier dates">&lsaquo;</button>
-    <div class="date-strip-wrap" aria-label="Available dates"><div class="date-strip">${buttons}</div></div>
-    <button class="date-strip-arrow" type="button" data-action="scroll-date-strip" data-dir="1" aria-label="Scroll to later dates">&rsaquo;</button>
-  </div>`;
-}
+      ${monthLabel}<span class="date-cell-num">${dayNum}</span><span class="date-cell-dot" aria-hidden="true"></span>
+    </button>`);
+  }
 
-function scrollDateStrip(dir) {
-  const scroller = document.querySelector('.date-strip-wrap');
-  if (!scroller) return;
-  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  scroller.scrollBy({
-    left: dir * Math.max(120, Math.round(scroller.clientWidth * 0.8)),
-    behavior: reduceMotion ? 'auto' : 'smooth'
-  });
+  while (cells.length % 7 !== 0) {
+    cells.push('<span class="date-cell date-cell-blank" aria-hidden="true"></span>');
+  }
+
+  const header = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    .map(dl => `<span class="date-grid-head">${dl}</span>`).join('');
+  return `<div class="date-grid" role="group" aria-label="Choose a date">${header}${cells.join('')}</div>`;
 }
 
 function slotStartMinutes(slot) {
@@ -997,7 +1009,7 @@ function renderBookingCalendar(cache, opts) {
   opts = opts || {};
   ensureSelectedDate(cache);
   const slotsForDate = ((cache && cache[selectedDate]) || []).slice().sort(sortSlots);
-  const dateStrip = renderDateStrip(cache);
+  const dateGrid = renderDateGrid(cache);
   const selectedParts = dateDisplayParts(selectedDate);
   const slotCount = slotsForDate.length;
   const selectedDateHeading = `<div class="selected-date-heading" data-selected-date-heading>
@@ -1009,51 +1021,13 @@ function renderBookingCalendar(cache, opts) {
   if (live && selectedDate) {
     live.textContent = `Showing ${slotCount} time${slotCount === 1 ? '' : 's'} for ${selectedParts.full}`;
   }
-  return `<div class="booking-calendar">${dateStrip}${selectedDateHeading}${timeGroups}</div>`;
-}
-
-function currentDateStripScrollLeft() {
-  const scroller = document.querySelector('.date-strip-wrap');
-  return scroller ? scroller.scrollLeft : null;
-}
-
-function restoreDateStripScrollLeft(scrollLeft) {
-  if (typeof scrollLeft !== 'number') return false;
-  const scroller = document.querySelector('.date-strip-wrap');
-  if (!scroller) return false;
-  scroller.scrollLeft = Math.max(0, scrollLeft);
-  return true;
-}
-
-function scrollSelectedDateIntoView() {
-  const selectedChip = document.querySelector('.date-chip[aria-current="date"]');
-  const scroller = selectedChip && selectedChip.closest('.date-strip-wrap');
-  if (!selectedChip || !scroller) return;
-
-  const scroll = () => {
-    const chipLeft = selectedChip.offsetLeft;
-    const chipRight = chipLeft + selectedChip.offsetWidth;
-    const viewLeft = scroller.scrollLeft;
-    const viewRight = viewLeft + scroller.clientWidth;
-    if (chipLeft >= viewLeft && chipRight <= viewRight) return;
-
-    const targetLeft = chipLeft - ((scroller.clientWidth - selectedChip.offsetWidth) / 2);
-    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    scroller.scrollTo({
-      left: Math.max(0, targetLeft),
-      behavior: reduceMotion ? 'auto' : 'smooth'
-    });
-  };
-
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(scroll);
-  else scroll();
+  return `<div class="booking-calendar">${dateGrid}${selectedDateHeading}${timeGroups}</div>`;
 }
 
 function selectDate(dateStr) {
-  const dateStripScrollLeft = currentDateStripScrollLeft();
   selectedDate = dateStr;
   clearSelectedSlot();
-  renderFeed({ scrollSelectedDate: true, dateStripScrollLeft });
+  renderFeed();
 }
 
 function slotDatasetFromButton(buttonEl) {
@@ -1173,8 +1147,7 @@ function buildSlotFeedHtml(allSlots) {
   return html;
 }
 
-function renderFeed(opts) {
-  opts = opts || {};
+function renderFeed() {
   const allSlots = getVisibleSlotsFromCache(slotCache);
 
   if (allSlots.length === 0) {
@@ -1202,8 +1175,6 @@ function renderFeed(opts) {
   const showInstructor = !document.getElementById('instructorFilter').value;
   document.getElementById('calContent').innerHTML = renderBookingCalendar(slotCache, { showInstructor });
   updateFeedFooter(allSlots.length);
-  restoreDateStripScrollLeft(opts.dateStripScrollLeft);
-  if (opts.scrollSelectedDate) scrollSelectedDateIntoView();
 }
 
 function updateFeedFooter(slotCount) {
@@ -2946,8 +2917,6 @@ document.addEventListener('click', function (e) {
     selectLessonType(target.dataset.lessonTypeId);
   } else if (action === 'select-date') {
     selectDate(target.dataset.date);
-  } else if (action === 'scroll-date-strip') {
-    scrollDateStrip(parseInt(target.dataset.dir, 10) || 1);
   } else if (action === 'set-repeat-weeks') {
     setRepeatWeeks(target.dataset.repeatWeeks);
   }
