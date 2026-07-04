@@ -494,6 +494,9 @@ function openDetail(idx) {
   if (b.status === 'scheduled' && !isPast) {
     actions += '<button class="btn-detail cancel-btn" data-action="cancel-from-detail">Cancel Lesson</button>';
   }
+  if (b.can_report_not_delivered) {
+    actions += '<button class="btn-detail cancel-btn" data-action="not-delivered-from-detail">Mark as not delivered</button>';
+  }
 
   document.getElementById('detailActions').innerHTML = actions;
   document.getElementById('detailModal').classList.add('open');
@@ -517,6 +520,13 @@ function cancelFromDetail() {
   if (!detailBooking) return;
   closeDetail();
   BookingActions.openCancel(detailBooking);
+}
+
+function notDeliveredFromDetail() {
+  if (!detailBooking) return;
+  var booking = detailBooking;
+  closeDetail();
+  BookingActions.openNotDelivered(booking);
 }
 function closeCancelConfirm(result) {
   document.getElementById('cancelConfirmModal').classList.remove('open');
@@ -646,6 +656,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-detail') openDetail(parseInt(t.dataset.detailIdx, 10));
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balanceMinutes, 10));
   else if (a === 'cancel-from-detail') cancelFromDetail();
+  else if (a === 'not-delivered-from-detail') notDeliveredFromDetail();
   else if (a === 'close-broadcast-batch') closeBroadcastBatch(t.dataset.batchId, t);
 });
 

@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.116 - Instructor Pre-Payout Not-Delivered Exception (4 July 2026)
+
+Instructors can now correct the specific case where a past lesson stayed on their calendar but did not happen before the Friday payout sweep. The new `POST /api/instructor?action=mark-not-delivered` endpoint is instructor- and school-scoped, locks the booking in a transaction, refuses future/refunded/already-paid-out rows, flips an unpaid past `scheduled` or `chargeable` booking to `refunded`, returns any deducted lesson credit to the same learner/instructor balance, marks active `booking_credit_sources` rows refunded, audit-logs the reason, and optionally notifies the learner. The dashboard and main instructor schedule show "Mark as not delivered" only when the schedule API's server-derived `can_report_not_delivered` flag is true.
+
+This keeps the May 2026 three-state booking principle intact: normal lessons are still payable by default, and this is a pre-payout exception rather than a return to dual confirmation prompts. Once a lesson appears in `payout_line_items`, the instructor path refuses and the case remains admin/manual.
+
+**Files:** `api/instructor.js`, `public/shared/instructor-booking-actions.js`, `public/instructor/dashboard.js`, `public/instructor/index.js`, `tests/instructor-not-delivered-contract.spec.js`, `docs/booking-statuses.md`, `docs/per-instructor-credits-audit.md`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.115 - Week-Grid Date Selector on book.html (4 July 2026)
 
 Replaces the horizontally scrolling date-chip strip on `book.html` with a fixed week-by-week Mon–Sun grid (4–5 rows) covering the whole 28-day booking window. Rationale: users think in weekly routines ("my usual Tuesday"), and a horizontal strip gives no spatial anchor for that; it also skipped dates with no availability, hiding fully-booked weeks entirely. In the grid, days without slots stay visible but dimmed/disabled, available days carry a dot indicator, today is underlined, and month labels appear on the 1st and the first cell. Phone-first: 7 equal columns give ~45px touch targets at 375px; the grid caps at 420px wide so desktop stays compact. Selecting a day keeps the exact same time-group slot list below — this changes only the date *selector*, not the slot-first feed, so the "do NOT re-add calendar views" rule is untouched.

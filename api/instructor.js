@@ -51,6 +51,7 @@ const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
 const { isLessonTypeOffered } = require('./_lesson-type-helpers');
+const { logAudit } = require('./_audit');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -73,6 +74,18 @@ class InstructorBookingTransactionAbort extends Error {
 
 function abortInstructorBookingTransaction(result) {
   throw new InstructorBookingTransactionAbort(result);
+}
+
+function clientSqlTag(client) {
+  return async (strings, ...values) => {
+    let text = '';
+    for (let i = 0; i < strings.length; i += 1) {
+      text += strings[i];
+      if (i < values.length) text += `$${i + 1}`;
+    }
+    const result = await client.query(text, values);
+    return result.rows || [];
+  };
 }
 
 function buildScopedDurationCreditRefusal(delta, availableMinutes) {
@@ -194,6 +207,7 @@ module.exports = async (req, res) => {
   if (action === 'set-blackout-dates') return handleSetBlackoutDates(req, res);
   if (action === 'learner-history')    return handleLearnerHistory(req, res);
   if (action === 'cancel-booking')     return handleCancelBooking(req, res);
+  if (action === 'mark-not-delivered') return handleMarkNotDelivered(req, res);
   if (action === 'reschedule-booking') return handleRescheduleBooking(req, res);
   if (action === 'edit-booking')       return handleEditBooking(req, res);
   if (action === 'create-booking')     return handleCreateBooking(req, res);
@@ -413,6 +427,15 @@ async function handleSchedule(req, res) {
           lb.status,
           lb.notes,
           lb.lesson_type_id,
+          COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
+          (
+            (lb.status = ${CHARGEABLE}
+              OR (lb.status = ${SCHEDULED} AND (lb.scheduled_date + lb.end_time) <= NOW()))
+            AND NOT EXISTS (
+              SELECT 1 FROM payout_line_items pli
+              WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
+            )
+          ) AS can_report_not_delivered,
           lu.id   AS learner_id,
           lu.name AS learner_name,
           lu.email AS learner_email,
@@ -455,6 +478,15 @@ async function handleSchedule(req, res) {
           lb.status,
           lb.notes,
           lb.lesson_type_id,
+          COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
+          (
+            (lb.status = ${CHARGEABLE}
+              OR (lb.status = ${SCHEDULED} AND (lb.scheduled_date + lb.end_time) <= NOW()))
+            AND NOT EXISTS (
+              SELECT 1 FROM payout_line_items pli
+              WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
+            )
+          ) AS can_report_not_delivered,
           lu.id   AS learner_id,
           lu.name AS learner_name,
           lu.email AS learner_email,
@@ -561,6 +593,15 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
+          COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
+          (
+            (lb.status = ${CHARGEABLE}
+              OR (lb.status = ${SCHEDULED} AND (lb.scheduled_date + lb.end_time) <= NOW()))
+            AND NOT EXISTS (
+              SELECT 1 FROM payout_line_items pli
+              WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
+            )
+          ) AS can_report_not_delivered,
           COALESCE(lb.social_video_consent, false) AS social_video_consent,
           COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
           CASE
@@ -603,6 +644,15 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
+          COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
+          (
+            (lb.status = ${CHARGEABLE}
+              OR (lb.status = ${SCHEDULED} AND (lb.scheduled_date + lb.end_time) <= NOW()))
+            AND NOT EXISTS (
+              SELECT 1 FROM payout_line_items pli
+              WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
+            )
+          ) AS can_report_not_delivered,
           COALESCE(lb.social_video_consent, false) AS social_video_consent,
           COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
           CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END AS transmission_type,
@@ -1778,6 +1828,180 @@ async function handleCancelBooking(req, res) {
     console.error('instructor cancel-booking error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to cancel booking' });
+  }
+}
+
+// Pre-payout exception path for a past lesson that stayed on the calendar but
+// did not happen. Returns lesson credit and removes it from payout eligibility.
+async function handleMarkNotDelivered(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+
+  const bookingId = parseInt(req.body?.booking_id, 10);
+  const reasonCode = String(req.body?.reason_code || '').trim().slice(0, 80);
+  const note = String(req.body?.note || '').trim().slice(0, 500);
+  const notify = req.body?.notify !== false;
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    return res.status(400).json({ error: 'booking_id required' });
+  }
+
+  const reasonLabels = {
+    instructor_cancelled_privately: 'Instructor cancelled privately',
+    rearranged_privately: 'Rearranged privately',
+    weather_or_vehicle: 'Weather or vehicle issue',
+    other: 'Other',
+  };
+  const reasonLabel = reasonLabels[reasonCode] || reasonLabels.other;
+  const schoolId = instructor.school_id || 1;
+
+  try {
+    const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const txSql = clientSqlTag(client);
+      const [booking] = await txSql`
+        SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
+               lb.scheduled_date::text AS scheduled_date,
+               lb.start_time::text AS start_time,
+               lb.end_time::text AS end_time,
+               lb.instructor_notes,
+               COALESCE(lb.minutes_deducted, 0)::int AS minutes_deducted,
+               (lb.scheduled_date + lb.end_time) <= NOW() AS lesson_is_past,
+               EXISTS (
+                 SELECT 1 FROM payout_line_items pli
+                  WHERE pli.booking_id = lb.id
+                    AND pli.school_id = ${schoolId}
+               ) AS already_paid_out,
+               lu.name AS learner_name, lu.email AS learner_email,
+               i.name AS instructor_name
+          FROM lesson_bookings lb
+          JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
+          JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
+         WHERE lb.id = ${bookingId}
+           AND lb.instructor_id = ${instructor.id}
+           AND COALESCE(lb.school_id, 1) = ${schoolId}
+         FOR UPDATE
+      `;
+
+      if (!booking) return { ok: false, status: 404, error: 'Booking not found' };
+      if (booking.status === REFUNDED) {
+        return { ok: false, status: 400, error: 'This lesson has already been cancelled or refunded.' };
+      }
+      if (![SCHEDULED, CHARGEABLE].includes(booking.status)) {
+        return { ok: false, status: 400, error: `Cannot report a booking with status "${booking.status}".` };
+      }
+      if (!booking.lesson_is_past) {
+        return { ok: false, status: 409, error: 'This lesson is still upcoming. Use Cancel lesson instead.' };
+      }
+      if (booking.already_paid_out) {
+        return { ok: false, status: 409, error: 'This lesson has already been included in a payout. Ask an admin to correct it manually.' };
+      }
+
+      const minsToReturn = Math.max(0, Number(booking.minutes_deducted || 0));
+      const existingNotes = String(booking.instructor_notes || '').trim();
+      const exceptionNote = `Not delivered: ${reasonLabel}${note ? ` - ${note}` : ''}`;
+      const nextNotes = existingNotes ? `${existingNotes}\n${exceptionNote}` : exceptionNote;
+
+      await txSql`
+        UPDATE lesson_bookings
+           SET status = ${REFUNDED},
+               credit_returned = ${minsToReturn > 0},
+               credit_forfeited = FALSE,
+               cancelled_at = NOW(),
+               instructor_notes = ${nextNotes}
+         WHERE id = ${bookingId}
+           AND instructor_id = ${instructor.id}
+           AND COALESCE(school_id, 1) = ${schoolId}
+      `;
+
+      await markBookingCreditSourcesRefunded(txSql, {
+        bookingId,
+        schoolId,
+      });
+
+      if (minsToReturn > 0) {
+        await lockBalanceAdjustLCB(txSql, {
+          learnerId: booking.learner_id,
+          instructorId: booking.instructor_id,
+          schoolId,
+          delta: minsToReturn,
+          creditsDelta: Math.ceil(minsToReturn / 60),
+        });
+      }
+
+      await logAudit(txSql, {
+        adminId: null,
+        adminEmail: instructor.email || null,
+        action: 'instructor.lesson_not_delivered',
+        targetType: 'lesson_booking',
+        targetId: bookingId,
+        schoolId,
+        req,
+        details: {
+          instructor_id: instructor.id,
+          learner_id: booking.learner_id,
+          previous_status: booking.status,
+          new_status: REFUNDED,
+          minutes_returned: minsToReturn,
+          reason_code: reasonCode || 'other',
+          reason_label: reasonLabel,
+          note: note || null,
+        },
+      });
+
+      return { ok: true, booking, minutes_returned: minsToReturn, reason_label: reasonLabel };
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ error: result.error || 'Could not report lesson issue' });
+    }
+
+    if (notify && result.booking.learner_email) {
+      try {
+        const mailer = createTransporter();
+        const firstName = (result.booking.learner_name || '').split(' ')[0] || 'there';
+        const dateObj = new Date(result.booking.scheduled_date + 'T00:00:00Z');
+        const dateStr = dateObj.toLocaleDateString('en-GB', {
+          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+        });
+        const timeStr = String(result.booking.start_time || '').slice(0, 5);
+        const creditCopy = result.minutes_returned > 0
+          ? '<p>Your lesson credit has been returned to your balance automatically.</p>'
+          : '<p>No lesson credit was deducted for this booking.</p>';
+
+        await mailer.sendMail({
+          from: 'CoachCarter <system@coachcarter.uk>',
+          to: result.booking.learner_email,
+          subject: `Lesson on ${dateStr} marked as not delivered`,
+          html: `
+            <h2>Hi ${firstName},</h2>
+            <p>${result.booking.instructor_name} has marked your lesson on <strong>${dateStr} at ${timeStr}</strong> as not delivered.</p>
+            <p><strong>Reason:</strong> ${result.reason_label}</p>
+            ${creditCopy}
+            <p>You can book another lesson from your dashboard.</p>
+            <p style="margin:28px 0">
+              <a href="https://coachcarter.uk/learner/book.html"
+                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                Book a lesson &rarr;
+              </a>
+            </p>
+          `
+        });
+      } catch (emailErr) {
+        console.error('Failed to send not-delivered email:', emailErr);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      success: true,
+      booking_id: bookingId,
+      minutes_returned: result.minutes_returned,
+    });
+  } catch (err) {
+    console.error('instructor mark-not-delivered error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to report lesson issue' });
   }
 }
 

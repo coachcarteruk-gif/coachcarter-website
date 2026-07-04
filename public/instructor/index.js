@@ -94,6 +94,9 @@ async function init() {
   const session = ccAuth.getAuth();
   if (!session) { window.location.href = '/instructor/login.html'; return; }
   instructor = session.instructor || null;
+  if (window.BookingActions) {
+    BookingActions.init({ showToast: showToast, onRefresh: function () { refreshSchedule(true); } });
+  }
 
   // Default to today
   cursor = new Date(); cursor.setHours(0,0,0,0);
@@ -1253,6 +1256,11 @@ function openBookingDetail(bookingId) {
       <button class="btn-modal-cancel" style="color:var(--red)" data-action="open-cancel-modal" data-id="${b.id}">Cancel lesson</button>
       <button class="btn-modal-cancel" style="color:var(--accent)" data-action="open-reschedule-modal" data-id="${b.id}" data-date="${b.scheduled_date}" data-start="${b.start_time.slice(0,5)}" data-end="${b.end_time.slice(0,5)}" data-name="${esc(b.learner_name)}">Reschedule</button>
       <button class="btn-modal-cancel" data-action="open-edit-booking-modal" data-id="${b.id}">Edit</button>
+      ${b.can_report_not_delivered ? `<button class="btn-modal-cancel" style="color:var(--red)" data-action="open-not-delivered-modal" data-id="${b.id}">Mark as not delivered</button>` : ''}
+      <button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
+  } else if (b.can_report_not_delivered) {
+    actions.innerHTML = `
+      <button class="btn-modal-cancel" style="color:var(--red)" data-action="open-not-delivered-modal" data-id="${b.id}">Mark as not delivered</button>
       <button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
   } else {
     actions.innerHTML = `<button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
@@ -1341,6 +1349,19 @@ function openCancelModal(bookingId) {
   closeBookingModal();
   document.getElementById('cancelReason').value = '';
   document.getElementById('cancelModal').classList.add('open');
+}
+
+function openNotDeliveredModal(bookingId) {
+  let booking = selectedBooking && selectedBooking.id === bookingId ? selectedBooking : null;
+  if (!booking) {
+    for (const ds in bookingCache) {
+      booking = bookingCache[ds].find(x => x.id === bookingId);
+      if (booking) break;
+    }
+  }
+  if (!booking || !window.BookingActions) return;
+  closeBookingModal();
+  BookingActions.openNotDelivered(booking);
 }
 
 function closeCancelModal() {
@@ -2529,6 +2550,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'save-inline-notes') saveInlineNotes(parseInt(t.dataset.id, 10));
   else if (a === 'open-learner-history') { e.preventDefault(); openLearnerHistory(parseInt(t.dataset.id, 10)); }
   else if (a === 'open-cancel-modal') openCancelModal(parseInt(t.dataset.id, 10));
+  else if (a === 'open-not-delivered-modal') openNotDeliveredModal(parseInt(t.dataset.id, 10));
   else if (a === 'open-reschedule-modal') openRescheduleModal(parseInt(t.dataset.id, 10), t.dataset.date, t.dataset.start, t.dataset.end, t.dataset.name);
   else if (a === 'open-edit-booking-modal') openEditBookingModal(parseInt(t.dataset.id, 10));
   else if (a === 'close-booking-modal') closeBookingModal();

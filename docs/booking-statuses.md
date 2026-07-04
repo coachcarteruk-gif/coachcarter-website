@@ -39,8 +39,10 @@ This is the rule the three-state model exists to encode. If you find yourself ad
 | `scheduled` | `refunded` | Learner cancels a self-serve free trial (any time; no credit/payout value) | `slots.js?action=cancel` |
 | `scheduled` | `refunded` | Instructor cancels their own slot (any time) | `instructor.js?action=cancel-booking` |
 | `scheduled` | `refunded` | Instructor cancels on learner's behalf (any time) | `instructor.js?action=cancel-booking` |
+| `scheduled` | `refunded` | Instructor reports a past unpaid lesson as not delivered before payout | `instructor.js?action=mark-not-delivered` |
 | `scheduled` | `refunded` | Admin cancels (any time) | `admin.js?action=cancel-booking` |
 | `scheduled` | `refunded` | Reschedule — old row terminates here (`credit_returned = TRUE` so the divergence cron stops counting it; new row carries `minutes_deducted` forward) | `slots.js?action=reschedule`, `instructor.js?action=reschedule-booking` |
+| `chargeable` | `refunded` | Instructor reports an unpaid lesson as not delivered before payout | `instructor.js?action=mark-not-delivered` |
 | `chargeable` | `refunded` | Admin manual override (goodwill, retroactive dispute, post-payout correction) | `admin.js` |
 | `refunded` | — | Terminal — no transitions out | — |
 
@@ -79,6 +81,8 @@ Why not just set `chargeable` immediately on the late-cancel? Because the calend
 - `api/slots.js` — learner cancel <48h (only writer)
 
 ## Payout implications
+
+Before a booking is included in `payout_line_items`, an instructor may use `POST /api/instructor?action=mark-not-delivered` for their own past `scheduled` or unpaid `chargeable` lesson. The endpoint flips the booking to `refunded`, returns any deducted lesson credit to the same learner/instructor balance, marks active BCS rows refunded, audit-logs the reason, and refuses already-paid-out bookings.
 
 `api/_payout-helpers.js` includes a booking in the payout total when `status = 'chargeable'`. No grace period — the 1-hour buffer on `scheduled → chargeable` already absorbs clock skew and last-minute reschedule races, and there's no confirmation step that could stall.
 

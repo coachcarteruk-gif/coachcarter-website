@@ -699,6 +699,7 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `ical-test` | POST | JWT | Test-fetch an iCal feed URL, returns event count |
 | `ical-status` | GET | JWT | Returns iCal sync status (url, last_synced, error, event_count) |
 | `cancel-booking` | POST | JWT | Cancel a scheduled booking (always refunds learner credit — instructor-initiated cancellations bypass the 48h rule). Body: `{ booking_id, reason?, notify? }` — `notify: false` skips learner email |
+| `mark-not-delivered` | POST | JWT | Pre-payout instructor exception for a past lesson that stayed on the calendar but did not happen. Body: `{ booking_id, reason_code?, note?, notify? }`. Only accepts the signed-in instructor's past `scheduled`/unpaid `chargeable` bookings, refuses rows already present in `payout_line_items`, flips the booking to `refunded`, returns deducted lesson credit to the same learner/instructor balance, marks BCS rows refunded, and audit-logs the reason. |
 | `reschedule-booking` | POST | JWT | Move a booking to a new slot (no time restriction, no count limit) |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts the learner's balance with that booking's instructor if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |

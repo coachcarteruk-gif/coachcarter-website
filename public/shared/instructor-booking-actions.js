@@ -23,6 +23,7 @@
 
   // ─── State ──────────────────────────────────────────────────────────────────
   let cancelBookingId = null;
+  let notDeliveredBooking = null;
   let rescheduleBooking = null;
   let addLessonLearners = [];
   let addLessonSelectedId = null;
@@ -61,6 +62,37 @@
           <div class="modal-actions">
             <button class="btn-modal-cancel" id="ba-cancel-goback">Go back</button>
             <button class="btn-cancel-danger" id="ba-cancel-btn" style="background:var(--red);color:white">Cancel this lesson</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Not Delivered Modal -->
+      <div class="modal-overlay" id="ba-not-delivered-modal">
+        <div class="modal">
+          <div class="modal-title">Report Lesson Issue</div>
+          <div class="modal-sub" id="ba-not-delivered-sub">Use this only when a past lesson stayed on your calendar but did not happen.</div>
+          <div style="margin:16px 0;display:flex;flex-direction:column;gap:12px">
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Reason</div>
+              <select id="ba-not-delivered-reason" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);background:var(--white);color:var(--primary)">
+                <option value="instructor_cancelled_privately">I cancelled privately</option>
+                <option value="rearranged_privately">We rearranged privately</option>
+                <option value="weather_or_vehicle">Weather or vehicle issue</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Note (optional)</div>
+              <textarea id="ba-not-delivered-note" placeholder="Short internal note..." style="width:100%;min-height:70px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);resize:vertical;background:var(--white);color:var(--primary)"></textarea>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer">
+              <input type="checkbox" id="ba-not-delivered-notify" checked>
+              Notify learner and return lesson credit
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal-cancel" id="ba-not-delivered-goback">Go back</button>
+            <button class="btn-cancel-danger" id="ba-not-delivered-btn" style="background:var(--red);color:white">Mark as not delivered</button>
           </div>
         </div>
       </div>
@@ -148,6 +180,8 @@
     // Wire up modal-overlay click-to-close (previously inline onclick)
     var cancelModal = document.getElementById('ba-cancel-modal');
     if (cancelModal) cancelModal.addEventListener('click', function (e) { if (e.target === cancelModal) closeCancel(); });
+    var notDeliveredModal = document.getElementById('ba-not-delivered-modal');
+    if (notDeliveredModal) notDeliveredModal.addEventListener('click', function (e) { if (e.target === notDeliveredModal) closeNotDelivered(); });
     var reschModal = document.getElementById('ba-reschedule-modal');
     if (reschModal) reschModal.addEventListener('click', function (e) { if (e.target === reschModal) closeReschedule(); });
     var addModal = document.getElementById('ba-add-modal');
@@ -157,6 +191,8 @@
     var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
     bind('ba-cancel-goback', closeCancel);
     bind('ba-cancel-btn', confirmCancel);
+    bind('ba-not-delivered-goback', closeNotDelivered);
+    bind('ba-not-delivered-btn', confirmNotDelivered);
     bind('ba-resch-cancel', closeReschedule);
     bind('ba-reschedule-btn', confirmReschedule);
     bind('ba-add-cancel', closeAdd);
@@ -232,6 +268,54 @@
   }
 
   // ─── Reschedule ─────────────────────────────────────────────────────────────
+  function openNotDelivered(booking) {
+    notDeliveredBooking = booking || null;
+    if (!notDeliveredBooking) return;
+    const sub = document.getElementById('ba-not-delivered-sub');
+    sub.textContent = 'Mark lesson with ' + (booking.learner_name || 'this learner') + ' as not delivered? The lesson credit will be returned and this lesson will be excluded from payout.';
+    document.getElementById('ba-not-delivered-reason').value = 'instructor_cancelled_privately';
+    document.getElementById('ba-not-delivered-note').value = '';
+    document.getElementById('ba-not-delivered-notify').checked = true;
+    document.getElementById('ba-not-delivered-btn').disabled = false;
+    document.getElementById('ba-not-delivered-btn').textContent = 'Mark as not delivered';
+    document.getElementById('ba-not-delivered-modal').classList.add('open');
+  }
+
+  function closeNotDelivered() {
+    document.getElementById('ba-not-delivered-modal').classList.remove('open');
+    notDeliveredBooking = null;
+  }
+
+  async function confirmNotDelivered() {
+    if (!notDeliveredBooking) return;
+    const btn = document.getElementById('ba-not-delivered-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    try {
+      const body = {
+        booking_id: notDeliveredBooking.id,
+        reason_code: document.getElementById('ba-not-delivered-reason').value,
+        note: document.getElementById('ba-not-delivered-note').value.trim() || null,
+        notify: !!document.getElementById('ba-not-delivered-notify').checked
+      };
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=mark-not-delivered', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to report lesson issue');
+      if (_onCacheUpdate) _onCacheUpdate(notDeliveredBooking.id, 'status', 'refunded');
+      closeNotDelivered();
+      _showToast('Lesson marked as not delivered - credit returned and payout blocked', 'success');
+      _onRefresh();
+    } catch (err) {
+      _showToast(err.message || 'Failed to report lesson issue', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Mark as not delivered';
+    }
+  }
+
   function openReschedule(booking) {
     rescheduleBooking = booking;
     document.getElementById('ba-resch-learner').textContent = booking.learner_name || '—';
@@ -523,6 +607,9 @@
     openCancel: openCancel,
     closeCancel: closeCancel,
     confirmCancel: confirmCancel,
+    openNotDelivered: openNotDelivered,
+    closeNotDelivered: closeNotDelivered,
+    confirmNotDelivered: confirmNotDelivered,
     openReschedule: openReschedule,
     closeReschedule: closeReschedule,
     confirmReschedule: confirmReschedule,
