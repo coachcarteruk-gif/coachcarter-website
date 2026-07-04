@@ -115,7 +115,7 @@
         instructors.forEach(function (inst) {
           var opt = document.createElement('option');
           opt.value = String(inst.id);
-          opt.textContent = inst.name;
+          opt.textContent = String(inst.name || '').trim().split(/\s+/)[0] || inst.name;
           opt.selected = Number(inst.id) === Number(currentInstructorId);
           select.appendChild(opt);
         });
