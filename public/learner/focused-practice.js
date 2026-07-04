@@ -222,20 +222,47 @@ function chooseMode(m) {
 
 /* ── Screen 1b: Guided focus pick + briefing ── */
 function renderFocusList() {
-  var container = document.getElementById('focus-area-list');
-  container.innerHTML = SUP_CATS.map(function(cat) {
-    var isSuggested = suggestedAreas.indexOf(cat.key) >= 0;
-    var isSelected = focusArea === cat.key;
-    return '<div class="area-pick' + (isSelected ? ' selected' : '') + '" data-action="pick-focus" data-cat="' + cat.key + '">' +
-      '<span class="area-pick-icon">' + cat.icon + '</span>' +
-      '<div class="area-pick-text">' +
-        '<div class="area-pick-name">' + cat.label + '</div>' +
-        '<div class="area-pick-desc">' + cat.description + '</div>' +
-      '</div>' +
-      (isSuggested ? '<span class="area-pick-score" style="color:var(--accent);">Suggested</span>' : '<span></span>') +
-      '<span class="area-pick-check">' + (isSelected ? '✓' : '') + '</span>' +
-    '</div>';
-  }).join('');
+  var listContainer = document.getElementById('focus-area-list');
+  var chosenContainer = document.getElementById('focus-area-chosen');
+  var introEl = document.getElementById('focus-intro');
+
+  if (focusArea) {
+    // Once a focus is picked, hide the full list and the intro copy so the
+    // briefing is the only thing left to read before setting off — no
+    // scrolling needed to get from pick to briefing.
+    var cat = CC_COMPETENCY.getSupervisorCategory(focusArea);
+    listContainer.innerHTML = '';
+    listContainer.classList.add('hidden');
+    if (introEl) introEl.classList.add('hidden');
+    if (cat) {
+      chosenContainer.innerHTML =
+        '<div class="area-pick selected chosen-only" data-action="pick-focus" data-cat="' + cat.key + '">' +
+          '<span class="area-pick-icon">' + cat.icon + '</span>' +
+          '<div class="area-pick-text">' +
+            '<div class="area-pick-name">' + cat.label + '</div>' +
+          '</div>' +
+          '<span class="area-pick-change">Change</span>' +
+        '</div>';
+    }
+    chosenContainer.classList.remove('hidden');
+  } else {
+    chosenContainer.innerHTML = '';
+    chosenContainer.classList.add('hidden');
+    if (introEl) introEl.classList.remove('hidden');
+    listContainer.classList.remove('hidden');
+    listContainer.innerHTML = SUP_CATS.map(function(cat) {
+      var isSuggested = suggestedAreas.indexOf(cat.key) >= 0;
+      return '<div class="area-pick" data-action="pick-focus" data-cat="' + cat.key + '">' +
+        '<span class="area-pick-icon">' + cat.icon + '</span>' +
+        '<div class="area-pick-text">' +
+          '<div class="area-pick-name">' + cat.label + '</div>' +
+          '<div class="area-pick-desc">' + cat.description + '</div>' +
+        '</div>' +
+        (isSuggested ? '<span class="area-pick-score" style="color:var(--accent);">Suggested</span>' : '<span></span>') +
+        '<span class="area-pick-check"></span>' +
+      '</div>';
+    }).join('');
+  }
   renderBriefing();
 }
 
@@ -258,7 +285,7 @@ function renderBriefing() {
     { title: 'What good looks like', items: g.good },
     { title: 'Common faults', items: g.faults }
   ];
-  var html = '<p class="briefing-intro">Read this together before you set off — phones go away once you’re moving.</p>';
+  var html = '';
   sections.forEach(function(sec) {
     if (!sec.items || sec.items.length === 0) return;
     html += '<div class="focus-guide"><h3>' + sec.title + '</h3><ul>';
