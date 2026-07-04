@@ -126,7 +126,7 @@ function selectMode(mode) {
     warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
       'Mobile phones must not be used while driving. The supervising driver should observe during the formal mock, then pull over to record ratings.';
     document.querySelector('.start-desc').textContent =
-      'This is still a formal mock assessment, not ordinary private practice. Use it only when a supervising driver is deliberately running a test-style drive; use Practice Drive for normal supervisor practice.';
+      'This is still a formal mock assessment, not ordinary private practice. Use it only when a supervising driver is deliberately running a test-style drive; use Start a drive for normal supervisor practice.';
   } else {
     warningBox.innerHTML = '<strong>&#9888;&#65039; IMPORTANT</strong>' +
       'Mobile phones must not be used by the driver or assessor during this test. Pull over safely at each 10-minute interval to record faults.';
@@ -875,7 +875,7 @@ function showSupervisorResults() {
     subMessage = concern + ' area' + (concern !== 1 ? 's' : '') + ' of concern and ' + needsWork + ' needing work. Don\u2019t worry \u2014 this is what practice is for!';
   }
 
-  document.querySelector('.result-criteria').textContent = 'Formal mock / supervisor assessment. These ratings are separate from ordinary Practice Drive reflections.';
+  document.querySelector('.result-criteria').textContent = 'Formal mock / supervisor assessment. These ratings are separate from ordinary Start a drive reflections.';
 
   // Build summary instead of fault totals
   var totalsHtml = '<div class="sup-result-summary">';

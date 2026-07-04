@@ -10,8 +10,8 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Practice Drive | Coach Carter</title>
-  <meta name="description" content="Pick a simple focus for a private practice drive, then save what went well and what to mention to your instructor.">
+  <title>Start a Drive | Coach Carter</title>
+  <meta name="description" content="Start a booked lesson or normal drive, pick a simple focus, then save what went well and what to mention to your instructor.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/competency-config.js"></script>
@@ -140,6 +140,59 @@
       color: var(--muted); font-size: 0.92rem; line-height: 1.5;
       max-width: 52ch;
       margin: 0;
+    }
+
+    .drive-choice-list {
+      display: flex; flex-direction: column; gap: 10px;
+      margin: 18px 0 22px;
+    }
+    .drive-choice {
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      align-items: center; gap: 14px;
+      width: 100%;
+      padding: 15px 16px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      text-align: left;
+      color: var(--primary);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    }
+    .drive-choice:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .drive-choice.selected {
+      border-color: var(--accent);
+      background: var(--accent-mid);
+    }
+    .drive-choice-icon {
+      width: 34px; height: 34px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-family: var(--font-mono); font-size: 0.74rem; font-weight: 800;
+      color: var(--accent);
+      background: var(--bg);
+    }
+    .drive-choice-title {
+      font-family: var(--font-head); font-size: 0.98rem; font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 2px;
+    }
+    .drive-choice-meta {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+    .drive-choice-tag {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .suggested-label {
@@ -535,8 +588,8 @@
 <body>
 
 <main class="page">
-  <div class="flow-header" aria-label="Practice drive progress">
-    <span class="flow-label">Practice drive</span>
+  <div class="flow-header" aria-label="Start a drive progress">
+    <span class="flow-label">Start a drive</span>
     <span class="flow-step-tag" id="step-tag">Setup</span>
   </div>
 
@@ -544,24 +597,33 @@
   <section id="screen-setup" class="screen">
     <div class="setup-screen">
       <div class="setup-hero">
-        <div class="setup-eyebrow">Practice with a supervisor</div>
-        <h1><em>Practice</em> drive.</h1>
-        <p class="setup-subtitle">Pick 1 to 3 simple focus areas before you set off. After the drive, save what went well and anything your instructor should know.</p>
+        <div class="setup-eyebrow">Start a drive</div>
+        <h1><em>Start</em> a drive.</h1>
+        <p class="setup-subtitle">Choose whether this is a current booked lesson or a normal drive. Then pick 1 to 3 focus areas before you set off.</p>
       </div>
 
-      <div id="suggested-section">
-        <div class="suggested-label">Good areas to try</div>
-        <div id="suggested-areas" class="area-pick-list"></div>
+      <div id="drive-choice-section">
+        <div class="suggested-label">What are you starting?</div>
+        <div id="drive-choices" class="drive-choice-list"></div>
       </div>
 
-      <button class="browse-toggle" id="browse-toggle">Browse all areas</button>
-      <div id="all-areas" class="area-pick-list hidden"></div>
+      <div id="focus-setup-section" class="hidden">
+        <div id="selected-drive-summary" class="focus-guide"></div>
 
-      <p class="pick-count" id="pick-count">0 of 3 selected</p>
+        <div id="suggested-section">
+          <div class="suggested-label">Good areas to try</div>
+          <div id="suggested-areas" class="area-pick-list"></div>
+        </div>
 
-      <div id="focus-guides"></div>
+        <button class="browse-toggle" id="browse-toggle">Browse all areas</button>
+        <div id="all-areas" class="area-pick-list hidden"></div>
 
-      <button class="btn-primary" id="btn-start-practice" disabled>Start practice drive</button>
+        <p class="pick-count" id="pick-count">0 of 3 selected</p>
+
+        <div id="focus-guides"></div>
+
+        <button class="btn-primary" id="btn-start-practice" disabled>Start drive</button>
+      </div>
     </div>
   </section>
 
@@ -569,7 +631,7 @@
   <section id="screen-drive" class="screen hidden">
     <div class="drive-screen">
       <div class="drive-eyebrow">Drive in progress</div>
-      <h2 class="drive-title">Practice drive</h2>
+      <h2 class="drive-title">Drive started</h2>
       <div class="focus-pills" id="focus-pills"></div>
 
       <div class="timer-display" id="timer-display">00:00</div>
@@ -596,15 +658,15 @@
   <section id="screen-results" class="screen hidden">
     <div class="results-screen">
       <div class="results-stamp">
-        <span><span class="results-stamp-tag">Practice Drive</span></span>
+        <span><span class="results-stamp-tag">Start a drive</span></span>
         <span id="results-stamp-date"></span>
       </div>
-      <h2>Practice drive <em>saved</em>.</h2>
+      <h2>Drive <em>saved</em>.</h2>
       <p class="results-subtitle" id="results-subtitle"></p>
       <div id="result-cards"></div>
       <div id="result-next"></div>
       <div class="results-actions">
-        <button class="btn-primary" id="btn-start-another">Start another practice drive</button>
+        <button class="btn-primary" id="btn-start-another">Start another drive</button>
         <a href="/learner/progress.html" class="btn-secondary">View my driving plan</a>
         <a href="/learner/" class="btn-secondary">Back to dashboard</a>
       </div>

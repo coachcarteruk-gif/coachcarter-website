@@ -111,6 +111,19 @@
       transform: translateX(3px);
     }
     .hub-card:active { transform: translateY(0) scale(0.99); }
+    .hub-primary-wrap { margin-bottom: 14px; }
+    .hub-card.primary {
+      grid-template-columns: 48px 1fr;
+      padding: 24px 22px;
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+    }
+    .hub-card.primary .hub-icon {
+      width: 48px; height: 48px;
+      background: var(--accent);
+      color: #fff;
+    }
+    .hub-card.primary .hub-card-title { font-size: 1.18rem; }
 
     /* Icon container — outlined squircle, colour per tool */
     .hub-icon {
@@ -157,9 +170,8 @@
     }
 
     /* Per-card colour assignments */
-    .hub-card.log { --hub-c: var(--accent); }
+    .hub-card.start { --hub-c: var(--accent); }
     .hub-card.mock { --hub-c: var(--red); }
-    .hub-card.focus { --hub-c: #3b82f6; }
     .hub-card.track { --hub-c: #22c55e; }
 
     @media (max-width: 500px) {
@@ -172,33 +184,27 @@
     <section class="hub-header">
       <div class="hub-eyebrow">Build your skills</div>
       <h1 class="hub-title"><em>Practice</em>.</h1>
-      <p class="hub-subtitle">Simple ways to capture what happened between lessons, choose what to practise next, and keep your instructor in the loop.</p>
+      <p class="hub-subtitle">Start one drive flow for a booked lesson or normal practice, then save the reflection to your driving plan.</p>
     </section>
 
-    <div class="section-label">What would you like to do?</div>
+    <div class="section-label">Main action</div>
+
+    <div class="hub-primary-wrap">
+      <a href="/learner/focused-practice.html" class="hub-card primary start">
+        <div class="hub-icon">
+          <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <div class="hub-card-body">
+          <span class="hub-card-kicker">Drive flow</span>
+          <h2 class="hub-card-title">Start a drive</h2>
+          <p class="hub-card-desc">Choose a current booked lesson or a normal drive, pick focus areas, then save what happened.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="section-label">Also available</div>
 
     <div class="hub-grid">
-      <a href="/learner/log-session.html" class="hub-card log">
-        <div class="hub-icon">
-          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-        </div>
-        <div class="hub-card-body">
-          <span class="hub-card-kicker">Quick reflection</span>
-          <h2 class="hub-card-title">Log a drive</h2>
-          <p class="hub-card-desc">Add the date, time, and a few traffic-light ratings after a drive or lesson.</p>
-        </div>
-      </a>
-
-      <a href="/learner/focused-practice.html" class="hub-card focus">
-        <div class="hub-icon">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
-        </div>
-        <div class="hub-card-body">
-          <span class="hub-card-kicker">Private practice</span>
-          <h2 class="hub-card-title">Practice with a supervisor</h2>
-          <p class="hub-card-desc">Pick a few focus areas before a drive, then save what went well and what needs help.</p>
-        </div>
-      </a>
 
       <a href="/learner/mock-test.html" class="hub-card mock">
         <div class="hub-icon">

@@ -202,9 +202,8 @@
       ]},
       { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
         { icon: 'home', label: 'Overview', href: '/learner/practice.html' },
-        { icon: 'clipboard', label: 'Log a drive', href: '/learner/log-session.html' },
+        { icon: 'play', label: 'Start a drive', href: '/learner/focused-practice.html' },
         { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-        { icon: 'play', label: 'Practice Drive', href: '/learner/focused-practice.html' },
         { icon: 'dashboard', label: 'My driving plan', href: '/learner/progress.html' }
       ]},
       { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html', children: [

@@ -616,15 +616,66 @@ async function handleFocusedPractice(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { focus_areas, suggested_areas, duration_minutes, reflections } = req.body;
+      const { focus_areas, suggested_areas, duration_minutes, reflections, booking_id, session_date, session_type, notes } = req.body;
       if (!focus_areas || !Array.isArray(focus_areas) || focus_areas.length === 0 || focus_areas.length > 3) {
         return res.status(400).json({ error: 'focus_areas must be 1-3 items' });
       }
 
+      let bookingId = null;
+      let sessionDate = session_date || null;
+      let sessionType = typeof session_type === 'string' && session_type.trim()
+        ? session_type.trim().slice(0, 40)
+        : 'focused_practice';
+      let sessionNotes = typeof notes === 'string' && notes.trim()
+        ? notes.trim().slice(0, 1000)
+        : null;
+      let durationMinutes = Number.parseInt(duration_minutes, 10);
+      if (!Number.isInteger(durationMinutes) || durationMinutes < 0) durationMinutes = 0;
+      if (durationMinutes > 600) durationMinutes = 600;
+
+      if (booking_id) {
+        bookingId = Number.parseInt(booking_id, 10);
+        if (!Number.isInteger(bookingId) || bookingId <= 0) {
+          return res.status(400).json({ error: 'Invalid booking' });
+        }
+
+        const [booking] = await sql`
+          SELECT lb.id, lb.scheduled_date::text, lb.status,
+            COALESCE(
+              lt.duration_minutes,
+              CASE
+                WHEN lb.end_time > lb.start_time
+                THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+                ELSE NULL
+              END
+            ) AS duration_minutes
+          FROM lesson_bookings lb
+          LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND COALESCE(lt.school_id, 1) = ${schoolId}
+          WHERE lb.id = ${bookingId}
+            AND lb.learner_id = ${user.id}
+            AND COALESCE(lb.school_id, 1) = ${schoolId}
+            AND lb.status IN (${SCHEDULED}, ${CHARGEABLE})`;
+        if (!booking) return res.status(400).json({ error: 'Invalid booking' });
+
+        const [existing] = await sql`
+          SELECT id FROM driving_sessions
+          WHERE booking_id = ${bookingId}
+            AND school_id = ${schoolId}
+          LIMIT 1`;
+        if (existing) return res.status(400).json({ error: 'This booking has already been logged' });
+
+        sessionDate = booking.scheduled_date;
+        if (!durationMinutes && booking.duration_minutes) durationMinutes = booking.duration_minutes;
+      }
+
+      if (!sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(sessionDate))) {
+        sessionDate = new Date().toISOString().slice(0, 10);
+      }
+
       // Create driving_session
       const [session] = await sql`
-        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, school_id)
-        VALUES (${user.id}, NOW()::date, ${duration_minutes || 0}, 'focused_practice', ${schoolId})
+        INSERT INTO driving_sessions (user_id, session_date, duration_minutes, session_type, notes, booking_id, school_id)
+        VALUES (${user.id}, ${sessionDate}, ${durationMinutes}, ${sessionType}, ${sessionNotes}, ${bookingId}, ${schoolId})
         RETURNING id`;
 
       // Create focused_practice_sessions row
