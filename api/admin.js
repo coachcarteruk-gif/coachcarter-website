@@ -2460,8 +2460,17 @@ async function handleLearnerControls(req, res) {
       LEFT JOIN credit_stats cs ON cs.learner_id = lu.id
       WHERE lu.school_id = ${schoolId}
       ORDER BY
-        CASE WHEN lu.test_date IS NOT NULL AND lu.test_date >= CURRENT_DATE THEN 0 ELSE 1 END,
-        lu.test_date ASC NULLS LAST,
+        CASE
+          WHEN lu.test_date::text ~ '^\\d{4}-\\d{2}-\\d{2}$'
+           AND lu.test_date::date >= CURRENT_DATE
+          THEN 0
+          ELSE 1
+        END,
+        CASE
+          WHEN lu.test_date::text ~ '^\\d{4}-\\d{2}-\\d{2}$'
+          THEN lu.test_date::date
+          ELSE NULL
+        END ASC NULLS LAST,
         lu.created_at DESC
     `;
 

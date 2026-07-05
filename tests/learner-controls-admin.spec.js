@@ -19,6 +19,7 @@ test.describe('admin learner controls', () => {
     expect(api).toContain("action: 'admin.update_learner_controls'");
     expect(api).toContain('targetType: \'learner\'');
     expect(api).not.toContain('::text FILTER');
+    expect(api).toContain("lu.test_date::text ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}$'");
   });
 
   test('migration and GDPR export include learner control fields', () => {
