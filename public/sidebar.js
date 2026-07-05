@@ -206,8 +206,8 @@
         { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
         { icon: 'dashboard', label: 'My driving plan', href: '/learner/progress.html' }
       ]},
-      { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html', children: [
-        { icon: 'message', label: 'Examiner AI', href: '/learner/ask-examiner.html' },
+      { icon: 'play', label: 'Mark Scheme', href: '/learner/ask-examiner.html', children: [
+        { icon: 'message', label: 'Check the scheme', href: '/learner/ask-examiner.html' },
         { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
       ]},
       { icon: 'gift', label: 'Refer a friend', href: '/learner/refer.html', authOnly: true },
@@ -236,7 +236,7 @@
           activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/test-swaps'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
           activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
-        { icon: 'play', label: 'Learn', href: '/learner/ask-examiner.html',
+        { icon: 'play', label: 'Mark Scheme', href: '/learner/ask-examiner.html',
           activeOn: ['/learner/learn', '/learner/examiner-quiz'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
           activeOn: [], authOnly: true }

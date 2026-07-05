@@ -59,7 +59,7 @@ test.describe('learner practice and log-session flow copy', () => {
 
   test('sidebar Practice submenu exposes Start a drive as the unified drive route', () => {
     const source = read('public/sidebar.js');
-    const practiceSection = source.slice(source.indexOf("{ icon: 'clipboard', label: 'Practice'"), source.indexOf("{ icon: 'play', label: 'Learn'"));
+    const practiceSection = source.slice(source.indexOf("{ icon: 'clipboard', label: 'Practice'"), source.indexOf("{ icon: 'play', label: 'Mark Scheme'"));
 
     expect(practiceSection).toContain("label: 'Start a drive', href: '/learner/focused-practice.html'");
     expect(practiceSection).toContain("label: 'Mock Test'");
