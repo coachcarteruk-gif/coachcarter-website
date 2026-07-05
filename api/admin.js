@@ -2392,9 +2392,9 @@ async function handleLearnerControls(req, res) {
           learner_id,
           COUNT(*)::int AS total_bookings,
           COUNT(*) FILTER (WHERE status = ${SCHEDULED} AND scheduled_date >= CURRENT_DATE)::int AS upcoming_bookings,
-          MIN(scheduled_date)::text FILTER (WHERE status = ${SCHEDULED} AND scheduled_date >= CURRENT_DATE) AS next_booking_date,
+          (MIN(scheduled_date) FILTER (WHERE status = ${SCHEDULED} AND scheduled_date >= CURRENT_DATE))::text AS next_booking_date,
           MAX(scheduled_date)::text AS last_booking_date,
-          MAX(scheduled_date)::text FILTER (WHERE status = ${CHARGEABLE}) AS last_lesson_date
+          (MAX(scheduled_date) FILTER (WHERE status = ${CHARGEABLE}))::text AS last_lesson_date
         FROM lesson_bookings
         WHERE school_id = ${schoolId}
           AND learner_id IS NOT NULL
