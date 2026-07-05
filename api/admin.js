@@ -218,6 +218,30 @@ const ADMIN_ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ADMIN_TIME_HHMM_RE = /^\d{2}:\d{2}$/;
 const RESERVED_MOVE_NOTICE_HOURS = 48;
 
+function normaliseAdminControlBool(value) {
+  if (value === true || value === 'true' || value === 1 || value === '1') return true;
+  if (value === false || value === 'false' || value === 0 || value === '0' || value == null || value === '') return false;
+  return null;
+}
+
+function normaliseAdminControlDate(value, fieldName) {
+  if (value == null || value === '') return { ok: true, value: null };
+  const text = String(value).trim();
+  if (!ADMIN_ISO_DATE_RE.test(text)) {
+    return { ok: false, error: `${fieldName} must be YYYY-MM-DD` };
+  }
+  return { ok: true, value: text };
+}
+
+function normaliseAdminControlTime(value, fieldName) {
+  if (value == null || value === '') return { ok: true, value: null };
+  const text = String(value).trim();
+  if (!ADMIN_TIME_HHMM_RE.test(text)) {
+    return { ok: false, error: `${fieldName} must be HH:MM` };
+  }
+  return { ok: true, value: text };
+}
+
 class ReservedGoodwillMoveAbort extends Error {
   constructor(statusCode, payload) {
     super(payload?.message || payload?.error || payload?.code || 'Reserved goodwill move refused');
@@ -331,8 +355,10 @@ module.exports = async (req, res) => {
   if (action === 'access-instructor-account') return handleAccessInstructorAccount(req, res);
   if (action === 'stop-instructor-access')    return handleStopInstructorAccess(req, res);
   if (action === 'all-learners')      return handleAllLearners(req, res);
+  if (action === 'learner-controls')  return handleLearnerControls(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);
+  if (action === 'update-learner-controls') return handleUpdateLearnerControls(req, res);
   if (action === 'update-learner-relationship') return handleUpdateLearnerRelationship(req, res);
   if (action === 'learner-broadcast-preview') return handleLearnerBroadcastPreview(req, res);
   if (action === 'send-learner-broadcast') return handleSendLearnerBroadcast(req, res);
@@ -2320,6 +2346,133 @@ async function handleAllLearners(req, res) {
 
 // ── GET /api/admin?action=learner-detail ────────────────────────────────────
 // Returns booking history, credit transactions, and progress for one learner
+// -- GET /api/admin?action=learner-controls ---------------------------------
+// Dense, read-mostly admin control room for key learner decisions.
+async function handleLearnerControls(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const instructors = await sql`
+      SELECT id, name, active, hourly_rate_pence
+      FROM instructors
+      WHERE school_id = ${schoolId}
+      ORDER BY active DESC, name ASC
+    `;
+
+    const learners = await sql`
+      WITH trial_stats AS (
+        SELECT
+          lb.learner_id,
+          COUNT(*)::int AS trial_booking_count,
+          MIN(lb.scheduled_date)::text AS first_trial_date,
+          MAX(
+            CASE
+              WHEN lb.status = ${CHARGEABLE}
+              THEN (lb.scheduled_date::timestamp + lb.end_time)::timestamptz
+              ELSE NULL
+            END
+          ) AS completed_at
+        FROM lesson_bookings lb
+        JOIN lesson_types lt
+          ON lt.id = lb.lesson_type_id
+         AND lt.school_id = lb.school_id
+        WHERE lb.school_id = ${schoolId}
+          AND lt.slug = 'trial'
+          AND lb.learner_id IS NOT NULL
+        GROUP BY lb.learner_id
+      ),
+      booking_stats AS (
+        SELECT
+          learner_id,
+          COUNT(*)::int AS total_bookings,
+          COUNT(*) FILTER (WHERE status = ${SCHEDULED} AND scheduled_date >= CURRENT_DATE)::int AS upcoming_bookings,
+          MIN(scheduled_date)::text FILTER (WHERE status = ${SCHEDULED} AND scheduled_date >= CURRENT_DATE) AS next_booking_date,
+          MAX(scheduled_date)::text AS last_booking_date,
+          MAX(scheduled_date)::text FILTER (WHERE status = ${CHARGEABLE}) AS last_lesson_date
+        FROM lesson_bookings
+        WHERE school_id = ${schoolId}
+          AND learner_id IS NOT NULL
+        GROUP BY learner_id
+      ),
+      credit_stats AS (
+        SELECT
+          lcb.learner_id,
+          COALESCE(SUM(lcb.balance_minutes), 0)::int AS balance_minutes,
+          json_agg(
+            json_build_object(
+              'instructor_id', lcb.instructor_id,
+              'instructor_name', i.name,
+              'balance_minutes', lcb.balance_minutes
+            )
+            ORDER BY i.name ASC
+          ) AS balances
+        FROM learner_credit_balances lcb
+        JOIN instructors i
+          ON i.id = lcb.instructor_id
+         AND i.school_id = ${schoolId}
+        WHERE lcb.school_id = ${schoolId}
+        GROUP BY lcb.learner_id
+      )
+      SELECT
+        lu.id,
+        lu.name,
+        lu.email,
+        lu.phone,
+        lu.pickup_address,
+        lu.learner_category,
+        lu.primary_instructor_id,
+        pi.name AS primary_instructor_name,
+        lu.test_date::text AS test_date,
+        lu.test_time,
+        lu.test_centre,
+        COALESCE(lu.free_trial_allowed, TRUE) AS free_trial_allowed,
+        lu.free_trial_completed_at,
+        COALESCE(lu.test_instructor_booked, FALSE) AS test_instructor_booked,
+        lu.admin_control_notes,
+        COALESCE(cs.balance_minutes, lu.balance_minutes, 0)::int AS balance_minutes,
+        COALESCE(cs.balances, '[]'::json) AS credit_balances,
+        COALESCE(bs.total_bookings, 0)::int AS total_bookings,
+        COALESCE(bs.upcoming_bookings, 0)::int AS upcoming_bookings,
+        bs.next_booking_date,
+        bs.last_booking_date,
+        bs.last_lesson_date,
+        COALESCE(ts.trial_booking_count, 0)::int AS trial_booking_count,
+        ts.first_trial_date,
+        COALESCE(lu.free_trial_completed_at, ts.completed_at) AS trial_completed_at,
+        iln.custom_hourly_rate_pence,
+        pi.hourly_rate_pence AS instructor_hourly_rate_pence
+      FROM learner_users lu
+      LEFT JOIN instructors pi
+        ON pi.id = lu.primary_instructor_id
+       AND pi.school_id = ${schoolId}
+      LEFT JOIN instructor_learner_notes iln
+        ON iln.learner_id = lu.id
+       AND iln.instructor_id = lu.primary_instructor_id
+       AND iln.school_id = ${schoolId}
+      LEFT JOIN trial_stats ts ON ts.learner_id = lu.id
+      LEFT JOIN booking_stats bs ON bs.learner_id = lu.id
+      LEFT JOIN credit_stats cs ON cs.learner_id = lu.id
+      WHERE lu.school_id = ${schoolId}
+      ORDER BY
+        CASE WHEN lu.test_date IS NOT NULL AND lu.test_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+        lu.test_date ASC NULLS LAST,
+        lu.created_at DESC
+    `;
+
+    return res.json({ ok: true, learners, instructors });
+  } catch (err) {
+    console.error('admin learner-controls error:', err);
+    reportError('/api/admin?action=learner-controls', err);
+    return res.status(500).json({ error: 'Failed to load learner controls', details: 'Internal server error' });
+  }
+}
+
 async function handleLearnerDetail(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -2470,6 +2623,177 @@ async function handleLearnerDetail(req, res) {
 // ── POST /api/admin?action=update-learner ─────────────────────────────────────
 // Body: { id, name?, email?, phone?, pickup_address?, learner_category?, primary_instructor_id?, test_date? }
 // Updates editable learner fields. Audit-logs before/after values.
+async function handleUpdateLearnerControls(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const body = req.body || {};
+  const learnerId = parseInt(body.learner_id || body.id, 10);
+  if (!learnerId) return res.status(400).json({ error: 'Learner ID is required' });
+
+  const category = body.learner_category != null && body.learner_category !== ''
+    ? normaliseLearnerCategory(body.learner_category)
+    : null;
+  if (body.learner_category != null && body.learner_category !== '' && !category) {
+    return res.status(400).json({ error: 'Invalid learner category' });
+  }
+
+  const primaryInstructorId = body.primary_instructor_id != null && body.primary_instructor_id !== ''
+    ? parseInt(body.primary_instructor_id, 10)
+    : null;
+  if (body.primary_instructor_id != null && body.primary_instructor_id !== '' && (!primaryInstructorId || primaryInstructorId < 1)) {
+    return res.status(400).json({ error: 'Invalid assigned instructor' });
+  }
+
+  const testDate = normaliseAdminControlDate(body.test_date, 'test_date');
+  if (!testDate.ok) return res.status(400).json({ error: testDate.error });
+  const testTime = normaliseAdminControlTime(body.test_time, 'test_time');
+  if (!testTime.ok) return res.status(400).json({ error: testTime.error });
+
+  const freeTrialAllowed = normaliseAdminControlBool(body.free_trial_allowed);
+  if (freeTrialAllowed == null && body.free_trial_allowed != null && body.free_trial_allowed !== '') {
+    return res.status(400).json({ error: 'free_trial_allowed must be true or false' });
+  }
+  const testInstructorBooked = normaliseAdminControlBool(body.test_instructor_booked);
+  if (testInstructorBooked == null && body.test_instructor_booked != null && body.test_instructor_booked !== '') {
+    return res.status(400).json({ error: 'test_instructor_booked must be true or false' });
+  }
+
+  let customHourlyRatePence = null;
+  if (body.custom_hourly_rate_pence != null && body.custom_hourly_rate_pence !== '') {
+    customHourlyRatePence = parseInt(body.custom_hourly_rate_pence, 10);
+    if (!Number.isFinite(customHourlyRatePence) || customHourlyRatePence < 0 || customHourlyRatePence > 25000) {
+      return res.status(400).json({ error: 'Custom hourly rate is invalid' });
+    }
+  }
+
+  const testCentre = body.test_centre != null
+    ? String(body.test_centre).trim().replace(/\s+/g, ' ').slice(0, 160) || null
+    : null;
+  const adminNotes = body.admin_control_notes != null
+    ? String(body.admin_control_notes).trim().slice(0, 2000) || null
+    : null;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [existing] = await sql`
+      SELECT
+        lu.id,
+        lu.name,
+        lu.email,
+        lu.learner_category,
+        lu.primary_instructor_id,
+        lu.test_date::text AS test_date,
+        lu.test_time,
+        lu.test_centre,
+        COALESCE(lu.free_trial_allowed, TRUE) AS free_trial_allowed,
+        COALESCE(lu.test_instructor_booked, FALSE) AS test_instructor_booked,
+        lu.admin_control_notes,
+        iln.custom_hourly_rate_pence
+      FROM learner_users lu
+      LEFT JOIN instructor_learner_notes iln
+        ON iln.learner_id = lu.id
+       AND iln.instructor_id = lu.primary_instructor_id
+       AND iln.school_id = ${schoolId}
+      WHERE lu.id = ${learnerId}
+        AND lu.school_id = ${schoolId}
+    `;
+    if (!existing) return res.status(404).json({ error: 'Learner not found' });
+
+    if (primaryInstructorId) {
+      const [instructor] = await sql`
+        SELECT id FROM instructors
+        WHERE id = ${primaryInstructorId}
+          AND school_id = ${schoolId}
+          AND active = TRUE
+      `;
+      if (!instructor) return res.status(400).json({ error: 'Assigned instructor must be an active instructor in this school' });
+    }
+
+    if (customHourlyRatePence != null && !primaryInstructorId) {
+      return res.status(400).json({ error: 'Assign an instructor before setting a learner hourly rate' });
+    }
+
+    const [updated] = await sql`
+      UPDATE learner_users
+      SET learner_category = ${category},
+          primary_instructor_id = ${primaryInstructorId},
+          test_date = ${testDate.value},
+          test_time = ${testTime.value},
+          test_centre = ${testCentre},
+          free_trial_allowed = ${freeTrialAllowed},
+          test_instructor_booked = ${testInstructorBooked},
+          admin_control_notes = ${adminNotes}
+      WHERE id = ${learnerId}
+        AND school_id = ${schoolId}
+      RETURNING id, learner_category, primary_instructor_id, test_date::text AS test_date,
+                test_time, test_centre, free_trial_allowed, test_instructor_booked,
+                admin_control_notes
+    `;
+
+    let relationship = null;
+    if (primaryInstructorId) {
+      const [row] = await sql`
+        INSERT INTO instructor_learner_notes
+          (instructor_id, learner_id, learner_category, custom_hourly_rate_pence, school_id, updated_at)
+        VALUES
+          (${primaryInstructorId}, ${learnerId}, ${category}, ${customHourlyRatePence}, ${schoolId}, NOW())
+        ON CONFLICT (instructor_id, learner_id)
+        DO UPDATE SET learner_category = ${category},
+                      custom_hourly_rate_pence = ${customHourlyRatePence},
+                      school_id = ${schoolId},
+                      updated_at = NOW()
+        RETURNING instructor_id, learner_id, learner_category, custom_hourly_rate_pence
+      `;
+      relationship = row || null;
+    }
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'admin.update_learner_controls',
+      targetType: 'learner',
+      targetId: learnerId,
+      details: {
+        before: {
+          learner_category: existing.learner_category,
+          primary_instructor_id: existing.primary_instructor_id,
+          test_date: existing.test_date,
+          test_time: existing.test_time,
+          test_centre: existing.test_centre,
+          free_trial_allowed: existing.free_trial_allowed,
+          test_instructor_booked: existing.test_instructor_booked,
+          admin_control_notes: existing.admin_control_notes,
+          custom_hourly_rate_pence: existing.custom_hourly_rate_pence
+        },
+        after: {
+          learner_category: updated.learner_category,
+          primary_instructor_id: updated.primary_instructor_id,
+          test_date: updated.test_date,
+          test_time: updated.test_time,
+          test_centre: updated.test_centre,
+          free_trial_allowed: updated.free_trial_allowed,
+          test_instructor_booked: updated.test_instructor_booked,
+          admin_control_notes: updated.admin_control_notes,
+          custom_hourly_rate_pence: relationship?.custom_hourly_rate_pence ?? null
+        }
+      },
+      schoolId,
+      req
+    });
+
+    return res.json({ ok: true, learner: updated, relationship });
+  } catch (err) {
+    console.error('admin update-learner-controls error:', err);
+    reportError('/api/admin?action=update-learner-controls', err);
+    return res.status(500).json({ error: 'Failed to update learner controls', details: 'Internal server error' });
+  }
+}
+
 async function handleUpdateLearner(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 

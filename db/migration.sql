@@ -2141,6 +2141,10 @@ ALTER TABLE instructors   ADD COLUMN IF NOT EXISTS calendar_token_rotated_at TIM
 
 -- Test Swaps Marketplace (June 2026)
 ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS test_centre TEXT;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS free_trial_allowed BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS free_trial_completed_at TIMESTAMPTZ;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS test_instructor_booked BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE learner_users ADD COLUMN IF NOT EXISTS admin_control_notes TEXT;
 
 CREATE TABLE IF NOT EXISTS test_swap_listings (
   id           SERIAL PRIMARY KEY,

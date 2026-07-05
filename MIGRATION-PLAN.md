@@ -28,7 +28,7 @@
 - index (calendar/dashboard), dashboard, availability, learners, profile, earnings, onboarding, login
 
 **Admin portal (7 pages):**
-- dashboard, editor, portal, login, franchise-calculator, franchise-comparison, plus the legacy `admin.html` redirect at `public/admin.html`
+- dashboard, editor, portal, learner-controls, login, franchise-calculator, franchise-comparison, plus the legacy `admin.html` redirect at `public/admin.html`
 
 **Superadmin portal (3 pages):**
 - index, schools, school-detail (cross-tenant management; not visible to school admins)
@@ -45,7 +45,7 @@
 | `instructor.js` | instructor | Schedule, weekly availability, one-off availability overrides, blackouts, learner history, notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
 | `instructor-auth.js` | none → instructor | Login, change-password (forced on first sign-in via `must_change_password`) |
 | `instructors.js` | public/instructor | Public instructor profile lookups (used by booking page) |
-| `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, learner feedback queue, credit adjustment, set-instructor-password, forgot-password code flow |
+| `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, learner controls read/update, learner feedback queue, credit adjustment, set-instructor-password, forgot-password code flow |
 | `slots.js` | mostly learner | available (12-wk cap), durations-for-slot, recurring-block-preview, recurring-block-commit (Lesson Credit only), book (+ `repeat_weeks` 1–8), checkout-slot, checkout-slot-guest, book-free-trial, cancel (+ cancel_series), reschedule, my-bookings, series-info |
 | `offers.js` | public (token) | get-offer, accept-offer (with `repeat_weeks`), expire-offers (cron). Exports `bookOfferSeries()` for the webhook |
 | `lesson-types.js` | mixed | CRUD for lesson types per school; instructor-scoped list filters opt-in-only lesson types such as paid `1hr` unless explicitly enabled |

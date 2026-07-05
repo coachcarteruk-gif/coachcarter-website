@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.117 - Admin Learner Controls Page (5 July 2026)
+
+Adds `/admin/learner-controls.html`, a dense admin control-room page for learner-level operational decisions without exposing a raw database editor. The page lists learners with assigned instructor, learner status, custom/default hourly rate, per-instructor credit balance summary, free-trial state, practical test date/time/centre, whether the instructor is booked for the test, next/last lesson, and computed attention flags.
+
+The new admin API actions are `GET /api/admin?action=learner-controls` and `POST /api/admin?action=update-learner-controls`. Updates are school-scoped and audit-logged, custom hourly rates continue to live in `instructor_learner_notes`, and credit balances remain read-only on this page. New `learner_users` columns store the admin trial/test controls and admin control note; learner GDPR export includes them. The self-serve free-trial path respects `free_trial_allowed` for existing learners, while the historical one-trial booking guard still blocks repeat trials. `cron-auto-complete` stamps completed free trials and turns eligibility off when a trial becomes `chargeable`.
+
+**Files:** `db/migration.sql`, `api/admin.js`, `api/slots.js`, `api/cron-auto-complete.js`, `api/learner.js`, `public/admin/learner-controls.html`, `public/admin/learner-controls.css`, `public/admin/learner-controls.js`, `public/admin/portal.html`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.116 - Instructor Pre-Payout Not-Delivered Exception (4 July 2026)
 
 Instructors can now correct the specific case where a past lesson stayed on their calendar but did not happen before the Friday payout sweep. The new `POST /api/instructor?action=mark-not-delivered` endpoint is instructor- and school-scoped, locks the booking in a transaction, refuses future/refunded/already-paid-out rows, flips an unpaid past `scheduled` or `chargeable` booking to `refunded`, returns any deducted lesson credit to the same learner/instructor balance, marks active `booking_credit_sources` rows refunded, audit-logs the reason, and optionally notifies the learner. The dashboard and main instructor schedule show "Mark as not delivered" only when the schedule API's server-derived `can_report_not_delivered` flag is true.
