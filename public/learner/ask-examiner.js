@@ -12,9 +12,18 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('chat-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSend('chat-input');
     }
   });
+  const starterInput = document.getElementById('starter-input');
+  if (starterInput) {
+    starterInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend('starter-input');
+      }
+    });
+  }
 });
 
 // ── Starter chip click ──
@@ -31,8 +40,9 @@ function askChip(btn) {
 }
 
 // ── Handle send ──
-function handleSend() {
-  const input = document.getElementById('chat-input');
+function handleSend(inputId) {
+  const input = document.getElementById(inputId || 'chat-input');
+  if (!input) return;
   const text = input.value.trim();
   if (!text || isSending) return;
   input.value = '';
@@ -209,6 +219,8 @@ document.addEventListener('click', function (e) {
 });
 (function wire() {
   var send = document.getElementById('chat-send');
-  if (send) send.addEventListener('click', handleSend);
+  if (send) send.addEventListener('click', function () { handleSend('chat-input'); });
+  var starterSend = document.getElementById('starter-send');
+  if (starterSend) starterSend.addEventListener('click', function () { handleSend('starter-input'); });
 })();
 })();

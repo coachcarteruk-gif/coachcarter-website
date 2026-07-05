@@ -10,8 +10,8 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-  <title>Ask the Examiner — AI Driving Test Help | Coach Carter Reading</title>
-  <meta name="description" content="Ask any question about the UK driving test marking scheme and get instant, accurate answers powered by AI. Grounded in real DVSA examiner guidance. Free from Coach Carter Driving School.">
+  <title>Mark Scheme — Driving Test Fault Checker | Coach Carter Reading</title>
+  <meta name="description" content="Check the UK driving test mark scheme and get instant, accurate answers about faults, scoring, manoeuvres, and DVSA examiner guidance. Free from Coach Carter Driving School.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <script src="/sidebar.js"></script>
@@ -26,7 +26,7 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── ASK THE EXAMINER — editorial DL25 dossier aesthetic ───
+    /* ── MARK SCHEME — editorial DL25 dossier aesthetic ───
        Concept: an interrogation room conversation with a DVSA
        examiner. Mono headers, file-folder document framing,
        editorial spacing. Built for dark mode primarily — the
@@ -194,6 +194,74 @@
       padding: 0 24px;
       display: flex; flex-direction: column; gap: 18px;
     }
+    .freeform-check {
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+    }
+    .freeform-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .freeform-deck {
+      font-size: 0.94rem;
+      line-height: 1.5;
+      color: var(--muted);
+      margin-bottom: 14px;
+      max-width: 58ch;
+    }
+    .freeform-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .freeform-input {
+      flex: 1;
+      min-width: 0;
+      min-height: 48px;
+      padding: 13px 14px;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--primary);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .freeform-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-mid);
+    }
+    .freeform-input::placeholder { color: var(--muted); opacity: 0.72; }
+    .freeform-send {
+      width: 48px;
+      min-width: 48px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(245,131,33,0.22);
+    }
+    .freeform-send:hover {
+      background: var(--accent-dk);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(245,131,33,0.36);
+    }
+    .freeform-send svg { width: 18px; height: 18px; fill: currentColor; }
     .briefing-intro {
       display: flex; align-items: center; gap: 10px;
       font-family: var(--font-mono); font-size: 0.66rem;
@@ -332,6 +400,11 @@
       .chat-messages { padding: 32px 24px 8px; }
       .briefing { padding: 0 24px; }
     }
+    @media (max-width: 520px) {
+      .freeform-check { padding: 16px 14px; }
+      .freeform-row { gap: 8px; }
+      .freeform-input { font-size: 0.94rem; }
+    }
   </style>
 </head>
 <body>
@@ -344,41 +417,51 @@
     </div>
     <div class="masthead-status">Online</div>
   </div>
-  <h1 class="masthead-title">Ask the <em>examiner</em>.</h1>
-  <p class="masthead-deck">Cross-checked against the real DVSA driving-test marking criteria. Ask anything about faults, scoring, manoeuvres, or what happens on the day.</p>
+  <h1 class="masthead-title">Check the <em>mark scheme</em>.</h1>
+  <p class="masthead-deck">Cross-checked against the real DVSA driving-test marking criteria. Check how faults, manoeuvres, junctions, and test-day situations are assessed.</p>
 </header>
 
 <main class="chat-container">
   <div class="chat-messages" id="chat-messages">
     <section class="briefing" id="starter-chips" aria-label="Suggested starter questions">
+      <div class="freeform-check">
+        <label class="freeform-label" for="starter-input">Ask anything</label>
+        <p class="freeform-deck">Describe something that happened, or something you are worried about, and we will check it against the driving-test mark scheme.</p>
+        <div class="freeform-row">
+          <input type="text" class="freeform-input" id="starter-input" placeholder="I stalled at a junction but restarted quickly..." autocomplete="off">
+          <button class="freeform-send" id="starter-send" type="button" aria-label="Check this situation">
+            <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+          </button>
+        </div>
+      </div>
       <div class="briefing-intro">
-        <span>Start a line of questioning</span>
+        <span>Or try an example</span>
         <span class="briefing-intro-line"></span>
       </div>
       <div class="briefing-prompts">
         <button class="briefing-prompt" data-action="ask-chip" type="button">
           <span class="briefing-prompt-num">Q.01</span>
-          <span class="briefing-prompt-text">What happens if I stall during the test?</span>
+          <span class="briefing-prompt-text">I stalled at a junction but restarted quickly</span>
           <span class="briefing-prompt-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
         </button>
         <button class="briefing-prompt" data-action="ask-chip" type="button">
           <span class="briefing-prompt-num">Q.02</span>
-          <span class="briefing-prompt-text">How are manoeuvres marked?</span>
+          <span class="briefing-prompt-text">I touched the kerb during a manoeuvre</span>
           <span class="briefing-prompt-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
         </button>
         <button class="briefing-prompt" data-action="ask-chip" type="button">
           <span class="briefing-prompt-num">Q.03</span>
-          <span class="briefing-prompt-text">Can I fail for driving too slowly?</span>
+          <span class="briefing-prompt-text">I drove 25mph in a 30 because I was nervous</span>
           <span class="briefing-prompt-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
         </button>
         <button class="briefing-prompt" data-action="ask-chip" type="button">
           <span class="briefing-prompt-num">Q.04</span>
-          <span class="briefing-prompt-text">What does the examiner look for at junctions?</span>
+          <span class="briefing-prompt-text">I checked mirrors late before changing lane</span>
           <span class="briefing-prompt-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
         </button>
         <button class="briefing-prompt" data-action="ask-chip" type="button">
           <span class="briefing-prompt-num">Q.05</span>
-          <span class="briefing-prompt-text">How many minors can I get?</span>
+          <span class="briefing-prompt-text">I hesitated at a busy roundabout</span>
           <span class="briefing-prompt-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
         </button>
       </div>
@@ -387,7 +470,7 @@
 
   <div class="typing-indicator" id="typing-indicator">
     <div class="typing-content">
-      <span>Examiner is reviewing</span>
+      <span>Checking the scheme</span>
       <span class="typing-dots"><span></span><span></span><span></span></span>
     </div>
   </div>
@@ -398,8 +481,8 @@
 <div class="chat-input-area">
   <div class="chat-input-wrap">
     <div class="chat-input-shell">
-      <span class="chat-input-prefix">ASK</span>
-      <input type="text" class="chat-input" id="chat-input" placeholder="What's on your mind about the test?" autocomplete="off">
+      <span class="chat-input-prefix">CHK</span>
+      <input type="text" class="chat-input" id="chat-input" placeholder="What do you want to check against the mark scheme?" autocomplete="off">
     </div>
     <button class="chat-send" id="chat-send" aria-label="Send question">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>

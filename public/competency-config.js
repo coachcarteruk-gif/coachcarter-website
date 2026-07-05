@@ -4,7 +4,7 @@
  * Single source of truth for the DL25-aligned driving skills.
  * 10 categories matching the real DVSA DL25 marking sheet,
  * used across Log Session, Examiner Quiz, Mock Test, My Progress,
- * and Ask the Examiner AI.
+ * and Mark Scheme AI.
  *
  * Every feature imports this file via <script src="/competency-config.js">
  * so wording, grouping, and skill keys are always consistent.
