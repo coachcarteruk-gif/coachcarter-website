@@ -58,6 +58,39 @@
     return session;
   }
 
+  function parseLocalDate(dateStr) {
+    if (!dateStr) return null;
+    var d = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatTestWeeksCopy(dateStr) {
+    var testDate = parseLocalDate(dateStr);
+    if (!testDate) return '';
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var diffDays = Math.ceil((testDate.getTime() - today.getTime()) / 86400000);
+    if (diffDays < 0) return 'Test date passed';
+    if (diffDays === 0) return 'Test today';
+    if (diffDays < 7) return diffDays + ' day' + (diffDays === 1 ? '' : 's') + ' to test';
+    var weeks = Math.ceil(diffDays / 7);
+    return weeks + ' week' + (weeks === 1 ? '' : 's') + ' to test';
+  }
+
+  function updateLearnerTestWeeks(dateStr) {
+    var wrap = document.getElementById('cc-sb-test-weeks');
+    var value = document.getElementById('cc-sb-test-weeks-value');
+    if (!wrap || !value) return;
+    var copy = formatTestWeeksCopy(dateStr);
+    if (!copy) {
+      wrap.style.display = 'none';
+      value.textContent = '';
+      return;
+    }
+    value.textContent = copy;
+    wrap.style.display = 'block';
+  }
+
   function isInstructorImpersonation(session) {
     return !!(session && session.impersonation && session.impersonation.active);
   }
@@ -352,6 +385,10 @@
       return '<div class="cc-sb-footer" id="cc-sb-footer">' +
         '<div class="cc-sb-user" id="cc-sb-user"></div>' +
         '<div class="cc-sb-credits" id="cc-sb-credits"></div>' +
+        '<div class="cc-sb-test-weeks" id="cc-sb-test-weeks" style="display:none">' +
+          '<span class="cc-sb-test-label">Weeks</span>' +
+          '<span class="cc-sb-test-value" id="cc-sb-test-weeks-value"></span>' +
+        '</div>' +
         themeBlock(currentTheme) +
         '<button class="cc-sb-logout" id="cc-sb-logout">' +
           '<span class="cc-sb-icon">' + icons.logOut + '</span>' +
@@ -488,6 +525,12 @@
     '  font-size: 0.7rem; font-weight: 700; color: var(--accent, #f58321);',
     '  letter-spacing: 0.06em; margin-bottom: 10px; font-variant-numeric: tabular-nums; }',
     '.cc-sb-credits:empty { display: none; }',
+    '.cc-sb-test-weeks { margin: 10px 0 12px; padding: 10px 11px; border: 1px solid var(--border, #e5e5e5);',
+    '  border-radius: 8px; background: var(--surface, #f5f5f5); }',
+    '.cc-sb-test-label { display: block; margin-bottom: 4px; font-family: "JetBrains Mono", "SF Mono", ui-monospace, monospace;',
+    '  font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted, #6b7280); }',
+    '.cc-sb-test-value { display: block; font-family: "Bricolage Grotesque", "Lato", sans-serif;',
+    '  font-size: 1rem; line-height: 1.05; font-weight: 800; color: var(--primary, #1a1a1a); }',
     '.cc-sb-logout { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px;',
     '  background: var(--surface, #f5f5f5); border: 1px solid var(--border, #e5e5e5);',
     '  border-radius: 6px; color: var(--muted, #6b7280); font-size: 0.8rem; cursor: pointer;',
@@ -1127,7 +1170,18 @@
             creditsEl.textContent = fallbackHrs + ' hrs total credit';
           }
         }
+        updateLearnerTestWeeks(learner.test_date);
       } catch(e) {}
+
+      if (window.ccAuth && typeof window.ccAuth.fetchAuthed === 'function') {
+        window.ccAuth.fetchAuthed('/api/learner?action=progress')
+          .then(function(res) { return res.ok ? res.json() : null; })
+          .then(function(data) {
+            if (!data) return;
+            updateLearnerTestWeeks(data.test_date);
+          })
+          .catch(function() {});
+      }
 
       var logoutBtn = document.getElementById('cc-sb-logout');
       if (logoutBtn) logoutBtn.addEventListener('click', function() {

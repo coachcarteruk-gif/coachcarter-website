@@ -871,6 +871,18 @@ function dateDisplayParts(dateStr) {
   };
 }
 
+function learnerTestDateString() {
+  return learnerProfile && learnerProfile.test_date ? String(learnerProfile.test_date).slice(0, 10) : '';
+}
+
+function isLearnerTestDate(dateStr) {
+  return !!dateStr && learnerTestDateString() === dateStr;
+}
+
+function testDateMarkerHTML() {
+  return '<span class="date-cell-test-badge" aria-hidden="true">TEST</span>';
+}
+
 /* Week-by-week date grid (Mon–Sun) covering the whole booking window.
    Days without availability stay visible but disabled so learners can map
    slots onto their weekly routine and see fully-booked days at a glance. */
@@ -893,21 +905,24 @@ function renderDateGrid(cache) {
     const showMonth = dayNum === 1 || ds === dates[0];
     const monthLabel = showMonth ? `<span class="date-cell-month">${esc(MON_SHORT[d.getMonth()])}</span>` : '';
     const todayClass = ds === todayStr ? ' date-cell-today' : '';
+    const testDateClass = isLearnerTestDate(ds) ? ' date-cell-test' : '';
+    const testDateBadge = isLearnerTestDate(ds) ? testDateMarkerHTML() : '';
 
     if (!count) {
-      cells.push(`<span class="date-cell date-cell-off${todayClass}">${monthLabel}<span class="date-cell-num">${dayNum}</span></span>`);
+      const testDateLabel = isLearnerTestDate(ds) ? ' aria-label="Your driving test date"' : '';
+      cells.push(`<span class="date-cell date-cell-off${todayClass}${testDateClass}"${testDateLabel}>${monthLabel}<span class="date-cell-num">${dayNum}</span>${testDateBadge}</span>`);
       continue;
     }
     const selected = ds === selectedDate;
     const parts = dateDisplayParts(ds);
-    const label = `${parts.full}, ${count} slot${count === 1 ? '' : 's'} available`;
-    cells.push(`<button class="date-cell date-cell-open${todayClass}" type="button"
+    const label = `${parts.full}, ${count} slot${count === 1 ? '' : 's'} available${isLearnerTestDate(ds) ? ', your driving test date' : ''}`;
+    cells.push(`<button class="date-cell date-cell-open${todayClass}${testDateClass}" type="button"
       data-action="select-date"
       data-date="${esc(ds)}"
       aria-pressed="${selected ? 'true' : 'false'}"
       ${selected ? 'aria-current="date"' : ''}
       aria-label="${esc(label)}">
-      ${monthLabel}<span class="date-cell-num">${dayNum}</span><span class="date-cell-dot" aria-hidden="true"></span>
+      ${monthLabel}<span class="date-cell-num">${dayNum}</span><span class="date-cell-dot" aria-hidden="true"></span>${testDateBadge}
     </button>`);
   }
 
@@ -1010,8 +1025,9 @@ function renderBookingCalendar(cache, opts) {
   const dateGrid = renderDateGrid(cache);
   const selectedParts = dateDisplayParts(selectedDate);
   const slotCount = slotsForDate.length;
+  const testDateNote = isLearnerTestDate(selectedDate) ? '<span class="selected-date-test-note">Test date</span>' : '';
   const selectedDateHeading = `<div class="selected-date-heading" data-selected-date-heading>
-    <strong>${esc(selectedParts.full)}</strong>
+    <strong>${esc(selectedParts.full)}${testDateNote}</strong>
     <span>${slotCount} time${slotCount === 1 ? '' : 's'} available</span>
   </div>`;
   const timeGroups = renderTimeGroups(slotsForDate, opts);
