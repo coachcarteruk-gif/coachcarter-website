@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Learner Controls - CoachCarter Admin</title>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/admin/learner-controls.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <script src="/shared/admin-auth.js"></script>
+  <script src="/admin/learner-controls.js" defer></script>
+</head>
+<body>
+  <header class="mobile-header">
+    <button class="hamburger" id="mobile-menu-btn" aria-label="Open navigation">Menu</button>
+    <strong>Admin</strong>
+  </header>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <a class="sidebar-brand" href="/admin/portal.html">
+      <img src="/Logo.png" alt="CoachCarter">
+      <div>
+        <div class="sidebar-brand-text">CoachCarter</div>
+        <div class="sidebar-brand-sub">Admin Portal</div>
+      </div>
+    </a>
+    <nav class="sidebar-nav" aria-label="Admin navigation">
+      <a href="/admin/portal.html"><span class="nav-icon">DB</span> Portal</a>
+      <a href="/admin/learner-controls.html" class="active"><span class="nav-icon">LC</span> Learner Controls</a>
+      <a href="/admin/dashboard.html"><span class="nav-icon">EQ</span> Enquiries</a>
+      <a href="/admin/editor.html"><span class="nav-icon">ED</span> Editor</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="admin-name" id="admin-name">Admin</div>
+      <div class="admin-email" id="admin-email"></div>
+      <button type="button" class="logout-btn" id="logout-btn">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="page-header">
+      <div>
+        <h1>Learner Controls</h1>
+        <p>One place for learner-level commercial, trial, test, and operational decisions.</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn" id="refresh-btn">Refresh</button>
+        <a class="btn btn-primary" href="/admin/portal.html">Back to Portal</a>
+      </div>
+    </section>
+
+    <section class="metrics-grid" aria-label="Learner control summary">
+      <div class="metric"><span id="metric-learners">-</span><small>Learners</small></div>
+      <div class="metric"><span id="metric-attention">-</span><small>Attention</small></div>
+      <div class="metric"><span id="metric-tests">-</span><small>Upcoming Tests</small></div>
+      <div class="metric"><span id="metric-trials">-</span><small>Trial Eligible</small></div>
+    </section>
+
+    <section class="toolbar" aria-label="Learner filters">
+      <label class="search-field">
+        <span>Search</span>
+        <input type="search" id="search-input" placeholder="Name, email, phone, instructor">
+      </label>
+      <label>
+        <span>View</span>
+        <select id="filter-view">
+          <option value="all">All learners</option>
+          <option value="attention">Attention needed</option>
+          <option value="test">Upcoming tests</option>
+          <option value="trial">Trial eligible</option>
+          <option value="credit">Has credit</option>
+        </select>
+      </label>
+      <label>
+        <span>Instructor</span>
+        <select id="filter-instructor">
+          <option value="">All instructors</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="table-shell" aria-live="polite">
+      <table class="controls-table">
+        <thead>
+          <tr>
+            <th>Learner</th>
+            <th>Instructor</th>
+            <th>Rate</th>
+            <th>Credit</th>
+            <th>Trial</th>
+            <th>Test</th>
+            <th>Next</th>
+            <th>Flags</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="learners-body">
+          <tr><td colspan="9" class="empty-state">Loading learner controls...</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <aside class="editor-panel" id="editor-panel" aria-hidden="true">
+    <form id="controls-form">
+      <div class="editor-header">
+        <div>
+          <h2 id="editor-title">Edit learner</h2>
+          <p id="editor-subtitle"></p>
+        </div>
+        <button type="button" class="icon-btn" id="close-editor" aria-label="Close editor">X</button>
+      </div>
+
+      <input type="hidden" id="field-learner-id">
+
+      <fieldset>
+        <legend>Assignment</legend>
+        <label>Assigned instructor
+          <select id="field-instructor"></select>
+        </label>
+        <label>Learner status
+          <select id="field-category">
+            <option value="">Not set</option>
+            <option value="regular">Regular</option>
+            <option value="sporadic">Sporadic</option>
+            <option value="inactive">Inactive</option>
+            <option value="passed">Passed</option>
+          </select>
+        </label>
+        <label>Custom hourly rate
+          <input type="number" id="field-rate" min="0" max="250" step="0.50" placeholder="Use instructor default">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Trial and test</legend>
+        <label class="toggle-row">
+          <input type="checkbox" id="field-trial-allowed">
+          <span>Free trial eligible</span>
+        </label>
+        <label>Test date
+          <input type="date" id="field-test-date">
+        </label>
+        <label>Test time
+          <input type="time" id="field-test-time">
+        </label>
+        <label>Test centre
+          <input type="text" id="field-test-centre" maxlength="160">
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="field-test-instructor-booked">
+          <span>Instructor booked for test</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Admin note</legend>
+        <label>Control note
+          <textarea id="field-notes" rows="5" maxlength="2000"></textarea>
+        </label>
+      </fieldset>
+
+      <div class="editor-footer">
+        <button type="button" class="btn" id="cancel-editor">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="save-btn">Save controls</button>
+      </div>
+    </form>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

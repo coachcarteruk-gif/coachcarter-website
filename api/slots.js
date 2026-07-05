@@ -4331,11 +4331,17 @@ async function handleBookFreeTrial(req, res) {
     // ── Find or create learner (mirrors offers.js findOrCreateLearner) ──
     let learnerId;
     const [existingLearner] = await sql`
-      SELECT id, name, phone, pickup_address, email FROM learner_users
+      SELECT id, name, phone, pickup_address, email, COALESCE(free_trial_allowed, TRUE) AS free_trial_allowed
       WHERE LOWER(email) = ${cleanEmail} AND school_id = ${schoolId}
     `;
 
     if (existingLearner) {
+      if (!existingLearner.free_trial_allowed) {
+        return res.status(403).json({
+          error: 'trial_not_allowed',
+          message: 'This account is not currently eligible for a free trial.'
+        });
+      }
       learnerId = existingLearner.id;
       const needsUpdate = (!existingLearner.name && cleanName) ||
                           (!existingLearner.phone && cleanPhone) ||

@@ -1432,7 +1432,9 @@ async function handleExportData(req, res) {
 
     const [profile] = await sql`
       SELECT name, email, phone, pickup_address, learner_category, primary_instructor_id,
-             test_date, test_time, test_centre, prefer_contact_before, terms_accepted_at, created_at, last_activity_at
+             test_date, test_time, test_centre, test_instructor_booked,
+             free_trial_allowed, free_trial_completed_at, admin_control_notes,
+             prefer_contact_before, terms_accepted_at, created_at, last_activity_at
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
 
     const onboarding = await sql`

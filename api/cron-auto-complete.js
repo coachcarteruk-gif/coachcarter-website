@@ -33,9 +33,35 @@ module.exports = async (req, res) => {
       SET status = ${CHARGEABLE}
       WHERE status = ${SCHEDULED}
         AND (scheduled_date + end_time) < (NOW() - INTERVAL '1 hour')
+      RETURNING id, learner_id, school_id, lesson_type_id, scheduled_date, end_time
     `;
 
     const flipped = result.length ?? 0;
-    return { ok: true, flipped };
+    const completedTrialLearnerIds = [];
+    if (flipped > 0) {
+      const flippedBookingIds = result.map(row => row.id).filter(Boolean);
+      const completedTrials = await sql`
+        SELECT DISTINCT lb.learner_id, lb.school_id, lb.scheduled_date, lb.end_time
+        FROM lesson_bookings lb
+        JOIN lesson_types lt
+          ON lt.id = lb.lesson_type_id
+         AND lt.school_id = lb.school_id
+        WHERE lb.id = ANY(${flippedBookingIds}::int[])
+          AND lt.slug = 'trial'
+          AND lb.learner_id IS NOT NULL
+      `;
+
+      for (const trial of completedTrials) {
+        completedTrialLearnerIds.push(trial.learner_id);
+        await sql`
+          UPDATE learner_users
+          SET free_trial_allowed = FALSE,
+              free_trial_completed_at = COALESCE(free_trial_completed_at, (${trial.scheduled_date}::date + ${trial.end_time}::time)::timestamptz)
+          WHERE id = ${trial.learner_id}
+            AND school_id = ${trial.school_id}
+        `;
+      }
+    }
+    return { ok: true, flipped, completed_trial_learners: completedTrialLearnerIds.length };
   });
 };
