@@ -196,3 +196,28 @@ test.describe('learner aggregate-safe balance displays', () => {
     expect(js).not.toContain("' hrs remaining'");
   });
 });
+
+test.describe('learner test date reminders', () => {
+  test('sidebar shows an authenticated weeks-until-test counter', () => {
+    const js = read('public/sidebar.js');
+
+    expect(js).toContain('id="cc-sb-test-weeks"');
+    expect(js).toContain('formatTestWeeksCopy');
+    expect(js).toContain("window.ccAuth.fetchAuthed('/api/learner?action=progress')");
+    expect(js).toContain('updateLearnerTestWeeks(data.test_date)');
+    expect(js).toContain('>Weeks</span>');
+  });
+
+  test('booking date grid marks the learner test date inside the booking window', () => {
+    const js = read('public/learner/book.js');
+    const html = read('public/learner/book.html');
+
+    expect(js).toContain('function learnerTestDateString()');
+    expect(js).toContain('function isLearnerTestDate(dateStr)');
+    expect(js).toContain('date-cell-test-badge');
+    expect(js).toContain('your driving test date');
+    expect(js).toContain('selected-date-test-note');
+    expect(html).toContain('.date-cell-test');
+    expect(html).toContain('.selected-date-test-note');
+  });
+});
