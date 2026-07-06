@@ -618,7 +618,7 @@ function getAriaLabel(skillKey, type, val, subKey) {
   var label = skill ? skill.label : skillKey;
   if (subKey && skill && skill.subs) {
     var sub = skill.subs.find(function(s) { return s.key === subKey; });
-    if (sub) label = skill.label + ' — ' + sub.label;
+    if (sub) label = skill.label + ' - ' + sub.label;
   }
   return label + ' ' + (ft ? ft.label : type) + ': ' + val;
 }
@@ -688,7 +688,7 @@ async function saveFaults() {
   var faultArray = [];
 
   if (testMode === 'supervisor') {
-    // Build supervisor fault array — one entry per DL25 skill mapped from each rated category
+    // Build supervisor fault array - one entry per DL25 skill mapped from each rated category
     var ratings = supervisorRatings[currentPart];
     Object.keys(ratings).forEach(function(catKey) {
       var cat = CC_COMPETENCY.getSupervisorCategory(catKey);
@@ -831,7 +831,7 @@ function showResults() {
 }
 
 function showSupervisorResults() {
-  // Aggregate all ratings across parts — take the worst rating per category
+  // Aggregate all ratings across parts - take the worst rating per category
   var allRatings = {};
   var ratingPriority = { concern: 0, needs_work: 1, good: 2 };
 
@@ -1193,13 +1193,13 @@ function startGpsTracking() {
     function(err) {
       console.warn('GPS error:', err.code, err.message);
       if (err.code === 1) {
-        // Permission denied — show a subtle note
+        // Permission denied - show a subtle note
         var existing = document.getElementById('gps-denied-note');
         if (!existing) {
           var note = document.createElement('div');
           note.id = 'gps-denied-note';
           note.style.cssText = 'background:var(--accent-lt);color:var(--accent-dk);padding:8px 12px;border-radius:8px;font-size:0.82rem;margin:8px 0;text-align:center;';
-          note.textContent = 'Location access denied — the fault map will use your selected route instead of GPS tracking.';
+          note.textContent = 'Location access denied - the fault map will use your selected route instead of GPS tracking.';
           var timer = document.getElementById('timer-display');
           if (timer && timer.parentNode) timer.parentNode.insertAdjacentElement('afterend', note);
         }
@@ -1410,7 +1410,7 @@ function placeFaultOnMap(latlng) {
     radius: 14, fillColor: colour, color: '#fff', weight: 2, fillOpacity: 0.9
   }).addTo(faultMap);
 
-  marker.bindTooltip(pendingFaultPlacement.shortLabel + ' — ' + pendingFaultPlacement.skillLabel, {
+  marker.bindTooltip(pendingFaultPlacement.shortLabel + ' - ' + pendingFaultPlacement.skillLabel, {
     permanent: false, direction: 'top', offset: [0, -10]
   });
 

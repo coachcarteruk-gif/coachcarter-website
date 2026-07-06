@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Franchise Fair-Value Calculator — CoachCarter Admin</title>
+<title>Franchise Fair-Value Calculator - CoachCarter Admin</title>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
 <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
@@ -325,7 +325,7 @@ header.page-head p {
 }
 .assumptions li { padding: 4px 0; }
 .assumptions li::before {
-  content: "—";
+  content: " - ";
   margin-right: 8px;
   color: var(--accent);
 }
@@ -336,19 +336,19 @@ header.page-head p {
   <a href="/admin/portal.html" class="back-link">← Back to admin portal</a>
   <header class="page-head">
     <h1>Franchise fair-value calculator</h1>
-    <p>RED Driving School vs CoachCarter, side by side. Tweak any number — the take-home for each column updates live.</p>
+    <p>RED Driving School vs CoachCarter, side by side. Tweak any number - the take-home for each column updates live.</p>
   </header>
 
   <div class="headline">
     <div>
-      <div class="label">CoachCarter advantage — annual</div>
+      <div class="label">CoachCarter advantage - annual</div>
       <div class="value" id="headlineValue">£0</div>
-      <div class="verdict" id="headlineVerdict">—</div>
+      <div class="verdict" id="headlineVerdict"> - </div>
     </div>
     <div class="right-stat">
       Gross revenue (same in both)
       <strong id="grossYearAmt">£0</strong>
-      <span id="grossDetail">— hrs/wk × £—/hr × 50 weeks</span>
+      <span id="grossDetail"> - hrs/wk �- £ - /hr �- 50 weeks</span>
     </div>
   </div>
 
@@ -357,7 +357,7 @@ header.page-head p {
     <div class="col red">
       <div class="col-head">
         <h2>RED Driving School</h2>
-        <div class="sub">The benchmark — what they're paying today</div>
+        <div class="sub">The benchmark - what they're paying today</div>
       </div>
       <div class="col-body">
         <h3>Their business</h3>
@@ -447,13 +447,13 @@ header.page-head p {
         </div>
         <div class="computed-row">
           <span class="label">Admin time cost
-            <small id="red_adminDetail">— hrs/wk × £—/hr × 50</small>
+            <small id="red_adminDetail"> - hrs/wk �- £ - /hr �- 50</small>
           </span>
           <span class="val cost" id="red_adminAmt">£0</span>
         </div>
         <div class="computed-row">
           <span class="label">Per-hour cut
-            <small id="red_cutDetail">£— × — hrs/wk × 50</small>
+            <small id="red_cutDetail">£ - �- - hrs/wk �- 50</small>
           </span>
           <span class="val cost" id="red_cutAmt">£0</span>
         </div>
@@ -468,7 +468,7 @@ header.page-head p {
     <div class="col cc">
       <div class="col-head">
         <h2>CoachCarter</h2>
-        <div class="sub">Your offer — same shape, different numbers</div>
+        <div class="sub">Your offer - same shape, different numbers</div>
       </div>
       <div class="col-body">
         <h3>Their business</h3>
@@ -580,13 +580,13 @@ header.page-head p {
         </div>
         <div class="computed-row">
           <span class="label">Admin time cost
-            <small id="cc_adminDetail">— hrs/wk × £—/hr × 50</small>
+            <small id="cc_adminDetail"> - hrs/wk �- £ - /hr �- 50</small>
           </span>
           <span class="val cost" id="cc_adminAmt">£0</span>
         </div>
         <div class="computed-row">
           <span class="label">Per-hour cut
-            <small id="cc_cutDetail">£— × — hrs/wk × 50</small>
+            <small id="cc_cutDetail">£ - �- - hrs/wk �- 50</small>
           </span>
           <span class="val cost" id="cc_cutAmt">£0</span>
         </div>
@@ -603,15 +603,15 @@ header.page-head p {
     <ul>
       <li>50 working weeks per year (2 weeks off)</li>
       <li><strong>Take-home</strong> = gross − franchise fee − insurance − maintenance − admin time cost</li>
-      <li><strong>Admin time cost</strong> = admin hrs/wk × lesson price × 50 weeks. Time is real money even if it doesn't leave the bank account</li>
+      <li><strong>Admin time cost</strong> = admin hrs/wk �- lesson price �- 50 weeks. Time is real money even if it doesn't leave the bank account</li>
       <li>Franchise fee is capped at weekly gross (instructor never goes negative on a quiet week)</li>
-      <li>Petrol is left out — same in both scenarios</li>
+      <li>Petrol is left out - same in both scenarios</li>
       <li>Doesn't price in non-cash benefits: brand, AI tools, platform features, compliance, support</li>
     </ul>
   </div>
 
   <p class="footnote">
-    Internal tool — share screen with the prospect, type their numbers in live. The honest framing is that the cash side is one piece; the platform features (AI, GDPR cover, learner funnel, automation) are the rest.
+    Internal tool - share screen with the prospect, type their numbers in live. The honest framing is that the cash side is one piece; the platform features (AI, GDPR cover, learner funnel, automation) are the rest.
   </p>
 </div>
 

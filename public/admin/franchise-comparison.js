@@ -43,7 +43,7 @@
     var wrappedAdjAnnual   = wrapAdj * WEEKS_PER_YEAR;        // +£ if NOT wrapped (cost)
     var dashcamAdjAnnual   = dashcamAdj * WEEKS_PER_YEAR;     // −£ if dashcam (saving)
 
-    // Learner guarantee: weeks missed × weekly compensation. Saves the instructor money.
+    // Learner guarantee: weeks missed �- weekly compensation. Saves the instructor money.
     var weeksMet      = Math.min(Math.max(guaranteeWeeks, 0), WEEKS_PER_YEAR);
     var weeksMissed   = WEEKS_PER_YEAR - weeksMet;
     var guaranteeAnnual = weeksMissed * guaranteeComp;        // saving (subtracts from fee)
@@ -90,7 +90,7 @@
       weeksMet: weeksMet,
       weeksMissed: weeksMissed,
       guaranteeAnnual: guaranteeAnnual,
-      // For headline / live "effective fee" display — base + adjustments, before guarantee
+      // For headline / live "effective fee" display - base + adjustments, before guarantee
       feeEffective: Math.max(0, baseFee + wrapAdj + dashcamAdj),
       takeHome: takeHome
     };
@@ -101,7 +101,7 @@
 
     // Franchise fee parent (base) + children + net subtotal
     $(prefix + '_feeAmt').textContent    = '−' + fmt(c.baseAnnual);
-    $(prefix + '_feeBaseDetail').textContent = fmt(c.baseFee) + '/wk × ' + WEEKS_PER_YEAR;
+    $(prefix + '_feeBaseDetail').textContent = fmt(c.baseFee) + '/wk �- ' + WEEKS_PER_YEAR;
 
     // Branding decals child (CC only). wrappedAdjAnnual is −£ when toggle ON (discount).
     var wrappedDiscountEl = $(prefix + '_wrappedDiscountAmt');
@@ -135,7 +135,7 @@
       $(prefix + '_guaranteeAmt').textContent = '−' + fmt(c.guaranteeAnnual);
       $(prefix + '_guaranteeAmt').className = 'val value';
     }
-    $(prefix + '_guaranteeDetail').textContent = c.weeksMissed + ' missed weeks × ' + fmt(c.guaranteeComp);
+    $(prefix + '_guaranteeDetail').textContent = c.weeksMissed + ' missed weeks �- ' + fmt(c.guaranteeComp);
 
     // Net franchise fee subtotal
     $(prefix + '_feeNetAmt').textContent = '−' + fmt(c.netFeeAnnual);
@@ -143,13 +143,13 @@
     $(prefix + '_insAmt').textContent    = '−' + fmt(c.insuranceAnnual);
     $(prefix + '_maintAmt').textContent  = '−' + fmt(c.maintAnnual);
     $(prefix + '_adminAmt').textContent  = '−' + fmt(c.adminAnnual);
-    $(prefix + '_adminDetail').textContent = c.adminHrs + ' hrs/wk × ' + fmt(c.avgPrice) + '/hr × ' + WEEKS_PER_YEAR;
+    $(prefix + '_adminDetail').textContent = c.adminHrs + ' hrs/wk �- ' + fmt(c.avgPrice) + '/hr �- ' + WEEKS_PER_YEAR;
 
     $(prefix + '_cutAmt').textContent    = '−' + fmt(c.perHourCutAnnual);
     if (c.cutCapHit) {
-      $(prefix + '_cutDetail').textContent = 'Capped at ' + fmt(c.cutCapWk) + '/wk × ' + WEEKS_PER_YEAR + ' (would be ' + fmt(c.perHourCut * c.lessonsWk) + '/wk uncapped)';
+      $(prefix + '_cutDetail').textContent = 'Capped at ' + fmt(c.cutCapWk) + '/wk �- ' + WEEKS_PER_YEAR + ' (would be ' + fmt(c.perHourCut * c.lessonsWk) + '/wk uncapped)';
     } else {
-      $(prefix + '_cutDetail').textContent = fmt(c.perHourCut) + ' × ' + c.lessonsWk + ' hrs/wk × ' + WEEKS_PER_YEAR;
+      $(prefix + '_cutDetail').textContent = fmt(c.perHourCut) + ' �- ' + c.lessonsWk + ' hrs/wk �- ' + WEEKS_PER_YEAR;
     }
 
     var monthlyEl = $(prefix + '_guaranteeMonthly');
@@ -173,13 +173,13 @@
     var effEl = $('cc_effectiveFee');
     if (effEl) effEl.textContent = fmt(cc.feeEffective) + '/wk';
 
-    // CC-only: per-toggle £ adjustment labels — always show the discount available
+    // CC-only: per-toggle £ adjustment labels - always show the discount available
     var wrappedAdjEl = $('cc_wrappedAdj');
     var dashcamAdjEl = $('cc_dashcamAdj');
     if (wrappedAdjEl) wrappedAdjEl.textContent = '−£25/wk';
     if (dashcamAdjEl) dashcamAdjEl.textContent = '−£30/wk';
 
-    // Headline strip — gross shown is RED's gross (acts as the baseline; CC may differ)
+    // Headline strip - gross shown is RED's gross (acts as the baseline; CC may differ)
     // Show both grosses if they differ
     var grossText;
     if (Math.round(red.grossYear) === Math.round(cc.grossYear)) {
@@ -189,8 +189,8 @@
     }
     $('grossYearAmt').textContent = grossText;
     $('grossDetail').textContent =
-      'RED: ' + red.lessonsWk + ' × ' + fmt(red.avgPrice) +
-      '  ·  CC: ' + cc.lessonsWk + ' × ' + fmt(cc.avgPrice);
+      'RED: ' + red.lessonsWk + ' �- ' + fmt(red.avgPrice) +
+      '  ·  CC: ' + cc.lessonsWk + ' �- ' + fmt(cc.avgPrice);
 
     // Headline delta
     var delta = cc.takeHome - red.takeHome;
@@ -201,11 +201,11 @@
 
     var verdict = $('headlineVerdict');
     if (red.takeHome <= 0 && cc.takeHome <= 0) {
-      verdict.textContent = 'Something looks off — both numbers come out below zero. Worth checking the inputs.';
+      verdict.textContent = 'Something looks off - both numbers come out below zero. Worth checking the inputs.';
     } else if (delta > Math.abs(red.takeHome) * 0.25) {
       verdict.textContent = 'A meaningful jump in your annual take-home, before factoring in the platform, brand, or support.';
     } else if (delta > 0) {
-      verdict.textContent = 'Slightly more in your pocket each year — and that\'s before the platform, brand, and support are added in.';
+      verdict.textContent = 'Slightly more in your pocket each year - and that\'s before the platform, brand, and support are added in.';
     } else if (delta > -Math.abs(red.takeHome) * 0.05) {
       verdict.textContent = 'Roughly level on take-home. The difference comes down to the platform, brand, and support you\'d gain.';
     } else {
@@ -218,7 +218,7 @@
     el.addEventListener('input', recalc);
   });
 
-  // Toggles on the CC column — re-run calc and refresh Yes/No labels
+  // Toggles on the CC column - re-run calc and refresh Yes/No labels
   function syncToggleLabel(checkboxId, labelId) {
     var cb = $(checkboxId);
     var lbl = $(labelId);

@@ -606,7 +606,7 @@ document.addEventListener('click', function (e) {
 
   // Calendar sync token rotation (PR-L, audit #17). Fetches the current token
   // status on load and binds the rotate button. The card stays hidden if the
-  // user has never set up calendar sync — no calendar_token = nothing to rotate.
+  // user has never set up calendar sync - no calendar_token = nothing to rotate.
   var calCard = document.getElementById('calendar-token-card');
   var calStatus = document.getElementById('cal-token-status');
   var rotateBtn = document.getElementById('btn-rotate-calendar');

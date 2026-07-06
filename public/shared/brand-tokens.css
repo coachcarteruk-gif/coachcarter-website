@@ -6,7 +6,7 @@
    via branding.js, which sets --brand-primary etc. at runtime.
 
    Admin, superadmin, instructor, and shared-auth keep their own
-   :root blocks for now — migrate when those areas are next touched.
+   :root blocks for now - migrate when those areas are next touched.
    ────────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -45,6 +45,6 @@
 
 /* Dark mode tokens are scoped to the learner hub (and any page that
    sets body.cc-has-sidebar via sidebar.js). The marketing site does
-   not opt into dark mode — its hero sections, top nav, and photo
+   not opt into dark mode - its hero sections, top nav, and photo
    overlays were not designed for it. Dark-mode token values live in
    learner.css under the body.cc-has-sidebar selector. */

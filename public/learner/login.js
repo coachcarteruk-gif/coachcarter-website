@@ -1,4 +1,4 @@
-/* CoachCarter learner login (May 2026 — password auth)
+/* CoachCarter learner login (May 2026 - password auth)
  *
  * State machine:
  *   ┌─ screen-auth (Sign in / Sign up tabs) ─┬─ signin     ─→ screen-success / new-user / terms
@@ -80,7 +80,7 @@
     var btn = document.getElementById('signin-btn');
     btn.disabled = true; btn.textContent = 'Signing in…';
 
-    // First, check if account exists & has password — routes us into either
+    // First, check if account exists & has password - routes us into either
     // login OR migration flow. Single network round-trip, then we either
     // POST /login or kick off /send-email-code.
     fetch('/api/learner-auth?action=check-account', {
@@ -100,17 +100,17 @@
           return null;
         }
         if (!chk.data.exists) {
-          // No account — nudge to sign-up tab and prefill email
+          // No account - nudge to sign-up tab and prefill email
           setError('error-msg', 'No account found for that email. Try signing up instead.');
           switchAuthMode('signup');
           document.getElementById('signup-email').value = email;
           return null;
         }
         if (!chk.data.has_password) {
-          // Existing user without password — start migration
+          // Existing user without password - start migration
           return startMigration(email);
         }
-        // Account has password — try login
+        // Account has password - try login
         return doLogin(email, password);
       })
       .catch(function () {
@@ -408,7 +408,7 @@
     });
   }
 
-  // ── Phone fallback (SMS code login — preserves old behaviour) ────────────
+  // ── Phone fallback (SMS code login - preserves old behaviour) ────────────
   function handleSmsPhone(e) {
     e.preventDefault();
     clearError('sms-phone-error');
@@ -597,7 +597,7 @@
           errEl.style.cssText = 'margin-top:12px;color:#ef4444;font-size:0.85rem;line-height:1.4;';
           btn.parentNode.appendChild(errEl);
         }
-        errEl.textContent = "Couldn't save — please try again.";
+        errEl.textContent = "Couldn't save - please try again.";
       });
   }
 

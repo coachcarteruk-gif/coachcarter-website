@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Franchise Comparison — CoachCarter</title>
+<title>Franchise Comparison - CoachCarter</title>
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
 <style>
@@ -337,12 +337,12 @@ header.page-head p {
 }
 .assumptions li { padding: 4px 0; }
 .assumptions li::before {
-  content: "—";
+  content: " - ";
   margin-right: 8px;
   color: var(--accent);
 }
 
-/* ── Mobile — stack columns, bigger touch targets ── */
+/* ── Mobile - stack columns, bigger touch targets ── */
 @media (max-width: 720px) {
   body { padding: 16px 12px 60px; }
 
@@ -406,7 +406,7 @@ header.page-head p {
   .assumptions ul { font-size: 0.9rem; }
 }
 
-/* ── Very small phones (under 360px) — final tighten ── */
+/* ── Very small phones (under 360px) - final tighten ── */
 @media (max-width: 360px) {
   .input-row input[type="number"] { width: 84px; }
   .headline .value { font-size: 1.7rem; }
@@ -418,19 +418,19 @@ header.page-head p {
 <div class="wrap">
   <header class="page-head">
     <h1>What you'd take home</h1>
-    <p>A side-by-side look at your current franchise and ours. Adjust any number to match your situation — everything updates as you go.</p>
+    <p>A side-by-side look at your current franchise and ours. Adjust any number to match your situation - everything updates as you go.</p>
   </header>
 
   <div class="headline">
     <div>
       <div class="label">Annual difference in your pocket</div>
       <div class="value" id="headlineValue">£0</div>
-      <div class="verdict" id="headlineVerdict">—</div>
+      <div class="verdict" id="headlineVerdict"> - </div>
     </div>
     <div class="right-stat">
       Annual gross revenue
       <strong id="grossYearAmt">£0</strong>
-      <span id="grossDetail">— hrs/wk × £—/hr × 52 weeks</span>
+      <span id="grossDetail"> - hrs/wk �- £ - /hr �- 52 weeks</span>
     </div>
   </div>
 
@@ -534,13 +534,13 @@ header.page-head p {
         </div>
         <div class="computed-row">
           <span class="label">Franchise fee
-            <small id="red_feeBaseDetail">£— /wk × 52</small>
+            <small id="red_feeBaseDetail">£ - /wk �- 52</small>
           </span>
           <span class="val cost" id="red_feeAmt">£0</span>
         </div>
         <div class="computed-row child">
           <span class="label">Missed-guarantee savings
-            <small id="red_guaranteeDetail">— missed weeks × £—</small>
+            <small id="red_guaranteeDetail"> - missed weeks �- £ - </small>
           </span>
           <span class="val value" id="red_guaranteeAmt">£0</span>
         </div>
@@ -558,13 +558,13 @@ header.page-head p {
         </div>
         <div class="computed-row">
           <span class="label">Admin time cost
-            <small id="red_adminDetail">— hrs/wk × £—/hr × 52</small>
+            <small id="red_adminDetail"> - hrs/wk �- £ - /hr �- 52</small>
           </span>
           <span class="val cost" id="red_adminAmt">£0</span>
         </div>
         <div class="computed-row">
           <span class="label">Per-hour cut
-            <small id="red_cutDetail">£— × — hrs/wk × 52</small>
+            <small id="red_cutDetail">£ - �- - hrs/wk �- 52</small>
           </span>
           <span class="val cost" id="red_cutAmt">£0</span>
         </div>
@@ -598,7 +598,7 @@ header.page-head p {
         </div>
         <div class="input-row">
           <label>Admin hours/week
-            <small>Less admin — bookings and payments are handled for you</small>
+            <small>Less admin - bookings and payments are handled for you</small>
           </label>
           <input type="number" id="cc_adminHrs" min="0" step="0.5" value="2">
         </div>
@@ -606,7 +606,7 @@ header.page-head p {
         <h3>Costs</h3>
         <div class="input-row">
           <label>Weekly franchise fee
-            <small>Base fee — toggle below for discounts</small>
+            <small>Base fee - toggle below for discounts</small>
           </label>
           <span class="input-prefix">
             <span class="currency">£</span>
@@ -698,7 +698,7 @@ header.page-head p {
         </div>
         <div class="computed-row">
           <span class="label">Franchise fee
-            <small id="cc_feeBaseDetail">£— /wk × 52</small>
+            <small id="cc_feeBaseDetail">£ - /wk �- 52</small>
           </span>
           <span class="val cost" id="cc_feeAmt">£0</span>
         </div>
@@ -712,7 +712,7 @@ header.page-head p {
         </div>
         <div class="computed-row child">
           <span class="label">Missed-guarantee savings
-            <small id="cc_guaranteeDetail">— missed weeks × £—</small>
+            <small id="cc_guaranteeDetail"> - missed weeks �- £ - </small>
           </span>
           <span class="val value" id="cc_guaranteeAmt">£0</span>
         </div>
@@ -730,13 +730,13 @@ header.page-head p {
         </div>
         <div class="computed-row">
           <span class="label">Admin time cost
-            <small id="cc_adminDetail">— hrs/wk × £—/hr × 52</small>
+            <small id="cc_adminDetail"> - hrs/wk �- £ - /hr �- 52</small>
           </span>
           <span class="val cost" id="cc_adminAmt">£0</span>
         </div>
         <div class="computed-row">
           <span class="label">Per-hour cut
-            <small id="cc_cutDetail">£— × — hrs/wk × 52</small>
+            <small id="cc_cutDetail">£ - �- - hrs/wk �- 52</small>
           </span>
           <span class="val cost" id="cc_cutAmt">£0</span>
         </div>
@@ -753,15 +753,15 @@ header.page-head p {
     <ul>
       <li>Based on 52 weeks a year</li>
       <li>Take-home = your gross income, minus the weekly fee, insurance, maintenance, and the time you spend on admin</li>
-      <li>Admin time is valued at your hourly rate — those are hours you could be teaching</li>
-      <li>The weekly fee can never exceed what you've earned that week — you'll never owe money on a quiet week</li>
-      <li>Petrol is left out — it's roughly the same either way</li>
+      <li>Admin time is valued at your hourly rate - those are hours you could be teaching</li>
+      <li>The weekly fee can never exceed what you've earned that week - you'll never owe money on a quiet week</li>
+      <li>Petrol is left out - it's roughly the same either way</li>
       <li>The numbers above are pure cash. They don't put a price on the brand, the booking platform, the learner funnel, or the support you'd get</li>
     </ul>
   </div>
 
   <p class="footnote">
-    Numbers are yours to play with. Adjust anything that doesn't reflect your situation — the comparison is only as honest as the inputs.
+    Numbers are yours to play with. Adjust anything that doesn't reflect your situation - the comparison is only as honest as the inputs.
   </p>
 </div>
 

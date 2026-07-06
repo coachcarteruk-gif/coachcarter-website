@@ -283,7 +283,7 @@
       console.error('Save error:', err);
       btn.disabled = false;
       btn.textContent = 'Save Profile';
-      alert('Something went wrong — please try again.');
+      alert('Something went wrong - please try again.');
     });
   };
 
@@ -384,7 +384,7 @@
             }
           }
         } else {
-          // Mixed ratings — set as struggled area and expand
+          // Mixed ratings - set as struggled area and expand
           areaRatings[area.id] = 'struggled';
           expandedAreas[area.id] = true;
           var mixBtn = document.querySelector('#area-card-' + area.id + ' .rating-btn[data-rating="struggled"]');

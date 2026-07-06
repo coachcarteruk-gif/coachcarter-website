@@ -12,9 +12,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
-  <title>Book a Lesson — CoachCarter</title>
+  <title>Book a Lesson - CoachCarter</title>
   <meta name="description" content="Book your driving lesson online with CoachCarter.">
-  <meta property="og:title" content="Book a Lesson — CoachCarter">
+  <meta property="og:title" content="Book a Lesson - CoachCarter">
   <meta property="og:description" content="Book your driving lesson online with CoachCarter.">
   <meta property="og:image" content="https://coachcarter.uk/Logo.png">
   <meta property="og:image:width" content="779">
@@ -32,7 +32,7 @@
   <script src="/shared/dark-mode.js" defer></script>
   <script src="/shared/font-swap.js" defer></script>
   <style>
-    /* ── BOOK A LESSON — learner booking calendar ───
+    /* ── BOOK A LESSON - learner booking calendar ───
        Same DL25 vocabulary as Examiner + buy-credits. The page now leads
        with learner choices: lesson length, date, then grouped time buttons.
        Status rows and postcode prompt keep the existing booking safeguards.
@@ -101,7 +101,7 @@
       opacity: 0.55;
     }
 
-    /* ── STATUS STRIP — banners collapse here as document rows ── */
+    /* ── STATUS STRIP - banners collapse here as document rows ── */
     .banner, .next-lesson-card, .reschedule-banner {
       display: none;
       align-items: center; gap: 14px;
@@ -161,7 +161,7 @@
     }
     .banner-dismiss:hover { border-color: var(--muted); color: var(--primary); }
 
-    /* Reschedule "Cancel" button — mono pill */
+    /* Reschedule "Cancel" button - mono pill */
     .reschedule-banner button:not(.banner-dismiss) {
       background: transparent; border: 1px solid var(--accent);
       border-radius: 6px;
@@ -664,7 +664,7 @@
       color: var(--accent); transform: translateX(2px);
     }
 
-    /* Slot avatar (rendered by JS — circle in old code, squircle now) */
+    /* Slot avatar (rendered by JS - circle in old code, squircle now) */
     .slot-avatar {
       width: 22px; height: 22px; border-radius: 6px;
       background: var(--accent-mid);
@@ -768,7 +768,7 @@
     .empty-icon  { font-size: 2.5rem; margin-bottom: 12px; }
     .empty-state h3 { font-family: var(--font-head); font-size: 1.1rem; margin-bottom: 6px; color: var(--primary); letter-spacing: -0.01em; }
 
-    /* ── Modals (unchanged — complex booking flow lives here) ── */
+    /* ── Modals (unchanged - complex booking flow lives here) ── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.5);
       display: flex; align-items: center; justify-content: center;
@@ -1103,7 +1103,7 @@
       .page { padding: 24px 18px 48px; }
       .page.has-selected-slot { padding-bottom: 200px; }
       /* Inside the mobile app shell, main is an inner scroll container and
-         sticky pins against its padding box — pin the summary to the viewport
+         sticky pins against its padding box - pin the summary to the viewport
          above the floating bottom tab bar instead. */
       body.cc-has-bottom-bar .selected-slot-summary {
         position: fixed;
@@ -1154,7 +1154,7 @@
 
   <!-- Guest banner -->
   <div class="banner banner-credits" id="guestBanner" data-tag="GST" style="display:none">
-    <p>Browsing as a guest — pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html">sign in</a> to use lesson hours.</p>
+    <p>Browsing as a guest - pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html">sign in</a> to use lesson hours.</p>
     <span></span>
   </div>
 
@@ -1175,7 +1175,7 @@
 
   <!-- Reschedule banner -->
   <div class="reschedule-banner" id="rescheduleBanner" data-tag="MV" style="display:none">
-    <span>Rescheduling: <strong id="rescheduleBannerText">—</strong>. Pick a new slot below.</span>
+    <span>Rescheduling: <strong id="rescheduleBannerText"> - </strong>. Pick a new slot below.</span>
     <button id="rescheduleCancelBtn">Cancel</button>
   </div>
 
@@ -1247,9 +1247,9 @@
         <button class="modal-close-x" aria-label="Close" id="bookModalCloseX">&times;</button>
       </div>
       <div class="modal-detail">
-        <div class="modal-detail-row"><span>Date</span><span id="mdDate">—</span></div>
-        <div class="modal-detail-row"><span>Time</span><span id="mdTime">—</span></div>
-        <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor">—</span></div>
+        <div class="modal-detail-row"><span>Date</span><span id="mdDate"> - </span></div>
+        <div class="modal-detail-row"><span>Time</span><span id="mdTime"> - </span></div>
+        <div class="modal-detail-row"><span>Instructor</span><span id="mdInstructor"> - </span></div>
         <div class="modal-detail-row"><span>Transmission</span><span id="mdTransmission">-</span></div>
         <div class="modal-detail-row" id="mdDurationPicker" style="display:none">
           <span>Lesson</span>
@@ -1258,7 +1258,7 @@
         <div id="mdUsualHint" style="display:none;font-size:0.75rem;color:var(--muted);text-align:right;margin-top:-4px">Selected on the page</div>
         <div class="modal-detail-row" id="mdSingleTypeRow" style="display:none">
           <span>Lesson</span>
-          <span id="mdSingleType">—</span>
+          <span id="mdSingleType"> - </span>
         </div>
         <div class="modal-detail-row modal-status-row" id="mdLoadingRow" style="display:none">
           <span>Lesson</span>
@@ -1268,7 +1268,7 @@
           <span>Lesson</span>
           <span id="mdNoFitText" style="font-weight:600">No lesson lengths fit this slot</span>
         </div>
-        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration">—</span></div>
+        <div class="modal-detail-row"><span>Duration</span><span id="mdDuration"> - </span></div>
       </div>
       <div id="socialVideoOption" style="display:none;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.86rem;color:var(--primary);font-weight:700;line-height:1.35">
@@ -1389,7 +1389,7 @@
       </div>
       <div id="modalPayPath" style="display:none">
         <p class="modal-credit-note" style="background:var(--accent-lt);border-color:var(--accent)">
-          You have no lessons on your account. Pay <strong id="mdPayAmount">—</strong> now and we'll book this slot instantly.
+          You have no lessons on your account. Pay <strong id="mdPayAmount"> - </strong> now and we'll book this slot instantly.
           Cancel 48+ hours before and it returns as a lesson credit.
         </p>
         <div class="modal-actions">
@@ -1407,7 +1407,7 @@
     <div id="bookSuccessStep" class="modal-success" style="display:none">
       <div class="modal-success-icon">✓</div>
       <h2>Lesson booked.</h2>
-      <p>Your lesson on <strong id="successDate">—</strong> at <strong id="successTime">—</strong> with <strong id="successInstructor">—</strong> is confirmed. Check your email for details.</p>
+      <p>Your lesson on <strong id="successDate"> - </strong> at <strong id="successTime"> - </strong> with <strong id="successInstructor"> - </strong> is confirmed. Check your email for details.</p>
       <p id="successBalance" style="display:none;font-size:0.875rem;color:var(--muted);margin-top:-8px"></p>
       <div class="reserved-weekly-prompt" id="reservedWeeklySuccessPrompt" style="display:none">
         <strong>Want this time every week?</strong>
@@ -1504,9 +1504,9 @@
       <button class="modal-close-x" aria-label="Close" id="cancelModalCloseX">&times;</button>
     </div>
     <div class="modal-detail">
-      <div class="modal-detail-row"><span>Date</span><span id="cmDate">—</span></div>
-      <div class="modal-detail-row"><span>Time</span><span id="cmTime">—</span></div>
-      <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">—</span></div>
+      <div class="modal-detail-row"><span>Date</span><span id="cmDate"> - </span></div>
+      <div class="modal-detail-row"><span>Time</span><span id="cmTime"> - </span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor"> - </span></div>
     </div>
     <div class="cancel-policy" id="cancelPolicyNote"></div>
     <div id="cancelSeriesOption" style="display:none;margin:10px 0;padding:10px;background:var(--surface);border-radius:8px;">
@@ -1537,12 +1537,12 @@
       <button class="modal-close-x" aria-label="Close" id="rescheduleModalCloseX">&times;</button>
     </div>
     <div class="modal-detail">
-      <div class="modal-detail-row"><span>Was</span><span id="rmOldDateTime" style="text-decoration:line-through;color:var(--muted)">—</span></div>
-      <div class="modal-detail-row"><span>Now</span><span id="rmNewDateTime" style="color:var(--accent);font-weight:700">—</span></div>
-      <div class="modal-detail-row"><span>Instructor</span><span id="rmInstructor">—</span></div>
+      <div class="modal-detail-row"><span>Was</span><span id="rmOldDateTime" style="text-decoration:line-through;color:var(--muted)"> - </span></div>
+      <div class="modal-detail-row"><span>Now</span><span id="rmNewDateTime" style="color:var(--accent);font-weight:700"> - </span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="rmInstructor"> - </span></div>
       <div class="modal-detail-row"><span>Duration</span><span id="rmDuration">1.5 hours</span></div>
     </div>
-    <p class="modal-credit-note">No balance change — your lesson is simply being moved to the new time.</p>
+    <p class="modal-credit-note">No balance change - your lesson is simply being moved to the new time.</p>
     <div id="rescheduleLocationFields" style="margin:12px 0">
       <div class="modal-section-title">Lesson details</div>
       <div id="reschedulePickupRow" style="margin-bottom:10px">

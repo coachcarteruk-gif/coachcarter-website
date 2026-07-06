@@ -1,5 +1,5 @@
 // Page-local glue for /learner/ (dashboard).
-// Previously two inline <script> blocks in learner/index.html — moved to an
+// Previously two inline <script> blocks in learner/index.html - moved to an
 // external file in PR-P (audit #22) because production CSP blocks 'unsafe-inline'.
 //
 // (1) Mirror legacy balance/readiness DOM into the new twin stat panels.
@@ -19,7 +19,7 @@
     var balSub = document.getElementById('stat-balance-sub');
     if (line && balVal) {
       // The legacy markup is `<span class="credit-badge">3.5 hrs remaining</span>` or
-      // `<span class="credit-badge">3 hrs remaining</span>` — pull out the number.
+      // `<span class="credit-badge">3 hrs remaining</span>` - pull out the number.
       var raw = (line.textContent || '').trim();
       var m = raw.match(/([\d.]+)\s*hrs?/i);
       if (m) {
@@ -72,6 +72,6 @@
           setTimeout(function () { toast.classList.remove('show'); }, 5000);
         }
       })
-      .catch(function () { /* silent — webhook likely handled it */ });
+      .catch(function () { /* silent - webhook likely handled it */ });
   });
 })();

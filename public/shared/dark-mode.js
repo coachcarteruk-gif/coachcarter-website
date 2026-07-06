@@ -22,7 +22,7 @@
     } else if (mode === 'light') {
       root.classList.add('light-mode');
     }
-    // 'auto' uses neither class — CSS @media handles it
+    // 'auto' uses neither class - CSS @media handles it
 
     // Update theme-color meta tag
     var isDark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);

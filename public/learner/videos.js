@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// Delegated image error handler — replaces inline onerror. Capture because
+// Delegated image error handler - replaces inline onerror. Capture because
 // the 'error' event does not bubble.
 document.addEventListener('error', function (e) {
   var t = e.target;
@@ -21,7 +21,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Auth (optional — page is viewable without login)
+// Auth (optional - page is viewable without login)
 const session = ccAuth.getAuth();
 if (session?.user?.name) document.getElementById('user-name').textContent = session.user.name;
 function logout() { ccAuth.logout(); }

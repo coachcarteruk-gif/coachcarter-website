@@ -37,7 +37,7 @@
       }
       // Read learner id from the display blob mirrored in localStorage
       // at login time. (The previous version tried atob(tok.split('.')[1])
-      // against the JSON blob, which silently failed — this is also a
+      // against the JSON blob, which silently failed - this is also a
       // drive-by fix.)
       var learnerId = null;
       try {

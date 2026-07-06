@@ -32,7 +32,7 @@
           EXPIRED: 'This lesson offer has expired. Please ask your instructor to send a new one.',
           ALREADY_ACCEPTED: 'This lesson offer has already been accepted and paid for.',
           CANCELLED: 'This lesson offer was cancelled by the instructor.',
-          SUPERSEDED: 'Sorry — that slot is no longer available! Another learner booked it first.',
+          SUPERSEDED: 'Sorry - that slot is no longer available! Another learner booked it first.',
           NOT_FOUND: 'This offer link is invalid. Please check the link from your email.'
         };
         showError(titles[data.code] || 'Unavailable', messages[data.code] || data.message || 'Something went wrong.');
@@ -81,7 +81,7 @@
         titleEl.textContent = 'Last-minute slot';
         subEl.textContent = '';  // banner explains the situation; no subtitle needed
         bannerTitle.textContent = "We've had a last-minute cancellation";
-        bannerBody.textContent = "This slot is being offered to a few learners who said they're free at this time. First to book it gets it — book quickly to secure it.";
+        bannerBody.textContent = "This slot is being offered to a few learners who said they're free at this time. First to book it gets it - book quickly to secure it.";
       } else {
         titleEl.textContent = 'Driving lesson offer';
         subEl.textContent = o.instructor_name + ' has a slot available';
@@ -95,7 +95,7 @@
     var dateEl = document.getElementById('offer-date');
     var timeEl = document.getElementById('offer-time');
     if (o.is_flexible) {
-      dateEl.textContent = 'Flexible — you choose';
+      dateEl.textContent = 'Flexible - you choose';
       timeEl.textContent = 'Book a time that works for you';
     } else {
       var dateObj = new Date(o.scheduled_date + 'T00:00:00Z');
@@ -109,7 +109,7 @@
     document.getElementById('offer-duration').textContent = durStr;
     document.getElementById('offer-instructor').textContent = o.instructor_name;
 
-    // Price display — build with DOM to avoid injecting HTML via innerHTML
+    // Price display - build with DOM to avoid injecting HTML via innerHTML
     var priceEl = document.getElementById('offer-price');
     priceEl.textContent = '';
     if (o.price_pence === 0) {
@@ -155,7 +155,7 @@
           totalEl.textContent = n + (n === 1 ? ' free lesson' : ' free lessons');
         } else {
           totalEl.textContent = 'Total: £' + ((o.price_pence * n) / 100).toFixed(2)
-            + (n > 1 ? ' (' + n + ' × £' + (o.price_pence / 100).toFixed(2) + ')' : '');
+            + (n > 1 ? ' (' + n + ' �- £' + (o.price_pence / 100).toFixed(2) + ')' : '');
         }
       };
       repeatSel.addEventListener('change', updateRepeatTotal);

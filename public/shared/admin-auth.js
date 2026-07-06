@@ -3,7 +3,7 @@
  * Mirror of learner-auth.js / instructor-auth.js for the admin + superadmin
  * pages. Session JWT lives in the httpOnly cc_admin cookie. Admin pages
  * that support instructor-admins (e.g. portal.html) may also authenticate
- * via cc_instructor when that token has isAdmin=true — the backend
+ * via cc_instructor when that token has isAdmin=true - the backend
  * requireAuth({ roles: ['admin'] }) accepts both.
  *
  * The display blob in localStorage under STORAGE_KEY is used for sidebar

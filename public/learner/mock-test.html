@@ -28,10 +28,10 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── MOCK DRIVING TEST — 7-screen DL25 dossier ───
+    /* ── MOCK DRIVING TEST - 7-screen DL25 dossier ───
        Mode → Start → Route → Part → Faults → Results → Map. Dense interactive
        flow with live timer, wake-lock, Leaflet map and per-skill fault counters.
-       Vocabulary matches the rest of the Practice tab — but the live faults
+       Vocabulary matches the rest of the Practice tab - but the live faults
        screen needs to read clearly while driving so info density wins over
        editorial flourish.
 
@@ -242,7 +242,7 @@
     /* Warning box: mock-test.js overwrites .innerHTML with
        `<strong>⚠️ IMPORTANT</strong>Mobile phones must not be used...`
        so we keep a flexible flow layout (no grid). The ⚠ icon is the
-       ::before element from .warning-box itself — but JS already emits
+       ::before element from .warning-box itself - but JS already emits
        its own ⚠️ in <strong>, so we don't add a separate one. */
     .warning-box {
       padding: 14px 16px;
@@ -750,7 +750,7 @@
       color: var(--primary); font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
-    /* Reflection outcome pills — themed so they hold up in dark mode */
+    /* Reflection outcome pills - themed so they hold up in dark mode */
     .fault-total-pills > .ft-pill-good { background: var(--green-lt); color: #166534; border-color: transparent; }
     .fault-total-pills > .ft-pill-warn { background: #fffbeb; color: #b45309; border-color: transparent; }
     .fault-total-pills > .ft-pill-bad  { background: var(--red-lt); color: #dc2626; border-color: transparent; }
@@ -799,12 +799,6 @@
       margin-bottom: 24px;
       font-family: var(--font-mono); font-size: 0.66rem;
       color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
-    }
-    .results-stamp-tag {
-      padding: 4px 10px;
-      background: var(--accent); color: #fff;
-      font-weight: 700;
-      border-radius: 3px;
     }
     .result-badge {
       display: inline-flex; align-items: center; gap: 8px;
@@ -1130,7 +1124,7 @@
         <a id="btn-open-maps" href="#" target="_blank" rel="noopener" class="btn-maps">📍 Open route in Google Maps</a>
         <button class="btn-primary" id="btn-begin-route">Begin mock test</button>
       </div>
-      <button class="btn-skip" id="btn-skip-route">Skip — I know my route</button>
+      <button class="btn-skip" id="btn-skip-route">Skip - I know my route</button>
       <div id="mock-start-status" class="mock-save-status hidden"></div>
     </div>
   </section>
@@ -1150,7 +1144,7 @@
 
       <div class="btn-group">
         <button class="btn-primary" id="btn-start-drive">Start driving</button>
-        <button class="btn-dark hidden" id="btn-pull-over" disabled>I've pulled over — record faults</button>
+        <button class="btn-dark hidden" id="btn-pull-over" disabled>I've pulled over - record faults</button>
       </div>
     </div>
   </section>
@@ -1184,7 +1178,7 @@
   <section id="screen-results" class="screen hidden">
     <div class="results-screen">
       <div class="results-stamp">
-        <span><span class="results-stamp-tag">Verdict</span></span>
+        <span>Verdict</span>
         <span id="results-stamp-date"></span>
       </div>
 

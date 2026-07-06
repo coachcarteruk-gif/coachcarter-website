@@ -80,11 +80,11 @@ async function loadDashboard() {
       renderLessons();
     }
 
-    // Pending broadcast offers (fire-and-forget — failure to load this card
+    // Pending broadcast offers (fire-and-forget - failure to load this card
     // shouldn't block the rest of the dashboard).
     loadBroadcasts().catch(function(e) { console.warn('broadcasts load failed:', e.message); });
 
-    // Connect health alert (fire-and-forget — same rationale).
+    // Connect health alert (fire-and-forget - same rationale).
     loadConnectAlert().catch(function(e) { console.warn('connect-alert load failed:', e.message); });
   } catch (err) {
     document.getElementById('dashLessons').innerHTML =
@@ -438,7 +438,7 @@ function openDetail(idx) {
   if (!b) return;
   detailBooking = b;
 
-  var time = b.start_time.slice(0, 5) + ' — ' + (b.end_time || '').slice(0, 5);
+  var time = b.start_time.slice(0, 5) + ' - ' + (b.end_time || '').slice(0, 5);
   var name = b.learner_name || 'Unknown';
   document.getElementById('detailTitle').textContent = name;
 
@@ -726,7 +726,7 @@ async function loadConnectAlert() {
     var n = s.requirements_pending || 0;
     message = n > 0
       ? 'Stripe needs ' + n + ' more item' + (n === 1 ? '' : 's') + ' before your payouts can resume.'
-      : 'Stripe has paused your payouts — action needed.';
+      : 'Stripe has paused your payouts - action needed.';
   } else if (s.payouts_paused) {
     message = 'Your payouts are paused.';
   }

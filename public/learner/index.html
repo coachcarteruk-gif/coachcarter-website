@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script src="/cookie-consent.js"></script>
   <script src="/posthog-loader.js"></script>
-  <title>Dashboard — CoachCarter</title>
+  <title>Dashboard - CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
@@ -23,10 +23,10 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── LEARNER DASHBOARD — overview document ───
+    /* ── LEARNER DASHBOARD - overview document ───
        Same DL25 vocabulary as the rest of the Lessons tab. Greeting replaces
        eyebrow/title. Balance + readiness as twin stat panels at the top.
-       One orange hero (next-lesson) — referral demoted to a ledger row.
+       One orange hero (next-lesson) - referral demoted to a ledger row.
        JS hooks preserved: welcome-msg, greeting-sub, credit-balance-line,
        dashboard-skeleton, next-lesson-card / .show / nl-when / nl-time /
        nl-instructor, next-lesson-empty / .show, readiness-ring / ring-fill /
@@ -76,7 +76,7 @@
       max-width: 52ch;
     }
 
-    /* ── TWIN STAT PANELS — Balance + Readiness ── */
+    /* ── TWIN STAT PANELS - Balance + Readiness ── */
     .stat-row {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 0;
@@ -130,7 +130,7 @@
     }
     .stat-cell-arrow svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; }
 
-    /* Legacy hooks — keep so JS doesn't choke */
+    /* Legacy hooks - keep so JS doesn't choke */
     .credit-badge { display: none; }
 
     /* ── NEXT LESSON HERO CARD (the one allowed gradient) ── */
@@ -197,14 +197,14 @@
     }
     .nl-btn:hover { background: rgba(255,255,255,0.28); }
 
-    /* Readiness ring — kept inside hero for now, smaller + cleaner */
+    /* Readiness ring - kept inside hero for now, smaller + cleaner */
     .readiness-ring {
       position: absolute;
       top: 18px; right: 18px;
       width: 58px; height: 58px;
       cursor: pointer;
       text-decoration: none;
-      display: none !important; /* hidden — duplicate exists in stat row above */
+      display: none !important; /* hidden - duplicate exists in stat row above */
     }
     .readiness-ring svg { width: 58px; height: 58px; transform: rotate(-90deg); }
     .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4; }
@@ -359,7 +359,7 @@
     }
     .profile-card .btn-complete:hover::after { transform: translateX(3px); }
 
-    /* ── UNLOGGED BANNER — status-strip row style ── */
+    /* ── UNLOGGED BANNER - status-strip row style ── */
     .unlogged-banner {
       display: none;
       grid-template-columns: 32px 1fr auto;
@@ -424,7 +424,7 @@
       content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
-    /* ── REFERRAL CARD — demoted to a ledger row, no second gradient ── */
+    /* ── REFERRAL CARD - demoted to a ledger row, no second gradient ── */
     .referral-card {
       display: none;
       grid-template-columns: 32px 1fr auto;
@@ -543,12 +543,6 @@
       color: var(--primary); line-height: 1.2;
       letter-spacing: -0.01em;
     }
-    .action-btn-sub {
-      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
-      color: var(--muted); letter-spacing: 0.08em;
-      margin-top: 2px;
-    }
-
     /* ── CREDIT VERIFICATION TOAST ── */
     .credit-toast {
       position: fixed; bottom: 90px; left: 50%;
@@ -594,17 +588,17 @@
     </div>
   </section>
 
-  <!-- TWIN STAT PANELS — Balance + Readiness -->
+  <!-- TWIN STAT PANELS - Balance + Readiness -->
   <div class="stat-row">
     <a href="/learner/profile.html" class="stat-cell" id="stat-balance">
       <div class="stat-cell-label">Total hours</div>
-      <div class="stat-cell-value" id="stat-balance-value">—</div>
+      <div class="stat-cell-value" id="stat-balance-value"> - </div>
       <div class="stat-cell-sub" id="stat-balance-sub">across instructors</div>
       <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
     </a>
     <a href="/learner/progress.html" class="stat-cell" id="stat-readiness">
       <div class="stat-cell-label">Practice level</div>
-      <div class="stat-cell-value" id="stat-readiness-value">—</div>
+      <div class="stat-cell-value" id="stat-readiness-value"> - </div>
       <div class="stat-cell-sub" id="stat-readiness-sub">across all skills</div>
       <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
     </a>
@@ -627,7 +621,7 @@
         <a href="/learner/lessons.html" class="nl-btn">View lessons</a>
       </div>
     </div>
-    <!-- Legacy readiness ring (hidden — replaced by stat-readiness above) -->
+    <!-- Legacy readiness ring (hidden - replaced by stat-readiness above) -->
     <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
       <svg viewBox="0 0 52 52">
         <circle class="ring-bg" cx="26" cy="26" r="21"/>
@@ -643,7 +637,7 @@
 
   <!-- NEXT LESSON EMPTY STATE -->
   <div class="next-lesson-empty" id="next-lesson-empty">
-    <div class="nle-icon">🗓</div>
+    <div class="nle-icon">�-�</div>
     <p>No upcoming lessons</p>
     <a href="/learner/book.html" class="nle-btn">Book a lesson</a>
   </div>
@@ -653,7 +647,7 @@
     <div class="unlogged-banner-icon">&#x1F4DD;</div>
     <div class="unlogged-banner-text">
       <div class="unlogged-banner-title" id="unlogged-title"></div>
-      <div class="unlogged-banner-sub" id="unlogged-sub">Your instructor marked it complete — take 30 seconds to log how it went.</div>
+      <div class="unlogged-banner-sub" id="unlogged-sub">Your instructor marked it complete - take 30 seconds to log how it went.</div>
     </div>
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
   </div>
@@ -670,7 +664,7 @@
     <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete next step</a>
   </div>
 
-  <!-- REFERRAL TEASER — demoted to a ledger row -->
+  <!-- REFERRAL TEASER - demoted to a ledger row -->
   <a class="referral-card referral-teaser" id="referral-card" href="/learner/refer.html">
     <div>
       <h3>Refer a friend</h3>
@@ -698,7 +692,6 @@
       </div>
       <div>
         <div class="action-btn-label">Book</div>
-        <div class="action-btn-sub">Pick a slot</div>
       </div>
     </a>
     <a href="/learner/focused-practice.html" class="action-btn">
@@ -707,7 +700,6 @@
       </div>
       <div>
         <div class="action-btn-label">Practice</div>
-        <div class="action-btn-sub">Start a drive</div>
       </div>
     </a>
     <a href="/learner/ask-examiner.html" class="action-btn">
@@ -716,7 +708,6 @@
       </div>
       <div>
         <div class="action-btn-label">Mark Scheme</div>
-        <div class="action-btn-sub">Check how faults are marked</div>
       </div>
     </a>
   </div>

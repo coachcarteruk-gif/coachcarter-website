@@ -17,12 +17,12 @@ function esc(str) {
 // Authentication now lives in the httpOnly cc_admin / cc_instructor
 // cookies. Session JWTs are attached automatically by the browser on
 // same-origin fetches; the backend accepts either cookie for admin
-// endpoints (via requireAuth({ roles: ['admin'] }) — which includes
+// endpoints (via requireAuth({ roles: ['admin'] }) - which includes
 // instructors with isAdmin=true).
 //
 // localStorage display blobs are read for sidebar greetings because
 // they're the fastest way to populate name/email on page load without
-// an extra API round-trip. They contain NO auth material — session JWTs
+// an extra API round-trip. They contain NO auth material - session JWTs
 // live in the httpOnly cc_admin / cc_instructor cookies.
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
 const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
@@ -50,7 +50,7 @@ if (isInstructorAdmin) {
 function logout() {
   if (isInstructorAdmin) {
     // Instructor-admins: clear the instructor session on the server
-    // (not the admin one — they authenticated via cc_instructor).
+    // (not the admin one - they authenticated via cc_instructor).
     try {
       fetchAdmin('/api/instructor?action=logout', { method: 'POST', keepalive: true })
         .catch(function () {});
@@ -137,7 +137,7 @@ function statusBadge(status) {
 }
 
 // At-a-glance Stripe Connect status for an instructor row.
-// DB-only — three columns from all-instructors. Live Stripe state
+// DB-only - three columns from all-instructors. Live Stripe state
 // (charges_enabled / requirements) is not fetched here to avoid N+1 round-
 // trips on admin pageload; instructors see their own live status on their
 // earnings page, which writes stripe_onboarding_complete back to the DB.
@@ -461,7 +461,7 @@ function openInstructorPasswordModal(instructorId, instructorName, hasPassword) 
       '<label style="display:block;font-size:0.78rem;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">New password</label>' +
       '<input type="text" id="instrPwInput" autocomplete="off" placeholder="Type a temporary password" style="width:100%;padding:11px 13px;border:1px solid #ddd;border-radius:8px;font-size:0.95rem;font-family:inherit;box-sizing:border-box;">' +
       '<div style="font-size:0.8rem;color:#888;margin-top:6px;line-height:1.4;">' +
-        'At least 8 characters. Share this with the instructor — they\'ll change it on first sign-in.' +
+        'At least 8 characters. Share this with the instructor - they\'ll change it on first sign-in.' +
       '</div>' +
       '<div style="display:flex;gap:10px;margin-top:20px;">' +
         '<button id="instrPwCancel" style="flex:1;padding:11px;background:#f1f1f1;border:none;border-radius:8px;font-family:inherit;font-weight:600;cursor:pointer;color:#444;">Cancel</button>' +
@@ -1448,7 +1448,7 @@ async function showLearnerDetail(id) {
 
     // Delete button
     html += '<div style="margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);">';
-    html += '<button data-action="confirm-delete-learner" data-id="' + id + '" data-name="' + esc(learner?.name || learner?.email || '') + '" style="background:#e74c3c;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">🗑️ Delete Learner</button>';
+    html += '<button data-action="confirm-delete-learner" data-id="' + id + '" data-name="' + esc(learner?.name || learner?.email || '') + '" style="background:#e74c3c;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">�-�️ Delete Learner</button>';
     html += '<span style="margin-left:12px;font-size:0.78rem;color:var(--muted);">Permanently removes this learner and all their data.</span>';
     html += '</div>';
 
@@ -2939,7 +2939,7 @@ async function loadPlatformBalance() {
           `;
         }).join('');
 
-    // Advisory — instructors stuck with chargeable lessons but no payout.
+    // Advisory - instructors stuck with chargeable lessons but no payout.
     const excluded = data.excluded_instructors || [];
     const reasonLabel = {
       paused: 'payouts paused',
@@ -2953,7 +2953,7 @@ async function loadPlatformBalance() {
         <div style="font-size:0.74rem;color:#92400e;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Not paid this Friday</div>
         ${excluded.map(e => `
           <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:#78350f;padding:2px 0;">
-            <span>${escapeHtml(e.name)} <span style="color:#a16207;">— ${reasonLabel[e.reason] || e.reason}</span></span>
+            <span>${escapeHtml(e.name)} <span style="color:#a16207;"> - ${reasonLabel[e.reason] || e.reason}</span></span>
             <span>${e.chargeable_lessons} chargeable lesson${e.chargeable_lessons === 1 ? '' : 's'}</span>
           </div>
         `).join('')}
@@ -3012,11 +3012,10 @@ async function loadPlatformBalance() {
 
       <p style="margin:12px 0 0;color:#6b7280;font-size:0.78rem;">
         Mirrors Friday's cron exactly (active + onboarded + not paused + has Connect account).
-        Same franchise / commission math as <code>processPayoutForInstructor</code>, in dry-run — no payout rows or Stripe transfers are created.
+        Same franchise / commission math as <code>processPayoutForInstructor</code>, in dry-run - no payout rows or Stripe transfers are created.
       </p>
       <p style="margin:6px 0 0;color:#9ca3af;font-size:0.74rem;">
-        Lesson gross uses <code>lesson_types.price_pence</code> (list rate). Most lessons are credit-funded —
-        the Stripe fee was taken at credit-purchase time on a <code>credit_transactions</code> row, not on the booking.
+        Lesson gross uses <code>lesson_types.price_pence</code> (list rate). Most lessons are credit-funded - the Stripe fee was taken at credit-purchase time on a <code>credit_transactions</code> row, not on the booking.
         Per-booking effective price + proportional Stripe-fee attribution wire through in the Step 4 / 4g keystone work
         (see <code>project_next_session_priority.md</code>). Until then, the headline succeed / fail status is
         reliable but per-row amounts can be slightly higher than what the platform actually nets for bulk-pack lessons.
@@ -3033,7 +3032,7 @@ function escapeHtml(s) {
 }
 
 async function loadPayouts() {
-  // Fire the balance fetch in parallel — independent network call, no need to chain.
+  // Fire the balance fetch in parallel - independent network call, no need to chain.
   loadPlatformBalance();
   try {
     const res = await fetchAdmin('/api/admin?action=payout-overview');
@@ -4296,7 +4295,7 @@ async function recordManualBankRefundFromPreview() {
 
 loadDashboard();
 
-// ── Delegated error listener — replaces inline onerror on dynamically
+// ── Delegated error listener - replaces inline onerror on dynamically
 //    inserted <img data-hide-on-error>. Capture because 'error' doesn't bubble.
 document.addEventListener('error', function (e) {
   var t = e.target;

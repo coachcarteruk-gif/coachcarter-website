@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-// HTML-escape helper — user data from the API is never trusted.
+// HTML-escape helper - user data from the API is never trusted.
 // Every ${field} interpolation into innerHTML MUST be wrapped in esc().
 function esc(str) {
   return String(str == null ? '' : str)
@@ -172,7 +172,7 @@ function renderInstructors(instructors) {
         ${i.bio ? `<span class="customer-email" style="font-size:0.8rem;">${esc(i.bio.slice(0,60))}${i.bio.length>60?'…':''}</span>` : ''}
       </div>
       <div class="customer-email" style="font-size:0.9rem;">${esc(i.email)}</div>
-      <div style="font-size:0.9rem;">${esc(i.phone || '—')}</div>
+      <div style="font-size:0.9rem;">${esc(i.phone || ' - ')}</div>
       <div style="font-size:0.9rem; color:var(--muted);">${esc(i.upcoming_bookings)} upcoming<br><span style="font-size:0.8rem;">${esc(i.completed_lessons)} done</span></div>
       <div class="actions">
         <button class="action-btn" data-action="edit-instructor" data-instructor='${esc(JSON.stringify(i))}'>Edit</button>
@@ -200,7 +200,7 @@ function openInstructorPasswordModal(instructorId, instructorName, hasPassword) 
       <label style="display:block;font-size:0.78rem;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">New password</label>
       <input type="text" id="instrPwInput" autocomplete="off" placeholder="Type a temporary password" style="width:100%;padding:11px 13px;border:1px solid #ddd;border-radius:8px;font-size:0.95rem;font-family:inherit;box-sizing:border-box;">
       <div style="font-size:0.8rem;color:#888;margin-top:6px;line-height:1.4;">
-        At least 8 characters. Share this with the instructor — they'll change it on their first sign-in.
+        At least 8 characters. Share this with the instructor - they'll change it on their first sign-in.
       </div>
       <div style="display:flex;gap:10px;margin-top:20px;">
         <button id="instrPwCancel" style="flex:1;padding:11px;background:#f1f1f1;border:none;border-radius:8px;font-family:inherit;font-weight:600;cursor:pointer;color:#444;">Cancel</button>
@@ -243,7 +243,7 @@ function openInstructorPasswordModal(instructorId, instructorName, hasPassword) 
         return;
       }
       close();
-      alert('Password ' + (hasPassword ? 'reset' : 'set') + ' for ' + instructorName + '.\n\nShare it with them — they\'ll be asked to change it on next sign-in.');
+      alert('Password ' + (hasPassword ? 'reset' : 'set') + ' for ' + instructorName + '.\n\nShare it with them - they\'ll be asked to change it on next sign-in.');
       loadInstructors();
     } catch (ex) {
       errEl.textContent = 'Network error. Please try again.';
@@ -353,7 +353,7 @@ document.querySelectorAll('.filters .filter-btn').forEach(btn => {
   });
 });
 
-// Admin auth now lives in the httpOnly cc_admin cookie — browser
+// Admin auth now lives in the httpOnly cc_admin cookie - browser
 // attaches it automatically. fetchAdmin (from shared/admin-auth.js)
 // handles credentials + CSRF header. ADMIN_HEADERS kept as a
 // Content-Type-only object so existing fetchAdmin({ headers: ... })

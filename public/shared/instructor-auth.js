@@ -1,6 +1,6 @@
 /* CoachCarter Instructor Auth Utilities
  *
- * Session state mirrors learner-auth.js — JWT in httpOnly cc_instructor
+ * Session state mirrors learner-auth.js - JWT in httpOnly cc_instructor
  * cookie, CSRF token in non-httpOnly cc_csrf cookie read via JS and
  * echoed in X-CSRF-Token. A display-only blob is kept in localStorage
  * for sidebar rendering. See learner-auth.js for the full rationale.
@@ -69,7 +69,7 @@
   }
 
   /** After login, fetch school branding if available. Reads school_id
-   *  from the display blob returned by the login endpoint — no JWT
+   *  from the display blob returned by the login endpoint - no JWT
    *  decode needed. */
   function onLogin(authData) {
     if (window.ccBranding && authData && authData.instructor && authData.instructor.school_id) {

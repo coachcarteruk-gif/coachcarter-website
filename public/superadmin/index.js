@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  // Auth check — read role/name/email from the display blob mirrored in
+  // Auth check - read role/name/email from the display blob mirrored in
   // localStorage at login time. The session JWT rides in the httpOnly
   // cc_admin cookie; nothing on this page needs to decode it.
   var adminData;
@@ -21,7 +21,7 @@
   document.getElementById('adminName').textContent = admin.name || 'Super Admin';
   document.getElementById('adminEmail').textContent = admin.email || '';
 
-  // API helpers — session cookie rides automatically via fetchAuthed
+  // API helpers - session cookie rides automatically via fetchAuthed
   async function apiFetch(url) {
     var res = await window.ccAdminAuth.fetchAuthed(url);
     return res.json();
@@ -68,7 +68,7 @@
     });
   }
 
-  // Logout — clears the cc_admin + cc_csrf cookies on the server.
+  // Logout - clears the cc_admin + cc_csrf cookies on the server.
   var logoutBtn = document.querySelector('.sidebar-footer .logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', function () {

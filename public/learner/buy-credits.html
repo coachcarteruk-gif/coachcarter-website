@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
-  <title>Buy Lessons — CoachCarter</title>
+  <title>Buy Lessons - CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
@@ -22,7 +22,7 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── BUY HOURS — credit-purchase document ───
+    /* ── BUY HOURS - credit-purchase document ───
        Same DL25 dossier vocabulary as the Examiner pages: mono labels,
        dashed-rule dividers, tabular numerals, italic accent title.
        Class names preserved so buy-credits.js continues to work. */
@@ -60,7 +60,7 @@
     .subtitle a { color: var(--accent); font-weight: 700; text-decoration: none; }
     .subtitle a:hover { text-decoration: underline; }
 
-    /* ── BALANCE CARD — quieter, stat-panel style ── */
+    /* ── BALANCE CARD - quieter, stat-panel style ── */
     .balance-card {
       display: grid;
       grid-template-columns: auto 1fr auto;
@@ -168,7 +168,7 @@
 
     /* ── SINGLE LESSON CARDS ── */
     .single-lessons-section { margin-bottom: 32px; }
-    /* Hide the legacy in-section title — replaced by .section-label below */
+    /* Hide the legacy in-section title - replaced by .section-label below */
     .single-lessons-title { display: none; }
     .single-lessons-grid {
       display: grid;
@@ -315,7 +315,7 @@
       border-radius: 3px;
     }
 
-    /* Legacy section divider — JS still emits .section-divider in the markup
+    /* Legacy section divider - JS still emits .section-divider in the markup
        between single-lesson cards and packages. Style as another section label. */
     .section-divider {
       display: flex; align-items: center; gap: 10px;
@@ -328,14 +328,14 @@
       padding: 0 4px;
     }
     /* When the single-lessons divider is visible (lesson types loaded), the
-       divider IS the section header — hide the standalone label to avoid
+       divider IS the section header - hide the standalone label to avoid
        two consecutive headers stacking. */
     main:has(#packagesDivider[style*="display:flex"]) #packagesLabel,
     main:has(#packagesDivider[style*="display: flex"]) #packagesLabel {
       display: none;
     }
 
-    /* Legacy single-lesson link container (hidden — kept for JS compatibility) */
+    /* Legacy single-lesson link container (hidden - kept for JS compatibility) */
     .single-lesson { display: none; }
     .single-lesson-link {
       font-family: var(--font-mono); font-size: 0.72rem;
@@ -346,7 +346,7 @@
     }
     .single-lesson-link:hover { color: var(--accent); }
 
-    /* ── PRICE SUMMARY — receipt strip ── */
+    /* ── PRICE SUMMARY - receipt strip ── */
     .price-summary {
       padding: 18px 20px;
       background: transparent;
@@ -403,7 +403,7 @@
     }
     .btn-checkout:disabled::after { display: none; }
 
-    /* Payment methods — retained only for the retired checkout layout */
+    /* Payment methods - retained only for the retired checkout layout */
     .payment-methods {
       display: flex; align-items: center; justify-content: center; gap: 10px;
       margin-top: 14px; margin-bottom: 32px;
@@ -423,7 +423,7 @@
 
     .retired-checkout-note { display: none; }
 
-    /* ── POLICY CARD — ledger style ── */
+    /* ── POLICY CARD - ledger style ── */
     .policy-card {
       padding: 20px 0 0;
       border-top: 1px dashed var(--border);
@@ -483,7 +483,7 @@
 
     /* ── TEST READY GUARANTEE PROGRAMME CARD ──
        Currently hidden in production. Bug fix applied: background previously
-       was var(--primary), which in dark mode is #e8e8e8 (text colour) — making
+       was var(--primary), which in dark mode is #e8e8e8 (text colour) - making
        the card invisible against the dark page bg. Switched to a hard-coded
        dark surface that works in both themes. */
     .programme-divider {
@@ -694,7 +694,7 @@
   <!-- Price summary -->
   <div class="price-summary" id="priceSummary">
     <div class="price-row">
-      <span id="summaryLine">12 hours × £55.00/hr</span>
+      <span id="summaryLine">12 hours �- £55.00/hr</span>
       <span id="summarySubtotal">£660.00</span>
     </div>
     <div class="price-row discount" id="discountRow" style="display:flex">
@@ -730,8 +730,8 @@
 
   <div class="programme-card" style="display:none">
     <div class="programme-badge">Test Ready Guarantee</div>
-    <h2 class="programme-title">Pass your test — guaranteed</h2>
-    <p class="programme-sub">You pay once. We teach you until you're ready, book your test, and if you need a retake — that's on us too.</p>
+    <h2 class="programme-title">Pass your test - guaranteed</h2>
+    <p class="programme-sub">You pay once. We teach you until you're ready, book your test, and if you need a retake - that's on us too.</p>
 
     <div class="programme-price-row">
       <span class="programme-price" id="programmePrice">£1,500</span>
@@ -740,7 +740,7 @@
 
     <div class="programme-urgency">
       <span class="programme-urgency-dot"></span>
-      <span><strong>Launch pricing</strong> — price increases £100 with every enrolment</span>
+      <span><strong>Launch pricing</strong> - price increases £100 with every enrolment</span>
     </div>
 
     <div class="programme-progress">
@@ -762,12 +762,12 @@
         <div style="flex: 1; text-align: center; padding: 12px 6px; background: rgba(255,255,255,0.04); border-radius: 8px;">
           <div style="font-size: 0.6rem; color: rgba(255,255,255,0.35); margin-bottom: 6px;">Pay-as-you-go</div>
           <div style="font-family: var(--font-head); font-size: 1rem; font-weight: 800; color: rgba(255,255,255,0.5); text-decoration: line-through;">£2,599</div>
-          <div style="font-size: 0.55rem; color: rgba(255,255,255,0.2); margin-top: 4px; line-height: 1.4;">30 × £82.50<br>+ 2 tests<br>no guarantee</div>
+          <div style="font-size: 0.55rem; color: rgba(255,255,255,0.2); margin-top: 4px; line-height: 1.4;">30 �- £82.50<br>+ 2 tests<br>no guarantee</div>
         </div>
         <div style="flex: 1; text-align: center; padding: 12px 6px; background: rgba(255,255,255,0.04); border-radius: 8px;">
           <div style="font-size: 0.6rem; color: rgba(255,255,255,0.35); margin-bottom: 6px;">Best bulk rate</div>
           <div style="font-family: var(--font-head); font-size: 1rem; font-weight: 800; color: rgba(255,255,255,0.5); text-decoration: line-through;">£1,980</div>
-          <div style="font-size: 0.55rem; color: rgba(255,255,255,0.2); margin-top: 4px; line-height: 1.4;">30 × £61.88<br>+ 2 tests<br>no guarantee</div>
+          <div style="font-size: 0.55rem; color: rgba(255,255,255,0.2); margin-top: 4px; line-height: 1.4;">30 �- £61.88<br>+ 2 tests<br>no guarantee</div>
         </div>
         <div style="flex: 1; text-align: center; padding: 12px 6px; background: rgba(245,131,33,0.1); border: 1px solid rgba(245,131,33,0.2); border-radius: 8px;">
           <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-bottom: 6px;">Test Ready Guarantee</div>
@@ -778,23 +778,23 @@
     </div>
 
     <ul class="programme-benefits">
-      <li>Minimum 18 lessons (27 hrs) — structured across 3 tiers</li>
-      <li>3 formal driving assessments — your instructor schedules extra lessons after each one if needed, at no extra cost</li>
-      <li>You only take the test when your instructor says you're ready — not before</li>
-      <li>Practical test booking included — we handle the DVSA admin</li>
-      <li>1st retake fully covered (15 hrs + test) — if you need it, it's on us</li>
-      <li>100% money back after your first lesson — no risk, no lock-in</li>
-      <li>One fixed price — no surprise costs, no matter how many lessons it takes</li>
+      <li>Minimum 18 lessons (27 hrs) - structured across 3 tiers</li>
+      <li>3 formal driving assessments - your instructor schedules extra lessons after each one if needed, at no extra cost</li>
+      <li>You only take the test when your instructor says you're ready - not before</li>
+      <li>Practical test booking included - we handle the DVSA admin</li>
+      <li>1st retake fully covered (15 hrs + test) - if you need it, it's on us</li>
+      <li>100% money back after your first lesson - no risk, no lock-in</li>
+      <li>One fixed price - no surprise costs, no matter how many lessons it takes</li>
     </ul>
 
     <div style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.15); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;">
       <span style="color: var(--green); font-weight: 700; flex-shrink: 0;">75%+</span>
-      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.5;">of our learners pass first time — vs the national average of 49%. Our structured programme is designed to get you test-ready, not just clock hours.</span>
+      <span style="font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.5;">of our learners pass first time - vs the national average of 49%. Our structured programme is designed to get you test-ready, not just clock hours.</span>
     </div>
 
     <div style="background: rgba(245,131,33,0.06); border: 1px solid rgba(245,131,33,0.12); border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; display: flex; gap: 10px; align-items: flex-start;">
       <span style="font-size: 0.85rem; flex-shrink: 0;">🤝</span>
-      <span style="font-size: 0.78rem; color: rgba(255,255,255,0.5); line-height: 1.5;"><strong style="color: rgba(255,255,255,0.7);">Our interests are aligned.</strong> With hourly lessons, a school earns more the longer you take. With the Test Ready Guarantee, you pay a fixed price — so every extra lesson and every retake comes out of our pocket, not yours. The faster you pass, the better it is for both of us.</span>
+      <span style="font-size: 0.78rem; color: rgba(255,255,255,0.5); line-height: 1.5;"><strong style="color: rgba(255,255,255,0.7);">Our interests are aligned.</strong> With hourly lessons, a school earns more the longer you take. With the Test Ready Guarantee, you pay a fixed price - so every extra lesson and every retake comes out of our pocket, not yours. The faster you pass, the better it is for both of us.</span>
     </div>
 
     <button class="btn-programme" id="btnProgramme" disabled>
@@ -807,8 +807,8 @@
   <div class="policy-card">
     <h3>Good to know</h3>
     <ul>
-      <li>Hours work for any lesson type — standard, extended, or refresher</li>
-      <li>Lessons never expire — use them whenever you're ready</li>
+      <li>Hours work for any lesson type - standard, extended, or refresher</li>
+      <li>Lessons never expire - use them whenever you're ready</li>
       <li>Cancel 48+ hours before and the lesson credit returns to your balance automatically</li>
       <li>Approved refunds are returned to the original payment method where possible, minus any non-refundable payment processing fees charged by our payment provider</li>
     </ul>

@@ -398,7 +398,7 @@ function closeBookModal() {
   }, 300);
 }
 
-// ─── Confirm booking (real API call — free for demo instructor) ──────────────
+// ─── Confirm booking (real API call - free for demo instructor) ──────────────
 async function confirmBookWithCredit() {
   if (!pendingSlot) return;
   const btn = document.getElementById('btnConfirmBook');

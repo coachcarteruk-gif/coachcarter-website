@@ -55,7 +55,7 @@
       var res = await fetch(API + '?action=get-offer&token=' + encodeURIComponent(token));
       var data = await res.json();
 
-      // Capture learner_email when the API returns it — both the pending-offer
+      // Capture learner_email when the API returns it - both the pending-offer
       // payload and the post-acceptance minimal payload include it. The auth
       // gate uses it to pre-fill the username field for password managers.
       if (data.offer && data.offer.learner_email) {
@@ -87,7 +87,7 @@
       document.getElementById('s-date-row').classList.add('hidden');
       document.getElementById('s-time-row').classList.add('hidden');
 
-      // Hide info box and old CTA — slot picker replaces them
+      // Hide info box and old CTA - slot picker replaces them
       document.getElementById('s-info').classList.add('hidden');
       document.getElementById('s-cta').classList.add('hidden');
 
@@ -113,7 +113,7 @@
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('success-content').classList.remove('hidden');
 
-    // Init slot picker for flexible offers — gate on auth first if guest
+    // Init slot picker for flexible offers - gate on auth first if guest
     if (flexible && instructorId) {
       gateThenInitSlotPicker();
     } else if (flexible) {
@@ -194,7 +194,7 @@
         var probeData = await probe.json();
         hasPassword = !!probeData.has_password;
       } catch (e) {
-        // If the lookup fails we'll still render the gate — sign-in mode is
+        // If the lookup fails we'll still render the gate - sign-in mode is
         // the safer default since it never overwrites a password.
         hasPassword = true;
       }
@@ -216,14 +216,14 @@
     var form = document.getElementById('auth-gate-form');
 
     if (mode === 'set') {
-      heading.textContent = 'Last step — set a password';
+      heading.textContent = 'Last step - set a password';
       sub.textContent = 'Pick a password so you can manage this booking and see your lesson history.';
       pwInput.setAttribute('autocomplete', 'new-password');
       pwInput.setAttribute('placeholder', 'At least 8 characters');
       submitBtn.textContent = 'Continue to slot picker';
     } else {
       heading.textContent = 'Sign in to book your slot';
-      sub.textContent = 'You already have a CoachCarter account — enter your password to continue.';
+      sub.textContent = 'You already have a CoachCarter account - enter your password to continue.';
       pwInput.setAttribute('autocomplete', 'current-password');
       pwInput.setAttribute('placeholder', 'Your password');
       submitBtn.textContent = 'Sign in and continue';
@@ -239,12 +239,12 @@
       emailInput.setAttribute('readonly', 'readonly');
       emailInput.style.display = '';
     } else if (mode === 'set') {
-      // 'set' uses offer_token + password and ignores any typed email — hide the
+      // 'set' uses offer_token + password and ignores any typed email - hide the
       // field rather than risk the user thinking they can choose the email here.
       emailInput.style.display = 'none';
       emailInput.value = '';
     } else {
-      // 'login' fallback — no captured email, let the user type one.
+      // 'login' fallback - no captured email, let the user type one.
       emailInput.removeAttribute('readonly');
       emailInput.value = '';
       emailInput.setAttribute('placeholder', 'Your email');
@@ -255,7 +255,7 @@
     gate.classList.remove('hidden');
     pwInput.focus();
 
-    // Idempotent — replace any previous handler
+    // Idempotent - replace any previous handler
     form.onsubmit = function (e) {
       e.preventDefault();
       submitAuthGate(mode);
@@ -313,7 +313,7 @@
       var data = await res.json();
 
       if (!res.ok || !data.success) {
-        // password_already_set is a recoverable case — switch to login mode
+        // password_already_set is a recoverable case - switch to login mode
         if (data.error === 'password_already_set') {
           renderAuthGate({ email: email, mode: 'login' });
           return;
@@ -325,7 +325,7 @@
         return;
       }
 
-      // Success — server set the session cookie. Update the localStorage
+      // Success - server set the session cookie. Update the localStorage
       // display blob so window.ccAuth.getAuth() returns truthy on the booking
       // call's CSRF check.
       try {
@@ -545,7 +545,7 @@
         return;
       }
 
-      // Success — show booked state
+      // Success - show booked state
       var d = new Date(selectedSlot.date + 'T00:00:00');
       var dayLabel = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
       var timeStr = selectedSlot.start_time.slice(0, 5) + ' \u2013 ' + selectedSlot.end_time.slice(0, 5);

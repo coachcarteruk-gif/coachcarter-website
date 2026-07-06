@@ -2,7 +2,7 @@
  *
  * Session state:
  *   - JWT lives in an httpOnly cookie (cc_learner) set by the login
- *     endpoint. JavaScript cannot read it — only the browser attaches
+ *     endpoint. JavaScript cannot read it - only the browser attaches
  *     it to outgoing requests on this origin.
  *   - CSRF token lives in a non-httpOnly cookie (cc_csrf) that this
  *     module reads and echoes in X-CSRF-Token on mutating fetches.
@@ -140,7 +140,7 @@
   }
 
   /** After login, fetch school branding if available. Reads school_id
-   *  from the display blob returned by the login endpoint — no JWT
+   *  from the display blob returned by the login endpoint - no JWT
    *  decode needed. */
   function onLogin(authData) {
     if (window.ccBranding && authData && authData.user && authData.user.school_id) {
@@ -150,7 +150,7 @@
 
   /** Log out: clear server cookies, clear localStorage blob, redirect to login. */
   function logout() {
-    // Fire-and-forget — if the request fails we still clear local state.
+    // Fire-and-forget - if the request fails we still clear local state.
     // keepalive lets it survive the page navigation.
     try {
       fetchAuthed(LOGOUT_URL, { method: 'POST', keepalive: true }).catch(function () {});

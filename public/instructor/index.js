@@ -186,7 +186,7 @@ async function renderCurrentView() {
   if (currentView === 'monthly') renderMonthly();
   else if (currentView === 'weekly') renderWeekly();
   else renderAgenda();
-  // Async — populate travel time indicators between consecutive bookings
+  // Async - populate travel time indicators between consecutive bookings
   injectTravelIndicators();
 }
 
@@ -241,7 +241,7 @@ async function fetchNeededData() {
     if (!res.ok) throw new Error(data.error);
 
     // Replace cache entries for this date range with fresh data
-    // (clear dates in range first, then populate — prevents stale/duplicate entries)
+    // (clear dates in range first, then populate - prevents stale/duplicate entries)
     const rangeStart = new Date(from + 'T00:00:00');
     const rangeEnd = new Date(to + 'T00:00:00');
     for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
@@ -289,7 +289,7 @@ function showError(msg) {
 // Returns true iff [startHHMM, startHHMM+durationMins] fits fully inside at
 // least one of the instructor's weekly availability windows for that date's
 // day-of-week. If availCache hasn't been populated yet, returns true (no
-// warning) — fail-open so we never block a legit booking on a load race.
+// warning) - fail-open so we never block a legit booking on a load race.
 function _slotInsideAvailability(dateStr, startHHMM, durationMins) {
   if (!availCache || availCache.length === 0) return true;
   if (!dateStr || !startHHMM || !durationMins) return true;
@@ -424,7 +424,7 @@ function renderWeekly() {
 
     html += `<div class="tp-day${isToday ? ' is-today' : ''}">`;
 
-    // Day label (left column) — click to jump to agenda for that day
+    // Day label (left column) - click to jump to agenda for that day
     html += `<div class="tp-day-label" data-action="cursor-to-agenda" data-day="${ds}">
       <div class="tp-day-dow">${DAY_SHORT[day.getDay()]}</div>
       <div class="tp-day-num">${day.getDate()}</div>
@@ -634,7 +634,7 @@ function renderAgenda() {
     for (let i = 0; i < daySlots.length; i++) {
       const b = daySlots[i];
 
-      // Pending offer card — "pencilled in", cancellable, distinct styling.
+      // Pending offer card - "pencilled in", cancellable, distinct styling.
       if (b._kind === 'offer') {
         const ltColour = b.lesson_type_colour || 'var(--accent)';
         const ltName   = b.lesson_type_name || 'Standard Lesson';
@@ -735,7 +735,7 @@ function renderAgenda() {
             ${thisAddr ? `<div class="agenda-address">📍 ${esc(thisAddr)}</div>` : ''}
           </div>
           <div class="agenda-card-right">
-            <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '●'}</span>
+            <span class="agenda-status status-${b.status}">${isCompleted ? '✓' : isCancelled ? '✕' : '�-�'}</span>
           </div>
         </div>`;
     }
@@ -1116,12 +1116,12 @@ async function injectTravelIndicators() {
     const to = clientExtractPostcode(el.dataset.travelTo);
     if (!from || !to || !coordMap[from] || !coordMap[to]) return;
     if (from.replace(/\s/g,'') === to.replace(/\s/g,'')) {
-      el.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">🚗 Same area</span>';
+      el.innerHTML = '<span style="font-size:0.75rem;color:var(--muted)">�- Same area</span>';
       return;
     }
     const mins = clientEstimateDrive(coordMap[from].lat, coordMap[from].lon, coordMap[to].lat, coordMap[to].lon);
     const colour = mins <= 15 ? 'var(--green,#16a34a)' : mins <= 30 ? 'var(--accent)' : 'var(--red,#e00)';
-    el.innerHTML = `<span style="font-size:0.75rem;color:${colour}">🚗 ~${mins} min travel</span>`;
+    el.innerHTML = `<span style="font-size:0.75rem;color:${colour}">�- ~${mins} min travel</span>`;
   });
 }
 
@@ -1144,7 +1144,7 @@ async function cancelPendingOffer(offerId, btnEl) {
       pendingOfferCache[ds] = pendingOfferCache[ds].filter(o => o.id !== offerId);
     }
     renderCurrentView();
-    showToast('Offer cancelled — slot is free again', 'success');
+    showToast('Offer cancelled - slot is free again', 'success');
   } catch (err) {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Cancel'; }
     showToast(err.message || 'Failed to cancel offer', 'error');
@@ -1203,7 +1203,7 @@ function shouldShowInstructorCalSync() {
   return Date.now() - ts > 30 * 24 * 60 * 60 * 1000; // 30 days
 }
 
-// Calendar sync banner removed — accessible via profile page
+// Calendar sync banner removed - accessible via profile page
 
 // Stats + next lesson moved to /instructor/dashboard.html
 
@@ -1385,7 +1385,7 @@ async function confirmCancel() {
     if (!res.ok) throw new Error(data.error);
 
     closeCancelModal();
-    showToast('Lesson cancelled — learner notified and credit returned', 'success');
+    showToast('Lesson cancelled - learner notified and credit returned', 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to cancel', 'error');
@@ -1443,7 +1443,7 @@ async function confirmInstrReschedule() {
     if (!res.ok) throw new Error(data.error);
 
     closeInstrRescheduleModal();
-    showToast('Lesson rescheduled — learner notified', 'success');
+    showToast('Lesson rescheduled - learner notified', 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to reschedule', 'error');
@@ -1562,13 +1562,13 @@ async function confirmEditBooking(forceOverride) {
     });
     const data = await res.json();
 
-    // Handle conflict warning — show details and ask for confirmation
+    // Handle conflict warning - show details and ask for confirmation
     if (res.status === 409 && data.can_force && data.conflicts) {
       let msg = 'This time overlaps with:\n\n';
       for (const c of data.conflicts) {
         msg += '"¢ ' + c.learner_name + ' (' + c.time + ')';
         if (c.travel_minutes != null) {
-          msg += ' — ~' + c.travel_minutes + ' min travel between pickups';
+          msg += ' - ~' + c.travel_minutes + ' min travel between pickups';
         }
         msg += '\n';
       }
@@ -1583,8 +1583,8 @@ async function confirmEditBooking(forceOverride) {
     if (!res.ok) throw new Error(data.error || data.message);
 
     closeEditBookingModal();
-    showToast('Lesson updated' + (data.balanceAdjusted ? ' — balance adjusted' : ''), 'success');
-    // Full refresh from server — renderCurrentView awaits fetch before rendering
+    showToast('Lesson updated' + (data.balanceAdjusted ? ' - balance adjusted' : ''), 'success');
+    // Full refresh from server - renderCurrentView awaits fetch before rendering
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || 'Failed to edit booking', 'error');
@@ -1857,7 +1857,7 @@ async function confirmCreateBooking() {
   const lessonTypeMins = _lessonTypeMinutes(lessonTypeId) || 90;
   if (!_slotInsideAvailability(newDate, newTime.slice(0, 5), lessonTypeMins)) {
     const proceed = confirm(
-      "Heads up — this slot is outside your weekly availability for that day.\n\n" +
+      "Heads up - this slot is outside your weekly availability for that day.\n\n" +
       (isPaymentLink
         ? "Sending the payment link will still hold the slot as a pending offer, but it won't appear in your normal availability and the learner won't see it in their slot feed.\n\n"
         : "Booking it will still work, but it won't appear on your normal availability and the learner won't see it in their slot feed.\n\n") +
@@ -1909,7 +1909,7 @@ async function confirmCreateBooking() {
     if (!res.ok) throw new Error(data.error);
 
     closeAddLessonModal();
-    showToast(`Lesson booked for ${data.learner_name || 'learner'} — they've been notified`, 'success');
+    showToast(`Lesson booked for ${data.learner_name || 'learner'} - they've been notified`, 'success');
     await refreshSchedule(true);
   } catch (err) {
     showToast(err.message || (isPaymentLink ? 'Failed to send payment link' : 'Failed to create booking'), 'error');
@@ -1997,7 +1997,7 @@ async function openOfferModal(prefillEmail, prefillName) {
   const repeatSel = document.getElementById('offerMaxRepeatWeeks');
   if (repeatSel) repeatSel.value = '1';
 
-  // Reset audience radio (default: one specific learner — preserves existing UX)
+  // Reset audience radio (default: one specific learner - preserves existing UX)
   const audOne = document.getElementById('offerAudienceOne');
   const audBcast = document.getElementById('offerAudienceBroadcast');
   const onePane = document.getElementById('offerOneLearnerPane');
@@ -2013,7 +2013,7 @@ async function openOfferModal(prefillEmail, prefillName) {
     onePane.style.display = isBroadcast ? 'none' : '';
     bcastPane.style.display = isBroadcast ? '' : 'none';
     // Broadcasts must be slot-pinned (we need a date+time to find matches),
-    // so the "Flexible — learner picks their own time" option doesn't apply.
+    // so the "Flexible - learner picks their own time" option doesn't apply.
     // Hide it entirely in broadcast mode rather than disabling it (less confusing).
     const flexRow = document.getElementById('offerFlexibleRow');
     if (flexRow) flexRow.style.display = isBroadcast ? 'none' : '';
@@ -2039,7 +2039,7 @@ async function openOfferModal(prefillEmail, prefillName) {
   document.getElementById('offerDate').onchange = slotChange;
   document.getElementById('offerTime').onchange = slotChange;
   // Lesson type change matters for end_time (which decides who's free for the full window)
-  // — wired below where we already attach updateOfferPrice.
+  // - wired below where we already attach updateOfferPrice.
 
   // Fetch lesson types and existing learners for the picker
   try {
@@ -2062,9 +2062,9 @@ async function openOfferModal(prefillEmail, prefillName) {
       const hrs = lt.duration_minutes / 60;
       const hrsStr = hrs % 1 === 0 ? `${hrs}hr` : `${hrs.toFixed(1)}hrs`;
       const price = (lt.price_pence / 100).toFixed(2);
-      return `<option value="${lt.id}" data-price="${lt.price_pence}">${lt.name} (${hrsStr}) — £${price}</option>`;
+      return `<option value="${lt.id}" data-price="${lt.price_pence}">${lt.name} (${hrsStr}) - £${price}</option>`;
     }).join('');
-  } catch { offerLearners = []; /* fallback — select will be empty */ }
+  } catch { offerLearners = []; /* fallback - select will be empty */ }
 
   document.getElementById('offerLessonModal').classList.add('open');
   // Reset custom price
@@ -2097,7 +2097,7 @@ function updateOfferPrice() {
   }
 
   if (customPrice === 0) {
-    noteEl.innerHTML = 'Learner will receive a <strong style="color:var(--green)">free lesson</strong> — no payment required';
+    noteEl.innerHTML = 'Learner will receive a <strong style="color:var(--green)">free lesson</strong> - no payment required';
   } else if (customPrice < parseFloat(defaultPrice)) {
     const saving = (parseFloat(defaultPrice) - customPrice).toFixed(2);
     noteEl.innerHTML = `Learner will pay <strong>£${customPrice.toFixed(2)}</strong> <span style="text-decoration:line-through;color:#999">£${defaultPrice}</span> (£${saving} off)`;
@@ -2254,7 +2254,7 @@ function updateAudienceSummary() {
   const total = all.length;
   summaryEl.textContent = checked + ' of ' + total + ' learners selected';
   if (checked > 10) {
-    warnEl.textContent = 'Sending to ' + checked + ' learners — Twilio cost approx £' + (checked * 0.05).toFixed(2) + '.';
+    warnEl.textContent = 'Sending to ' + checked + ' learners - Twilio cost approx £' + (checked * 0.05).toFixed(2) + '.';
     warnEl.style.display = '';
   } else {
     warnEl.style.display = 'none';
@@ -2328,7 +2328,7 @@ async function sendBroadcastOffer() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send broadcast');
 
-    const skipMsg = data.skipped > 0 ? ` (${data.skipped} skipped — no longer free at that time)` : '';
+    const skipMsg = data.skipped > 0 ? ` (${data.skipped} skipped - no longer free at that time)` : '';
     successEl.innerHTML = `<div>Broadcast sent to <strong>${data.notified}</strong> learner${data.notified === 1 ? '' : 's'}${skipMsg}. First to book wins.</div>`;
     successEl.style.display = 'block';
     btn.textContent = 'Sent ✓';
@@ -2378,7 +2378,7 @@ async function sendOffer() {
     offerPricePence = Math.round(parsed * 100);
   }
 
-  // Outside-availability second-confirm — only for slot-pinned offers
+  // Outside-availability second-confirm - only for slot-pinned offers
   // (flexible offers don't have a fixed time to check). Catches the case
   // where the instructor sends a paid link for a time they're not normally
   // free, e.g. Beatriz / Simon 2026-05-19.
@@ -2386,7 +2386,7 @@ async function sendOffer() {
     const offerMins = _lessonTypeMinutes(lessonTypeId ? parseInt(lessonTypeId) : null) || 90;
     if (!_slotInsideAvailability(date, time.slice(0, 5), offerMins)) {
       const proceed = confirm(
-        "Heads up — this slot is outside your weekly availability for that day.\n\n" +
+        "Heads up - this slot is outside your weekly availability for that day.\n\n" +
         "You can still send the offer, but the learner won't see this slot in their normal feed and your other learners may not realise it's now blocked.\n\n" +
         "Send the offer anyway?"
       );
@@ -2432,7 +2432,7 @@ async function sendOffer() {
     const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (£${(offerPricePence / 100).toFixed(2)})` : '';
     const flexMsg = flexible ? ' (flexible time)' : '';
 
-    // Use the accept URL (token-based) — carries the offer price
+    // Use the accept URL (token-based) - carries the offer price
     const shareUrl = data.accept_url;
     const selectedOfferName = existingMode ? document.getElementById('offerLearnerSelectedName').textContent : offerName;
     const safeName = selectedOfferName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -2466,7 +2466,7 @@ async function sendOffer() {
     } else if (missingParts.length > 0) {
       statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg}; the selected learner has ${missingParts.join(' and ')}. Use Copy link below.`;
     } else {
-      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} — share the link below.`;
+      statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg} - share the link below.`;
     }
 
     successEl.innerHTML = `

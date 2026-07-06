@@ -67,7 +67,7 @@
       margin: 0;
     }
 
-    /* ── STAT CARDS — 4-up ledger row ── */
+    /* ── STAT CARDS - 4-up ledger row ── */
     .stats-grid {
       display: grid; grid-template-columns: repeat(4, 1fr);
       gap: 0;
@@ -382,7 +382,7 @@
     .area-header:hover { background: var(--accent-mid); }
 
     /* At-a-glance summary on the area header itself.
-       Sits between the area name and the score badge — gives parents /
+       Sits between the area name and the score badge - gives parents /
        learners / instructors the full picture without expanding the card. */
     .area-summary {
       display: flex; align-items: center; gap: 10px;
@@ -417,7 +417,7 @@
       font-family: var(--font-mono); font-size: 0.82rem;
       min-width: 14px; text-align: center;
     }
-    /* On narrow screens the summary block hides — the score badge alone
+    /* On narrow screens the summary block hides - the score badge alone
        carries the headline on mobile, and the sub-skill rows below carry
        the per-sub-skill detail. */
     @media (max-width: 620px) {
@@ -425,7 +425,7 @@
       .area-summary { display: none; }
     }
 
-    /* Headline fault summary on each area header — sits in the same slot
+    /* Headline fault summary on each area header - sits in the same slot
        the score badge used to occupy (the area is now scoped to mock-test
        data only, so the headline shows the area's fault counts from the
        most recent mock). */
@@ -462,7 +462,7 @@
     .area-card.mock-area-fail-light  { border-left: 3px solid var(--amber); }
     .area-card.mock-area-fail-heavy  { border-left: 3px solid var(--red); }
 
-    /* Empty state — no mock test completed yet */
+    /* Empty state - no mock test completed yet */
     .mock-empty {
       text-align: center;
       padding: 32px 24px;
@@ -572,7 +572,7 @@
       .skill-name { font-size: 0.84rem; }
     }
 
-    /* Sub-skill rows — quieter than the parent skill row. Each shows the
+    /* Sub-skill rows - quieter than the parent skill row. Each shows the
        sub-skill name + a Mock-test fault breakdown when present. Lesson and
        Quiz data don't exist at sub-skill level today, so this single Mock
        column carries the only per-sub-skill signal we have. */
@@ -932,7 +932,7 @@
           </div>
         </div>
         <h2 class="section-title">Latest mock test detail <span id="recent-mock-meta" class="section-title-meta"></span></h2>
-        <p class="mock-mark-helper">These are mock-test marks: D is a small fault, S is serious, × is dangerous.</p>
+        <p class="mock-mark-helper">These are mock-test marks: D is a small fault, S is serious, �- is dangerous.</p>
         <div id="skill-breakdown"></div>
       </div>
     </details>

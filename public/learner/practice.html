@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script src="/cookie-consent.js"></script>
   <script src="/posthog-loader.js"></script>
-  <title>Practice — CoachCarter</title>
+  <title>Practice - CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
@@ -70,7 +70,7 @@
       content: ''; flex: 1; height: 1px; background: var(--border);
     }
 
-    /* ── HUB GRID — 1 col mobile, 2 col tablet+ ── */
+    /* ── HUB GRID - 1 col mobile, 2 col tablet+ ── */
     .hub-grid {
       display: grid; grid-template-columns: 1fr; gap: 10px;
     }
@@ -81,8 +81,8 @@
     /* ── HUB CARD ── */
     .hub-card {
       display: grid;
-      grid-template-columns: 40px 1fr;
-      align-items: flex-start; gap: 14px;
+      grid-template-columns: 1fr;
+      align-items: flex-start;
       padding: 18px;
       background: var(--surface);
       border: 1.5px solid var(--border);
@@ -113,47 +113,13 @@
     .hub-card:active { transform: translateY(0) scale(0.99); }
     .hub-primary-wrap { margin-bottom: 14px; }
     .hub-card.primary {
-      grid-template-columns: 48px 1fr;
       padding: 24px 22px;
       border-color: var(--accent);
       background: color-mix(in srgb, var(--accent) 9%, var(--surface));
     }
-    .hub-card.primary .hub-icon {
-      width: 48px; height: 48px;
-      background: var(--accent);
-      color: #fff;
-    }
     .hub-card.primary .hub-card-title { font-size: 1.18rem; }
 
-    /* Icon container — outlined squircle, colour per tool */
-    .hub-icon {
-      width: 40px; height: 40px;
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      border: 1.5px solid var(--hub-c, var(--accent));
-      background: var(--bg);
-      color: var(--hub-c, var(--accent));
-    }
-    .hub-icon svg {
-      width: 20px; height: 20px;
-      stroke: currentColor; fill: none;
-      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
-    }
-
     .hub-card-body { min-width: 0; }
-
-    .hub-card-kicker {
-      display: inline-flex; align-items: center;
-      padding: 2px 6px;
-      font-family: var(--font-mono); font-size: 0.58rem; font-weight: 700;
-      letter-spacing: 0.12em;
-      background: var(--bg);
-      border: 1px solid var(--hub-c, var(--border));
-      color: var(--hub-c, var(--muted));
-      border-radius: 3px;
-      margin-bottom: 6px;
-    }
 
     .hub-card-title {
       font-family: var(--font-head); font-size: 1rem; font-weight: 700;
@@ -191,11 +157,7 @@
 
     <div class="hub-primary-wrap">
       <a href="/learner/focused-practice.html" class="hub-card primary start">
-        <div class="hub-icon">
-          <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </div>
         <div class="hub-card-body">
-          <span class="hub-card-kicker">Drive flow</span>
           <h2 class="hub-card-title">Start a drive</h2>
           <p class="hub-card-desc">Choose a current booked lesson or a normal drive, pick focus areas, then save what happened.</p>
         </div>
@@ -207,22 +169,14 @@
     <div class="hub-grid">
 
       <a href="/learner/mock-test.html" class="hub-card mock">
-        <div class="hub-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
         <div class="hub-card-body">
-          <span class="hub-card-kicker">Formal assessment</span>
           <h2 class="hub-card-title">Take a mock test</h2>
           <p class="hub-card-desc">Use this when you want a proper test-style run with formal results at the end.</p>
         </div>
       </a>
 
       <a href="/learner/progress.html" class="hub-card track">
-        <div class="hub-icon">
-          <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        </div>
         <div class="hub-card-body">
-          <span class="hub-card-kicker">Next steps</span>
           <h2 class="hub-card-title">View my driving plan</h2>
           <p class="hub-card-desc">See what is going well, what to practise next, and your recent activity.</p>
         </div>

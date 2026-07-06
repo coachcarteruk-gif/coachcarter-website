@@ -157,7 +157,7 @@
   }
 
   async function saveAvailability() {
-    // Validate — start < end for each window
+    // Validate - start < end for each window
     for (const w of windows) {
       if (w.start_time >= w.end_time) {
         showToast('Start time must be before end time for all windows', 'error');

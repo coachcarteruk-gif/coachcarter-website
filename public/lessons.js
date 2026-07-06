@@ -55,7 +55,7 @@ async function loadLiveBulkPricing() {
   }
 }
 
-// Mirror api/_pricing-helpers.js::getDiscountPct — tiers sorted desc, first match wins.
+// Mirror api/_pricing-helpers.js::getDiscountPct - tiers sorted desc, first match wins.
 function pickDiscountPct(hours, tiers) {
   if (!Array.isArray(tiers) || !tiers.length) return 0;
   const hit = tiers.find(t => hours >= t.min_hours);
@@ -66,7 +66,7 @@ function pickDiscountPct(hours, tiers) {
 // derived from the live hourly rate + tiers. Keeps the same hour buckets the
 // marketing page advertises (10/20/30/40/50) but prices them from the source
 // the checkout endpoint will use. If overlay fails the page renders whatever
-// config.json shipped — same as pre-PR-J behaviour.
+// config.json shipped - same as pre-PR-J behaviour.
 function overlayServerBulkPackages(configData, live) {
   if (!configData || !live || !configData.pricing || !Array.isArray(configData.pricing.bulk_packages)) return;
   const hourlyPence = live.hourly_pence;
@@ -102,7 +102,7 @@ async function loadConfig() {
 
   // Overlay live pricing for the public CoachCarter instructor. Final selected-
   // instructor pricing is confirmed inside the live booking/buy-credit flows.
-  // Fetch both overlays in parallel — both are independent of each other and of configData.
+  // Fetch both overlays in parallel - both are independent of each other and of configData.
   const [live, liveBulk] = await Promise.all([loadLivePricing(), loadLiveBulkPricing()]);
   if (configData && live) {
     configData.pricing = configData.pricing || {};
@@ -147,7 +147,7 @@ function applyConfig() {
   const paygLessonPrice = p.payg_lesson_price || (p.payg_hourly ? p.payg_hourly * 1.5 : 90);
   if (paygPriceEl) paygPriceEl.textContent = '£' + paygLessonPrice;
 
-  // Hero stats reduced 2026-04-28 — TRG hidden, so stats 3 & 4 now show "Free trial"
+  // Hero stats reduced 2026-04-28 - TRG hidden, so stats 3 & 4 now show "Free trial"
   // and "DVSA approved" instead of programme price/duration. Stage 2 retires
   // self-serve credit package messaging, so stat 2 stays direct-booking focused.
   const hourly = p.payg_hourly || (p.payg_lesson_price ? p.payg_lesson_price / 1.5 : 60);
@@ -165,7 +165,7 @@ function applyConfig() {
   // The config still carries core_programme / retake_price for the
   // learner-journey.html page; nothing on /lessons.html reads them.
 
-  // Hero headline only — subheadline NO LONGER overridden from config (was reintroducing
+  // Hero headline only - subheadline NO LONGER overridden from config (was reintroducing
   // TRG copy from old config.json values). 2026-04-28.
   if (c.hero) {
     const headlineEl = document.getElementById('hero-headline');
@@ -234,7 +234,7 @@ function applyConfig() {
 }
 
 function updateComparisonTable(pricing) {
-  // Comparison table removed — function kept as no-op for safety
+  // Comparison table removed - function kept as no-op for safety
 }
 
 function renderPackages() {
@@ -281,7 +281,7 @@ function scrollToPackages() {
   document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
 }
 
-// Primary booking flow — sends users to the learner portal
+// Primary booking flow - sends users to the learner portal
 function bookFreeTrial() {
   const session = JSON.parse(localStorage.getItem('cc_learner') || 'null');
   if (session) {
@@ -371,7 +371,7 @@ document.addEventListener('click', function (e) {
   bind('btn-payg', bookFreeTrial);                      // PAYG section is hidden but binding kept harmless
   bind('pkg-slider', function () { updatePkg(this.value); }, 'input');
   bind('btn-package', function () { startBulkCheckout(currentPkgIndex); });
-  // cta-primary ("Book a lesson now") — sends learners to the credit-funded
+  // cta-primary ("Book a lesson now") - sends learners to the credit-funded
   // book.html flow instead of the retired legacy PAYG Stripe session (PR-J).
   bind('cta-primary', bookFreeTrial);
 })();

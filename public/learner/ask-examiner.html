@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <link rel="manifest" href="/manifest.json">
@@ -10,7 +10,7 @@
   <script src="/pwa.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-  <title>Mark Scheme — Driving Test Fault Checker | Coach Carter Reading</title>
+  <title>Mark Scheme - Driving Test Fault Checker | Coach Carter Reading</title>
   <meta name="description" content="Check the UK driving test mark scheme and get instant, accurate answers about faults, scoring, manoeuvres, and DVSA examiner guidance. Free from Coach Carter Driving School.">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
@@ -26,22 +26,22 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── MARK SCHEME — editorial DL25 dossier aesthetic ───
+    /* -- MARK SCHEME - editorial DL25 dossier aesthetic ---
        Concept: an interrogation room conversation with a DVSA
        examiner. Mono headers, file-folder document framing,
-       editorial spacing. Built for dark mode primarily — the
+       editorial spacing. Built for dark mode primarily - the
        learner hub auto-enables dark via cc-has-sidebar. */
 
     body { display: flex; flex-direction: column; min-height: 100dvh; }
 
-    /* Mono font for numerals, references, labels — adds gravitas
+    /* Mono font for numerals, references, labels - adds gravitas
        without pulling in a new file. JetBrains Mono fallback chain. */
     :root {
       --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
       --hairline: rgba(245,131,33,0.18);
     }
 
-    /* ── DOSSIER MASTHEAD ── */
+    /* -- DOSSIER MASTHEAD -- */
     .examiner-masthead {
       max-width: 760px; width: 100%; margin: 0 auto;
       padding: 28px 24px 22px;
@@ -96,7 +96,7 @@
       max-width: 52ch;
     }
 
-    /* ── CONVERSATION COLUMN ── */
+    /* -- CONVERSATION COLUMN -- */
     .chat-container {
       flex: 1; display: flex; flex-direction: column;
       max-width: 760px; width: 100%; margin: 0 auto;
@@ -161,7 +161,7 @@
     .msg-body p { margin-bottom: 10px; }
     .msg-body p:last-child { margin-bottom: 0; }
 
-    /* ── TYPING INDICATOR ── matches the rail aesthetic */
+    /* -- TYPING INDICATOR -- matches the rail aesthetic */
     .typing-indicator { display: none; animation: msgIn 0.32s ease both; }
     .typing-indicator.show { display: block; padding: 0 24px; }
     .typing-content {
@@ -187,7 +187,7 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ── PROMPT BRIEFING — replaces the chip cloud ──
+    /* -- PROMPT BRIEFING - replaces the chip cloud --
        A composed empty state with a small instructional copy and
        a stack of asymmetric "case file" prompt entries. */
     .briefing {
@@ -309,7 +309,7 @@
     }
     .briefing-prompt-arrow svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
 
-    /* ── INPUT DOCK ── */
+    /* -- INPUT DOCK -- */
     .chat-input-area {
       position: fixed; bottom: 0; left: 0; right: 0;
       background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -413,7 +413,7 @@
   <div class="masthead-meta">
     <div class="masthead-meta-left">
       <span class="masthead-tag">DL25</span>
-      <span class="masthead-ref">Marking sheet<span class="dot">·</span>Live reference</span>
+      <span class="masthead-ref">Marking sheet<span class="dot">�</span>Live reference</span>
     </div>
     <div class="masthead-status">Online</div>
   </div>
@@ -488,7 +488,7 @@
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
   </div>
-  <div class="chat-hint">Hit <kbd>↵</kbd> to send</div>
+  <div class="chat-hint">Hit <kbd>?</kbd> to send</div>
 </div>
 
 <script src="/learner/ask-examiner.js"></script>

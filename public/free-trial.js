@@ -151,7 +151,7 @@
 
     // QoL: auto-scroll to the details form so the learner can immediately
     // see what to do next. Without this, the slot just changes colour and
-    // the form stays out of view — common cause of drop-off.
+    // the form stays out of view - common cause of drop-off.
     var formAnchor = document.getElementById('step-2-heading');
     if (formAnchor && typeof formAnchor.scrollIntoView === 'function') {
       formAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -235,7 +235,7 @@
       } else if (r.status === 429) {
         showError(r.body.error || 'Too many attempts. Please try again in an hour.');
       } else {
-        showError(r.body.error || r.body.message || 'Could not book — please try again.');
+        showError(r.body.error || r.body.message || 'Could not book - please try again.');
       }
 
       submitBtn.disabled = false;

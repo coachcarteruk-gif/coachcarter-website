@@ -14,7 +14,7 @@ window.CC_COMPETENCY = (function () {
 
   // ── 10 DL25 Categories ─────────────────────────────────────────
   var AREAS = [
-    { id: 'control',        label: 'Control',                     icon: '🚗', colour: '#6366f1' },
+    { id: 'control',        label: 'Control',                     icon: '�-', colour: '#6366f1' },
     { id: 'move_off',       label: 'Move Off',                    icon: '🟢', colour: '#22c55e' },
     { id: 'mirrors',        label: 'Use of Mirrors',              icon: '👁️', colour: '#0ea5e9' },
     { id: 'signals',        label: 'Signals',                     icon: '🔶', colour: '#f59e0b' },
@@ -53,7 +53,7 @@ window.CC_COMPETENCY = (function () {
         { key: 'safety',  label: 'Safety' },
         { key: 'control', label: 'Control' }
       ],
-      description: 'Moving off safely — flat, uphill, downhill, and at an angle' },
+      description: 'Moving off safely - flat, uphill, downhill, and at an angle' },
 
     // ── 3. Use of Mirrors ────────────────────────────────────────
     { key: 'mirrors', label: 'Use of Mirrors', area: 'mirrors',
@@ -71,7 +71,7 @@ window.CC_COMPETENCY = (function () {
         { key: 'correctly', label: 'Correctly' },
         { key: 'timed',     label: 'Timed' }
       ],
-      description: 'Timely, correct signals — not too early, late, or misleading' },
+      description: 'Timely, correct signals - not too early, late, or misleading' },
 
     // ── 5. Junctions ─────────────────────────────────────────────
     { key: 'junctions', label: 'Junctions', area: 'junctions',
@@ -91,7 +91,7 @@ window.CC_COMPETENCY = (function () {
         { key: 'meeting',    label: 'Meeting' },
         { key: 'crossing',   label: 'Crossing' }
       ],
-      description: 'Assessing gaps, speeds, and distances — overtaking, meeting traffic, crossroads' },
+      description: 'Assessing gaps, speeds, and distances - overtaking, meeting traffic, crossroads' },
 
     // ── 7. Positioning ───────────────────────────────────────────
     { key: 'positioning', label: 'Positioning', area: 'positioning',
@@ -179,7 +179,7 @@ window.CC_COMPETENCY = (function () {
       } },
 
     { key: 'speed_control', label: 'Speed & Control',
-      icon: '🚗', colour: '#6366f1',
+      icon: '�-', colour: '#6366f1',
       description: 'Smooth use of pedals, gears, steering, and appropriate speed',
       dl25Skills: ['control', 'progress'],
       faultHints: [
@@ -200,7 +200,7 @@ window.CC_COMPETENCY = (function () {
         ],
         good: [
           'Braking is early and gentle, gears change smoothly without looking down',
-          'Speed matches the road and conditions — confident but never rushed'
+          'Speed matches the road and conditions - confident but never rushed'
         ],
         faults: [
           'Harsh braking, stalling, or rough gear changes',
@@ -220,7 +220,7 @@ window.CC_COMPETENCY = (function () {
       reflectionQ: 'How did they handle junctions and roundabouts?',
       guided: {
         why: [
-          'Junctions are where most learner collisions happen — usually pulling out on something they didn’t see',
+          'Junctions are where most learner collisions happen - usually pulling out on something they didn’t see',
           'Approaching too fast leaves no time to look properly, so everything else goes wrong'
         ],
         exercises: [
@@ -250,7 +250,7 @@ window.CC_COMPETENCY = (function () {
       reflectionQ: 'How was their lane position and following distance?',
       guided: {
         why: [
-          'Following too closely is the leading cause of rear-end crashes — no reaction time',
+          'Following too closely is the leading cause of rear-end crashes - no reaction time',
           'Passing parked cars too tightly risks a door opening or a pedestrian stepping out'
         ],
         exercises: [
@@ -280,11 +280,11 @@ window.CC_COMPETENCY = (function () {
       reflectionQ: 'How well did they use signals and respond to road signs?',
       guided: {
         why: [
-          'A wrong or missing signal makes other drivers act on bad information — that’s how junctions go wrong',
+          'A wrong or missing signal makes other drivers act on bad information - that’s how junctions go wrong',
           'Missing a sign (speed limit, no entry, lane closed) can put you somewhere genuinely dangerous'
         ],
         exercises: [
-          'Drive a route with plenty of turns and signal early — a good rule is signal, then check it’s cancelled after the turn',
+          'Drive a route with plenty of turns and signal early - a good rule is signal, then check it’s cancelled after the turn',
           'Have your supervisor ask "what was the last sign we passed?" a few times during the drive',
           'Practise approaching traffic lights: call out the colour early and what you’ll do'
         ],
@@ -310,7 +310,7 @@ window.CC_COMPETENCY = (function () {
       reflectionQ: 'How did their manoeuvres (parking, reversing) go?',
       guided: {
         why: [
-          'Reversing is when the car moves where you can’t naturally see — pedestrians and children are the risk',
+          'Reversing is when the car moves where you can’t naturally see - pedestrians and children are the risk',
           'One manoeuvre comes up on every driving test, so this is guaranteed marks to win or lose'
         ],
         exercises: [
@@ -319,7 +319,7 @@ window.CC_COMPETENCY = (function () {
           'Do one parallel park behind a single parked car'
         ],
         good: [
-          'Slow, controlled speed with constant all-round observation — pausing to look is fine',
+          'Slow, controlled speed with constant all-round observation - pausing to look is fine',
           'Finishes reasonably close to the kerb or centred in the bay, and corrects calmly if not'
         ],
         faults: [
@@ -369,7 +369,7 @@ window.CC_COMPETENCY = (function () {
   // ── Fault Types ────────────────────────────────────────────────
   var FAULT_TYPES = [
     { key: 'driving',   label: 'Driving fault',   shortLabel: 'D',  colour: '#f59e0b', description: 'Not potentially dangerous, but shows a lapse in skill or knowledge' },
-    { key: 'serious',   label: 'Serious fault',   shortLabel: 'S',  colour: '#ef4444', description: 'Potentially dangerous — could put someone at risk' },
+    { key: 'serious',   label: 'Serious fault',   shortLabel: 'S',  colour: '#ef4444', description: 'Potentially dangerous - could put someone at risk' },
     { key: 'dangerous', label: 'Dangerous fault',  shortLabel: '✕',  colour: '#991b1b', description: 'Involved actual danger to the examiner, candidate, public, or property' }
   ];
 

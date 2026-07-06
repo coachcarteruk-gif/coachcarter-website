@@ -5,10 +5,10 @@
      <script src="/auth-gate.js"></script>
 
    API:
-     window.ccAuth.isLoggedIn   — boolean
-     window.ccAuth.user         — { id, name, email, tier, school_id } or null
-     window.ccAuth.requireAuth() — shows sign-in modal if not logged in, returns boolean
-     window.ccAuth.onAuth(fn)   — calls fn when user signs in (for deferred actions)
+     window.ccAuth.isLoggedIn - boolean
+     window.ccAuth.user - { id, name, email, tier, school_id } or null
+     window.ccAuth.requireAuth() - shows sign-in modal if not logged in, returns boolean
+     window.ccAuth.onAuth(fn) - calls fn when user signs in (for deferred actions)
 ─────────────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';

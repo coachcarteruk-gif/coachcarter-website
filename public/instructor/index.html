@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
-  <title>My Schedule — CoachCarter Instructor</title>
+  <title>My Schedule - CoachCarter Instructor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
@@ -449,7 +449,7 @@
     .agenda-empty { text-align: center; padding: 48px 20px; color: var(--muted); }
     .agenda-empty .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
 
-    /* Pending-offer card — pencilled-in slot, dashed border, cancellable.
+    /* Pending-offer card - pencilled-in slot, dashed border, cancellable.
        Uses the accent-lt token so light and dark themes both work: it's a
        warm cream in light mode and a dark amber-tinted surface in dark mode
        (defined alongside the rest of the theme palette in instructor.css). */
@@ -599,7 +599,7 @@
       .month-cell { min-height: 60px; }
       .month-booking-pill { display: none; }
       .month-cell.has-bookings::after {
-        content: '●'; font-size: 0.6rem; color: var(--accent);
+        content: '�-�'; font-size: 0.6rem; color: var(--accent);
         position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
       }
       .week-grid { overflow-x: auto; }
@@ -665,7 +665,7 @@
   <div class="cal-toolbar">
     <div class="cal-nav">
       <button class="cal-nav-btn" id="btn-nav-prev" title="Previous">&#8249;</button>
-      <span class="cal-nav-label" id="calNavLabel">—</span>
+      <span class="cal-nav-label" id="calNavLabel"> - </span>
       <button class="cal-nav-btn" id="btn-nav-next" title="Next">&#8250;</button>
     </div>
     <button class="btn-today" id="btn-today">Today</button>
@@ -678,7 +678,7 @@
     <button class="btn-today" id="btn-open-avail">+ Slot</button>
     <button class="btn-today" id="btn-open-busy">Block time</button>
     <span class="toolbar-secondary">
-      <button class="btn-today" id="btn-open-offer" title="Send a lesson offer to one learner — or broadcast it to everyone free at this time">Offer</button>
+      <button class="btn-today" id="btn-open-offer" title="Send a lesson offer to one learner - or broadcast it to everyone free at this time">Offer</button>
     </span>
     <div class="toolbar-overflow-wrap">
       <button class="btn-today toolbar-overflow-btn" id="btn-toolbar-overflow" title="More options">&#x22EF;</button>
@@ -701,7 +701,7 @@
 <div class="modal-overlay" id="availModal">
   <div class="modal">
     <div class="modal-title" id="modalTitle">Add Availability</div>
-    <div class="modal-sub" id="modalSubtitle">—</div>
+    <div class="modal-sub" id="modalSubtitle"> - </div>
     <div class="modal-field">
       <label class="modal-label">Date</label>
       <input type="date" class="modal-input" id="modalDate">
@@ -733,7 +733,7 @@
 <div class="modal-overlay" id="busyModal">
   <div class="modal">
     <div class="modal-title">Block Busy Time</div>
-    <div class="modal-sub" id="busySubtitle">—</div>
+    <div class="modal-sub" id="busySubtitle"> - </div>
     <div class="modal-field">
       <label class="modal-label">Date</label>
       <input type="date" class="modal-input" id="busyDate">
@@ -785,7 +785,7 @@
     <div class="modal-title">Cancel Lesson</div>
     <div class="modal-sub" id="cancelSubtitle">This will cancel the lesson and return the lesson credit to the learner's balance.</div>
     <div>
-      <div class="notes-label">Reason (optional — will be shared with the learner)</div>
+      <div class="notes-label">Reason (optional - will be shared with the learner)</div>
       <textarea class="cancel-reason" id="cancelReason" placeholder="e.g. Car in for service, feeling unwell…"></textarea>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:0.85rem;cursor:pointer">
         <input type="checkbox" id="cancelNotify" checked>
@@ -805,8 +805,8 @@
     <div class="modal-title">Reschedule Lesson</div>
     <div class="modal-sub" id="instrRescheduleSubtitle">Move this lesson to a new date and time.</div>
     <div style="margin:16px 0">
-      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Learner</span><span class="booking-detail-val" id="instrReschLearner">—</span></div>
-      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Current</span><span class="booking-detail-val" id="instrReschCurrent" style="text-decoration:line-through;color:var(--muted)">—</span></div>
+      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Learner</span><span class="booking-detail-val" id="instrReschLearner"> - </span></div>
+      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Current</span><span class="booking-detail-val" id="instrReschCurrent" style="text-decoration:line-through;color:var(--muted)"> - </span></div>
       <div style="margin-top:16px">
         <div class="notes-label">New date</div>
         <input type="date" id="instrReschDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;margin-bottom:8px">
@@ -827,7 +827,7 @@
     <div class="modal-title">Edit Lesson</div>
     <div class="modal-sub">Change the date, time, or lesson type.</div>
     <div style="margin:16px 0">
-      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Learner</span><span class="booking-detail-val" id="editBookingLearner">—</span></div>
+      <div class="booking-detail-row" style="margin-bottom:8px"><span class="booking-detail-label">Learner</span><span class="booking-detail-val" id="editBookingLearner"> - </span></div>
       <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
         <div>
           <div class="notes-label">Date</div>
@@ -848,7 +848,7 @@
             <option value="automatic">Automatic</option>
           </select>
         </div>
-        <div class="booking-detail-row"><span class="booking-detail-label">End time</span><span class="booking-detail-val" id="editBookingEndTime">—</span></div>
+        <div class="booking-detail-row"><span class="booking-detail-label">End time</span><span class="booking-detail-val" id="editBookingEndTime"> - </span></div>
         <div id="editBookingBalanceInfo" style="font-size:0.82rem;color:var(--muted);display:none"></div>
         <label style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:0.85rem;cursor:pointer">
           <input type="checkbox" id="editBookingNotify" checked>
@@ -1006,7 +1006,7 @@
         <div class="notes-label">Recipients</div>
         <div id="offerAudienceList"
           style="border:1px solid var(--border);border-radius:8px;padding:10px;max-height:240px;overflow-y:auto;background:var(--bg);font-size:0.85rem;">
-          <div style="color:var(--muted);font-style:italic;padding:6px 0">Pick a date and time below — we'll show who's free.</div>
+          <div style="color:var(--muted);font-style:italic;padding:6px 0">Pick a date and time below - we'll show who's free.</div>
         </div>
         <div id="offerAudienceSummary" style="font-size:0.8rem;color:var(--muted);margin-top:6px"></div>
         <div id="offerBroadcastWarn" style="display:none;margin-top:8px;padding:8px 10px;background:#fff7e6;border:1px solid #ffd591;border-radius:6px;font-size:0.78rem;color:#7a4f00"></div>
@@ -1019,7 +1019,7 @@
       <div id="offerFlexibleRow">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="offerFlexible" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
-          <span style="font-size:0.88rem;font-weight:600;color:var(--primary);">Flexible — learner picks their own time</span>
+          <span style="font-size:0.88rem;font-weight:600;color:var(--primary);">Flexible - learner picks their own time</span>
         </label>
       </div>
       <div id="offerSlotFields">
@@ -1036,7 +1036,7 @@
         <div style="margin-top:10px;">
           <div class="notes-label">Weekly repeats (optional)</div>
           <select id="offerMaxRepeatWeeks" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
-            <option value="1">No repeat — single lesson only</option>
+            <option value="1">No repeat - single lesson only</option>
             <option value="2">Up to 2 weekly lessons</option>
             <option value="3">Up to 3 weekly lessons</option>
             <option value="4">Up to 4 weekly lessons</option>

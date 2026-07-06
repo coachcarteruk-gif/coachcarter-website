@@ -207,7 +207,7 @@ function renderLearners() {
       notesPreview = '<div class="learner-notes-preview">' + esc(preview) + '</div>';
     }
 
-    // Free-times chips (weekly availability — empty string if learner hasn't set any)
+    // Free-times chips (weekly availability - empty string if learner hasn't set any)
     const ftChips = renderFreeTimesChips(l.availability);
     const freeTimesRow = ftChips
       ? '<div class="learner-freetimes"><span class="learner-freetimes-label">Free</span>' + ftChips + '</div>'
@@ -1007,7 +1007,7 @@ function formatDate(str) {
 
 // ── Free-times formatter ──
 // `windows` is an array of { day_of_week, start_time, end_time } with HH:MM strings.
-// Returns short HTML chips like "Mon 4–6pm · Wed 5–7pm" — empty string if none.
+// Returns short HTML chips like "Mon 4–6pm · Wed 5–7pm" - empty string if none.
 const FT_DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const FT_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 function fmtFTTime(t) {

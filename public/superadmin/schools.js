@@ -2,7 +2,7 @@
   'use strict';
 
 (function() {
-  // Auth check — read role/name/email from the display blob mirrored in
+  // Auth check - read role/name/email from the display blob mirrored in
   // localStorage at login time. The session JWT rides in the httpOnly
   // cc_admin cookie; nothing on this page needs to decode it.
   let adminData;
@@ -22,7 +22,7 @@
   document.getElementById('adminName').textContent = admin.name || 'Super Admin';
   document.getElementById('adminEmail').textContent = admin.email || '';
 
-  // API helpers — session cookie + CSRF header via fetchAuthed
+  // API helpers - session cookie + CSRF header via fetchAuthed
   async function apiFetch(url) {
     const res = await window.ccAdminAuth.fetchAuthed(url);
     return res.json();

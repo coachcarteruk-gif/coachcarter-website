@@ -6,7 +6,7 @@
 
   // Gate the whole page on login. ccAuth.requireAuth() shows the shared
   // sign-in modal when the user is not logged in. Don't fetch anything
-  // until we know we're authed — otherwise the API returns 401, the JSON
+  // until we know we're authed - otherwise the API returns 401, the JSON
   // parse succeeds with an error body, and we end up rendering an empty
   // share-link card.
   if (!ccAuth.isLoggedIn) {
@@ -70,7 +70,7 @@
   // ── Render recent referrals ──────────────────────────────────────────────
   function renderRecent(list) {
     if (!list || list.length === 0) {
-      elList.innerHTML = '<div class="ref-empty">No one yet — share your link above.</div>';
+      elList.innerHTML = '<div class="ref-empty">No one yet - share your link above.</div>';
       return;
     }
     var badgeMap = {
@@ -136,7 +136,7 @@
     if (!shareUrl || !navigator.share) return;
     navigator.share({ url: shareUrl })
       .then(function () { track('referral_link_shared', { method: 'native' }); })
-      .catch(function () { /* user cancelled — silent */ });
+      .catch(function () { /* user cancelled - silent */ });
   }
 
   // ── Load data ────────────────────────────────────────────────────────────

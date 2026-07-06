@@ -101,7 +101,7 @@ function processData() {
     }
   }
 
-  // Most recent mock test metadata (date + pass/fail) — used as the source of
+  // Most recent mock test metadata (date + pass/fail) - used as the source of
   // truth for the "Most recent mock test" breakdown section.
   recentMockMeta = DATA.recent_mock || null;
 
@@ -121,7 +121,7 @@ function processData() {
     }
   }
 
-  // Build sub-skill faults map — only from most recent mock test.
+  // Build sub-skill faults map - only from most recent mock test.
   subFaultMap = {};
   if (DATA.recent_sub_faults) {
     for (var sf = 0; sf < DATA.recent_sub_faults.length; sf++) {
@@ -686,12 +686,12 @@ function renderRadar() {
   var scores = [];
   for (var i = 0; i < n; i++) scores.push(areaAvg(areas[i].id));
 
-  // Build short labels for the radar — full names like "Response to Signs /
+  // Build short labels for the radar - full names like "Response to Signs /
   // Signals" don't fit on a 400px-wide canvas at 3/9 o'clock. The full label
   // remains used everywhere else (skill breakdown, examiner quiz, etc.).
   // Map full labels to compact forms for the radar only. Area IDs from
   // competency-config.js AREAS list. The longer the label, the more padding
-  // it forces, shrinking the chart — so shorten the two longest.
+  // it forces, shrinking the chart - so shorten the two longest.
   var SHORT_LABEL = {
     'signs_signals': 'Signs',
     'mirrors': 'Mirrors'
@@ -708,7 +708,7 @@ function renderRadar() {
 
   // Compute the widest *radar* label so we can pad maxR enough to keep
   // horizontal labels fully visible. At 3/9 o'clock the label is anchored at
-  // cx ± (maxR + 32) with text aligned away from centre — so the full label
+  // cx ± (maxR + 32) with text aligned away from centre - so the full label
   // width must fit between the anchor and the canvas edge.
   ctx.font = '600 12px Lato, sans-serif';
   var widestLabel = 0;
@@ -717,10 +717,10 @@ function renderRadar() {
     if (tw > widestLabel) widestLabel = tw;
   }
   // pad needs to cover the worst case: a horizontal label at 3/9 o'clock,
-  // which sits at cx ± (maxR + 32) — text extending widestLabel away from
+  // which sits at cx ± (maxR + 32) - text extending widestLabel away from
   // anchor. Required: cx - (maxR + 32) ≥ widestLabel → maxR ≤ cx - 32 - W.
-  // We use widestLabel + 20 as a soft pad — 20px for the labelR offset and a
-  // bit of breathing room — relying on the fact that the widest labels are
+  // We use widestLabel + 20 as a soft pad - 20px for the labelR offset and a
+  // bit of breathing room - relying on the fact that the widest labels are
   // diagonal (not at 3/9 exactly) so they have a bit more room than worst case.
   var pad = Math.min(Math.max(50, widestLabel + 20), size / 2 * 0.5);
   var maxR = size / 2 - pad;
@@ -830,7 +830,7 @@ function renderSkillBreakdown() {
   var container = document.getElementById('skill-breakdown');
   var metaEl = document.getElementById('recent-mock-meta');
 
-  // Empty state — no mock test yet
+  // Empty state - no mock test yet
   if (!recentMockMeta) {
     if (metaEl) metaEl.textContent = '';
     container.innerHTML =
@@ -897,12 +897,12 @@ function renderSkillBreakdown() {
     html += '<div class="area-header" data-action="toggle-area">';
     html += '<span class="area-icon">' + area.icon + '</span>';
     html += '<span class="area-name">' + area.label + '</span>';
-    // Headline summary on the right — fault breakdown or "Clean"
+    // Headline summary on the right - fault breakdown or "Clean"
     if (totalFaults > 0) {
       var parts = [];
       if (headlineFaults.driving > 0)   parts.push('<span class="area-fault area-fault-d">D' + headlineFaults.driving + '</span>');
       if (headlineFaults.serious > 0)   parts.push('<span class="area-fault area-fault-s">S' + headlineFaults.serious + '</span>');
-      if (headlineFaults.dangerous > 0) parts.push('<span class="area-fault area-fault-x">×' + headlineFaults.dangerous + '</span>');
+      if (headlineFaults.dangerous > 0) parts.push('<span class="area-fault area-fault-x">�-' + headlineFaults.dangerous + '</span>');
       html += '<span class="area-headline">' + parts.join(' ') + '</span>';
     } else {
       html += '<span class="area-headline area-headline-clean">Clean</span>';
@@ -922,11 +922,11 @@ function renderSkillBreakdown() {
           var subParts = [];
           if (subFault.driving > 0)   subParts.push('<span class="sub-skill-fault sub-skill-fault-d">D' + subFault.driving + '</span>');
           if (subFault.serious > 0)   subParts.push('<span class="sub-skill-fault sub-skill-fault-s">S' + subFault.serious + '</span>');
-          if (subFault.dangerous > 0) subParts.push('<span class="sub-skill-fault sub-skill-fault-x">×' + subFault.dangerous + '</span>');
+          if (subFault.dangerous > 0) subParts.push('<span class="sub-skill-fault sub-skill-fault-x">�-' + subFault.dangerous + '</span>');
           mockCellHtml = '<div class="sub-skill-mock" title="Faults on this mock test (Driving / Serious / Dangerous)">' + subParts.join(' ') + '</div>';
           rowClass += ' has-attention';
         } else {
-          mockCellHtml = '<div class="sub-skill-mock sub-skill-mock-empty" title="No fault on this sub-skill">—</div>';
+          mockCellHtml = '<div class="sub-skill-mock sub-skill-mock-empty" title="No fault on this sub-skill"> - </div>';
         }
         html += '<div class="' + rowClass + '">';
         html += '<span class="sub-skill-name">' + sub.label + '</span>';

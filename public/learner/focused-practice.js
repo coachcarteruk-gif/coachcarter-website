@@ -8,7 +8,7 @@ var focusArea = null;         // guided mode: single supervisor category key
 var suggestedAreas = [];      // weakest categories, for the "Suggested" badge + payload
 var competencyData = null;
 var skillScores = {};
-var timerStart = null;        // Date.now() at drive start — survives backgrounded tabs
+var timerStart = null;        // Date.now() at drive start - survives backgrounded tabs
 var timerInterval = null;
 var elapsedSeconds = 0;
 var moments = [];             // free mode parked-break notes: { catKey, rating, note }
@@ -135,7 +135,7 @@ async function loadCurrentDriveOptions() {
     console.warn('Failed to load current bookings:', e);
     currentDriveOptions = [];
   }
-  // Auto-link the drive to a booking happening near now — the learner
+  // Auto-link the drive to a booking happening near now - the learner
   // shouldn't have to make this decision, just be able to undo it.
   if (currentDriveOptions.length > 0) {
     selectedDrive = { kind: 'booking', booking: currentDriveOptions[0] };
@@ -197,7 +197,7 @@ function renderBookingNote() {
     var label = booking.lesson_type_name || 'Booked lesson';
     var meta = formatBookingTime(booking);
     if (booking.instructor_name) meta += ' with ' + booking.instructor_name;
-    el.innerHTML = '<span class="booking-note-text">Linking to your lesson: <strong>' + escHtml(label) + '</strong> — ' + escHtml(meta) + '</span>' +
+    el.innerHTML = '<span class="booking-note-text">Linking to your lesson: <strong>' + escHtml(label) + '</strong> - ' + escHtml(meta) + '</span>' +
       '<button type="button" class="booking-note-link" data-action="unlink-booking">Not this lesson?</button>';
     el.classList.remove('hidden');
   } else if (currentDriveOptions.length > 0) {
@@ -228,7 +228,7 @@ function renderFocusList() {
 
   if (focusArea) {
     // Once a focus is picked, hide the full list and the intro copy so the
-    // briefing is the only thing left to read before setting off — no
+    // briefing is the only thing left to read before setting off - no
     // scrolling needed to get from pick to briefing.
     var cat = CC_COMPETENCY.getSupervisorCategory(focusArea);
     listContainer.innerHTML = '';
@@ -286,7 +286,7 @@ function renderBriefing() {
     { key: 'faults', title: 'Common faults', items: g.faults }
   ];
   // Collapsed by default so "Start drive" is reachable right after picking
-  // a focus — reading the briefing is optional, not a gate to setting off.
+  // a focus - reading the briefing is optional, not a gate to setting off.
   var html = '<p class="briefing-intro">Optional reading before you set off. Tap a heading to expand it.</p>';
   sections.forEach(function(sec) {
     if (!sec.items || sec.items.length === 0) return;
@@ -447,7 +447,7 @@ function goToReflection() {
       html += '<button class="reflect-btn' + sel + '" data-action="set-reflection" data-cat="' + catKey + '" data-rating="' + r.key + '">' + r.label + '</button>';
     });
     html += '</div>';
-    // Guided drives get the fault checklist from the briefing — a more
+    // Guided drives get the fault checklist from the briefing - a more
     // detailed debrief for the one area they were working on.
     if (mode === 'guided' && cat.guided && cat.guided.faults && cat.guided.faults.length > 0) {
       html += '<div class="fault-checklist"><div class="fault-checklist-title">Did any of these come up?</div>';

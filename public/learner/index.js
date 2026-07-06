@@ -150,7 +150,7 @@ const DOW_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function render() {
   removeSkeleton();
 
-  // Greeting — use name from bookings response or fallback
+  // Greeting - use name from bookings response or fallback
   const upcoming = (BOOKINGS_DATA && BOOKINGS_DATA.upcoming) ? BOOKINGS_DATA.upcoming : [];
   const nameEl = document.getElementById('welcome-msg');
 
@@ -280,7 +280,7 @@ function renderUnlogged() {
   banner.classList.add('show');
 }
 
-// ── Referral teaser — links through to /learner/refer.html for the full page ──
+// ── Referral teaser - links through to /learner/refer.html for the full page ──
 async function loadReferralCard() {
   if (!AUTH) return;
   try {

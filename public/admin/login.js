@@ -4,7 +4,7 @@
   var pendingResetEmail = null;
 
   // Redirect if already logged in. The session JWT lives in the httpOnly
-  // cc_admin cookie — we just hit /verify with credentials included to
+  // cc_admin cookie - we just hit /verify with credentials included to
   // check validity. localStorage is only used as a quick hint to skip
   // the verify round-trip if there's no display blob at all.
   var existing = null;

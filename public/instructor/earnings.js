@@ -230,7 +230,7 @@
         <div class="connect-banner pending">
           <div class="connect-banner-text">
             <div class="connect-banner-title">Finish Setting Up Payouts</div>
-            <div class="connect-banner-desc">You've started the process — just a few more steps to connect your bank account.</div>
+            <div class="connect-banner-desc">You've started the process - just a few more steps to connect your bank account.</div>
           </div>
           <button class="connect-btn" data-action="continue-connect">Continue Setup</button>
         </div>
@@ -239,7 +239,7 @@
     // State 4: DB says complete, but Stripe is currently blocking transfers.
     // Either capabilities are off (charges_enabled/payouts_enabled false), or
     // Stripe has currently_due requirements (re-verification, expired ID,
-    // missing bank details, etc.). Treat as amber — instructor needs to act.
+    // missing bank details, etc.). Treat as amber - instructor needs to act.
     const stripeHealthKnown = status.charges_enabled !== undefined; // older API responses lack these
     const stripeUnhealthy = stripeHealthKnown && (
       !status.charges_enabled ||

@@ -42,7 +42,7 @@ function getDefaultConfig() {
     content: {
       hero: {
         headline: "Your licence. Your way.",
-        subheadline: "Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.",
+        subheadline: "Choose how you want to learn - from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.",
         stats: [
           { value: "£90", label: "Per 1.5hr lesson" },
           { value: "Online", label: "Direct booking available" },
@@ -53,11 +53,11 @@ function getDefaultConfig() {
       sections: {
         payg: { title: "Pay As You Go", subtitle: "Maximum flexibility. Book when you need, cancel when life happens." },
         packages: { title: "Existing Lesson Credit", subtitle: "Existing Lesson Credit still works for eligible bookings. New self-serve credit packages are retired." },
-        guarantee: { title: "The Test Ready Guarantee", subtitle: "18 weeks to your driving licence — or we keep going until you pass." }
+        guarantee: { title: "The Test Ready Guarantee", subtitle: "18 weeks to your driving licence - or we keep going until you pass." }
       },
       features: {
         payg: ["Qualified ADI instructor every time", "Book online or by phone", "Lesson length to suit you", "Progress tracked between lessons", "Upgrade to a package anytime"],
-        core: ["18-week structured programme", "~30 hours with expert instructor", "3 mock driving assessments included", "Practical test booked for you", "100% Money Back After First Lesson", "1st retake fully covered — 15 hrs tuition + test booking included"]
+        core: ["18-week structured programme", "~30 hours with expert instructor", "3 mock driving assessments included", "Practical test booked for you", "100% Money Back After First Lesson", "1st retake fully covered - 15 hrs tuition + test booking included"]
       },
       cta: {
         primary: "Book a Lesson",
@@ -357,13 +357,13 @@ function updatePreview() {
 // ── BULK CREDIT PRICING (per-school) ────────────────────────────────────────
 // The hourly rate + tiers below control what learners are actually charged
 // at checkout (api/credits.js). The Bulk Packages table above is the marketing
-// display only — separate concern, separate save path.
+// display only - separate concern, separate save path.
 
 function renderBulkTiers(tiers) {
   const tbody = document.getElementById('bulkTiersBody');
   if (!tbody) return;
   if (!tiers.length) {
-    tbody.innerHTML = '<tr id="bulk-tiers-empty"><td colspan="3" style="text-align:center; color: var(--muted); padding: 16px;">No discount tiers — bulk credits will be charged at the full hourly rate.</td></tr>';
+    tbody.innerHTML = '<tr id="bulk-tiers-empty"><td colspan="3" style="text-align:center; color: var(--muted); padding: 16px;">No discount tiers - bulk credits will be charged at the full hourly rate.</td></tr>';
     return;
   }
   tbody.innerHTML = tiers.map((t, i) => `
@@ -405,7 +405,7 @@ function removeBulkTier(idx) {
 }
 
 // Returns null if valid, error string otherwise. Mirrors the server-side
-// rules in api/_pricing-helpers.js#validateBulkPricingConfig — keep in sync.
+// rules in api/_pricing-helpers.js#validateBulkPricingConfig - keep in sync.
 function validateBulkTiers() {
   const errEl = document.getElementById('bulkTiersError');
   const saveBtn = document.getElementById('btn-save-config');
@@ -423,7 +423,7 @@ function validateBulkTiers() {
       break;
     }
     if (seen.has(t.min_hours)) {
-      err = `Duplicate tier for ${t.min_hours} hours — each milestone must be unique.`;
+      err = `Duplicate tier for ${t.min_hours} hours - each milestone must be unique.`;
       break;
     }
     seen.add(t.min_hours);
@@ -468,7 +468,7 @@ function gatherFormData() {
   currentConfig.pricing.payg_lesson_price = lessonPrice;
   currentConfig.pricing.payg_hourly = lessonPrice / 1.5;
 
-  // Bulk credit pricing — only stored if a value has been entered. Empty
+  // Bulk credit pricing - only stored if a value has been entered. Empty
   // input means "use the school's standard 90-min lesson type rate" (handled
   // server-side in api/_pricing-helpers.js).
   const bulkRaw = document.getElementById('bulkHourlyRate')?.value;
@@ -540,7 +540,7 @@ async function saveConfig() {
     return;
   }
 
-  // Block save if bulk pricing is invalid — server would reject anyway, but
+  // Block save if bulk pricing is invalid - server would reject anyway, but
   // catching here gives a clearer message and avoids a wasted round-trip.
   const bulkErr = validateBulkTiers();
   if (bulkErr) {
@@ -626,7 +626,7 @@ async function loadDynamicPricing() {
 
     statusEl.innerHTML = `Price is at <strong style="color:var(--accent);">${pct}%</strong> of cap · <strong>${data.purchases}</strong> enrolments so far`;
   } catch (err) {
-    statusEl.textContent = 'Could not load dynamic pricing — the guarantee_pricing table may not exist yet. It will be created on first API call.';
+    statusEl.textContent = 'Could not load dynamic pricing - the guarantee_pricing table may not exist yet. It will be created on first API call.';
   }
 }
 
@@ -645,7 +645,7 @@ async function overrideGuaranteePrice() {
 
   try {
     const { neon } = await import('https://esm.sh/@neondatabase/serverless@0.10.1');
-    // We can't call Neon directly from the browser — use the config API as a proxy.
+    // We can't call Neon directly from the browser - use the config API as a proxy.
     // Instead, we'll call a simple POST to our guarantee-price endpoint with the admin secret.
     const res = await fetch('/api/guarantee-price', {
       method: 'POST',

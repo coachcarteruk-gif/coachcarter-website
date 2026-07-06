@@ -161,7 +161,7 @@
       var first = bookings[0];
       html += '<div class="series-group">' +
         '<div class="series-header">' +
-        '<span>Weekly series — ' + bookings.length + ' remaining</span>' +
+        '<span>Weekly series - ' + bookings.length + ' remaining</span>' +
         '<button data-action="open-cancel-modal"' +
         ' data-booking-id="' + first.id + '"' +
         ' data-date="' + first.scheduled_date + '"' +
@@ -214,7 +214,7 @@
         });
         var today = new Date();
         var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-        if (b.scheduled_date === todayStr) dateStr = 'Today — ' + dateStr;
+        if (b.scheduled_date === todayStr) dateStr = 'Today - ' + dateStr;
         html += '<div class="date-header">' + dateStr + '</div>';
       }
       html += renderLessonCard(b, isPast);
@@ -245,7 +245,7 @@
       '<div class="lesson-accent" style="background:' + ltColour + '"></div>' +
       '<div class="lesson-body">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
-      '<div class="lesson-time">' + start + ' — ' + end + '</div>';
+      '<div class="lesson-time">' + start + ' - ' + end + '</div>';
 
     if (isCancelled) {
       html += '<span class="lesson-status status-cancelled">Cancelled</span>';
@@ -348,7 +348,7 @@
     var dateDisplay = new Date(date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
     document.getElementById('cmDate').textContent = dateDisplay;
-    document.getElementById('cmTime').textContent = start + ' — ' + end;
+    document.getElementById('cmTime').textContent = start + ' - ' + end;
     document.getElementById('cmInstructor').textContent = instructorName;
 
     var willGet = hoursUntil >= 48;

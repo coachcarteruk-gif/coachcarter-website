@@ -1,10 +1,10 @@
-/* CoachCarter instructor login (May 2026 — password auth)
+/* CoachCarter instructor login (May 2026 - password auth)
  *
  * Flows:
- *   - Choice screen (sign-in vs. join-the-team) — kept as-is
+ *   - Choice screen (sign-in vs. join-the-team) - kept as-is
  *   - Sign in: email + password → either dashboard, or force-change-password
  *   - Force change password: required after admin sets/resets a password
- *   - Join the team: enquiry form — kept as-is
+ *   - Join the team: enquiry form - kept as-is
  *
  * Forgot-password is intentionally NOT self-serve. Instructors contact the
  * admin (see hint text on the sign-in screen). Admins use the admin portal

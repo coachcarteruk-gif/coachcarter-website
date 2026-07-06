@@ -272,7 +272,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-player') openPlayer(t.dataset.uid, t.dataset.title, t.dataset.desc);
   else if (a === 'toggle-mute') toggleMute(t.dataset.uid);
 });
-// Delegated error listener — replaces inline onerror="this.style.display='none'"
+// Delegated error listener - replaces inline onerror="this.style.display='none'"
 // on dynamically inserted <img data-hide-on-error>. Must use capture: true
 // because the 'error' event does not bubble.
 document.addEventListener('error', function (e) {

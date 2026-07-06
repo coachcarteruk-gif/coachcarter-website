@@ -284,7 +284,7 @@ function rate(key, value, btn) {
 function updateStep2Button() {
   const rated = Object.keys(ratings).length;
   const btn = document.getElementById('btn-step2-next');
-  // Require at least 1 rating (not all 17 — learners may not practise every skill)
+  // Require at least 1 rating (not all 17 - learners may not practise every skill)
   btn.disabled = rated < 1;
   btn.textContent = rated < 1
     ? 'Rate at least 1 skill'
@@ -295,7 +295,7 @@ function updateStep2Button() {
 function buildSummary() {
   const date = document.getElementById('session-date').value;
   const duration = document.getElementById('duration').value;
-  const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const dateStr = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ' - ';
 
   // Count total faults
   let totalD = 0, totalS = 0, totalX = 0;
@@ -306,7 +306,7 @@ function buildSummary() {
 
   document.getElementById('summary-meta').innerHTML = `
     <div class="summary-pill"><div class="val">${dateStr}</div><div class="lbl">Date</div></div>
-    <div class="summary-pill"><div class="val">${duration ? duration + ' min' : '—'}</div><div class="lbl">Duration</div></div>
+    <div class="summary-pill"><div class="val">${duration ? duration + ' min' : ' - '}</div><div class="lbl">Duration</div></div>
     <div class="summary-pill"><div class="val">${currentType === 'instructor' ? 'Instructor' : 'Private'}</div><div class="lbl">Type</div></div>
     <div class="summary-pill"><div class="val">${Object.keys(ratings).length}</div><div class="lbl">Skills rated</div></div>
     ${hasFaults ? `<div class="summary-pill"><div class="val" style="color:var(--red)">${totalD}D · ${totalS}S · ${totalX}!</div><div class="lbl">Formal marks</div></div>` : ''}

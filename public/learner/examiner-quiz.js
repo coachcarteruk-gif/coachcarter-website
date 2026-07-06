@@ -97,7 +97,7 @@ function renderQuestion() {
   document.getElementById('quiz-dl25').textContent = `DL25 · ${s.dl25_ref}`;
   document.getElementById('quiz-scenario').textContent = s.scenario;
 
-  // Reset answer buttons — keep data-answer attribute so CSS variables stay applied
+  // Reset answer buttons - keep data-answer attribute so CSS variables stay applied
   const btns = document.querySelectorAll('.answer-btn');
   btns.forEach(btn => {
     btn.disabled = false;

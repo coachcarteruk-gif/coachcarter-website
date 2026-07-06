@@ -12,7 +12,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <script src="/cookie-consent.js"></script>
 <script src="/posthog-loader.js"></script>
-<title>CoachCarter — Config Editor</title>
+<title>CoachCarter - Config Editor</title>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
@@ -728,7 +728,7 @@ textarea {
         </tr>
       </thead>
       <tbody id="bulkTiersBody">
-        <!-- Populated by JS — see editor.js renderBulkTiers() -->
+        <!-- Populated by JS - see editor.js renderBulkTiers() -->
       </tbody>
     </table>
     <button type="button" class="btn-add" id="btnAddTier" style="margin-top: 12px;">+ Add tier</button>
@@ -844,7 +844,7 @@ textarea {
     <h2>Dynamic Guarantee Pricing</h2>
 
     <div class="calc-note">
-      <strong>📈 Demand-based pricing:</strong> The Test Ready Guarantee price starts low and increases by £100 with each enrolment. This is managed separately from the static core programme price above — it lives in its own database table and updates automatically via the Stripe webhook.
+      <strong>📈 Demand-based pricing:</strong> The Test Ready Guarantee price starts low and increases by £100 with each enrolment. This is managed separately from the static core programme price above - it lives in its own database table and updates automatically via the Stripe webhook.
     </div>
 
     <div class="guarantee-calc">
@@ -857,11 +857,11 @@ textarea {
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <div>
               <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Current Price</div>
-              <div id="dp-current" style="font-family: var(--font-head); font-size: 2rem; font-weight: 800; color: var(--accent);">—</div>
+              <div id="dp-current" style="font-family: var(--font-head); font-size: 2rem; font-weight: 800; color: var(--accent);"> - </div>
             </div>
             <div>
               <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Purchases So Far</div>
-              <div id="dp-purchases" style="font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; color: #fff;">—</div>
+              <div id="dp-purchases" style="font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; color: #fff;"> - </div>
             </div>
           </div>
         </div>
@@ -870,15 +870,15 @@ textarea {
           <h4>Configuration</h4>
           <div class="guarantee-input-group">
             <label>Base (starting) price</label>
-            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: var(--accent);" id="dp-base">—</div>
+            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: var(--accent);" id="dp-base"> - </div>
           </div>
           <div class="guarantee-input-group">
             <label>Increment per purchase</label>
-            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: #fff;" id="dp-increment">—</div>
+            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: #fff;" id="dp-increment"> - </div>
           </div>
           <div class="guarantee-input-group">
             <label>Price cap (maximum)</label>
-            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: #fff;" id="dp-cap">—</div>
+            <div style="font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: #fff;" id="dp-cap"> - </div>
           </div>
           <p style="font-size: 0.78rem; color: rgba(255,255,255,0.35); margin-top: 12px;">
             To change these values, update the guarantee_pricing table directly in Neon or contact support.
@@ -910,7 +910,7 @@ textarea {
       </div>
       <div class="form-group full-width">
         <label>Subheadline</label>
-        <textarea id="heroSubheadline">Choose how you want to learn — from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.</textarea>
+        <textarea id="heroSubheadline">Choose how you want to learn - from flexible pay-as-you-go to our fully guaranteed 18-week Test Ready Guarantee. Expert instructors, real results.</textarea>
       </div>
       <div class="form-group">
         <label>Stat 1 - Value</label>
@@ -973,7 +973,7 @@ textarea {
       </div>
       <div class="form-group">
         <label>Guarantee Section Subtitle</label>
-        <input type="text" id="sectionGuaranteeSubtitle" value="18 weeks to your driving licence — or we keep going until you pass.">
+        <input type="text" id="sectionGuaranteeSubtitle" value="18 weeks to your driving licence - or we keep going until you pass.">
       </div>
     </div>
   </div>

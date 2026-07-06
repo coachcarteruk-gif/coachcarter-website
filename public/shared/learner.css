@@ -11,7 +11,7 @@
   body.cc-has-sidebar .page { margin-top: 0 !important; padding-top: 32px !important; }
 }
 
-/* Brand tokens are loaded from /shared/brand-tokens.css — must be linked
+/* Brand tokens are loaded from /shared/brand-tokens.css - must be linked
    in <head> before this stylesheet. */
 
 /* Base */
@@ -132,7 +132,7 @@ body {
   .site-nav-link:not(.primary):not(.back) { display: none; }
 }
 
-/* ── Dark mode (hub-only — scoped to .cc-has-sidebar) ─────────────────
+/* ── Dark mode (hub-only - scoped to .cc-has-sidebar) ─────────────────
    Marketing pages do NOT opt into dark mode (hero sections, top nav,
    and photo overlays weren't designed for it). Tokens override here
    so descendants of the hub body see them. */

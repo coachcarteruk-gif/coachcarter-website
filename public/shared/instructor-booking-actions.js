@@ -12,7 +12,7 @@
  *   BookingActions.openAddLesson({ defaultDate })
  *
  * All API calls ride on the cc_instructor httpOnly cookie via
- * ccAuth.fetchAuthed() — no token needs to be passed in.
+ * ccAuth.fetchAuthed() - no token needs to be passed in.
  */
 (function () {
   'use strict';
@@ -56,7 +56,7 @@
           <div class="modal-title">Cancel Lesson</div>
           <div class="modal-sub" id="ba-cancel-sub">This will cancel the lesson and notify the learner.</div>
           <div>
-            <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Reason (optional — shared with the learner)</div>
+            <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Reason (optional - shared with the learner)</div>
             <textarea id="ba-cancel-reason" placeholder="e.g. Car in for service, feeling unwell…" style="width:100%;min-height:70px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);resize:vertical;background:var(--white);color:var(--primary)"></textarea>
           </div>
           <div class="modal-actions">
@@ -103,8 +103,8 @@
           <div class="modal-title">Reschedule Lesson</div>
           <div class="modal-sub">Move this lesson to a new date and time.</div>
           <div style="margin:16px 0">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:var(--muted)">Learner</span><span style="font-size:0.85rem;font-weight:600" id="ba-resch-learner">—</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:var(--muted)">Current</span><span style="font-size:0.85rem;text-decoration:line-through;color:var(--muted)" id="ba-resch-current">—</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:var(--muted)">Learner</span><span style="font-size:0.85rem;font-weight:600" id="ba-resch-learner"> - </span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:var(--muted)">Current</span><span style="font-size:0.85rem;text-decoration:line-through;color:var(--muted)" id="ba-resch-current"> - </span></div>
             <div style="margin-top:16px">
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">New date</div>
               <input type="date" id="ba-resch-date" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;margin-bottom:8px;background:var(--white);color:var(--primary)">
@@ -258,7 +258,7 @@
       if (!res.ok) throw new Error(data.error || 'Failed to cancel');
       if (_onCacheUpdate) _onCacheUpdate(cancelBookingId, 'status', 'refunded');
       closeCancel();
-      _showToast('Lesson cancelled — learner notified', 'success');
+      _showToast('Lesson cancelled - learner notified', 'success');
       _onRefresh();
     } catch (err) {
       _showToast(err.message || 'Failed to cancel lesson', 'error');
@@ -318,7 +318,7 @@
 
   function openReschedule(booking) {
     rescheduleBooking = booking;
-    document.getElementById('ba-resch-learner').textContent = booking.learner_name || '—';
+    document.getElementById('ba-resch-learner').textContent = booking.learner_name || ' - ';
     const dateStr = new Date(booking.scheduled_date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
     document.getElementById('ba-resch-current').textContent = dateStr + ' ' + (booking.start_time || '').slice(0, 5) + '–' + (booking.end_time || '').slice(0, 5);
 
@@ -380,7 +380,7 @@
         btn.disabled = false;
       }
     } catch (e) {
-      // Silently fail conflict check — don't block reschedule
+      // Silently fail conflict check - don't block reschedule
       conflictEl.style.display = 'none';
       btn.disabled = false;
     }
@@ -405,7 +405,7 @@
       if (!res.ok) throw new Error(data.error || 'Failed to reschedule');
       if (_onCacheUpdate) _onCacheUpdate(rescheduleBooking.id, 'status', 'refunded');
       closeReschedule();
-      _showToast('Lesson rescheduled — learner notified', 'success');
+      _showToast('Lesson rescheduled - learner notified', 'success');
       _onRefresh();
     } catch (err) {
       _showToast(err.message || 'Failed to reschedule', 'error');
@@ -585,7 +585,7 @@
       if (!res.ok) throw new Error(data.error || 'Failed to book');
       var learnerName = document.getElementById('ba-add-sel-name').textContent;
       closeAdd();
-      _showToast('Lesson booked for ' + learnerName + ' — they\'ve been notified', 'success');
+      _showToast('Lesson booked for ' + learnerName + ' - they\'ve been notified', 'success');
       _onRefresh();
     } catch (err) {
       _showToast(err.message || 'Failed to book lesson', 'error');

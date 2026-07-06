@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script src="/cookie-consent.js"></script>
   <script src="/posthog-loader.js"></script>
-  <title>My Lessons — CoachCarter</title>
+  <title>My Lessons - CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
@@ -23,11 +23,11 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── MY LESSONS — booking log ───
+    /* ── MY LESSONS - booking log ───
        Same DL25 vocabulary as the rest of the Lessons tab. Tab bar adopts
        the mono ledger style. Lesson cards: tabular time, mono labels,
        hairline date dividers. Past lessons treated subtly (no strikethrough,
-       no global opacity dimmer — just a muted tone). */
+       no global opacity dimmer - just a muted tone). */
 
     :root {
       --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -56,7 +56,7 @@
       max-width: 52ch;
     }
 
-    /* ── TAB BAR — mono ledger style ── */
+    /* ── TAB BAR - mono ledger style ── */
     .tab-bar {
       display: flex; gap: 0;
       margin-bottom: 24px;
@@ -82,7 +82,7 @@
     .tab-btn.active { color: var(--accent); }
     .tab-btn.active::after { background: var(--accent); }
 
-    /* ── DATE HEADERS — match book.html ── */
+    /* ── DATE HEADERS - match book.html ── */
     .date-header {
       font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
       color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
@@ -187,7 +187,7 @@
     .btn-lesson.calendar { color: var(--accent); }
     .btn-lesson.calendar:hover { border-color: var(--accent); background: var(--accent-mid); }
 
-    /* ── SERIES GROUP — quieter (no nested-card look) ── */
+    /* ── SERIES GROUP - quieter (no nested-card look) ── */
     .series-group {
       background: transparent;
       border: 1px dashed var(--border);
@@ -228,14 +228,14 @@
     /* Series-grouped lesson cards: lighter background since they're inside a group */
     .series-group .lesson-card { background: var(--bg); }
 
-    /* ── PAST LESSONS — subtle, no strikethrough ── */
+    /* ── PAST LESSONS - subtle, no strikethrough ── */
     .lesson-card.past {
       background: transparent;
       border-color: var(--border);
     }
     .lesson-card.past .lesson-time { color: var(--muted); }
     .lesson-card.past .lesson-accent { opacity: 0.4; }
-    /* No strikethrough — that reads as "cancelled". Past time is just muted. */
+    /* No strikethrough - that reads as "cancelled". Past time is just muted. */
 
     .lesson-status {
       font-family: var(--font-mono); font-size: 0.6rem; font-weight: 700;
@@ -308,7 +308,7 @@
     }
     .btn-book-link:hover::after { transform: translateX(4px); }
 
-    /* ── MODALS (kept compatible — slightly tuned for dark mode) ── */
+    /* ── MODALS (kept compatible - slightly tuned for dark mode) ── */
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.55);
       display: flex; align-items: center; justify-content: center;
@@ -451,7 +451,7 @@
   <section class="lessons-hero">
     <div class="hero-eyebrow">Your schedule</div>
     <h1 class="page-title">My <em>lessons</em>.</h1>
-    <p class="lessons-subtitle">Everything you've booked with us. Switch tabs to see what's coming up or look back at past lessons — cancel or reschedule from any upcoming row.</p>
+    <p class="lessons-subtitle">Everything you've booked with us. Switch tabs to see what's coming up or look back at past lessons - cancel or reschedule from any upcoming row.</p>
   </section>
 
   <!-- Tab bar: Upcoming / Past -->
@@ -471,9 +471,9 @@
   <div class="modal cancel-modal">
     <h2>Cancel lesson?</h2>
     <div class="modal-detail">
-      <div class="modal-detail-row"><span>Date</span><span id="cmDate">—</span></div>
-      <div class="modal-detail-row"><span>Time</span><span id="cmTime">—</span></div>
-      <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor">—</span></div>
+      <div class="modal-detail-row"><span>Date</span><span id="cmDate"> - </span></div>
+      <div class="modal-detail-row"><span>Time</span><span id="cmTime"> - </span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="cmInstructor"> - </span></div>
     </div>
     <div class="cancel-policy" id="cancelPolicyNote"></div>
     <div id="cancelSeriesOption" style="display:none;margin:10px 0;padding:10px;background:var(--surface);border-radius:8px;">
@@ -502,8 +502,8 @@
     <h2>Reschedule lesson</h2>
     <p class="modal-credit-note">To reschedule, you'll be taken to the booking page where you can pick a new time slot.</p>
     <div class="modal-detail">
-      <div class="modal-detail-row"><span>Current</span><span id="rmCurrentDateTime">—</span></div>
-      <div class="modal-detail-row"><span>Instructor</span><span id="rmInstructor">—</span></div>
+      <div class="modal-detail-row"><span>Current</span><span id="rmCurrentDateTime"> - </span></div>
+      <div class="modal-detail-row"><span>Instructor</span><span id="rmInstructor"> - </span></div>
     </div>
     <div class="modal-actions">
       <button class="btn-modal-cancel">Cancel</button>

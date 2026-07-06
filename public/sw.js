@@ -59,14 +59,13 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip API calls, auth endpoints, and Stripe — always go to network
+  // Skip API calls, auth endpoints, and Stripe - always go to network
   if (url.pathname.startsWith('/api/') || url.hostname.includes('stripe') || url.hostname.includes('posthog')) {
     return;
   }
 
   // For HTML pages: network first, fall back to cache, then offline page.
-  // Auth-gated paths (/learner/*, /instructor/*, /admin/*) are network-only —
-  // never cached, never served from cache. Prevents stale per-user shells from
+  // Auth-gated paths (/learner/*, /instructor/*, /admin/*) are network-only - // never cached, never served from cache. Prevents stale per-user shells from
   // leaking across sessions when a different account signs in.
   if (event.request.headers.get('accept')?.includes('text/html')) {
     if (isAuthPath(url.pathname)) {
@@ -91,7 +90,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Static assets under auth-gated paths (e.g. /learner/foo.js) bypass the
-  // cache entirely. Same defence-in-depth as the HTML branch above — a
+  // cache entirely. Same defence-in-depth as the HTML branch above - a
   // per-user JS file shouldn't survive an account switch.
   if (isAuthPath(url.pathname)) return;
 

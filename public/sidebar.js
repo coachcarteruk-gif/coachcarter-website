@@ -3,7 +3,7 @@
 
   // ── Context detection ──────────────────────────────────────────
   var path = window.location.pathname;
-  // Skip admin pages — they have their own sidebar
+  // Skip admin pages - they have their own sidebar
   if (path.startsWith('/admin/') || path === '/admin') return;
 
   var context = 'public';
@@ -171,8 +171,7 @@
 
   // Auto-render marketing nav placeholders. Pages just include
   // <nav class="site-nav" id="cc-site-nav"></nav> and/or
-  // <nav class="mobile-tab-bar" id="cc-mobile-tab-bar"></nav> —
-  // sidebar.js fills them on load. No inline <script> needed (CSP-safe).
+  // <nav class="mobile-tab-bar" id="cc-mobile-tab-bar"></nav> - // sidebar.js fills them on load. No inline <script> needed (CSP-safe).
   function autoRenderMarketing() {
     if (document.getElementById('cc-site-nav')) {
       renderMarketingTopBar('#cc-site-nav');
@@ -187,7 +186,7 @@
     autoRenderMarketing();
   }
 
-  // Skip marketing/public pages — they keep their own .site-nav and
+  // Skip marketing/public pages - they keep their own .site-nav and
   // .mobile-tab-bar styling, but render contents via window.ccNav above.
   // Marketing and hub remain intentionally separate shells (see CLAUDE.md).
   if (context === 'public') return;
@@ -328,7 +327,7 @@
         var item = items[i];
         if (item.authOnly && !isLoggedIn) continue;
 
-        // Section with children — flattened (no accordion, all visible)
+        // Section with children - flattened (no accordion, all visible)
         if (item.children) {
           html += '<div class="cc-sb-section">' +
             '<div class="cc-sb-section-header">' +
@@ -367,7 +366,7 @@
     var isLoggedIn = !!session;
     var isSupportAccess = context === 'instructor' && isInstructorImpersonation(session);
 
-    // Themed footer styles for the inline theme-select dropdown — defined here
+    // Themed footer styles for the inline theme-select dropdown - defined here
     // so they pick up CSS-variable fallbacks consistently in both modes.
     var themeBlock = function(current) {
       return '<div class="cc-sb-theme">' +
@@ -505,7 +504,7 @@
     '  stroke-linecap: round; stroke-linejoin: round; }',
     '.cc-sb-divider { height: 1px; background: var(--border, #e5e5e5); margin: 8px 20px; }',
 
-    /* Flattened section (no accordion) — DL25 dossier-style section labels */
+    /* Flattened section (no accordion) - DL25 dossier-style section labels */
     '.cc-sb-section { margin: 4px 0 8px; }',
     '.cc-sb-section-header { display: flex; align-items: center; gap: 10px; padding: 10px 20px 6px;',
     '  font-family: "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;',
@@ -563,7 +562,7 @@
     '  border-radius: 5px; color: var(--primary, #1a1a1a); font-family: inherit;',
     '  font-size: 0.78rem; padding: 4px 8px; outline: none; cursor: pointer; }',
 
-    /* Cookie + back-to-site links — secondary muted utility links */
+    /* Cookie + back-to-site links - secondary muted utility links */
     '.cc-sb-cookie-settings, .cc-sb-back-site {',
     '  display: flex; align-items: center; gap: 8px; width: 100%;',
     '  padding: 8px 12px; margin-top: 2px;',
@@ -669,7 +668,7 @@
     '  .cc-sb.open { transform: translateX(0); }',
     '  .cc-sb-close { display: block; }',
     '  .cc-impersonation-banner { flex-wrap: wrap; top: calc(56px + env(safe-area-inset-top, 0px)); }',
-    /* Mobile header — always show on mobile */
+    /* Mobile header - always show on mobile */
     '  body.cc-has-sidebar .cc-mob-header { display: flex; padding-top: env(safe-area-inset-top, 0px); height: calc(56px + env(safe-area-inset-top, 0px)); }',
     '  body.cc-has-sidebar:not(.cc-has-bottom-bar) { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
     '  body.cc-has-sidebar.cc-has-bottom-bar { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }',
@@ -686,7 +685,7 @@
     '    overflow-y: auto;',
     '    -webkit-overflow-scrolling: touch;',
     '    margin-top: 0 !important;',
-    /* Breathing room below the fixed mobile header — pages set their own
+    /* Breathing room below the fixed mobile header - pages set their own
        horizontal/bottom padding but the shell owns the top edge. */
     '    padding-top: 20px !important;',
     '    box-sizing: border-box;',
@@ -699,7 +698,7 @@
     'body.cc-has-sidebar > .page,',
     'body.cc-has-sidebar > .chat-container { margin-top: 0 !important; padding-top: 0 !important; }',
 
-    /* Bottom tab bar (mobile only) — floating pill style */
+    /* Bottom tab bar (mobile only) - floating pill style */
     '.cc-bottom-bar { display: none; }',
 
     '@media (max-width: 959px) {',
@@ -709,7 +708,7 @@
     '    bottom: max(12px, env(safe-area-inset-bottom));',
     '    left: 10px; right: 10px;',
     '    z-index: 997;',
-    /* Translucent glass — works in both light and dark mode via color-mix */
+    /* Translucent glass - works in both light and dark mode via color-mix */
     '    background: color-mix(in srgb, var(--white, #fff) 88%, transparent);',
     '    backdrop-filter: blur(24px) saturate(160%);',
     '    -webkit-backdrop-filter: blur(24px) saturate(160%);',
@@ -797,7 +796,7 @@
     '  color: #999;',
     '}',
 
-    /* Sub-tab bar for section navigation (mobile only) — DL25 ledger style */
+    /* Sub-tab bar for section navigation (mobile only) - DL25 ledger style */
     '.cc-sub-tabs { display: none; }',
     '@media (max-width: 959px) {',
     '  .cc-sub-tabs {',
@@ -1185,7 +1184,7 @@
 
       var logoutBtn = document.getElementById('cc-sb-logout');
       if (logoutBtn) logoutBtn.addEventListener('click', function() {
-        // Prefer window.ccAuth.logout (learner-auth.js) — it clears the
+        // Prefer window.ccAuth.logout (learner-auth.js) - it clears the
         // httpOnly session cookie on the server before redirecting.
         // Fall back to local-only clear if learner-auth.js wasn't loaded.
         if (window.ccAuth && typeof window.ccAuth.logout === 'function') {

@@ -14,7 +14,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const hint = document.getElementById('auth-hint');
   if (AUTH) {
     hint.style.display = 'inline-block';
-    hint.textContent = 'Signed in as ' + (AUTH.user?.name || 'learner') + ' — personalised recommendations active';
+    hint.textContent = 'Signed in as ' + (AUTH.user?.name || 'learner') + ' - personalised recommendations active';
   } else {
     hint.style.display = 'inline-block';
     hint.textContent = 'Sign in for personalised recommendations based on your progress';
@@ -34,7 +34,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Check if returned from cancelled checkout
   const params = new URLSearchParams(window.location.search);
   if (params.get('cancelled') === 'true') {
-    appendMessage('assistant', "No worries — the checkout was cancelled. You can change your mind anytime. Would you like to explore a different package, or is there anything else I can help with?");
+    appendMessage('assistant', "No worries - the checkout was cancelled. You can change your mind anytime. Would you like to explore a different package, or is there anything else I can help with?");
     window.history.replaceState({}, '', window.location.pathname);
   }
 });
@@ -43,7 +43,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function saveConversation() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversationHistory));
-  } catch (e) { /* quota exceeded — clear old data */ }
+  } catch (e) { /* quota exceeded - clear old data */ }
 }
 
 function restoreConversation() {
@@ -60,7 +60,7 @@ function restoreConversation() {
       }
       scrollToBottom();
     }
-  } catch (e) { /* corrupted — start fresh */ }
+  } catch (e) { /* corrupted - start fresh */ }
 }
 
 function clearConversation() {

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  // Auth gate — redirect to admin login if not authed.
+  // Auth gate - redirect to admin login if not authed.
   // Skipped on localhost / preview hosts so the calculator works for design review.
   var host = window.location.hostname;
   var isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.vercel.app') || host === '';
@@ -92,13 +92,13 @@
     $(prefix + '_insAmt').textContent    = '−' + fmt(c.insuranceAnnual);
     $(prefix + '_maintAmt').textContent  = '−' + fmt(c.maintAnnual);
     $(prefix + '_adminAmt').textContent  = '−' + fmt(c.adminAnnual);
-    $(prefix + '_adminDetail').textContent = c.adminHrs + ' hrs/wk × ' + fmt(c.avgPrice) + '/hr × ' + WEEKS_PER_YEAR;
+    $(prefix + '_adminDetail').textContent = c.adminHrs + ' hrs/wk �- ' + fmt(c.avgPrice) + '/hr �- ' + WEEKS_PER_YEAR;
 
     $(prefix + '_cutAmt').textContent    = '−' + fmt(c.perHourCutAnnual);
     if (c.cutCapHit) {
-      $(prefix + '_cutDetail').textContent = 'Capped at ' + fmt(c.cutCapWk) + '/wk × ' + WEEKS_PER_YEAR + ' (would be ' + fmt(c.perHourCut * c.lessonsWk) + '/wk uncapped)';
+      $(prefix + '_cutDetail').textContent = 'Capped at ' + fmt(c.cutCapWk) + '/wk �- ' + WEEKS_PER_YEAR + ' (would be ' + fmt(c.perHourCut * c.lessonsWk) + '/wk uncapped)';
     } else {
-      $(prefix + '_cutDetail').textContent = fmt(c.perHourCut) + ' × ' + c.lessonsWk + ' hrs/wk × ' + WEEKS_PER_YEAR;
+      $(prefix + '_cutDetail').textContent = fmt(c.perHourCut) + ' �- ' + c.lessonsWk + ' hrs/wk �- ' + WEEKS_PER_YEAR;
     }
 
     $(prefix + '_takeHome').textContent  = fmt(c.takeHome);
@@ -127,7 +127,7 @@
       dashcamAdjEl.textContent = dashcamEl.checked ? '−£30/wk' : '−£0/wk';
     }
 
-    // Headline strip — gross shown is RED's gross (acts as the baseline; CC may differ)
+    // Headline strip - gross shown is RED's gross (acts as the baseline; CC may differ)
     // Show both grosses if they differ
     var grossText;
     if (Math.round(red.grossYear) === Math.round(cc.grossYear)) {
@@ -137,8 +137,8 @@
     }
     $('grossYearAmt').textContent = grossText;
     $('grossDetail').textContent =
-      'RED: ' + red.lessonsWk + ' × ' + fmt(red.avgPrice) +
-      '  ·  CC: ' + cc.lessonsWk + ' × ' + fmt(cc.avgPrice);
+      'RED: ' + red.lessonsWk + ' �- ' + fmt(red.avgPrice) +
+      '  ·  CC: ' + cc.lessonsWk + ' �- ' + fmt(cc.avgPrice);
 
     // Headline delta
     var delta = cc.takeHome - red.takeHome;
@@ -149,9 +149,9 @@
 
     var verdict = $('headlineVerdict');
     if (red.takeHome <= 0 && cc.takeHome <= 0) {
-      verdict.textContent = 'Both columns lose money — sense-check the inputs.';
+      verdict.textContent = 'Both columns lose money - sense-check the inputs.';
     } else if (delta > Math.abs(red.takeHome) * 0.25) {
-      verdict.textContent = 'Strong CoachCarter advantage on cash alone — before counting the platform, AI tools, or brand.';
+      verdict.textContent = 'Strong CoachCarter advantage on cash alone - before counting the platform, AI tools, or brand.';
     } else if (delta > 0) {
       verdict.textContent = 'CoachCarter edges ahead on cash. The non-cash side (platform, funnel, support) widens the gap.';
     } else if (delta > -Math.abs(red.takeHome) * 0.05) {
@@ -166,7 +166,7 @@
     el.addEventListener('input', recalc);
   });
 
-  // Toggles on the CC column — re-run calc and refresh Yes/No labels
+  // Toggles on the CC column - re-run calc and refresh Yes/No labels
   function syncToggleLabel(checkboxId, labelId) {
     var cb = $(checkboxId);
     var lbl = $(labelId);
