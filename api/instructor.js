@@ -64,6 +64,12 @@ const JWT_EXPIRY           = '180d';
 const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 
+function isSelfServeFreeTrialBooking(booking) {
+  return booking?.created_by === 'free_trial_self_serve'
+    && booking?.payment_method === 'free'
+    && Number(booking?.minutes_deducted || 0) === 0;
+}
+
 class InstructorBookingTransactionAbort extends Error {
   constructor(result) {
     super(result?.message || result?.code || 'INSTRUCTOR_BOOKING_TRANSACTION_ABORT');
@@ -1754,7 +1760,7 @@ async function handleCancelBooking(req, res) {
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date, lb.start_time,
-             COALESCE(lb.minutes_deducted, 90) AS minutes_deducted,
+             lb.created_by, lb.payment_method, lb.minutes_deducted,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name
       FROM lesson_bookings lb
@@ -1767,30 +1773,36 @@ async function handleCancelBooking(req, res) {
     if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
 
-    const minsToReturn = booking.minutes_deducted || 90;
+    const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);
+    const minsToReturn = isSelfServeFreeTrial
+      ? 0
+      : Number(booking.minutes_deducted ?? 90);
 
     // Cancel the booking
     await sql`
       UPDATE lesson_bookings SET status = ${REFUNDED},
-        credit_returned = true, cancelled_at = NOW(),
+        credit_returned = ${!isSelfServeFreeTrial}, credit_forfeited = FALSE,
+        cancelled_at = NOW(),
         instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
       WHERE id = ${booking_id}
     `;
-    await markBookingCreditSourcesRefunded(sql, {
-      bookingId: booking_id,
-      schoolId: booking.school_id || 1,
-    });
+    if (!isSelfServeFreeTrial) {
+      await markBookingCreditSourcesRefunded(sql, {
+        bookingId: booking_id,
+        schoolId: booking.school_id || 1,
+      });
 
-    // Refund the learner's balance to the same LCB row that was debited.
-    // No ledger row (matches the slots.js cancel refund convention — the
-    // lesson_bookings row's REFUNDED status is the audit trail).
-    await lockBalanceAdjustLCB(sql, {
-      learnerId: booking.learner_id,
-      instructorId: booking.instructor_id,
-      schoolId: booking.school_id || 1,
-      delta: minsToReturn,
-      creditsDelta: Math.ceil(minsToReturn / 60),
-    });
+      // Refund the learner's balance to the same LCB row that was debited.
+      // No ledger row (matches the slots.js cancel refund convention — the
+      // lesson_bookings row's REFUNDED status is the audit trail).
+      await lockBalanceAdjustLCB(sql, {
+        learnerId: booking.learner_id,
+        instructorId: booking.instructor_id,
+        schoolId: booking.school_id || 1,
+        delta: minsToReturn,
+        creditsDelta: Math.ceil(minsToReturn / 60),
+      });
+    }
 
     // Email the learner (unless notify is explicitly false)
     if (notify !== false) try {
@@ -1809,7 +1821,9 @@ async function handleCancelBooking(req, res) {
           <h2>Hi ${firstName},</h2>
           <p>Your lesson on <strong>${dateStr} at ${timeStr}</strong> with ${booking.instructor_name} has been cancelled.</p>
           ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-          <p>Your lesson credit has been refunded automatically. You can rebook at any time from your dashboard.</p>
+          ${isSelfServeFreeTrial
+            ? '<p>No lesson credit was used for this free trial.</p>'
+            : '<p>Your lesson credit has been refunded automatically. You can rebook at any time from your dashboard.</p>'}
           <p style="margin:28px 0">
             <a href="https://coachcarter.uk/learner/book.html"
                style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;

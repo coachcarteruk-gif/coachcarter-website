@@ -246,6 +246,99 @@
     /* ── TOOLBAR (mono filter strip) ──
        Not sticky: it used to pin over the long slot feed, but with the week
        grid it just overlaid the dates mid-scroll. */
+    .test-date-panel {
+      display: none;
+      margin: 18px 0;
+      padding: 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .test-date-panel.is-visible { display: grid; gap: 12px; }
+    .test-date-panel h2 {
+      margin: 0;
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.01em;
+    }
+    .test-date-panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+    .test-date-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .test-date-meta span {
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--white);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: 0.04em;
+      overflow-wrap: anywhere;
+    }
+    .test-date-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .test-date-start-options { display: flex; flex-wrap: wrap; gap: 8px; }
+    .test-date-option {
+      min-height: 40px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--white);
+      color: var(--primary);
+      padding: 8px 11px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .test-date-option[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    .test-date-option:disabled { opacity: 0.45; cursor: not-allowed; }
+    .test-date-action {
+      min-height: 40px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      padding: 9px 13px;
+      font-family: var(--font-head);
+      font-size: 0.9rem;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .test-date-action:disabled { background: var(--border); cursor: not-allowed; }
+    .test-date-status {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    @media (max-width: 560px) {
+      .test-date-meta { grid-template-columns: 1fr; }
+      .test-date-controls { grid-template-columns: 1fr; }
+      .test-date-action { width: 100%; }
+    }
+
     .cal-toolbar {
       display: flex; align-items: center; gap: 12px;
       padding: 12px 0;
@@ -1172,6 +1265,17 @@
     </div>
     <a href="/learner/lessons.html" class="next-lesson-link">View all &rarr;</a>
   </div>
+
+  <section class="test-date-panel" id="testDatePanel" aria-labelledby="testDateTitle">
+    <h2 id="testDateTitle">Book your test date lesson</h2>
+    <p id="testDateIntro">This is a fixed 1.5 hour booking for your warm-up and practical test.</p>
+    <div class="test-date-meta" id="testDateMeta"></div>
+    <div class="test-date-controls" id="testDateControls" style="display:none">
+      <div class="test-date-start-options" id="testDateStartOptions" role="group" aria-label="Test date lesson start times"></div>
+      <button class="test-date-action" id="btnBookTestDate" type="button" disabled>Book test lesson</button>
+    </div>
+    <div class="test-date-status" id="testDateStatus"></div>
+  </section>
 
   <!-- Reschedule banner -->
   <div class="reschedule-banner" id="rescheduleBanner" data-tag="MV" style="display:none">

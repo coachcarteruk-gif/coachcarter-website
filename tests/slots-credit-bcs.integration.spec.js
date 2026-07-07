@@ -101,7 +101,7 @@ async function seedCreditSource({
   return row.id;
 }
 
-async function book({ date, weeks = 1, startTime = '09:00', durationMins = 90 }) {
+async function book({ date, weeks = 1, startTime = '09:00', endTime = null, durationMins = 90, extra = {} }) {
   const bookingDates = Array.from({ length: weeks }, (_, index) => ({
     date: futureDate(date + index * 7),
   }));
@@ -112,12 +112,13 @@ async function book({ date, weeks = 1, startTime = '09:00', durationMins = 90 })
     schoolId: SCHOOL_ID,
     bookingDates,
     startTime,
-    endTime: durationMins === 90 ? '10:30' : '11:00',
+    endTime: endTime || (durationMins === 90 ? '10:30' : '11:00'),
     lessonTypeId,
     durationMins,
     pickupAddress: '1 Test Street, London SW1A 1AA',
     dropoffAddress: null,
     seriesId: weeks > 1 ? crypto.randomUUID() : null,
+    ...extra,
   });
   if (result.createdBookings) {
     result.createdBookings.forEach(b => createdBookingIds.add(b.id));
@@ -236,6 +237,54 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
       WHERE learner_id = ${learnerId} AND instructor_id = ${instructorId}
     `;
     expect(lcb.balance_minutes).toBe(30);
+  });
+
+  test('test-date transactional guard rejects overlapping bookings with different start times', async () => {
+    await seedLcb(180);
+    await seedCreditSource({ minutes: 180, amountPence: 16500, stripeFeePence: 360 });
+    const date = futureDate(42);
+
+    const [existing] = await sql`
+      INSERT INTO lesson_bookings
+        (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+         lesson_type_id, minutes_deducted, school_id, booking_purpose)
+      VALUES
+        (${learnerId}, ${instructorId}, ${date}, '09:15', '10:45', ${SCHEDULED},
+         ${lessonTypeId}, 0, ${SCHOOL_ID}, 'lesson')
+      RETURNING id
+    `;
+    createdBookingIds.add(existing.id);
+
+    const result = await book({
+      date: 42,
+      startTime: '09:30',
+      endTime: '11:00',
+      extra: {
+        bookingPurpose: 'test_date',
+        testStartTime: '10:14',
+        testCentre: 'Test Centre',
+        useTestDateOverlapGuards: true,
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe('SLOTS_UNAVAILABLE');
+    expect(result.conflicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        date,
+        start_time: '09:15',
+        reason: 'already_booked',
+      }),
+    ]));
+
+    const [balance] = await sql`
+      SELECT balance_minutes
+        FROM learner_credit_balances
+       WHERE learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${SCHOOL_ID}
+    `;
+    expect(Number(balance.balance_minutes)).toBe(180);
   });
 
   async function recomputePairDrift() {

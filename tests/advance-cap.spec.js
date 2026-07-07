@@ -6,10 +6,12 @@ const { test: authedTest, expect: authedExpect } = require('./fixtures/auth');
 //
 // MAX_DAYS_AHEAD = 28 in api/slots.js. The cap covers ?action=available,
 // ?action=book, ?action=checkout-slot, ?action=reschedule, ?action=book-free-trial,
-// and api/instructor.js?action=create-offer. The ONLY legitimate path past
-// the cap is bookOfferSeries() in api/offers.js, fanned out from the Stripe
-// webhook. Instructors may reduce their own learner-facing booking window via
-// max_booking_days_ahead, but may not extend self-serve booking beyond 28 days.
+// and api/instructor.js?action=create-offer. The legitimate paths past the cap
+// are bookOfferSeries() in api/offers.js, fanned out from the Stripe webhook,
+// and the narrow practical-test exception in ?action=test-date-availability,
+// ?action=book-test-date, and ?action=checkout-test-date. Instructors may
+// reduce their own learner-facing booking window via max_booking_days_ahead,
+// but may not extend ordinary self-serve booking beyond 28 days.
 //
 // What this exercises (live API):
 //   1. ?action=available rejects `to` > today + 28 days with the documented

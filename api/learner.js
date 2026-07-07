@@ -335,7 +335,7 @@ async function handleProfile(req, res) {
     // Columns already exist in learner_users — no migrations needed
     const [row] = await sql`
       SELECT name, email, phone, pickup_address, prefer_contact_before,
-             test_date::text AS test_date, test_time, test_centre
+             test_date::text AS test_date, test_time, test_centre, test_instructor_booked
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!row) return res.status(404).json({ error: 'User not found' });

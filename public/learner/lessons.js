@@ -226,7 +226,7 @@
     var start = b.start_time.slice(0, 5);
     var end = b.end_time.slice(0, 5);
     var ltColour = b.lesson_type_colour || 'var(--accent)';
-    var ltName = b.lesson_type_name || '';
+    var ltName = b.booking_purpose === 'test_date' ? 'Test date lesson' : (b.lesson_type_name || '');
     var addr = b.pickup_address || '';
     var isCancelled = b.status === 'refunded';
     var isCompleted = b.status === 'chargeable';

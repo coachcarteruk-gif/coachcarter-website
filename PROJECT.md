@@ -415,6 +415,17 @@ Bound to `/r/:code` via a `vercel.json` rewrite. No `?action=` routing — this 
 
 ### API — `api/slots.js`
 
+Practical test date lessons use a narrow named exception to the ordinary
+28-day learner booking cap: `test-date-availability`, `book-test-date`, and
+`checkout-test-date`. These learner-authenticated actions read the learner's
+saved `test_date` / `test_time`, force a 90-minute booking, generate nearby
+quarter-hour starts around `test_time - 45 minutes`, run normal availability,
+clash, reservation, blackout, and travel checks, and snapshot
+`booking_purpose='test_date'`, `test_start_time`, and `test_centre` on
+`lesson_bookings`. Credit-funded bookings use the existing instructor-scoped
+LCB/FIFO/BCS path; direct-pay checkout prices server-side and preserves the
+test metadata through the slot-booking webhook.
+
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `available` | GET | No | Available slots for a lesson type duration. Params: `from`, `to`, `instructor_id?`, `lesson_type_id?`, `pickup_postcode?`, `min_duration_only?`. When `min_duration_only=1`, the API treats `lesson_type_id` as grid-spacing only and skips the `offered_lesson_types` filter — used by the slot-first feed where the instructor list isn't yet narrowed by duration. |
@@ -605,6 +616,9 @@ rescheduled_from INTEGER  -- links to the booking this one replaced (NULL for or
 reschedule_count INTEGER DEFAULT 0  -- how many times this booking chain has been rescheduled (max 2)
 created_by TEXT DEFAULT 'learner'    -- 'learner', 'instructor', 'admin'
 payment_method TEXT DEFAULT 'credit' -- 'credit', 'stripe', 'cash', 'free'
+booking_purpose TEXT DEFAULT 'lesson' -- 'lesson' or 'test_date'
+test_start_time TEXT                 -- practical test start snapshot for test-date bookings
+test_centre TEXT                     -- practical test centre snapshot for test-date bookings
 lesson_type_id INTEGER              -- FK to lesson_types
 transmission_type TEXT DEFAULT 'manual' -- 'manual' or 'automatic'; concrete per-lesson vehicle type
 minutes_deducted INTEGER            -- hours deducted (in minutes) for audit trail

@@ -2284,6 +2284,19 @@ ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS social_video_age_confirmed 
 ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS social_video_discount_pct INTEGER NOT NULL DEFAULT 0
   CHECK (social_video_discount_pct IN (0, 5));
 
+-- Test date lesson booking metadata. These rows remain normal bookings for
+-- lifecycle/payout purposes; the purpose flag only labels the practical-test
+-- warm-up/test reservation and snapshots the learner's saved test details.
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS booking_purpose TEXT NOT NULL DEFAULT 'lesson';
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS test_start_time TEXT;
+ALTER TABLE lesson_bookings ADD COLUMN IF NOT EXISTS test_centre TEXT;
+ALTER TABLE lesson_bookings DROP CONSTRAINT IF EXISTS chk_lesson_bookings_booking_purpose;
+ALTER TABLE lesson_bookings ADD CONSTRAINT chk_lesson_bookings_booking_purpose
+  CHECK (booking_purpose IN ('lesson', 'test_date'));
+CREATE INDEX IF NOT EXISTS idx_lesson_bookings_test_date_purpose
+  ON lesson_bookings(school_id, booking_purpose, scheduled_date)
+  WHERE booking_purpose = 'test_date';
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Credits Step 3a: instructors.hourly_rate_pence column (May 2026)
 -- ══════════════════════════════════════════════════════════════════════════════

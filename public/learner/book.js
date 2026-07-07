@@ -52,6 +52,8 @@ let recurringPreviewBusy = false;
 let recurringCommitBusy = false;
 let recurringConfirmMode = 'credit';
 let learnerProfile = { phone: '', pickup_address: '' };
+let testDateAvailability = null;
+let selectedTestDateStart = null;
 let hasFreeTrialSlot = false; // true if current school has a lesson_type with slug='trial'
 // Slot-first state: full list of selectable lesson types (excludes 'trial')
 // and the smallest active duration in minutes - used as the provisional feed duration.
@@ -105,6 +107,8 @@ function init() {
   document.getElementById('bookModalCloseX').onclick = closeBookModal;
   document.getElementById('btnConfirmBook').onclick = confirmBookWithCredit;
   document.getElementById('btnPayAndBook').onclick = confirmPayAndBook;
+  const testDateBtn = document.getElementById('btnBookTestDate');
+  if (testDateBtn) testDateBtn.onclick = confirmTestDateBooking;
   const handleSocialVideoToggle = function () {
     if (selectedLessonType) {
       applyLessonTypeToModal(selectedLessonType, !auth, !auth && false);
@@ -207,7 +211,9 @@ function init() {
       // Re-load lesson types now that instructors are known, so
       // offered_lesson_types filtering and instructor-exact pricing apply
       if (preselectedInstructorSlug || preselectedInstructorId || instructors.length === 1) await loadLessonTypes();
+      await loadTestDateAvailability();
       initFeed();
+      renderTestDatePanel();
       showPostcodePromptIfNeeded();
 
       if (reservedBankReturn) {
@@ -499,6 +505,159 @@ async function loadLearnerProfile() {
   } catch {}
 }
 
+function selectedTestDateInstructorId() {
+  const selected = document.getElementById('instructorFilter')?.value || '';
+  if (selected) return selected;
+  return instructors.length === 1 ? String(instructors[0].id) : '';
+}
+
+function hasSavedTestDetails() {
+  return !!(learnerProfile.test_date && learnerProfile.test_time);
+}
+
+async function loadTestDateAvailability() {
+  testDateAvailability = null;
+  selectedTestDateStart = null;
+  if (!auth || !hasSavedTestDetails()) {
+    renderTestDatePanel();
+    return;
+  }
+  const instructorId = selectedTestDateInstructorId();
+  if (!instructorId) {
+    renderTestDatePanel();
+    return;
+  }
+  try {
+    const url = '/api/slots?action=test-date-availability&instructor_id=' + encodeURIComponent(instructorId);
+    const res = await ccAuth.fetchAuthed(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not load test date options');
+    testDateAvailability = data;
+    const recommended = (data.options || []).find(o => o.recommended && o.fits)
+      || (data.options || []).find(o => o.fits)
+      || null;
+    selectedTestDateStart = recommended ? recommended.start_time : null;
+  } catch (err) {
+    testDateAvailability = { error: err.message || 'Could not load test date options' };
+  }
+  renderTestDatePanel();
+}
+
+function renderTestDatePanel() {
+  const panel = document.getElementById('testDatePanel');
+  if (!panel) return;
+  if (!auth) {
+    panel.classList.remove('is-visible');
+    return;
+  }
+  panel.classList.add('is-visible');
+  const meta = document.getElementById('testDateMeta');
+  const status = document.getElementById('testDateStatus');
+  const controls = document.getElementById('testDateControls');
+  const optionsEl = document.getElementById('testDateStartOptions');
+  const btn = document.getElementById('btnBookTestDate');
+
+  if (!hasSavedTestDetails()) {
+    meta.innerHTML = '';
+    controls.style.display = 'none';
+    status.innerHTML = 'Add your practical test date and time in <a href="/learner/profile.html" style="color:var(--accent)">Profile</a> to unlock this booking option.';
+    return;
+  }
+
+  const dateText = new Date(learnerProfile.test_date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  meta.innerHTML = [
+    '<span>Date ' + esc(dateText) + '</span>',
+    '<span>Test ' + esc(String(learnerProfile.test_time || '').slice(0, 5)) + '</span>',
+    '<span>Centre ' + esc(learnerProfile.test_centre || 'Not set') + '</span>'
+  ].join('');
+
+  if (learnerProfile.test_instructor_booked) {
+    controls.style.display = 'none';
+    status.textContent = 'Your profile says your test instructor is already booked.';
+    return;
+  }
+
+  const instructorId = selectedTestDateInstructorId();
+  if (!instructorId) {
+    controls.style.display = 'none';
+    status.textContent = 'Choose an instructor above to check test date lesson times.';
+    return;
+  }
+
+  if (!testDateAvailability) {
+    controls.style.display = 'none';
+    status.textContent = 'Checking test date lesson times...';
+    return;
+  }
+  if (testDateAvailability.error) {
+    controls.style.display = 'none';
+    status.textContent = testDateAvailability.error;
+    return;
+  }
+
+  controls.style.display = 'grid';
+  const options = testDateAvailability.options || [];
+  optionsEl.innerHTML = options.map(o => {
+    const selected = o.start_time === selectedTestDateStart;
+    const label = o.start_time + '-' + o.end_time + (o.recommended ? ' recommended' : '');
+    const unavailable = !o.fits;
+    return '<button class="test-date-option" type="button" data-action="select-test-date-start" data-start="' + esc(o.start_time) + '" ' +
+      'aria-pressed="' + (selected ? 'true' : 'false') + '" ' +
+      (unavailable ? 'disabled' : '') + '>' + esc(label) + '</button>';
+  }).join('');
+  const canUseCredit = !!testDateAvailability.can_use_credit;
+  const price = formatMoney(testDateAvailability.price_pence || 0);
+  btn.disabled = !selectedTestDateStart;
+  btn.textContent = canUseCredit ? 'Book with credit' : 'Pay ' + price + ' & book';
+  status.textContent = options.some(o => o.fits)
+    ? 'Choose a start close to 45 minutes before your practical test.'
+    : 'No matching test date lesson time is currently available with this instructor.';
+}
+
+async function confirmTestDateBooking() {
+  if (!testDateAvailability || !selectedTestDateStart) return;
+  if (!(await saveProfileFieldsFromModal())) return;
+  const pickup = (learnerProfile.pickup_address || '').trim();
+  if (!pickup) {
+    showToast('Save your pickup address before booking your test date lesson.', 'error');
+    showPostcodePromptIfNeeded();
+    return;
+  }
+  const btn = document.getElementById('btnBookTestDate');
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = testDateAvailability.can_use_credit ? 'Booking...' : 'Redirecting...';
+  try {
+    const body = {
+      instructor_id: testDateAvailability.instructor_id,
+      start_time: selectedTestDateStart,
+      pickup_address: pickup
+    };
+    const action = testDateAvailability.can_use_credit ? 'book-test-date' : 'checkout-test-date';
+    const res = await ccAuth.fetchAuthed('/api/slots?action=' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.message || 'Could not book test date lesson');
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+    learnerProfile.test_instructor_booked = true;
+    selectedInstructorBalanceMinutes = data.balance_minutes || 0;
+    showToast('Test date lesson booked.', 'success');
+    renderTestDatePanel();
+    loadUpcoming();
+  } catch (err) {
+    showToast(err.message || 'Could not book test date lesson.', 'error');
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
 function showPostcodePromptIfNeeded() {
   const prompt = document.getElementById('postcodePrompt');
   if (!prompt) return;
@@ -715,6 +874,7 @@ async function onFilterChange() {
   // back only when the kept date has no slots under the new filter.
   clearSelectedSlot();
   await loadLessonTypes();
+  if (auth) await loadTestDateAvailability();
   initFeed();
 }
 
@@ -2935,6 +3095,9 @@ document.addEventListener('click', function (e) {
     continueSelectedSlot();
   } else if (action === 'select-lesson-type') {
     selectLessonType(target.dataset.lessonTypeId);
+  } else if (action === 'select-test-date-start') {
+    selectedTestDateStart = target.dataset.start || null;
+    renderTestDatePanel();
   } else if (action === 'select-date') {
     selectDate(target.dataset.date);
   } else if (action === 'set-repeat-weeks') {

@@ -91,6 +91,38 @@ test.describe('free trial scheduling safeguards', () => {
     expect(cancel).toContain('SET status = ${REFUNDED}, cancelled_at = NOW(), credit_returned = FALSE, credit_forfeited = FALSE');
     expect(cancel).toContain('if (bookingReleased) {');
     expect(cancel).toContain('Free trial cancelled.');
+
+    const selfServeBranch = cancel.slice(
+      cancel.indexOf('} else if (isSelfServeFreeTrial) {'),
+      cancel.indexOf('} else {', cancel.indexOf('} else if (isSelfServeFreeTrial) {'))
+    );
+    expect(selfServeBranch).not.toContain('markBookingCreditSourcesRefunded');
+    expect(selfServeBranch).not.toContain('lockBalanceAdjustLCB');
+    expect(selfServeBranch).not.toContain('free_trial_allowed');
+    expect(cancel).not.toContain('UPDATE learner_users SET free_trial_allowed');
+  });
+
+  test('instructor cancellation keeps self-serve free trials out of credits', () => {
+    const api = read('api/instructor.js');
+    const cancel = functionBody(api, 'handleCancelBooking');
+
+    expect(api).toContain('function isSelfServeFreeTrialBooking(booking)');
+    expect(cancel).toContain('lb.created_by, lb.payment_method');
+    expect(cancel).toContain('const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);');
+    expect(cancel).toContain('const minsToReturn = isSelfServeFreeTrial');
+    expect(cancel).toContain('Number(booking.minutes_deducted ?? 90)');
+    expect(cancel).not.toContain('Number(booking.minutes_deducted || 90)');
+    expect(cancel).toContain('credit_returned = ${!isSelfServeFreeTrial}, credit_forfeited = FALSE');
+    expect(cancel).toContain('if (!isSelfServeFreeTrial) {');
+
+    const refundBranch = cancel.slice(
+      cancel.indexOf('if (!isSelfServeFreeTrial) {'),
+      cancel.indexOf('// Email the learner', cancel.indexOf('if (!isSelfServeFreeTrial) {'))
+    );
+    expect(refundBranch).toContain('markBookingCreditSourcesRefunded');
+    expect(refundBranch).toContain('lockBalanceAdjustLCB');
+    expect(cancel).toContain('No lesson credit was used for this free trial.');
+    expect(cancel).not.toContain('UPDATE learner_users SET free_trial_allowed');
   });
 
   test('migration repairs already-cancelled self-serve free trial rows only', () => {
