@@ -52,6 +52,106 @@ async function resolveSchoolId(sql, metadata, sessionId) {
   return 1;
 }
 
+async function lockTestDateSlotMutation(client, { schoolId, instructorId, date }) {
+  await client.query(
+    `SELECT pg_advisory_xact_lock($1::integer, hashtext($2)::integer)`,
+    [schoolId, `test-date-slot:${instructorId}:${date}`]
+  );
+}
+
+async function testDateSlotOverlapConflictsPg(client, {
+  instructorId,
+  schoolId,
+  scheduledDate,
+  startTime,
+  endTime,
+  excludeReservationSessionId = null,
+}) {
+  const conflicts = [];
+
+  const bookingConflicts = await client.query(
+    `SELECT id
+       FROM lesson_bookings
+      WHERE instructor_id = $1
+        AND school_id = $2
+        AND scheduled_date = $3::date
+        AND status = ANY($6::text[])
+        AND start_time < $5::time
+        AND end_time > $4::time
+      LIMIT 1`,
+    [instructorId, schoolId, scheduledDate, startTime, endTime, BLOCKING_STATUSES]
+  );
+  if (bookingConflicts.rowCount > 0) conflicts.push('booking');
+
+  const reservationConflicts = await client.query(
+    `SELECT id
+       FROM slot_reservations
+      WHERE instructor_id = $1
+        AND school_id = $2
+        AND scheduled_date = $3::date
+        AND expires_at > NOW()
+        AND ($6::text IS NULL OR stripe_session_id IS DISTINCT FROM $6)
+        AND start_time < $5::time
+        AND end_time > $4::time
+      LIMIT 1`,
+    [instructorId, schoolId, scheduledDate, startTime, endTime, excludeReservationSessionId]
+  );
+  if (reservationConflicts.rowCount > 0) conflicts.push('reservation');
+
+  try {
+    const offerConflicts = await client.query(
+      `SELECT id
+         FROM lesson_offers
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = $3::date
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND start_time < $5::time
+          AND end_time > $4::time
+        LIMIT 1`,
+      [instructorId, schoolId, scheduledDate, startTime, endTime]
+    );
+    if (offerConflicts.rowCount > 0) conflicts.push('offer');
+  } catch (_) {}
+
+  try {
+    const recurringHoldConflicts = await client.query(
+      `SELECT rsbi.id
+         FROM recurring_slot_block_items rsbi
+         JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+        WHERE rsbi.instructor_id = $1
+          AND rsbi.school_id = $2
+          AND rsbi.scheduled_date = $3::date
+          AND rsbi.status = 'held'
+          AND rsb.status = 'pending_payment'
+          AND rsb.expires_at > NOW()
+          AND rsbi.start_time < $5::time
+          AND rsbi.end_time > $4::time
+        LIMIT 1`,
+      [instructorId, schoolId, scheduledDate, startTime, endTime]
+    );
+    if (recurringHoldConflicts.rowCount > 0) conflicts.push('recurring_hold');
+  } catch (_) {}
+
+  try {
+    const busyBlockConflicts = await client.query(
+      `SELECT id
+         FROM instructor_busy_blocks
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND block_date = $3::date
+          AND start_time < $5::time
+          AND end_time > $4::time
+        LIMIT 1`,
+      [instructorId, schoolId, scheduledDate, startTime, endTime]
+    );
+    if (busyBlockConflicts.rowCount > 0) conflicts.push('busy_block');
+  } catch (_) {}
+
+  return conflicts;
+}
+
 module.exports = async (req, res) => {
   // Raw body needed for Stripe signature
   if (req.method !== 'POST') {
@@ -487,6 +587,9 @@ async function handleSlotBooking(session) {
   const socialVideoConsent = socialVideoRequested && socialVideoAgeConfirmed;
   const socialVideoDiscountPct = socialVideoConsent ? (parseInt(metadata.social_video_discount_pct, 10) || 0) : 0;
   const bookingTransmissionType = concreteLessonTransmissionType(metadata.transmission_type);
+  const bookingPurpose = metadata.booking_purpose === 'test_date' ? 'test_date' : 'lesson';
+  const testStartTime = bookingPurpose === 'test_date' ? (metadata.test_time || null) : null;
+  const testCentre = bookingPurpose === 'test_date' ? (metadata.test_centre || null) : null;
 
   if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
     console.error('❌ slot_booking webhook missing required metadata', metadata);
@@ -633,22 +736,70 @@ async function handleSlotBooking(session) {
     // and read back from Stripe, never recomputed live.
     let booking;
     try {
-      const [b] = await sql`
-        INSERT INTO lesson_bookings
-          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           lesson_type_id, transmission_type, minutes_deducted, school_id,
-           pickup_address, dropoff_address,
-           stripe_fee_pence, stripe_fee_source,
-           list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
-        VALUES
-          (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
-           ${lessonTypeId}, ${bookingTransmissionType}, ${chargeMins}, ${schoolId},
-           ${pickupAddress || null}, ${dropoffAddress || null},
-           ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
-           ${amountPence}, 'stripe_metadata', ${socialVideoConsent}, ${socialVideoAgeConfirmed}, ${socialVideoDiscountPct})
-        RETURNING id, scheduled_date, start_time::text, end_time::text
-      `;
-      booking = b;
+      if (bookingPurpose === 'test_date') {
+        booking = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+          await lockTestDateSlotMutation(client, { schoolId, instructorId, date: scheduledDate });
+          const conflicts = await testDateSlotOverlapConflictsPg(client, {
+            instructorId,
+            schoolId,
+            scheduledDate,
+            startTime,
+            endTime,
+            excludeReservationSessionId: session.id,
+          });
+          if (conflicts.length > 0) {
+            const overlapErr = new Error(`TEST_DATE_SLOT_OVERLAP: ${conflicts.join(',')}`);
+            overlapErr.code = 'TEST_DATE_SLOT_OVERLAP';
+            throw overlapErr;
+          }
+
+          const inserted = await client.query(
+            `INSERT INTO lesson_bookings
+              (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+               lesson_type_id, transmission_type, minutes_deducted, school_id,
+               pickup_address, dropoff_address,
+               stripe_fee_pence, stripe_fee_source,
+               list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct,
+               booking_purpose, test_start_time, test_centre)
+             VALUES
+              ($1, $2, $3, $4, $5, $6,
+               $7, $8, $9, $10,
+               $11, $12,
+               $13, $14,
+               $15, 'stripe_metadata', $16, $17, $18,
+               $19, $20, $21)
+             RETURNING id, scheduled_date, start_time::text, end_time::text`,
+            [
+              learnerId, instructorId, scheduledDate, startTime, endTime, SCHEDULED,
+              lessonTypeId, bookingTransmissionType, chargeMins, schoolId,
+              pickupAddress || null, dropoffAddress || null,
+              stripeFeePence, stripeFeePence != null ? 'balance_transaction' : null,
+              amountPence, socialVideoConsent, socialVideoAgeConfirmed, socialVideoDiscountPct,
+              bookingPurpose, testStartTime, testCentre,
+            ]
+          );
+          return inserted.rows[0];
+        });
+      } else {
+        const [b] = await sql`
+          INSERT INTO lesson_bookings
+            (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+             lesson_type_id, transmission_type, minutes_deducted, school_id,
+             pickup_address, dropoff_address,
+             stripe_fee_pence, stripe_fee_source,
+             list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct,
+             booking_purpose, test_start_time, test_centre)
+          VALUES
+            (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
+             ${lessonTypeId}, ${bookingTransmissionType}, ${chargeMins}, ${schoolId},
+             ${pickupAddress || null}, ${dropoffAddress || null},
+             ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
+             ${amountPence}, 'stripe_metadata', ${socialVideoConsent}, ${socialVideoAgeConfirmed}, ${socialVideoDiscountPct},
+             ${bookingPurpose}, ${testStartTime}, ${testCentre})
+          RETURNING id, scheduled_date, start_time::text, end_time::text
+        `;
+        booking = b;
+      }
     } catch (insertErr) {
       // Booking insert failed (slot taken, FK / CHECK violation, etc.). Refund
       // the deduction so the learner has the hours on their account, then
@@ -677,6 +828,16 @@ async function handleSlotBooking(session) {
       creditTransaction: slotCreditTx,
       durationMins: chargeMins,
     });
+
+    if (bookingPurpose === 'test_date') {
+      await sql`
+        UPDATE learner_users
+           SET test_instructor_booked = TRUE,
+               last_activity_at = NOW()
+         WHERE id = ${learnerId}
+           AND school_id = ${schoolId}
+      `;
+    }
 
     // 5a. Supersede any pending broadcast offers on this slot — a learner just
     // booked it through the guest-checkout flow, so the broadcast is moot.
