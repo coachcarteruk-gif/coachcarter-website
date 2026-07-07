@@ -123,6 +123,12 @@ function abortReservedPolicyMove(statusCode, payload) {
   throw new ReservedPolicyMoveAbort(statusCode, payload);
 }
 
+function isMissingBookingPurposeSchema(err) {
+  const msg = String(err?.message || '');
+  return err?.code === '42703'
+    && /column .*?(booking_purpose|test_start_time|test_centre).*? does not exist/i.test(msg);
+}
+
 function abortBookingTransaction(result) {
   throw new BookingTransactionAbort(result);
 }
@@ -2194,25 +2200,47 @@ async function bookCreditFundedSlotsTransaction({
     const createdBookings = [];
     for (const bd of bookingDates) {
       try {
-        const inserted = await client.query(
-          `INSERT INTO lesson_bookings
-             (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-              pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
-              list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct,
-              booking_purpose, test_start_time, test_centre)
-           VALUES
-             ($1, $2, $3, $4, $5, $6,
-              $7, $8, $9, $10, $11, $12, $13,
-              0, 'live_compute_insert', $14, $15, $16,
-              $17, $18, $19)
-           RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
-          [
-            learnerId, instructorId, bd.date, startTime, endTime, SCHEDULED,
-            pickupAddress, dropoffAddress, lessonTypeId, bookingTransmissionType || 'manual', chargeMinutesPerBooking, seriesId, schoolId,
-            !!socialVideoConsent, !!socialVideoAgeConfirmed, socialVideoDiscountPct || 0,
-            bookingPurpose || 'lesson', testStartTime || null, testCentre || null,
-          ]
-        );
+        let inserted;
+        try {
+          inserted = await client.query(
+            `INSERT INTO lesson_bookings
+               (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+                pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
+                list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct,
+                booking_purpose, test_start_time, test_centre)
+             VALUES
+               ($1, $2, $3, $4, $5, $6,
+                $7, $8, $9, $10, $11, $12, $13,
+                0, 'live_compute_insert', $14, $15, $16,
+                $17, $18, $19)
+             RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
+            [
+              learnerId, instructorId, bd.date, startTime, endTime, SCHEDULED,
+              pickupAddress, dropoffAddress, lessonTypeId, bookingTransmissionType || 'manual', chargeMinutesPerBooking, seriesId, schoolId,
+              !!socialVideoConsent, !!socialVideoAgeConfirmed, socialVideoDiscountPct || 0,
+              bookingPurpose || 'lesson', testStartTime || null, testCentre || null,
+            ]
+          );
+        } catch (insertErr) {
+          if (!isMissingBookingPurposeSchema(insertErr) || bookingPurpose === TEST_DATE_PURPOSE) throw insertErr;
+          console.warn('credit booking: lesson_bookings test-date metadata columns missing; using legacy lesson insert for normal booking');
+          inserted = await client.query(
+            `INSERT INTO lesson_bookings
+               (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+                pickup_address, dropoff_address, lesson_type_id, transmission_type, minutes_deducted, series_id, school_id,
+                list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
+             VALUES
+               ($1, $2, $3, $4, $5, $6,
+                $7, $8, $9, $10, $11, $12, $13,
+                0, 'live_compute_insert', $14, $15, $16)
+             RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
+            [
+              learnerId, instructorId, bd.date, startTime, endTime, SCHEDULED,
+              pickupAddress, dropoffAddress, lessonTypeId, bookingTransmissionType || 'manual', chargeMinutesPerBooking, seriesId, schoolId,
+              !!socialVideoConsent, !!socialVideoAgeConfirmed, socialVideoDiscountPct || 0,
+            ]
+          );
+        }
         const booking = inserted.rows[0];
         createdBookings.push(booking);
         bookingTargets.push({ booking_id: booking.id, minutes: chargeMinutesPerBooking });
@@ -6528,8 +6556,9 @@ async function handleMyBookings(req, res) {
         lb.status, lb.cancelled_at, lb.credit_returned,
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
-        COALESCE(lb.booking_purpose, 'lesson') AS booking_purpose,
-        lb.test_start_time, lb.test_centre,
+        COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
+        to_jsonb(lb)->>'test_start_time' AS test_start_time,
+        to_jsonb(lb)->>'test_centre' AS test_centre,
         lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
@@ -6592,8 +6621,9 @@ async function handleMyBookings(req, res) {
         lb.status, lb.cancelled_at, lb.credit_returned,
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
-        COALESCE(lb.booking_purpose, 'lesson') AS booking_purpose,
-        lb.test_start_time, lb.test_centre,
+        COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
+        to_jsonb(lb)->>'test_start_time' AS test_start_time,
+        to_jsonb(lb)->>'test_centre' AS test_centre,
         lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
@@ -6633,8 +6663,9 @@ async function handleMyBookings(req, res) {
         lb.status, lb.cancelled_at, lb.credit_returned,
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
-        COALESCE(lb.booking_purpose, 'lesson') AS booking_purpose,
-        lb.test_start_time, lb.test_centre,
+        COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
+        to_jsonb(lb)->>'test_start_time' AS test_start_time,
+        to_jsonb(lb)->>'test_centre' AS test_centre,
         lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
@@ -6698,8 +6729,9 @@ async function handleMyBookings(req, res) {
         lb.status, lb.cancelled_at, lb.credit_returned,
         COALESCE(lb.reschedule_count, 0) AS reschedule_count,
         lb.rescheduled_from, lb.pickup_address, lb.dropoff_address,
-        COALESCE(lb.booking_purpose, 'lesson') AS booking_purpose,
-        lb.test_start_time, lb.test_centre,
+        COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
+        to_jsonb(lb)->>'test_start_time' AS test_start_time,
+        to_jsonb(lb)->>'test_centre' AS test_centre,
         lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,

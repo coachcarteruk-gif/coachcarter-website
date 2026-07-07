@@ -9,10 +9,15 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 test.describe('test date lesson booking contract', () => {
   test('schema stores a narrow booking purpose and practical test snapshot', () => {
     const migration = read('db/migration.sql');
+    const numberedMigration = read('db/migrations/033_lesson_booking_test_date_metadata.sql');
     expect(migration).toContain("booking_purpose TEXT NOT NULL DEFAULT 'lesson'");
     expect(migration).toContain('test_start_time TEXT');
     expect(migration).toContain('test_centre TEXT');
     expect(migration).toContain("booking_purpose IN ('lesson', 'test_date')");
+    expect(numberedMigration).toContain("booking_purpose TEXT NOT NULL DEFAULT 'lesson'");
+    expect(numberedMigration).toContain('test_start_time TEXT');
+    expect(numberedMigration).toContain('test_centre TEXT');
+    expect(numberedMigration).toContain("booking_purpose IN ('lesson', 'test_date')");
   });
 
   test('slots API exposes dedicated test-date actions without changing normal cap constants', () => {

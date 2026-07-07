@@ -18,6 +18,12 @@ function concreteLessonTransmissionType(value) {
   return text === 'automatic' ? 'automatic' : 'manual';
 }
 
+function isMissingBookingPurposeSchema(err) {
+  const msg = String(err?.message || '');
+  return err?.code === '42703'
+    && /column .*?(booking_purpose|test_start_time|test_centre).*? does not exist/i.test(msg);
+}
+
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
 // Order: metadata.school_id → lookup via instructor_id (instructors are
 // school-unique) → metadata.learner_id → hard fallback to 1 with an alert.
@@ -781,23 +787,44 @@ async function handleSlotBooking(session) {
           return inserted.rows[0];
         });
       } else {
-        const [b] = await sql`
-          INSERT INTO lesson_bookings
-            (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-             lesson_type_id, transmission_type, minutes_deducted, school_id,
-             pickup_address, dropoff_address,
-             stripe_fee_pence, stripe_fee_source,
-             list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct,
-             booking_purpose, test_start_time, test_centre)
-          VALUES
-            (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
-             ${lessonTypeId}, ${bookingTransmissionType}, ${chargeMins}, ${schoolId},
-             ${pickupAddress || null}, ${dropoffAddress || null},
-             ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
-             ${amountPence}, 'stripe_metadata', ${socialVideoConsent}, ${socialVideoAgeConfirmed}, ${socialVideoDiscountPct},
-             ${bookingPurpose}, ${testStartTime}, ${testCentre})
-          RETURNING id, scheduled_date, start_time::text, end_time::text
-        `;
+        let b;
+        try {
+          [b] = await sql`
+            INSERT INTO lesson_bookings
+              (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+               lesson_type_id, transmission_type, minutes_deducted, school_id,
+               pickup_address, dropoff_address,
+               stripe_fee_pence, stripe_fee_source,
+               list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct,
+               booking_purpose, test_start_time, test_centre)
+            VALUES
+              (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
+               ${lessonTypeId}, ${bookingTransmissionType}, ${chargeMins}, ${schoolId},
+               ${pickupAddress || null}, ${dropoffAddress || null},
+               ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
+               ${amountPence}, 'stripe_metadata', ${socialVideoConsent}, ${socialVideoAgeConfirmed}, ${socialVideoDiscountPct},
+               ${bookingPurpose}, ${testStartTime}, ${testCentre})
+            RETURNING id, scheduled_date, start_time::text, end_time::text
+          `;
+        } catch (insertErr) {
+          if (!isMissingBookingPurposeSchema(insertErr)) throw insertErr;
+          console.warn('slot_booking: lesson_bookings test-date metadata columns missing; using legacy lesson insert for normal booking');
+          [b] = await sql`
+            INSERT INTO lesson_bookings
+              (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+               lesson_type_id, transmission_type, minutes_deducted, school_id,
+               pickup_address, dropoff_address,
+               stripe_fee_pence, stripe_fee_source,
+               list_price_pence, list_price_source, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
+            VALUES
+              (${learnerId}, ${instructorId}, ${scheduledDate}, ${startTime}, ${endTime}, ${SCHEDULED},
+               ${lessonTypeId}, ${bookingTransmissionType}, ${chargeMins}, ${schoolId},
+               ${pickupAddress || null}, ${dropoffAddress || null},
+               ${stripeFeePence}, ${stripeFeePence != null ? 'balance_transaction' : null},
+               ${amountPence}, 'stripe_metadata', ${socialVideoConsent}, ${socialVideoAgeConfirmed}, ${socialVideoDiscountPct})
+            RETURNING id, scheduled_date, start_time::text, end_time::text
+          `;
+        }
         booking = b;
       }
     } catch (insertErr) {
