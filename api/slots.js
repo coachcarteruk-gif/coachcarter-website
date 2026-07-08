@@ -4879,8 +4879,20 @@ async function handleBookFreeTrial(req, res) {
     if (normPhone.startsWith('07')) normPhone = '+44' + normPhone.slice(1);
     const phoneVariants = [cleanPhone, normPhone];
 
+    const [existingLearner] = await sql`
+      SELECT id, name, phone, pickup_address, email, COALESCE(free_trial_allowed, TRUE) AS free_trial_allowed
+      FROM learner_users
+      WHERE LOWER(email) = ${cleanEmail} AND school_id = ${schoolId}
+    `;
+    if (existingLearner && !existingLearner.free_trial_allowed) {
+      return res.status(403).json({
+        error: 'trial_not_allowed',
+        message: 'This account is not currently allowed to book a free trial.'
+      });
+    }
+
     const [priorTrial] = await sql`
-      SELECT lb.id FROM lesson_bookings lb
+      SELECT lb.id, lb.learner_id FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       WHERE lb.lesson_type_id = ${trialType.id}
         AND lb.school_id = ${schoolId}
@@ -4892,7 +4904,10 @@ async function handleBookFreeTrial(req, res) {
         )
       LIMIT 1
     `;
-    if (priorTrial) {
+    const learnerTrialOverrideOn = existingLearner
+      && existingLearner.free_trial_allowed
+      && String(priorTrial?.learner_id || '') === String(existingLearner.id);
+    if (priorTrial && !learnerTrialOverrideOn) {
       return res.status(409).json({
         error: 'already_used',
         message: "Looks like you've already booked a free trial. Check your email or log in to manage it."
@@ -5025,18 +5040,7 @@ async function handleBookFreeTrial(req, res) {
 
     // ── Find or create learner (mirrors offers.js findOrCreateLearner) ──
     let learnerId;
-    const [existingLearner] = await sql`
-      SELECT id, name, phone, pickup_address, email, COALESCE(free_trial_allowed, TRUE) AS free_trial_allowed
-      WHERE LOWER(email) = ${cleanEmail} AND school_id = ${schoolId}
-    `;
-
     if (existingLearner) {
-      if (!existingLearner.free_trial_allowed) {
-        return res.status(403).json({
-          error: 'trial_not_allowed',
-          message: 'This account is not currently eligible for a free trial.'
-        });
-      }
       learnerId = existingLearner.id;
       const needsUpdate = (!existingLearner.name && cleanName) ||
                           (!existingLearner.phone && cleanPhone) ||

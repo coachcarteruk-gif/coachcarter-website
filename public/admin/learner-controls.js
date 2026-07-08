@@ -84,8 +84,8 @@
     return Math.round((target - start) / 86400000);
   }
 
-  function effectiveTrialAllowed(learner) {
-    return !!learner.free_trial_allowed && Number(learner.trial_booking_count || 0) === 0;
+  function canHaveFreeTrial(learner) {
+    return !!learner.free_trial_allowed;
   }
 
   function getFlags(learner) {
@@ -101,7 +101,7 @@
       flags.push({ text: 'Credit idle', tone: 'amber' });
     }
     if (learner.free_trial_allowed && Number(learner.trial_booking_count || 0) > 0) {
-      flags.push({ text: 'Trial already used', tone: 'amber' });
+      flags.push({ text: 'Trial override on', tone: 'blue' });
     }
     if (!learner.learner_category) {
       flags.push({ text: 'No status', tone: 'gray' });
@@ -159,7 +159,7 @@
         var d = daysUntil(learner.test_date);
         if (d == null || d < 0) return false;
       }
-      if (view === 'trial' && !effectiveTrialAllowed(learner)) return false;
+      if (view === 'trial' && !canHaveFreeTrial(learner)) return false;
       if (view === 'credit' && Number(learner.balance_minutes || 0) <= 0) return false;
       return true;
     });
@@ -173,7 +173,7 @@
       var d = daysUntil(l.test_date);
       return d != null && d >= 0;
     }).length;
-    var trials = learners.filter(effectiveTrialAllowed).length;
+    var trials = learners.filter(canHaveFreeTrial).length;
     $('metric-learners').textContent = learners.length;
     $('metric-attention').textContent = attention;
     $('metric-tests').textContent = tests;
@@ -196,11 +196,12 @@
     var flagHtml = flags.length
       ? flags.map(function (f) { return '<span class="badge ' + f.tone + '">' + esc(f.text) + '</span>'; }).join('')
       : '<span class="badge green">Clear</span>';
-    var trialBadge = effectiveTrialAllowed(learner)
-      ? '<span class="badge green">Eligible</span>'
-      : (Number(learner.trial_booking_count || 0) > 0
-        ? '<span class="badge gray">Used</span>'
-        : '<span class="badge amber">Off</span>');
+    var trialBadge = canHaveFreeTrial(learner)
+      ? '<span class="badge green">Allowed</span>'
+      : '<span class="badge amber">Blocked</span>';
+    var trialSubtext = Number(learner.trial_booking_count || 0) > 0
+      ? 'Used before' + (learner.trial_completed_at ? ' - ' + formatShortDate(learner.trial_completed_at) : '')
+      : 'Not used';
     var testExtra = learner.test_date
       ? '<span class="subtle">' + esc(learner.test_time || '') + (learner.test_centre ? ' ' + esc(learner.test_centre) : '') + '</span>'
       : '<span class="subtle">Not set</span>';
@@ -217,7 +218,7 @@
         '<span class="subtle">' + esc(learner.learner_category || 'No status') + '</span></td>' +
       '<td><span class="money">' + esc(rateText) + '</span><span class="subtle">' + rateSub + '</span></td>' +
       '<td><span class="money">' + esc(hours(learner.balance_minutes)) + '</span><span class="subtle">' + esc((learner.credit_balances || []).length) + ' balance row(s)</span></td>' +
-      '<td>' + trialBadge + '<span class="subtle">' + (learner.trial_completed_at ? 'Completed ' + formatShortDate(learner.trial_completed_at) : 'No completion') + '</span></td>' +
+      '<td>' + trialBadge + '<span class="subtle">' + esc(trialSubtext) + '</span></td>' +
       '<td><span class="money">' + esc(formatDate(learner.test_date)) + '</span>' + testExtra +
         (learner.test_instructor_booked ? '<span class="subtle">Instructor booked</span>' : '') + '</td>' +
       '<td>' + esc(formatShortDate(learner.next_booking_date)) + '<span class="subtle">Last ' + esc(formatShortDate(learner.last_lesson_date || learner.last_booking_date)) + '</span></td>' +

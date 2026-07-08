@@ -42,11 +42,13 @@ test.describe('admin learner controls', () => {
     const cron = read('api/cron-auto-complete.js');
 
     expect(portal).toContain('/admin/learner-controls.html');
+    expect(html).toContain('Can have a free trial');
     expect(html).toContain('id="field-trial-allowed"');
     expect(html).toContain('id="field-test-instructor-booked"');
     expect(js).toContain("fetchAdmin('/api/admin?action=learner-controls'");
     expect(js).toContain("fetchAdmin('/api/admin?action=update-learner-controls'");
     expect(slots).toContain('COALESCE(free_trial_allowed, TRUE) AS free_trial_allowed');
+    expect(slots).toContain('const learnerTrialOverrideOn = existingLearner');
     expect(slots).toContain("error: 'trial_not_allowed'");
     expect(cron).toContain('free_trial_allowed = FALSE');
     expect(cron).toContain('free_trial_completed_at = COALESCE');
