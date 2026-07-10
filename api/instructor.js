@@ -53,6 +53,15 @@ const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-he
 const { isLessonTypeOffered } = require('./_lesson-type-helpers');
 const { logAudit } = require('./_audit');
 const {
+  releaseRequestHold,
+  captureRequestHold,
+  refundCapturedRequest,
+  bookAcceptedCardRequest,
+  expirePendingRequest,
+  withLearnerContact,
+  notifyLearnerRequestClosed,
+} = require('./_lesson-requests');
+const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
   copyRefundedBookingCreditSources,
@@ -230,6 +239,9 @@ module.exports = async (req, res) => {
   if (action === 'earnings-summary')     return handleEarningsSummary(req, res);
   if (action === 'ical-test')            return handleIcalTest(req, res);
   if (action === 'ical-status')          return handleIcalStatus(req, res);
+  if (action === 'list-requests')        return handleListRequests(req, res);
+  if (action === 'accept-request')       return handleAcceptRequest(req, res);
+  if (action === 'decline-request')      return handleDeclineRequest(req, res);
   if (action === 'create-offer')         return handleCreateOffer(req, res);
   if (action === 'list-offers')          return handleListOffers(req, res);
   if (action === 'cancel-offer')         return handleCancelOffer(req, res);
@@ -3717,6 +3729,346 @@ async function handleIcalStatus(req, res) {
 // offer_price_pence overrides effective pricing; otherwise the final price is snapshotted from effective hourly fallback.
 // max_repeat_weeks (1..18, default null = single lesson): caps how many weekly
 // repeats the learner can choose on the accept page. Slot-pinned only.
+// ── GET /api/instructor?action=list-requests ──────────────────────────────────
+// Pending lesson requests (plus the last 30 days of decided ones) for the
+// authenticated instructor's dashboard card. LESSON-REQUEST-PLAN.md.
+async function handleListRequests(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      SELECT lr.id, lr.scheduled_date::text, lr.start_time::text, lr.end_time::text,
+             lr.status, lr.payment_method, lr.pickup_address, lr.decline_reason,
+             lr.expires_at, lr.decided_at, lr.created_at, lr.booking_id,
+             COALESCE(lu.name, lr.guest_name)   AS learner_name,
+             COALESCE(lu.phone, lr.guest_phone) AS learner_phone,
+             lt.name AS lesson_type_name, lt.duration_minutes
+      FROM lesson_requests lr
+      LEFT JOIN learner_users lu ON lu.id = lr.learner_id AND lu.school_id = lr.school_id
+      LEFT JOIN lesson_types lt ON lt.id = lr.lesson_type_id
+      WHERE lr.instructor_id = ${instructor.id}
+        AND lr.school_id = ${schoolId}
+        AND (lr.status = 'pending' OR lr.decided_at > NOW() - INTERVAL '30 days')
+      ORDER BY (lr.status = 'pending') DESC, lr.expires_at ASC
+      LIMIT 100
+    `;
+    // Lazy-expire anything the hourly cron hasn't reached yet so the card
+    // never shows a request the instructor can no longer answer.
+    const now = Date.now();
+    const live = [];
+    for (const row of rows) {
+      if (row.status === 'pending' && new Date(row.expires_at).getTime() <= now) {
+        await expirePendingRequest(sql, { id: row.id, school_id: schoolId, instructor_id: instructor.id, learner_id: null });
+        continue;
+      }
+      live.push(row);
+    }
+    return res.json({ ok: true, requests: live });
+  } catch (err) {
+    console.error('list-requests error:', err);
+    reportError('/api/instructor?action=list-requests', err);
+    return res.status(500).json({ error: 'Failed to load requests', details: 'Internal server error' });
+  }
+}
+
+// Shared claim-and-load for accept/decline. Returns the claimed row (with
+// learner contact + lesson type joined) or null if it wasn't pending.
+async function claimRequestDecision(sql, { requestId, instructorId, schoolId, newStatus, declineReason = null }) {
+  const [claimed] = await sql`
+    UPDATE lesson_requests
+       SET status = ${newStatus},
+           decided_at = NOW(),
+           decline_reason = ${declineReason}
+     WHERE id = ${requestId}
+       AND instructor_id = ${instructorId}
+       AND school_id = ${schoolId}
+       AND status = 'pending'
+       AND expires_at > NOW()
+     RETURNING *
+  `;
+  return claimed || null;
+}
+
+// ── POST /api/instructor?action=accept-request ────────────────────────────────
+// Accept a pending lesson request: release/capture the held payment and
+// create the booking. Credit path refunds the hold then books through the
+// standard FIFO transaction; card path captures the PaymentIntent then books
+// like a direct slot purchase.
+async function handleAcceptRequest(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const requestId = parseInt(req.body?.request_id, 10);
+  if (!Number.isInteger(requestId) || requestId <= 0)
+    return res.status(400).json({ error: 'request_id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const request = await claimRequestDecision(sql, {
+      requestId, instructorId: instructor.id, schoolId, newStatus: 'accepted',
+    });
+    if (!request) {
+      return res.status(409).json({
+        error: true,
+        code: 'REQUEST_NOT_PENDING',
+        message: 'This request has already been answered, withdrawn, or expired.'
+      });
+    }
+
+    const [instrDetails] = await sql`
+      SELECT name FROM instructors WHERE id = ${instructor.id} AND school_id = ${schoolId}
+    `;
+    const instructorName = instrDetails?.name || 'Your instructor';
+
+    const [lessonType] = request.lesson_type_id
+      ? await sql`SELECT id, name, duration_minutes FROM lesson_types WHERE id = ${request.lesson_type_id} AND school_id = ${schoolId}`
+      : [null];
+    const durationMins = lessonType?.duration_minutes || Number(request.credits_minutes || 60);
+
+    // Cheap pre-flight clash check before any money moves — the booking
+    // writers below re-check under their own locks, this just gives the
+    // instructor a clean error without touching the payment.
+    const [clash] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${request.scheduled_date}
+        AND start_time = ${request.start_time}
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
+      LIMIT 1
+    `;
+    if (clash) {
+      await sql`
+        UPDATE lesson_requests
+           SET status = 'declined', decline_reason = 'Slot no longer free when accepted'
+         WHERE id = ${request.id} AND school_id = ${schoolId}
+      `;
+      await releaseRequestHold(sql, request);
+      const withContact = await withLearnerContact(sql, request);
+      await notifyLearnerRequestClosed(withContact, 'accept_failed', {
+        instructorName, declineReason: 'the time is no longer free'
+      });
+      return res.status(409).json({
+        error: true,
+        code: 'SLOT_UNAVAILABLE',
+        message: 'That time is no longer free — something else is on your calendar. The request has been declined and the learner\'s payment released.'
+      });
+    }
+
+    let booking;
+    if (request.payment_method === 'credit') {
+      // 1. Return the held credits so the standard booking transaction can
+      //    draw them through FIFO like any normal credit booking.
+      const release = await releaseRequestHold(sql, request);
+      if (!release.ok) {
+        // Claim stands as 'accepted' with no booking; the cron sweep will
+        // alert. Tell the instructor to retry.
+        return res.status(500).json({ error: 'Could not release the learner\'s credit hold. Please try again.' });
+      }
+
+      const booked = await createInstructorCreditBookingTransaction({
+        connectionString: process.env.POSTGRES_URL,
+        learnerId: request.learner_id,
+        instructorId: instructor.id,
+        schoolId,
+        scheduledDate: String(request.scheduled_date).slice(0, 10),
+        startTime: String(request.start_time).slice(0, 5),
+        endTime: String(request.end_time).slice(0, 5),
+        lessonTypeId: request.lesson_type_id,
+        transmissionType: request.transmission_type || 'manual',
+        durationMins,
+        notes: null,
+        pickupAddress: request.pickup_address,
+        dropoffAddress: null,
+      });
+
+      if (!booked.ok) {
+        // Credits are already back with the learner — close the request out
+        // honestly and tell both sides.
+        await sql`
+          UPDATE lesson_requests
+             SET status = 'declined', decline_reason = ${'Booking failed on accept: ' + (booked.code || 'unknown')}
+           WHERE id = ${request.id} AND school_id = ${schoolId}
+        `;
+        const withContact = await withLearnerContact(sql, request);
+        await notifyLearnerRequestClosed(withContact, 'accept_failed', { instructorName });
+        const msg = booked.code === 'INSUFFICIENT_BALANCE' || booked.code === 'INSUFFICIENT_FIFO_SOURCES'
+          ? 'The learner\'s credit could not cover the lesson. Their hold has been returned and the request closed.'
+          : (booked.message || 'The booking could not be created. The learner\'s hold has been returned and the request closed.');
+        return res.status(409).json({ error: true, code: booked.code || 'BOOKING_FAILED', message: msg });
+      }
+      booking = booked.booking;
+    } else {
+      // Card path: capture the authorization, then book like a slot purchase.
+      const capture = await captureRequestHold(request);
+      if (!capture.ok) {
+        // Card died during the hold window. Close the request; nothing was
+        // charged (a failed capture releases the authorization).
+        await sql`
+          UPDATE lesson_requests
+             SET status = 'declined', decline_reason = 'Payment could not be completed', released_at = NOW()
+           WHERE id = ${request.id} AND school_id = ${schoolId}
+        `;
+        const withContact = await withLearnerContact(sql, request);
+        await notifyLearnerRequestClosed(withContact, 'accept_failed', {
+          instructorName, declineReason: 'the payment could not be completed'
+        });
+        return res.status(409).json({
+          error: true,
+          code: 'CAPTURE_FAILED',
+          message: 'The learner\'s payment could not be taken (their card may have expired). The request has been closed and they\'ve been asked to request again.'
+        });
+      }
+      await sql`
+        UPDATE lesson_requests SET released_at = NOW()
+         WHERE id = ${request.id} AND school_id = ${schoolId} AND released_at IS NULL
+      `;
+
+      const booked = await bookAcceptedCardRequest(sql, { request, lessonType });
+      if (!booked.ok) {
+        await refundCapturedRequest(request);
+        await sql`
+          UPDATE lesson_requests
+             SET status = 'declined', decline_reason = ${'Booking failed on accept: ' + (booked.code || 'unknown')}
+           WHERE id = ${request.id} AND school_id = ${schoolId}
+        `;
+        const withContact = await withLearnerContact(sql, request);
+        await notifyLearnerRequestClosed(withContact, 'accept_failed', { instructorName });
+        return res.status(409).json({
+          error: true,
+          code: booked.code || 'BOOKING_FAILED',
+          message: 'The booking could not be created. The learner\'s payment has been refunded and the request closed.'
+        });
+      }
+      booking = booked.booking;
+    }
+
+    await sql`
+      UPDATE lesson_requests SET booking_id = ${booking.id}
+       WHERE id = ${request.id} AND school_id = ${schoolId}
+    `;
+
+    // Confirmations — mirror the instructor-created-booking notifications.
+    const withContact = await withLearnerContact(sql, request);
+    const dateStr = new Date(String(request.scheduled_date).slice(0, 10) + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+    const startDisplay = String(request.start_time).slice(0, 5);
+    const endDisplay = String(request.end_time).slice(0, 5);
+    const durationStr = durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins !== 60 ? 's' : ''}` : `${durationMins} mins`;
+    const learnerEmail = withContact.learner_email || withContact.guest_email;
+    const learnerPhone = withContact.learner_phone || withContact.guest_phone;
+    const firstName = String(withContact.learner_name || withContact.guest_name || 'there').split(' ')[0] || 'there';
+
+    if (learnerEmail) {
+      try {
+        const mailer = createTransporter();
+        await mailer.sendMail({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: learnerEmail,
+          subject: `Lesson confirmed — ${dateStr} at ${startDisplay}`,
+          html: `
+            <h2>Hi ${firstName},</h2>
+            <p>${instructorName} has accepted your lesson request. You're booked in:</p>
+            <table>
+              <tr><td><strong>Date:</strong></td><td>${dateStr}</td></tr>
+              <tr><td><strong>Time:</strong></td><td>${startDisplay} – ${endDisplay}</td></tr>
+              <tr><td><strong>Instructor:</strong></td><td>${instructorName}</td></tr>
+              <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
+            </table>
+            <p>${request.payment_method === 'card_hold' ? 'Your card has now been charged for this lesson.' : 'The lesson has been taken from your credit balance.'}</p>
+            <p style="margin-top:16px;font-size:0.875rem;color:#797879">
+              Need to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.
+            </p>
+            <p style="margin:28px 0">
+              <a href="https://coachcarter.uk/learner/"
+                 style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                        border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
+                View my bookings →
+              </a>
+            </p>
+          `
+        });
+      } catch (emailErr) {
+        console.error('accept-request learner email failed:', emailErr);
+      }
+    }
+    if (learnerPhone) {
+      await sendWhatsApp(learnerPhone,
+        `✅ ${instructorName} accepted your lesson request!\n\n📅 ${dateStr}\n⏰ ${startDisplay} – ${endDisplay}\n\n${request.payment_method === 'card_hold' ? 'Your card has now been charged.' : 'Taken from your credit balance.'}\n\nView bookings: https://coachcarter.uk/learner/`,
+        { purpose: 'lesson_request.accepted_learner', learnerId: request.learner_id || undefined, instructorId: instructor.id, schoolId }
+      );
+    }
+
+    return res.json({
+      ok: true,
+      booking_id: booking.id,
+      request_id: request.id,
+      scheduled_date: String(request.scheduled_date).slice(0, 10),
+      start_time: startDisplay,
+      end_time: endDisplay,
+    });
+  } catch (err) {
+    console.error('accept-request error:', err);
+    reportError('/api/instructor?action=accept-request', err);
+    return res.status(500).json({ error: 'Accept failed', details: 'Internal server error' });
+  }
+}
+
+// ── POST /api/instructor?action=decline-request ───────────────────────────────
+// Decline a pending request: release the held payment in full and notify the
+// learner (card holds are cancelled — the card is never charged).
+async function handleDeclineRequest(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const requestId = parseInt(req.body?.request_id, 10);
+  if (!Number.isInteger(requestId) || requestId <= 0)
+    return res.status(400).json({ error: 'request_id is required' });
+  const declineReason = req.body?.reason ? String(req.body.reason).slice(0, 300) : null;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const request = await claimRequestDecision(sql, {
+      requestId, instructorId: instructor.id, schoolId, newStatus: 'declined', declineReason,
+    });
+    if (!request) {
+      return res.status(409).json({
+        error: true,
+        code: 'REQUEST_NOT_PENDING',
+        message: 'This request has already been answered, withdrawn, or expired.'
+      });
+    }
+
+    const [instrDetails] = await sql`
+      SELECT name FROM instructors WHERE id = ${instructor.id} AND school_id = ${schoolId}
+    `;
+    const instructorName = instrDetails?.name || 'Your instructor';
+
+    const release = await releaseRequestHold(sql, request);
+    const withContact = await withLearnerContact(sql, request);
+    await notifyLearnerRequestClosed(withContact, 'declined', {
+      instructorName,
+      declineReason,
+    });
+
+    return res.json({ ok: true, request_id: request.id, released: release.ok });
+  } catch (err) {
+    console.error('decline-request error:', err);
+    reportError('/api/instructor?action=decline-request', err);
+    return res.status(500).json({ error: 'Decline failed', details: 'Internal server error' });
+  }
+}
+
 async function handleCreateOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);

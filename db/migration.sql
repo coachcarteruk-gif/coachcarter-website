@@ -2959,6 +2959,13 @@ CREATE TABLE IF NOT EXISTS lesson_requests (
   decline_reason      TEXT,
   expires_at          TIMESTAMPTZ NOT NULL,
   decided_at          TIMESTAMPTZ,
+  -- Set when the held payment was actually released back to the learner:
+  -- credits refunded ('request_refund' CT written) or Stripe PaymentIntent
+  -- cancelled. Accept sets it too (hold refunded before the booking draws).
+  -- A decided request with released_at IS NULL is a crashed decision — the
+  -- expire cron sweeps and retries the release, so no learner is ever left
+  -- charged-but-unbooked.
+  released_at         TIMESTAMPTZ,
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -2974,3 +2981,6 @@ CREATE INDEX IF NOT EXISTS idx_requests_expiry      ON lesson_requests(expires_a
 -- (same pattern as uq_offer_slot on lesson_offers).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_request_slot
   ON lesson_requests(instructor_id, scheduled_date, start_time) WHERE status = 'pending';
+-- Sweep target for the expire cron's crashed-decision retry (see released_at).
+CREATE INDEX IF NOT EXISTS idx_requests_unreleased
+  ON lesson_requests(decided_at) WHERE released_at IS NULL AND status <> 'pending';

@@ -37,7 +37,19 @@ const { createTransporter } = require('./_auth-helpers');
 const { notifyAvailableLearners, supersedeBroadcastSiblings } = require('./_notify-availability');
 const { checkAdjacentTravelTime, extractPostcode, bulkGeocodeUK, estimateDriveMinutes, TRAVEL_BUFFER_MINUTES, DEFAULT_MAX_TRAVEL_MINUTES } = require('./_travel-time');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
-const { lockBalanceAdjustLCB } = require('./_credit-grant');
+const { lockBalanceAdjustLCB, lockBalanceAndMutate } = require('./_credit-grant');
+const {
+  computeRequestExpiresAt,
+  pendingRequestConflicts,
+  pendingRequestConflictsPg,
+  pendingRequestWindows,
+  releaseRequestHold,
+  lazyExpireSlotRequests,
+  withLearnerContact,
+  notifyLearnerRequestClosed,
+  notifyInstructorNewRequest,
+  formatSlotDisplay,
+} = require('./_lesson-requests');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
@@ -887,6 +899,9 @@ module.exports = async (req, res) => {
   if (action === 'book-test-date') return handleBookTestDate(req, res);
   if (action === 'checkout-test-date') return handleCheckoutTestDate(req, res);
   if (action === 'book')         return handleBook(req, res);
+  if (action === 'request-slot') return handleRequestSlot(req, res);
+  if (action === 'my-requests')  return handleMyRequests(req, res);
+  if (action === 'withdraw-request') return handleWithdrawRequest(req, res);
   if (action === 'checkout-slot') return handleCheckoutSlot(req, res);
   if (action === 'checkout-slot-guest') return handleCheckoutSlotGuest(req, res);
   if (action === 'book-free-trial') return handleBookFreeTrial(req, res);
@@ -4165,6 +4180,414 @@ async function handleBook(req, res) {
     console.error('slots book error:', err);
     reportError('/api/slots', err);
     return res.status(500).json({ error: 'Booking failed', details: 'Internal server error' });
+  }
+}
+
+// All the ways a slot can be taken, in one place: blocking bookings, live
+// checkout reservations, pending offers, pending lesson requests, pending
+// weekly-block holds, and busy blocks. Tagged-template twin of the checks
+// inside bookCreditFundedSlotsTransaction — use this from handlers that
+// aren't already inside that transaction. Returns conflict rows
+// [{ date, start_time, reason }].
+async function slotClashConflicts(sql, { instructorId, schoolId, dates, startTime, endTime }) {
+  const conflicts = [];
+
+  const bookings = await sql`
+    SELECT scheduled_date::text AS date, start_time::text
+    FROM lesson_bookings
+    WHERE instructor_id = ${instructorId}
+      AND school_id = ${schoolId}
+      AND scheduled_date = ANY(${dates})
+      AND start_time = ${startTime}
+      AND status = ANY(${BLOCKING_STATUSES}::text[])
+  `;
+  conflicts.push(...bookings.map(r => ({ ...r, reason: 'already_booked' })));
+
+  try {
+    const reservations = await sql`
+      SELECT scheduled_date::text AS date, start_time::text
+      FROM slot_reservations
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ANY(${dates})
+        AND start_time = ${startTime}
+        AND expires_at > NOW()
+    `;
+    conflicts.push(...reservations.map(r => ({ ...r, reason: 'reserved' })));
+  } catch (e) { /* table may not exist yet */ }
+
+  try {
+    const offers = await sql`
+      SELECT scheduled_date::text AS date, start_time::text
+      FROM lesson_offers
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ANY(${dates})
+        AND start_time = ${startTime}
+        AND status = 'pending'
+        AND expires_at > NOW()
+    `;
+    conflicts.push(...offers.map(r => ({ ...r, reason: 'pending_offer' })));
+  } catch (e) { /* table may not exist yet */ }
+
+  const requests = await pendingRequestConflicts(sql, { instructorId, schoolId, dates, startTime });
+  conflicts.push(...requests.map(r => ({ ...r, reason: 'pending_request' })));
+
+  try {
+    const recurringHolds = await sql`
+      SELECT rsbi.scheduled_date::text AS date, rsbi.start_time::text
+      FROM recurring_slot_block_items rsbi
+      JOIN recurring_slot_blocks rsb ON rsb.id = rsbi.block_id
+      WHERE rsbi.instructor_id = ${instructorId}
+        AND rsbi.school_id = ${schoolId}
+        AND rsbi.scheduled_date = ANY(${dates})
+        AND rsbi.start_time = ${startTime}
+        AND rsbi.status = 'held'
+        AND rsb.status = 'pending_payment'
+        AND rsb.expires_at > NOW()
+    `;
+    conflicts.push(...recurringHolds.map(r => ({ ...r, reason: 'pending_weekly_block' })));
+  } catch (e) { /* table may not exist yet */ }
+
+  if (endTime) {
+    try {
+      const busyBlocks = await sql`
+        SELECT block_date::text AS date, start_time::text
+        FROM instructor_busy_blocks
+        WHERE instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+          AND block_date = ANY(${dates})
+          AND start_time < ${endTime}::time
+          AND end_time > ${startTime}::time
+      `;
+      conflicts.push(...busyBlocks.map(r => ({ ...r, reason: 'busy_block' })));
+    } catch (e) { /* table may not exist yet */ }
+  }
+
+  return conflicts;
+}
+
+// ── POST /api/slots?action=request-slot ───────────────────────────────────────
+// Credit-funded lesson request for a request-to-book instructor
+// (LESSON-REQUEST-PLAN.md). Deducts the lesson's minutes as a hold
+// ('request_hold' ledger row) and creates a pending lesson_requests row that
+// blocks the slot until the instructor accepts, declines, or it expires.
+// Single slot only — no repeat weeks on requests.
+async function handleRequestSlot(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  const { instructor_id, date, start_time, end_time, lesson_type_id, pickup_address, transmission_type } = req.body;
+  if (!instructor_id || !date || !start_time || !end_time)
+    return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
+  const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
+  if (transmission_type && !requestedTransmissionType) {
+    return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
+  }
+
+  const bookingDate = parseDate(date);
+  if (!bookingDate)
+    return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+  const today = startOfDay(new Date());
+  if (bookingDate < today)
+    return res.status(400).json({ error: 'Cannot request a slot in the past' });
+  const maxAhead = addDays(today, MAX_DAYS_AHEAD);
+  if (bookingDate > maxAhead)
+    return res.status(400).json({ error: `Cannot request a lesson more than ${MAX_DAYS_AHEAD} days in advance` });
+
+  const startMins = timeToMinutes(start_time);
+  const endMins   = timeToMinutes(end_time);
+
+  // Requests need decision headroom: reject anything inside the minimum lead
+  // window (also covers already-started same-day slots).
+  const requestExpiresAt = computeRequestExpiresAt(date, start_time);
+  if (!requestExpiresAt) {
+    return res.status(400).json({
+      error: true,
+      code: 'REQUEST_TOO_LATE',
+      message: 'This slot starts too soon to request — the instructor needs time to confirm. Please pick a later slot.'
+    });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const lessonType = await getLessonType(sql, lesson_type_id, schoolId);
+    if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
+    if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
+    const durationMins = lessonType.duration_minutes;
+    if (endMins - startMins !== durationMins)
+      return res.status(400).json({ error: `Slot must be exactly ${formatHours(durationMins)} for ${lessonType.name}` });
+
+    const [learner] = await sql`
+      SELECT id, name, email, phone, pickup_address
+      FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
+    `;
+    if (!learner) return res.status(404).json({ error: 'Learner account not found' });
+
+    const [instructor] = await sql`
+      SELECT id, name, email, phone, max_travel_minutes, offered_lesson_types,
+             COALESCE(request_to_book, false) AS request_to_book,
+             COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
+             COALESCE(transmission_type, 'manual') AS transmission_type
+      FROM instructors
+      WHERE id = ${instructor_id} AND active = true AND school_id = ${schoolId}
+    `;
+    if (!instructor)
+      return res.status(404).json({ error: 'Instructor not found or unavailable' });
+    if (!instructor.request_to_book) {
+      return res.status(400).json({
+        error: true,
+        code: 'REQUEST_NOT_ENABLED',
+        message: 'This instructor takes instant bookings — book the slot instead.'
+      });
+    }
+    if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
+      return rejectLessonTypeNotOffered(res);
+    }
+    if (!isDateWithinBookingWindow(bookingDate, instructor.max_booking_days_ahead)) {
+      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead, 'request') });
+    }
+
+    // Demo instructors / payments-disabled schools book instantly for free —
+    // request mode is meaningless there.
+    const isDemoInstructor = instructor.email === 'demo@coachcarter.uk';
+    const [schoolRow] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
+    if (isDemoInstructor || !schoolRow?.config?.payments_enabled) {
+      return res.status(400).json({
+        error: true,
+        code: 'REQUEST_NOT_ENABLED',
+        message: 'Requests are not available here — book the slot instead.'
+      });
+    }
+
+    const fitsAvailability = await slotFitsActiveAvailability(sql, {
+      instructorId: instructor_id,
+      schoolId,
+      date,
+      startTime: start_time,
+      endTime: end_time,
+      transmissionType: requestedTransmissionType
+    });
+    if (!fitsAvailability) {
+      return res.status(409).json({ error: true, code: 'SLOTS_UNAVAILABLE', message: 'That slot is no longer available' });
+    }
+
+    const requestPickupAddr = pickup_address || learner.pickup_address || null;
+    let travelWarnings = null;
+    if (requestPickupAddr) {
+      if (await rejectIfPickupTravelConflict(res, sql, {
+        instructorId: instructor_id,
+        schoolId,
+        date,
+        startTime: start_time,
+        endTime: end_time,
+        pickupAddress: requestPickupAddr,
+      })) return;
+      try {
+        const result = await checkAdjacentTravelTime(
+          sql, instructor_id, date, start_time, end_time,
+          requestPickupAddr, instructor.max_travel_minutes || undefined
+        );
+        if (result) travelWarnings = result.warnings;
+      } catch { /* never block requests on travel-check errors */ }
+    }
+
+    // Clear any pending-but-expired request still holding this slot's unique
+    // index, then run the same clash checks a booking would.
+    await lazyExpireSlotRequests(sql, { instructorId: instructor_id, schoolId, date, startTime: start_time });
+
+    const clashChecks = await slotClashConflicts(sql, {
+      instructorId: instructor_id,
+      schoolId,
+      dates: [date],
+      startTime: start_time,
+      endTime: end_time,
+    });
+    if (clashChecks.length > 0) {
+      return res.status(409).json({ error: true, code: 'SLOTS_UNAVAILABLE', message: 'That slot is no longer available' });
+    }
+
+    const bookingTransmissionType = concreteLessonTransmissionType(requestedTransmissionType, instructor.transmission_type);
+
+    // 1. Claim the slot with the pending-request row (uq_request_slot makes
+    //    concurrent duplicates impossible). Insert BEFORE taking the hold so
+    //    a crash can never strand deducted credits without a visible row.
+    let request;
+    try {
+      const [inserted] = await sql`
+        INSERT INTO lesson_requests
+          (school_id, instructor_id, learner_id, scheduled_date, start_time, end_time,
+           lesson_type_id, pickup_address, transmission_type, payment_method,
+           credits_minutes, status, expires_at)
+        VALUES
+          (${schoolId}, ${instructor_id}, ${user.id}, ${date}, ${start_time}, ${end_time},
+           ${lessonType.id}, ${requestPickupAddr}, ${bookingTransmissionType}, 'credit',
+           ${durationMins}, 'pending', ${requestExpiresAt.toISOString()})
+        RETURNING id, expires_at
+      `;
+      request = inserted;
+    } catch (insertErr) {
+      if (insertErr.code === '23505' || insertErr.message?.includes('uq_request_slot')) {
+        return res.status(409).json({ error: true, code: 'SLOTS_UNAVAILABLE', message: 'Someone has already requested that slot.' });
+      }
+      throw insertErr;
+    }
+
+    // 2. Take the credit hold. On failure, remove the claim.
+    const hold = await lockBalanceAndMutate(sql, {
+      learnerId: user.id,
+      instructorId: Number(instructor_id),
+      schoolId,
+      delta: -durationMins,
+      creditsDelta: -Math.ceil(durationMins / 60),
+      ledgerType: 'request_hold',
+      reason: 'lesson request hold',
+    });
+    if (!hold.ok) {
+      await sql`DELETE FROM lesson_requests WHERE id = ${request.id} AND school_id = ${schoolId} AND status = 'pending'`;
+      if (hold.code === 'INSUFFICIENT_BALANCE') {
+        return res.status(402).json({
+          error: true,
+          code: 'INSUFFICIENT_BALANCE',
+          message: `Not enough Lesson Credit. You need ${formatHours(durationMins)}. Please use pay-and-request for this slot.`
+        });
+      }
+      throw new Error(`request_hold failed: ${hold.code}`);
+    }
+    await sql`
+      UPDATE lesson_requests SET hold_transaction_id = ${hold.transactionId}
+      WHERE id = ${request.id} AND school_id = ${schoolId}
+    `;
+
+    // 3. Nudge the instructor (awaited — Vercel kills the instance after res).
+    await notifyInstructorNewRequest(
+      {
+        id: request.id,
+        instructor_id: Number(instructor_id),
+        learner_id: user.id,
+        school_id: schoolId,
+        scheduled_date: date,
+        start_time,
+        end_time,
+        expires_at: request.expires_at,
+      },
+      instructor,
+      { learnerDisplayName: learner.name || 'A learner' }
+    );
+
+    const response = {
+      ok: true,
+      request_id: request.id,
+      expires_at: request.expires_at,
+      balance_minutes: hold.balanceMinutes,
+      balance_hours: ((hold.balanceMinutes || 0) / 60).toFixed(1),
+    };
+    if (travelWarnings && travelWarnings.length > 0) response.travel_warnings = travelWarnings;
+    return res.status(201).json(response);
+  } catch (err) {
+    console.error('request-slot error:', err);
+    reportError('/api/slots?action=request-slot', err);
+    return res.status(500).json({ error: 'Request failed', details: 'Internal server error' });
+  }
+}
+
+// ── GET /api/slots?action=my-requests ─────────────────────────────────────────
+// The authenticated learner's lesson requests (pending first, then recent).
+async function handleMyRequests(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      SELECT lr.id, lr.scheduled_date::text, lr.start_time::text, lr.end_time::text,
+             lr.status, lr.payment_method, lr.credits_minutes, lr.amount_pence,
+             lr.decline_reason, lr.expires_at, lr.decided_at, lr.created_at,
+             lr.booking_id,
+             i.name AS instructor_name,
+             lt.name AS lesson_type_name, lt.duration_minutes
+      FROM lesson_requests lr
+      JOIN instructors i ON i.id = lr.instructor_id AND i.school_id = lr.school_id
+      LEFT JOIN lesson_types lt ON lt.id = lr.lesson_type_id
+      WHERE lr.learner_id = ${user.id}
+        AND lr.school_id = ${schoolId}
+        AND lr.created_at > NOW() - INTERVAL '90 days'
+      ORDER BY (lr.status = 'pending') DESC, lr.scheduled_date DESC, lr.start_time DESC
+      LIMIT 100
+    `;
+    return res.json({ ok: true, requests: rows });
+  } catch (err) {
+    console.error('my-requests error:', err);
+    reportError('/api/slots?action=my-requests', err);
+    return res.status(500).json({ error: 'Failed to load requests', details: 'Internal server error' });
+  }
+}
+
+// ── POST /api/slots?action=withdraw-request ───────────────────────────────────
+// Learner cancels their own pending request. Releases the hold in full.
+async function handleWithdrawRequest(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = user.school_id || 1;
+
+  const requestId = parseInt(req.body?.request_id, 10);
+  if (!Number.isInteger(requestId) || requestId <= 0)
+    return res.status(400).json({ error: 'request_id is required' });
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+
+    // Atomic claim — races with accept/decline/expiry lose cleanly.
+    const [claimed] = await sql`
+      UPDATE lesson_requests
+         SET status = 'withdrawn', decided_at = NOW()
+       WHERE id = ${requestId}
+         AND school_id = ${schoolId}
+         AND learner_id = ${user.id}
+         AND status = 'pending'
+       RETURNING *
+    `;
+    if (!claimed) {
+      return res.status(409).json({
+        error: true,
+        code: 'REQUEST_NOT_PENDING',
+        message: 'This request has already been answered or has expired.'
+      });
+    }
+
+    const release = await releaseRequestHold(sql, claimed);
+
+    // Let the instructor know the slot is free again (best effort).
+    try {
+      const [instr] = await sql`
+        SELECT name, phone FROM instructors WHERE id = ${claimed.instructor_id} AND school_id = ${schoolId}
+      `;
+      if (instr?.phone) {
+        await sendWhatsApp(
+          instr.phone,
+          `Lesson request withdrawn: ${formatSlotDisplay(claimed)} is available again.`,
+          { purpose: 'lesson_request.withdrawn_instructor', learnerId: user.id, instructorId: claimed.instructor_id, schoolId }
+        );
+      }
+    } catch (notifyErr) {
+      console.error('withdraw-request instructor notify failed:', notifyErr.message);
+    }
+
+    const withContact = await withLearnerContact(sql, claimed);
+    await notifyLearnerRequestClosed(withContact, 'withdrawn');
+
+    return res.json({ ok: true, released: release.ok });
+  } catch (err) {
+    console.error('withdraw-request error:', err);
+    reportError('/api/slots?action=withdraw-request', err);
+    return res.status(500).json({ error: 'Withdraw failed', details: 'Internal server error' });
   }
 }
 
