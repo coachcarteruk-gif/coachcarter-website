@@ -93,6 +93,12 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     // 1. Anonymise financial records (7-year retention).
     sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learnerId}`,
     sql`UPDATE lesson_bookings SET learner_id = NULL, learner_anonymized = true WHERE learner_id = ${learnerId}`,
+    // Lesson requests: keep the row (it documents a payment hold/decision) but
+    // strip all PII. The FK is ON DELETE SET NULL — this explicit UPDATE also
+    // clears the guest contact columns and pickup address. A still-pending
+    // request's hold release degrades safely: the card PI cancel needs no
+    // learner row, and a credit hold refund is moot once the balance is gone.
+    sql`UPDATE lesson_requests SET learner_id = NULL, guest_name = NULL, guest_email = NULL, guest_phone = NULL, pickup_address = NULL WHERE learner_id = ${learnerId}`,
 
     // 2. Hard-delete learner-keyed tables.
     sql`DELETE FROM skill_ratings WHERE user_id = ${learnerId}`,

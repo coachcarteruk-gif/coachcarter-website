@@ -156,6 +156,20 @@ Hard rules:
 5. The `instructors.broadcast_offers_enabled` toggle defaults to `FALSE`. Cancellation-driven broadcasts only fire when this is `TRUE` and the cancellation is <48h before lesson start. Toggle UI lives on `/instructor/profile.html` ("Last-minute broadcasts" card).
 6. Instructor-triggered manual broadcasts (`trigger='instructor_manual'`) are not gated by the toggle — the toggle only affects auto-cancellation broadcasts. Manual broadcasts always go through `?action=create-broadcast-offer` and require an explicit `learner_ids` array.
 
+## Lesson requests (request-to-book, July 2026)
+
+> Full reference: [`LESSON-REQUEST-PLAN.md`](LESSON-REQUEST-PLAN.md). Shared lifecycle helpers: `api/_lesson-requests.js`.
+
+Per-instructor `instructors.request_to_book` toggle: learners request slots instead of instant-booking them; payment is **held, never taken up front** (Stripe manual-capture authorization for cards, `request_hold`/`request_refund` credit_transactions pair for credits). Hard rules:
+
+1. **Pending `lesson_requests` rows block their slot** exactly like pending `lesson_offers`. Any NEW booking-creation or slot-holding path must add the pending-request conflict check (mirror the pending-offer check beside it). The slot lock is the partial unique index `uq_request_slot`.
+2. **Never charge before accept.** Card requests use `payment_intent_data.capture_method='manual'` — capture on accept, cancel otherwise. Don't add request paths that charge-then-refund.
+3. **Hold release is exactly-once**, keyed on `lesson_requests.released_at`. Route all releases through `releaseRequestHold()` — never write ad-hoc refund/cancel logic. Every status transition away from `pending` must be an atomic claim (`UPDATE … WHERE status='pending'`).
+4. The `request_hold`/`request_refund` ledger pair must always net zero per request — the divergence cron counts them in ΣCT. Neither type may ever be added to `CREDIT_BOOKING_SOURCE_TYPES` (they are not drawable FIFO sources).
+5. Requests expire at min(created + 48h, lesson start − 2h) — inside Stripe's ~7-day auth-hold window. Don't extend past 5 days without rethinking the card path.
+6. Declined/expired guest emails must state the card was never charged (only authorised).
+7. No weekly repeats and no social-video discount on requests (v1 — deliberate).
+
 ## Multi-instructor franchise model
 
 > Full plans: [`FRANCHISE-MODEL-PLAN.md`](FRANCHISE-MODEL-PLAN.md), [`INSTRUCTOR-EXPERIENCE-PLAN.md`](INSTRUCTOR-EXPERIENCE-PLAN.md)

@@ -287,6 +287,19 @@
       </div>
 
       <div class="form-card">
+        <div class="form-card-title">Request to book</div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="inputRequestToBook" ${p.request_to_book ? 'checked' : ''}
+              style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+            Learners must request slots — I confirm each one
+          </label>
+          <p class="field-hint">Turn this on if you can't always keep your diary up to date. Learners see your slots as normal but send a request instead of booking instantly. Their payment is held (never taken up front) and you have 48 hours to accept or decline from your dashboard. Pending requests block the slot for everyone else.</p>
+        </div>
+      </div>
+
+      <div class="form-card">
         <div class="form-card-title">Calendar Sync</div>
         <p class="field-hint" style="margin-bottom:14px">
           Paste your personal calendar's iCal feed URL below. Your personal events will automatically block booking slots so learners can't book over your commitments.
@@ -551,6 +564,7 @@
     const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
     const bulk_tiers_enabled = document.getElementById('inputBulkTiersEnabled').checked;
     const social_video_opt_in = document.getElementById('inputSocialVideoOptIn').checked;
+    const request_to_book = document.getElementById('inputRequestToBook').checked;
 
     // New profile fields
     const adi_grade      = document.getElementById('inputAdiGrade').value.trim() || null;
@@ -583,7 +597,7 @@
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, max_booking_days_ahead, reminder_hours, daily_schedule_email,
-          broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in,
+          broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in, request_to_book,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,
           service_areas, languages, ical_feed_url

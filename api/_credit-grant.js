@@ -706,6 +706,10 @@ const ALLOWED_LEDGER_TYPES = new Set([
   'purchase', 'refund', 'slot_purchase',
   'edit_adjustment', 'admin_add', 'admin_remove',
   'referral_bonus', 'referral_reward', 'free_trial',
+  // Lesson requests (LESSON-REQUEST-PLAN.md): hold deducts at request time,
+  // refund returns it in full on decline/expiry/withdrawal/accept-rebook.
+  // Neither is a drawable FIFO source (see CREDIT_BOOKING_SOURCE_TYPES).
+  'request_hold', 'request_refund',
 ]);
 
 async function lockBalanceAndMutate(sql, args) {

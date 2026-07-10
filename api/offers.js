@@ -145,6 +145,20 @@ async function bookOfferSeries(sql, {
       `;
       if (existing) { skipped.push({ date: candidateStr, reason: 'already_booked' }); weekOffset++; continue; }
 
+      // A pending lesson request holds this slot — skip the week rather than
+      // book over the requesting learner's held payment.
+      try {
+        const [pendingRequest] = await sql`
+          SELECT id FROM lesson_requests
+          WHERE instructor_id = ${instructorId}
+            AND scheduled_date = ${candidateStr}
+            AND start_time = ${startTime}::time
+            AND status = 'pending'
+            AND expires_at > NOW()
+        `;
+        if (pendingRequest) { skipped.push({ date: candidateStr, reason: 'pending_request' }); weekOffset++; continue; }
+      } catch (e) { /* table may not exist yet */ }
+
       canBook = true;
     }
 

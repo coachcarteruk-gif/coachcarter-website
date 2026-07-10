@@ -1635,6 +1635,25 @@ async function handleExportData(req, res) {
           WHERE lo.learner_id = ${user.id}
           ORDER BY lo.created_at DESC`;
 
+    // Lesson requests (request-to-book): the learner's request history,
+    // including the guest contact details a pre-signup request captured.
+    // Stripe ids excluded — operational references, not personal data the
+    // learner needs, and the session id doubles as an idempotency key.
+    let lessonRequests = [];
+    try {
+      lessonRequests = await sql`
+        SELECT lr.scheduled_date::text, lr.start_time::text, lr.end_time::text,
+               lr.pickup_address, lr.payment_method, lr.amount_pence,
+               lr.credits_minutes, lr.status, lr.decline_reason,
+               lr.guest_name, lr.guest_email, lr.guest_phone,
+               lr.expires_at, lr.decided_at, lr.created_at,
+               i.name AS instructor_name
+        FROM lesson_requests lr
+        JOIN instructors i ON i.id = lr.instructor_id
+        WHERE lr.learner_id = ${user.id} AND lr.school_id = ${schoolId}
+        ORDER BY lr.created_at DESC`;
+    } catch (e) { /* table may not exist yet */ }
+
     const feedbackSubmitted = await sql`
       SELECT type, title, message, page_url, status, reviewed_at, created_at
       FROM learner_feedback
@@ -1676,6 +1695,7 @@ async function handleExportData(req, res) {
           'availability', 'instructor_notes_about_me',
           'cookie_consents', 'deletion_requests',
           'lesson_confirmations', 'offers_received',
+          'lesson_requests',
           'feedback_submitted',
           'test_swap_listings', 'test_swap_requests',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
@@ -1701,6 +1721,7 @@ async function handleExportData(req, res) {
       deletion_requests: deletionRequests,
       lesson_confirmations: lessonConfirmations,
       offers_received: offersReceived,
+      lesson_requests: lessonRequests,
       feedback_submitted: feedbackSubmitted,
       test_swap_listings: testSwapListings,
       test_swap_requests: testSwapRequests,

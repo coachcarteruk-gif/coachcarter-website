@@ -11,6 +11,10 @@ const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { withNeonTransaction } = require('./_db-transaction');
 const { normaliseSocialVideoConsent } = require('./_pricing-helpers');
+const {
+  computeRequestExpiresAt,
+  notifyInstructorNewRequest,
+} = require('./_lesson-requests');
 
 
 function concreteLessonTransmissionType(value) {
@@ -209,6 +213,11 @@ module.exports = async (req, res) => {
       } else if (paymentType === 'recurring_block_bank_checkout') {
         // Reserved Weekly Slot Pay by Bank: convert held block on success.
         await handleRecurringBlockBankPaymentSuccess(session);
+      } else if (paymentType === 'lesson_request_hold') {
+        // ── Request-to-book: card authorized (NOT captured) — create the
+        // pending lesson request. Manual-capture sessions complete with
+        // payment_status 'unpaid', so this branch must not gate on isPaid.
+        await handleRequestHold(session);
       } else {
         // Unknown payment_type. Pre-PR-J this fell into the legacy
         // handleCheckoutComplete + in-memory Map flow, which silently
@@ -571,6 +580,177 @@ async function notifyBookingInsertFailed({ session, kind, learnerEmail, instruct
 }
 
 // ── Slot booking handler (pay-per-slot) ─────────────────────────────────────
+// ── Request-to-book: checkout completed with an UNCAPTURED PaymentIntent ──────
+// Creates the pending lesson_requests row that the instructor accepts or
+// declines (LESSON-REQUEST-PLAN.md). No money has moved: the card is
+// authorized only. If the slot was lost between checkout and webhook, the
+// authorization is cancelled and the learner is told their card was never
+// charged.
+async function handleRequestHold(session) {
+  const metadata = session.metadata || {};
+  const learnerId = parseInt(metadata.learner_id, 10);
+  const instructorId = parseInt(metadata.instructor_id, 10);
+  const scheduledDate = metadata.scheduled_date;
+  const startTime = metadata.start_time;
+  const endTime = metadata.end_time;
+  const amountPence = parseInt(metadata.amount_pence, 10) || 0;
+  const durationMins = parseInt(metadata.duration_minutes, 10) || 60;
+  const lessonTypeId = metadata.lesson_type_id ? parseInt(metadata.lesson_type_id, 10) : null;
+  const learnerEmail = metadata.learner_email || session.customer_email || metadata.guest_email || null;
+
+  if (!learnerId || !instructorId || !scheduledDate || !startTime || !endTime) {
+    console.error('❌ lesson_request_hold webhook missing required metadata', metadata);
+    return;
+  }
+
+  const paymentIntentId = typeof session.payment_intent === 'string'
+    ? session.payment_intent
+    : session.payment_intent?.id || null;
+  if (!paymentIntentId) {
+    console.error('❌ lesson_request_hold webhook has no payment intent', session.id);
+    return;
+  }
+
+  const sql = neon(process.env.POSTGRES_URL);
+  const schoolId = await resolveSchoolId(sql, metadata, session.id);
+
+  // Idempotency: one request row per checkout session.
+  const [existing] = await sql`
+    SELECT id FROM lesson_requests WHERE stripe_session_id = ${session.id} AND school_id = ${schoolId}
+  `;
+  if (existing) return;
+
+  // The card is authorized but not captured; if anything below fails, the
+  // authorization must be cancelled so the hold drops off the learner's card.
+  const cancelHoldAndApologise = async (reason) => {
+    try {
+      await stripe.paymentIntents.cancel(paymentIntentId);
+    } catch (cancelErr) {
+      if (cancelErr?.code !== 'payment_intent_unexpected_state') {
+        console.error('❌ lesson_request_hold: PI cancel failed', paymentIntentId, cancelErr.message);
+        reportError('/api/webhook lesson_request_hold PI cancel', cancelErr);
+      }
+    }
+    try {
+      await sql`DELETE FROM slot_reservations WHERE stripe_session_id = ${session.id}`;
+    } catch (e) {}
+    if (learnerEmail) {
+      try {
+        const mailer = createTransporter();
+        await mailer.sendMail({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: learnerEmail,
+          subject: 'Your lesson request could not be placed',
+          html: `
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
+              <h2 style="color:#262626">Hi,</h2>
+              <p>${reason}</p>
+              <p><strong>Your card was NOT charged.</strong> If you can see a pending amount on your
+              statement, it is only an authorisation hold and will disappear within a few days.</p>
+              <p style="margin:24px 0">
+                <a href="https://coachcarter.uk/learner/book.html"
+                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
+                          border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
+                  Find another slot →
+                </a>
+              </p>
+            </div>
+          `,
+        });
+      } catch (emailErr) {
+        console.error('lesson_request_hold apology email failed:', emailErr.message);
+      }
+    }
+  };
+
+  try {
+    // Requests still need decision headroom at webhook time (payment can
+    // complete minutes after checkout started).
+    const expiresAt = computeRequestExpiresAt(scheduledDate, startTime);
+    if (!expiresAt) {
+      await cancelHoldAndApologise('The lesson you requested now starts too soon for the instructor to confirm it.');
+      return;
+    }
+
+    // Re-check the slot is still free (blocking bookings, pending offers,
+    // other pending requests, busy blocks). Our own slot_reservation still
+    // holds it against other checkouts, so reservations aren't re-checked.
+    const [bookingClash] = await sql`
+      SELECT id FROM lesson_bookings
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${scheduledDate}
+        AND start_time = ${startTime}::time
+        AND status = ANY(${BLOCKING_STATUSES}::text[])
+      LIMIT 1
+    `;
+    const [offerClash] = await sql`
+      SELECT id FROM lesson_offers
+      WHERE instructor_id = ${instructorId}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${scheduledDate}
+        AND start_time = ${startTime}::time
+        AND status = 'pending'
+        AND expires_at > NOW()
+      LIMIT 1
+    `;
+    if (bookingClash || offerClash) {
+      await cancelHoldAndApologise('The slot you requested was taken while you were checking out.');
+      return;
+    }
+
+    let request;
+    try {
+      const [inserted] = await sql`
+        INSERT INTO lesson_requests
+          (school_id, instructor_id, learner_id, guest_name, guest_email, guest_phone,
+           scheduled_date, start_time, end_time, lesson_type_id, pickup_address,
+           transmission_type, payment_method, stripe_session_id, payment_intent_id,
+           amount_pence, credits_minutes, list_price_pence, list_price_source,
+           status, expires_at)
+        VALUES
+          (${schoolId}, ${instructorId}, ${learnerId},
+           ${metadata.guest_name || null}, ${metadata.guest_email || null}, ${metadata.guest_phone || null},
+           ${scheduledDate}, ${startTime}, ${endTime}, ${lessonTypeId}, ${metadata.pickup_address || null},
+           ${metadata.transmission_type || 'manual'}, 'card_hold', ${session.id}, ${paymentIntentId},
+           ${amountPence}, ${durationMins}, ${amountPence}, 'stripe_metadata',
+           'pending', ${expiresAt.toISOString()})
+        RETURNING *
+      `;
+      request = inserted;
+    } catch (insertErr) {
+      if (insertErr.code === '23505' || insertErr.message?.includes('uq_request_slot')) {
+        await cancelHoldAndApologise('Someone else requested the same slot moments before you.');
+        return;
+      }
+      throw insertErr;
+    }
+
+    try {
+      await sql`DELETE FROM slot_reservations WHERE stripe_session_id = ${session.id}`;
+    } catch (e) {}
+
+    const [instructor] = await sql`
+      SELECT id, name, email, phone FROM instructors
+      WHERE id = ${instructorId} AND school_id = ${schoolId}
+    `;
+    const [learner] = await sql`
+      SELECT name FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}
+    `;
+    if (instructor) {
+      await notifyInstructorNewRequest(request, instructor, {
+        learnerDisplayName: learner?.name || metadata.guest_name || 'A learner',
+      });
+    }
+  } catch (err) {
+    console.error('❌ lesson_request_hold webhook failed', session.id, err.message);
+    reportError('/api/webhook lesson_request_hold', err);
+    // Leave the PI authorized: the insert may or may not have landed, and
+    // cancelling here could strand a real pending request without its hold.
+    // The idempotent retry (Stripe redelivers) or the expire cron resolves it.
+  }
+}
+
 async function handleSlotBooking(session) {
   if (!isPaid(session)) return;
 

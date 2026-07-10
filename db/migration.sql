@@ -811,8 +811,18 @@ ALTER TABLE credit_transactions ADD CONSTRAINT credit_transactions_type_check
     'referral_bonus',
     'referral_reward',
     'free_trial',
-    'legacy_grandfather'
+    'legacy_grandfather',
+    'request_hold',
+    'request_refund'
   ));
+-- 'request_hold' / 'request_refund' (July 2026, LESSON-REQUEST-PLAN.md):
+-- credit-funded lesson requests deduct at request time (hold, minutes < 0)
+-- and refund in full on decline/expiry/withdrawal (refund, minutes > 0).
+-- On accept the hold is refunded and the booking re-deducts through the
+-- standard bookCreditFundedSlotsTransaction FIFO path, so the pair always
+-- nets zero in the divergence cron's expected = ΣCT − draws formula.
+-- Neither type is in CREDIT_BOOKING_SOURCE_TYPES — they are never drawable
+-- FIFO sources.
 
 -- ── Weekly franchise fee model (alternative to commission_rate) ──
 -- When non-NULL, platform takes this fixed amount per week instead of per-lesson commission.
@@ -2903,3 +2913,74 @@ UPDATE lesson_bookings
    AND created_by = 'free_trial_self_serve'
    AND payment_method = 'free'
    AND COALESCE(minutes_deducted, 0) = 0;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Lesson requests — "request to book" (July 2026)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- LESSON-REQUEST-PLAN.md. Per-instructor toggle: when ON, learners request a
+-- slot instead of instantly booking it. Payment is held, not taken — card
+-- requests use a Stripe manual-capture authorization (captured on accept,
+-- cancelled on decline/expiry), credit requests deduct via a 'request_hold'
+-- credit_transactions row and refund in full via 'request_refund'.
+-- A pending request blocks the slot (uq_request_slot) exactly like a pending
+-- lesson_offer. Requests expire at min(created + 48h, lesson start − 2h).
+ALTER TABLE instructors ADD COLUMN IF NOT EXISTS request_to_book BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS lesson_requests (
+  id                  SERIAL PRIMARY KEY,
+  school_id           INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  instructor_id       INTEGER NOT NULL REFERENCES instructors(id) ON DELETE CASCADE,
+  -- ON DELETE SET NULL + guest columns: GDPR deletion anonymises rather than
+  -- breaking FK chains (mirrors lesson_bookings.learner_id, May 2026).
+  learner_id          INTEGER REFERENCES learner_users(id) ON DELETE SET NULL,
+  guest_email         TEXT,
+  guest_name          TEXT,
+  guest_phone         TEXT,
+  scheduled_date      DATE NOT NULL,
+  start_time          TIME NOT NULL,
+  end_time            TIME NOT NULL,
+  lesson_type_id      INTEGER REFERENCES lesson_types(id),
+  pickup_address      TEXT,
+  transmission_type   TEXT,
+  payment_method      TEXT NOT NULL CHECK (payment_method IN ('card_hold', 'credit')),
+  -- card_hold path
+  stripe_session_id   TEXT,
+  payment_intent_id   TEXT,
+  amount_pence        INTEGER,
+  -- credit path: minutes deducted at request time + the hold ledger row
+  credits_minutes     INTEGER,
+  hold_transaction_id INTEGER REFERENCES credit_transactions(id),
+  -- price snapshot at request time (what the booking will record on accept)
+  list_price_pence    INTEGER,
+  list_price_source   TEXT,
+  status              TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','accepted','declined','expired','withdrawn')),
+  booking_id          INTEGER REFERENCES lesson_bookings(id),
+  decline_reason      TEXT,
+  expires_at          TIMESTAMPTZ NOT NULL,
+  decided_at          TIMESTAMPTZ,
+  -- Set when the held payment was actually released back to the learner:
+  -- credits refunded ('request_refund' CT written) or Stripe PaymentIntent
+  -- cancelled. Accept sets it too (hold refunded before the booking draws).
+  -- A decided request with released_at IS NULL is a crashed decision — the
+  -- expire cron sweeps and retries the release, so no learner is ever left
+  -- charged-but-unbooked.
+  released_at         TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CLAUDE.md security rule #6: every FK column indexed.
+CREATE INDEX IF NOT EXISTS idx_requests_school      ON lesson_requests(school_id);
+CREATE INDEX IF NOT EXISTS idx_requests_instructor  ON lesson_requests(instructor_id, status);
+CREATE INDEX IF NOT EXISTS idx_requests_learner     ON lesson_requests(learner_id) WHERE learner_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_requests_lesson_type ON lesson_requests(lesson_type_id) WHERE lesson_type_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_requests_booking     ON lesson_requests(booking_id) WHERE booking_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_requests_hold_tx     ON lesson_requests(hold_transaction_id) WHERE hold_transaction_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_requests_expiry      ON lesson_requests(expires_at) WHERE status = 'pending';
+-- One pending request per slot — this partial unique index IS the slot lock
+-- (same pattern as uq_offer_slot on lesson_offers).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_request_slot
+  ON lesson_requests(instructor_id, scheduled_date, start_time) WHERE status = 'pending';
+-- Sweep target for the expire cron's crashed-decision retry (see released_at).
+CREATE INDEX IF NOT EXISTS idx_requests_unreleased
+  ON lesson_requests(decided_at) WHERE released_at IS NULL AND status <> 'pending';

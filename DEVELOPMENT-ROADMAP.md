@@ -1,5 +1,17 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.118 - Lesson Requests: Request-to-Book with Payment Holds (10 July 2026)
+
+Per-instructor "Request to book" mode (LESSON-REQUEST-PLAN.md), built for instructors like Simon who can't always keep their diary current but still want to be asked. With `instructors.request_to_book = TRUE` (profile toggle), learners see the instructor's slots as normal but the feed reads "Request this slot" with an "On request" badge; sending a request holds the payment instead of taking it, and the instructor has up to 48 hours (never later than 2h before the slot) to accept or decline from a new dashboard card, nudged by SMS + email.
+
+Payment is held, never charged up front. Credit path: `?action=request-slot` deducts the minutes as a `request_hold` `credit_transactions` row (new type, with matching `request_refund` — the pair nets zero in the divergence cron's expected-balance formula and neither is a drawable FIFO source). Card path: `?action=checkout-request` (learner or guest, guest-checkout rate limits) runs Stripe Checkout with `capture_method='manual'`; the webhook's `lesson_request_hold` branch creates the pending row from the authorized-not-captured session. Accept refunds the credit hold and books through `createInstructorCreditBookingTransaction`, or captures the PI and books slot-purchase-style; decline/expiry/withdrawal releases the hold in full — a declined card learner was never charged, and the emails say so explicitly.
+
+Pending requests block their slot everywhere pending offers do (partial unique index `uq_request_slot` + conflict checks in the feed, durations, all book/checkout/reschedule/test-date paths, instructor create-offer/broadcast/manual-booking, and `bookOfferSeries` week-skip). Lifecycle is crash-safe: every transition is an atomic status claim, hold release is exactly-once via `released_at`, and the hourly `api/requests.js?action=expire-requests` cron expires stale requests, retries failed releases, and closes out accepted-but-never-booked rows in the learner's favour with an operator alert. GDPR: rows anonymised in `deleteLearnerCascade`, included in learner export, decided rows purged after 12 months. No weekly repeats or social-video discount on requests in v1; reschedules of existing bookings stay instant.
+
+**Files:** `db/migration.sql`, `db/diagnostics/lesson-requests-{pre,post}-migration.sql`, `api/_lesson-requests.js` (new), `api/requests.js` (new), `api/slots.js`, `api/instructor.js`, `api/offers.js`, `api/webhook.js`, `api/_credit-grant.js`, `api/_gdpr.js`, `api/learner.js`, `api/cron-retention.js`, `vercel.json`, `public/learner/book.html`, `public/learner/book.js`, `public/instructor/dashboard.html`, `public/instructor/dashboard.js`, `public/instructor/profile.js`, `PROJECT.md`, `MIGRATION-PLAN.md`, `CLAUDE.md`, `LESSON-REQUEST-PLAN.md`.
+
+---
+
 ## 2.117 - Admin Learner Controls Page (5 July 2026)
 
 Adds `/admin/learner-controls.html`, a dense admin control-room page for learner-level operational decisions without exposing a raw database editor. The page lists learners with assigned instructor, learner status, custom/default hourly rate, per-instructor credit balance summary, free-trial state, practical test date/time/centre, whether the instructor is booked for the test, next/last lesson, and computed attention flags.
