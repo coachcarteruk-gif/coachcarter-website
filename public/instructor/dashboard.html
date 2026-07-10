@@ -127,6 +127,17 @@
     }
     .broadcast-close-btn:hover { border-color: #e74c3c; color: #e74c3c; }
 
+    /* ── Pending lesson requests card ── */
+    .request-accept-btn {
+      background: var(--accent); border: 1.5px solid var(--accent); border-radius: 8px;
+      padding: 6px 14px; font-size: 0.78rem; font-weight: 700;
+      color: #fff; cursor: pointer; white-space: nowrap;
+      font-family: var(--font-body); transition: all 0.15s;
+    }
+    .request-accept-btn:hover { background: var(--accent-dk); border-color: var(--accent-dk); }
+    .request-accept-btn:disabled, .broadcast-close-btn:disabled { opacity: 0.5; cursor: default; }
+    .request-expiry { color: #e67e22; font-weight: 700; }
+
     /* ── Date header ── */
     .dash-date {
       font-family: var(--font-head); font-size: 0.78rem; font-weight: 700;
@@ -448,6 +459,9 @@
     <div class="dash-booking-link-url" id="dashBookingUrl"></div>
     <button class="dash-booking-link-btn" id="dashCopyBtn">Copy link</button>
   </div>
+
+  <!-- Pending lesson requests (loaded async, hidden when none) -->
+  <div id="dashRequests" style="display:none"></div>
 
   <!-- Pending broadcast offers (loaded async, hidden when none) -->
   <div id="dashBroadcasts" style="display:none"></div>

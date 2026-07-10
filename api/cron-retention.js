@@ -117,6 +117,19 @@ module.exports = async (req, res) => {
       RETURNING id`;
     results.notifications_purged = purgedNotifications.length;
 
+    // 11. Purge decided lesson requests >12 months (LESSON-REQUEST-PLAN.md).
+    //     Once decided, the money facts live on the booking / credit ledger;
+    //     the request row only documents the ask (incl. guest PII). Pending
+    //     rows are never purged — the expire cron owns those, and their holds.
+    try {
+      const purgedRequests = await sql`
+        DELETE FROM lesson_requests
+        WHERE status <> 'pending'
+          AND created_at < NOW() - INTERVAL '12 months'
+        RETURNING id`;
+      results.lesson_requests_purged = purgedRequests.length;
+    } catch (e) { /* table may not exist yet */ }
+
     console.log('retention cron results:', results);
     return { ok: true, results };
   });

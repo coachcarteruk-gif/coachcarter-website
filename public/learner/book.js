@@ -35,6 +35,9 @@ let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
 const FEED_MAX_DAYS   = 28;
 let pendingSlot   = null;
+// Request-to-book mode: the pending slot's instructor confirms each booking
+// personally. Set from the slot dataset, re-confirmed by durations-for-slot.
+let slotRequestMode = false;
 let socialVideoOption = { available: false, discountPct: 5 };
 let pendingCancel = null;
 let preselectedTypeSlug = null;
@@ -87,6 +90,10 @@ function init() {
     showToast(paidMsg, 'success');
     const paidPrompt = document.getElementById('reservedWeeklyPaidPrompt');
     if (paidPrompt) paidPrompt.style.display = 'block';
+    window.history.replaceState({}, '', '/learner/book.html');
+  }
+  if (params.get('requested') === '1') {
+    showToast('Request sent! The instructor has up to 48 hours to confirm — we\'ll text and email you either way. Your card has only been authorised, not charged.', 'success');
     window.history.replaceState({}, '', '/learner/book.html');
   }
   if (params.get('cancelled') === '1') {
@@ -205,7 +212,7 @@ function init() {
     return;
   }
 
-  Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadLearnerProfile(), loadLessonTypes()])
+  Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadPendingRequests(), loadLearnerProfile(), loadLessonTypes()])
     .then(async () => {
       preselectInstructor();
       // Re-load lesson types now that instructors are known, so
@@ -493,6 +500,56 @@ async function loadUpcoming() {
       `${dateStr} at ${next.start_time.slice(0,5)} with ${next.instructor_name}${filmingText}`;
     card.style.display = 'flex';
   } catch {}
+}
+
+// ─── Pending lesson requests card (request-to-book instructors) ──────────────
+async function loadPendingRequests() {
+  const card = document.getElementById('pendingRequestsCard');
+  if (!card || !auth) return;
+  try {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=my-requests');
+    if (!res.ok) { card.style.display = 'none'; return; }
+    const data = await res.json();
+    const pending = (data.requests || []).filter(r => r.status === 'pending');
+    if (pending.length === 0) { card.style.display = 'none'; return; }
+
+    card.innerHTML = pending.map(r => {
+      const dateStr = new Date(String(r.scheduled_date).slice(0, 10) + 'T00:00:00Z')
+        .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
+      const timeStr = String(r.start_time || '').slice(0, 5);
+      const holdStr = r.payment_method === 'card_hold' ? 'card authorised — charged only if accepted' : 'credit held — returned if declined';
+      return `<div class="next-lesson-card" style="border-style:dashed">
+        <div>
+          <span class="next-lesson-label">Requested — awaiting ${esc(firstName(r.instructor_name || 'instructor'))}</span>
+          <span class="next-lesson-detail">${esc(dateStr)} at ${esc(timeStr)} · ${esc(holdStr)}</span>
+        </div>
+        <button type="button" class="next-lesson-link" data-action="withdraw-request" data-request-id="${r.id}"
+          style="background:none;border:none;cursor:pointer;font:inherit;color:inherit">Withdraw</button>
+      </div>`;
+    }).join('');
+    card.style.display = 'block';
+  } catch { card.style.display = 'none'; }
+}
+
+async function withdrawRequestFromCard(requestId, btn) {
+  if (!confirm('Withdraw this request? Your held payment will be released straight away.')) return;
+  btn.disabled = true;
+  btn.textContent = 'Withdrawing…';
+  try {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=withdraw-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: parseInt(requestId, 10) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Withdraw failed');
+    showToast('Request withdrawn — your held payment has been released.', 'success');
+    loadBalance();
+  } catch (err) {
+    showToast(err.message || 'Withdraw failed. Please try again.', 'error');
+  }
+  loadPendingRequests();
+  initFeed();
 }
 
 // ─── Learner profile ─────────────────────────────────────────────────────────
@@ -1148,10 +1205,12 @@ function renderTimeGroups(slotsForDate, opts) {
         const avatar = s.instructor_avatar
           ? `<span class="slot-avatar"><img src="${esc(s.instructor_avatar)}" alt=""></span>`
           : `<span class="slot-avatar">${esc((instructorName || '?')[0])}</span>`;
-        const meta = showInstructor
+        const onRequest = !!s.request_to_book;
+        const requestTag = onRequest ? ' · <span class="slot-on-request">On request</span>' : '';
+        const meta = (showInstructor
           ? `${avatar}${esc(firstName(instructorName))} · ${esc(transmissionLabel(transmission))}`
-          : esc(transmissionLabel(transmission));
-        const accessible = `Select ${formatTimeDisplay(s.start_time)} with ${instructorName}, ${transmissionLabel(transmission)}, ${selectedLength}`;
+          : esc(transmissionLabel(transmission))) + requestTag;
+        const accessible = `${onRequest ? 'Request' : 'Select'} ${formatTimeDisplay(s.start_time)} with ${instructorName}, ${transmissionLabel(transmission)}, ${selectedLength}${onRequest ? ', instructor confirms each booking' : ''}`;
         const isSelected = !!selectedSlot && slotKeyFromSlot(s) === slotKeyFromDataset(selectedSlot);
         return `<button class="time-slot-button" type="button"
           data-action="select-slot"
@@ -1161,6 +1220,7 @@ function renderTimeGroups(slotsForDate, opts) {
           data-end="${esc(s.end_time)}"
           data-transmission-type="${esc(transmission)}"
           data-instructor-name="${esc(instructorName)}"
+          data-request-to-book="${onRequest ? '1' : ''}"
           aria-pressed="${isSelected ? 'true' : 'false'}"
           aria-label="${esc(accessible)}">
           <span class="time-slot-main">${esc(formatTimeDisplay(s.start_time))}</span>
@@ -1209,7 +1269,8 @@ function slotDatasetFromButton(buttonEl) {
     start: buttonEl.dataset.start || '',
     end: buttonEl.dataset.end || '',
     transmissionType: normaliseTransmissionType(buttonEl.dataset.transmissionType) || 'both',
-    instructorName: buttonEl.dataset.instructorName || 'Instructor'
+    instructorName: buttonEl.dataset.instructorName || 'Instructor',
+    requestToBook: buttonEl.dataset.requestToBook === '1'
   };
 }
 
@@ -1244,8 +1305,10 @@ function renderSelectedSlotSummary() {
   const lengthLabel = selectedLessonType ? formatHours(selectedLessonType.duration_minutes) : 'Selected length';
   const transmission = transmissionLabel(selectedSlot.transmissionType);
   title.textContent = `${dateLabel} at ${formatTimeDisplay(selectedSlot.start)}`;
-  meta.textContent = `${selectedSlot.instructorName} · ${lengthLabel} · ${transmission} · Credit or payment checked next`;
-  cta.textContent = pendingReschedule ? 'Move lesson' : 'Continue';
+  meta.textContent = selectedSlot.requestToBook
+    ? `${selectedSlot.instructorName} · ${lengthLabel} · ${transmission} · Instructor confirms — payment held, not taken`
+    : `${selectedSlot.instructorName} · ${lengthLabel} · ${transmission} · Credit or payment checked next`;
+  cta.textContent = pendingReschedule ? 'Move lesson' : (selectedSlot.requestToBook ? 'Request this slot' : 'Book this slot');
   summary.classList.add('is-visible');
   page.classList.add('has-selected-slot');
 }
@@ -1425,6 +1488,54 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
     }
     updateBalanceLine(chargeMins);
   }
+
+  applyRequestModeUi(isGuest, ltPriceStr, chargeMins);
+}
+
+// Request-to-book modal chrome: swap the book/pay copy for hold copy and hide
+// weekly repeats (requests are single-slot). Restores defaults when the modal
+// is reused for an instant-book instructor.
+let requestUiApplied = false;
+function applyRequestModeUi(isGuest, ltPriceStr, chargeMins) {
+  const repeatSection = document.getElementById('repeatSection');
+  const creditNote = document.getElementById('mdCreditNote');
+  const payNote = document.getElementById('mdPayNote');
+  const instructorFirst = firstName(pendingSlot?.instructor_name || 'The instructor');
+
+  if (slotRequestMode) {
+    requestUiApplied = true;
+    if (repeatSection) repeatSection.style.display = 'none';
+    document.getElementById('bookBtnLabel').textContent = 'Send request';
+    document.getElementById('payBtnLabel').textContent = `Request — hold ${ltPriceStr}`;
+    if (creditNote) {
+      creditNote.innerHTML = `${esc(instructorFirst)} confirms each booking personally. We'll hold `
+        + `<strong id="mdDeductHours">${esc(formatHours(chargeMins))}</strong> from your balance while they decide `
+        + `(up to 48 hours) — returned in full if they can't make it.`;
+    }
+    if (payNote) {
+      payNote.innerHTML = `${esc(instructorFirst)} confirms each booking personally. We'll hold `
+        + `<strong id="mdPayAmount">${esc(ltPriceStr)}</strong> on your card — it's <strong>only charged if they accept</strong>. `
+        + `If they decline or don't respond within 48 hours, the hold simply disappears. No charge.`;
+    }
+  } else if (requestUiApplied) {
+    // Only rebuild the default copy if a previous request-mode render
+    // replaced it — avoids clobbering path-specific text (e.g. the
+    // payments-disabled 'free' override) on ordinary opens.
+    requestUiApplied = false;
+    if (repeatSection && !isGuest) repeatSection.style.display = '';
+    if (creditNote) {
+      creditNote.innerHTML = `This will use <strong id="mdDeductHours">${esc(formatHours(chargeMins))}</strong> from your balance. `
+        + `Cancel 48+ hours before and it returns automatically.`;
+    }
+    if (payNote) {
+      payNote.innerHTML = `You have no lessons on your account. Pay <strong id="mdPayAmount">${esc(ltPriceStr)}</strong> now and we'll book this slot instantly. `
+        + `Cancel 48+ hours before and it returns as a lesson credit.`;
+    }
+    if (!paymentsEnabled) {
+      const deduct = document.getElementById('mdDeductHours');
+      if (deduct) deduct.textContent = 'free - no credits required';
+    }
+  }
 }
 
 function openBookModal(el) {
@@ -1457,6 +1568,7 @@ function openBookModal(el) {
     transmission_type: el.dataset.transmissionType,
     instructor_name: el.dataset.instructorName
   };
+  slotRequestMode = el.dataset.requestToBook === '1' || el.dataset.requestToBook === true;
   socialVideoOption = { available: false, discountPct: 5 };
   const socialVideoCheckbox = document.getElementById('mdSocialVideoConsent');
   if (socialVideoCheckbox) socialVideoCheckbox.checked = false;
@@ -1560,8 +1672,11 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load durations');
     await selectedBalancePromise;
+    // Authoritative request-to-book flag (dataset may be stale after the
+    // instructor flips the toggle).
+    slotRequestMode = !!data.request_to_book;
     socialVideoOption = {
-      available: !!data.social_video_opt_in,
+      available: slotRequestMode ? false : !!data.social_video_opt_in,
       discountPct: Number(data.social_video_discount_pct || 5),
     };
 
@@ -2048,6 +2163,11 @@ function updateBookButtonState() {
   const weeks = getRepeatWeeks();
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
+  if (slotRequestMode) {
+    label.textContent = 'Send request';
+    btn.disabled = false;
+    return;
+  }
   if (weeks > 1) {
     label.textContent = repeatConflicts.length > 0 ? 'Slots unavailable' : `Book ${weeks} lessons`;
     btn.disabled = repeatConflicts.length > 0;
@@ -2059,6 +2179,46 @@ function updateBookButtonState() {
 window.toggleRepeatOptions = toggleRepeatOptions;
 window.updateRepeatDates = updateRepeatDates;
 
+// ─── Send request with credit hold (request-to-book instructors) ─────────────
+async function confirmRequestWithCredit(locations) {
+  const btn = document.getElementById('btnConfirmBook');
+  const label = document.getElementById('bookBtnLabel');
+  const spinner = document.getElementById('bookSpinner');
+  btn.disabled = true; label.textContent = 'Sending request…'; spinner.style.display = 'block';
+
+  try {
+    const body = {
+      instructor_id: pendingSlot.instructor_id,
+      date: pendingSlot.date,
+      start_time: pendingSlot.start_time,
+      end_time: pendingSlot.end_time,
+      transmission_type: pendingSlot.transmission_type,
+      pickup_address: locations.pickup_address
+    };
+    if (selectedLessonType && selectedLessonType.id) body.lesson_type_id = selectedLessonType.id;
+    const res = await ccAuth.fetchAuthed('/api/slots?action=request-slot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
+
+    balanceMinutes = data.balance_minutes || 0;
+    selectedInstructorBalanceMinutes = data.balance_minutes || 0;
+    updateCreditBadge();
+    setLastLessonType(selectedLessonType);
+    window.posthog && posthog.capture('lesson_request_sent', { method: 'credit', lesson_type_slug: selectedLessonType?.slug });
+    showRequestSuccess();
+    refreshAfterBooking();
+  } catch (err) {
+    showToast(err.message || 'Request failed. Please try again.', 'error');
+    btn.disabled = false;
+    label.textContent = 'Send request';
+    spinner.style.display = 'none';
+  }
+}
+
 // ─── Confirm with credit ─────────────────────────────────────────────────────
 async function confirmBookWithCredit() {
   if (!pendingSlot) return;
@@ -2067,6 +2227,8 @@ async function confirmBookWithCredit() {
   const locations = validateBookingLocations(false);
   if (!locations) return;
   if (!validateSocialVideoEligibility()) return;
+
+  if (slotRequestMode) return confirmRequestWithCredit(locations);
 
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
@@ -2176,6 +2338,33 @@ async function confirmPayAndBook() {
   window.posthog && posthog.capture('booking_pay_initiated', { method: 'stripe', is_guest: isGuest, lesson_type_slug: selectedLessonType?.slug });
 
   try {
+    if (slotRequestMode) {
+      // Request-to-book: manual-capture checkout. Card is authorized now,
+      // charged only if the instructor accepts.
+      const requestBody = {
+        instructor_id: pendingSlot.instructor_id,
+        date: pendingSlot.date,
+        start_time: pendingSlot.start_time,
+        end_time: pendingSlot.end_time,
+        transmission_type: pendingSlot.transmission_type,
+        lesson_type_id: selectedLessonType?.id,
+        pickup_address: locations.pickup_address
+      };
+      if (isGuest) {
+        requestBody.guest_name  = document.getElementById('mdGuestName').value.trim();
+        requestBody.guest_email = document.getElementById('mdGuestEmail').value.trim();
+        requestBody.guest_phone = document.getElementById('mdGuestPhone').value.replace(/\s+/g, '').trim();
+      }
+      const res = await ccAuth.fetchAuthed('/api/slots?action=checkout-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error);
+      window.location.href = data.url;
+      return;
+    }
     if (isGuest) {
       // Guest checkout - no auth required
       const payBody = {
@@ -2216,8 +2405,37 @@ async function confirmPayAndBook() {
   } catch (err) {
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
     const priceStr = formatMoney(socialVideoPrice(ltPrice));
-    btn.disabled = false; label.textContent = `Pay ${priceStr} & book`; spinner.style.display = 'none';
+    btn.disabled = false;
+    label.textContent = slotRequestMode ? `Request — hold ${priceStr}` : `Pay ${priceStr} & book`;
+    spinner.style.display = 'none';
   }
+}
+
+// Success state for a sent request (credit path — the card path returns via
+// ?requested=1 after Stripe).
+function showRequestSuccess() {
+  const successStep = document.getElementById('bookSuccessStep');
+  const dateDisplay = new Date(pendingSlot.date + 'T00:00:00Z')
+    .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', timeZone:'UTC' });
+  successStep.querySelector('h2').textContent = 'Request sent!';
+  successStep.querySelector('p').innerHTML = `We've asked <strong>${esc(pendingSlot.instructor_name)}</strong> about `
+    + `<strong>${esc(dateDisplay)}</strong> at <strong>${esc(pendingSlot.start_time)}</strong>. `
+    + `They have up to 48 hours to confirm — we'll text and email you either way. `
+    + `Your credit is held until then and returned in full if they can't make it.`;
+
+  const balanceEl = document.getElementById('successBalance');
+  if (balanceEl) balanceEl.style.display = 'none';
+  const reservedWeeklyPrompt = document.getElementById('reservedWeeklySuccessPrompt');
+  if (reservedWeeklyPrompt) reservedWeeklyPrompt.style.display = 'none';
+  const calSyncPrompt = document.getElementById('calSyncPrompt');
+  if (calSyncPrompt) calSyncPrompt.style.display = 'none';
+  const calSyncedNote = document.getElementById('calSyncedNote');
+  if (calSyncedNote) calSyncedNote.style.display = 'none';
+  recurringAnchorBookingId = null;
+  recurringAnchorContext = null;
+
+  document.getElementById('bookConfirmStep').style.display = 'none';
+  successStep.style.display = 'block';
 }
 
 function showBookSuccess(weeks, dates) {
@@ -3102,6 +3320,8 @@ document.addEventListener('click', function (e) {
     selectDate(target.dataset.date);
   } else if (action === 'set-repeat-weeks') {
     setRepeatWeeks(target.dataset.repeatWeeks);
+  } else if (action === 'withdraw-request') {
+    withdrawRequestFromCard(target.dataset.requestId, target);
   }
 });
 

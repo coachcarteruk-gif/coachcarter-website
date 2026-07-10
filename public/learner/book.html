@@ -595,6 +595,12 @@
       letter-spacing: 0.04em;
       line-height: 1.35;
     }
+    .slot-on-request {
+      color: var(--accent);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
     .time-slot-button .slot-avatar {
       display: inline-flex;
       margin-right: 5px;
@@ -1266,6 +1272,9 @@
     <a href="/learner/lessons.html" class="next-lesson-link">View all &rarr;</a>
   </div>
 
+  <!-- Pending lesson requests (request-to-book instructors; hidden when none) -->
+  <div id="pendingRequestsCard" style="display:none"></div>
+
   <section class="test-date-panel" id="testDatePanel" aria-labelledby="testDateTitle">
     <h2 id="testDateTitle">Book your test date lesson</h2>
     <p id="testDateIntro">This is a fixed 1.5 hour booking for your warm-up and practical test.</p>
@@ -1475,7 +1484,7 @@
       </div>
 
       <div id="modalCreditPath" style="display:none">
-        <p class="modal-credit-note">
+        <p class="modal-credit-note" id="mdCreditNote">
           This will use <strong id="mdDeductHours">1.5 hours</strong> from your balance.
           Cancel 48+ hours before and it returns automatically.
         </p>
@@ -1492,7 +1501,7 @@
         </p>
       </div>
       <div id="modalPayPath" style="display:none">
-        <p class="modal-credit-note" style="background:var(--accent-lt);border-color:var(--accent)">
+        <p class="modal-credit-note" id="mdPayNote" style="background:var(--accent-lt);border-color:var(--accent)">
           You have no lessons on your account. Pay <strong id="mdPayAmount"> - </strong> now and we'll book this slot instantly.
           Cancel 48+ hours before and it returns as a lesson credit.
         </p>

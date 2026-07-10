@@ -83,6 +83,7 @@ async function loadDashboard() {
     // Pending broadcast offers (fire-and-forget - failure to load this card
     // shouldn't block the rest of the dashboard).
     loadBroadcasts().catch(function(e) { console.warn('broadcasts load failed:', e.message); });
+    loadRequests().catch(function(e) { console.warn('requests load failed:', e.message); });
 
     // Connect health alert (fire-and-forget - same rationale).
     loadConnectAlert().catch(function(e) { console.warn('connect-alert load failed:', e.message); });
@@ -658,7 +659,88 @@ document.addEventListener('click', function (e) {
   else if (a === 'cancel-from-detail') cancelFromDetail();
   else if (a === 'not-delivered-from-detail') notDeliveredFromDetail();
   else if (a === 'close-broadcast-batch') closeBroadcastBatch(t.dataset.batchId, t);
+  else if (a === 'accept-request' || a === 'decline-request') decideRequest(t.dataset.requestId, a, t);
 });
+
+// ── Pending lesson requests card (request-to-book) ──
+async function loadRequests() {
+  var container = document.getElementById('dashRequests');
+  if (!container) return;
+  try {
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=list-requests');
+    if (!res.ok) { container.style.display = 'none'; return; }
+    var data = await res.json();
+    var pending = (data.requests || []).filter(function (r) { return r.status === 'pending'; });
+    if (pending.length === 0) { container.style.display = 'none'; return; }
+
+    var html = '<div class="dash-broadcasts-title">Lesson requests waiting for you</div>';
+    html += pending.map(function (r) {
+      var date = new Date(String(r.scheduled_date).slice(0, 10) + 'T00:00:00Z');
+      var dateStr = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      var timeStr = String(r.start_time || '').slice(0, 5) + ' – ' + String(r.end_time || '').slice(0, 5);
+      var expiresMs = new Date(r.expires_at).getTime() - Date.now();
+      var expiresStr = expiresMs < 60 * 60 * 1000
+        ? Math.max(1, Math.round(expiresMs / 60000)) + ' min left'
+        : Math.round(expiresMs / 3600000) + 'h left';
+      var payStr = r.payment_method === 'card_hold' ? 'card held' : 'credit held';
+      return '<div class="broadcast-batch-card">' +
+        '<div class="broadcast-batch-info">' +
+          '<div class="broadcast-batch-title">' + esc(r.learner_name || 'Learner') + ' · ' + esc(dateStr) + '</div>' +
+          '<div class="broadcast-batch-meta">' +
+            esc(timeStr) +
+            (r.lesson_type_name ? ' · ' + esc(r.lesson_type_name) : '') +
+            ' · ' + esc(payStr) +
+            ' · <span class="request-expiry">' + esc(expiresStr) + '</span>' +
+            (r.pickup_address ? '<br>Pickup: ' + esc(r.pickup_address) : '') +
+          '</div>' +
+        '</div>' +
+        '<button class="request-accept-btn" data-action="accept-request" data-request-id="' + r.id + '">Accept</button>' +
+        '<button class="broadcast-close-btn" data-action="decline-request" data-request-id="' + r.id + '">Decline</button>' +
+      '</div>';
+    }).join('');
+
+    container.innerHTML = html;
+    container.style.display = '';
+  } catch (err) {
+    console.warn('loadRequests:', err.message);
+    container.style.display = 'none';
+  }
+}
+
+async function decideRequest(requestId, action, btn) {
+  var reason = null;
+  if (action === 'decline-request') {
+    reason = prompt('Optional: tell the learner why you can\'t make it (leave blank to skip)');
+    if (reason === null) return; // cancelled the prompt
+    reason = reason.trim() || null;
+  } else {
+    if (!confirm('Accept this request? The learner\'s held payment will be taken and the lesson booked.')) return;
+  }
+
+  var card = btn.closest('.broadcast-batch-card');
+  var buttons = card ? card.querySelectorAll('button') : [btn];
+  buttons.forEach(function (b) { b.disabled = true; });
+  btn.textContent = action === 'accept-request' ? 'Accepting…' : 'Declining…';
+
+  try {
+    var endpoint = action === 'accept-request' ? 'accept-request' : 'decline-request';
+    var res = await ccAuth.fetchAuthed('/api/instructor?action=' + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: parseInt(requestId, 10), reason: reason })
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      showToast(data.message || data.error || 'Something went wrong');
+    } else {
+      showToast(action === 'accept-request' ? 'Booked! The learner has been told.' : 'Declined. The learner\'s payment was released.');
+    }
+  } catch (err) {
+    showToast('Network error — please try again');
+  }
+  loadRequests().catch(function () {});
+  loadDashboard();
+}
 
 // ── Pending broadcast offers card ──
 async function loadBroadcasts() {

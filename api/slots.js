@@ -1020,7 +1020,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                   i.max_travel_minutes
+                   i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.instructor_id = ${instructor_id}
@@ -1041,7 +1042,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                   i.max_travel_minutes
+                   i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.instructor_id = ${instructor_id}
@@ -1064,7 +1066,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                   i.max_travel_minutes
+                   i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.active = true
@@ -1085,7 +1088,8 @@ async function handleAvailable(req, res) {
                    COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                    COALESCE(to_jsonb(ia)->>'transmission_type', 'both') AS transmission_type,
                    COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                   i.max_travel_minutes
+                   i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
             FROM instructor_availability ia
             JOIN instructors i ON i.id = ia.instructor_id
             WHERE ia.active = true
@@ -1113,7 +1117,8 @@ async function handleAvailable(req, res) {
                      COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                     i.max_travel_minutes
+                     i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
               WHERE iao.instructor_id = ${instructor_id}
@@ -1136,7 +1141,8 @@ async function handleAvailable(req, res) {
                      COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                     i.max_travel_minutes
+                     i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
               WHERE iao.instructor_id = ${instructor_id}
@@ -1161,7 +1167,8 @@ async function handleAvailable(req, res) {
                      COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                     i.max_travel_minutes
+                     i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
               WHERE iao.active = true
@@ -1184,7 +1191,8 @@ async function handleAvailable(req, res) {
                      COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
                      COALESCE(iao.transmission_type, 'both') AS transmission_type,
                      COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
-                     i.max_travel_minutes
+                     i.max_travel_minutes,
+                   COALESCE(i.request_to_book, false) AS request_to_book
               FROM instructor_availability_overrides iao
               JOIN instructors i ON i.id = iao.instructor_id
               WHERE iao.active = true
@@ -1519,6 +1527,7 @@ async function handleAvailable(req, res) {
           min_booking_notice_hours: parseInt(w.min_booking_notice_hours) || 24,
           max_booking_days_ahead: normaliseMaxBookingDaysAhead(w.max_booking_days_ahead),
           max_travel_minutes: w.max_travel_minutes != null ? parseInt(w.max_travel_minutes) : DEFAULT_MAX_TRAVEL_MINUTES,
+          request_to_book: !!w.request_to_book,
           windows:        []
         };
       }
@@ -1641,6 +1650,7 @@ async function handleAvailable(req, res) {
               instructor_id:   instructor.id,
               instructor_name: instructor.name,
               instructor_photo: instructor.photo_url,
+              request_to_book: !!instructor.request_to_book,
               date:            dateStr,
               start_time:      minutesToTime(slotStart),
               end_time:        minutesToTime(slotEnd),
@@ -1746,7 +1756,8 @@ async function handleDurationsForSlot(req, res) {
              COALESCE(i.min_booking_notice_hours, 24) AS min_booking_notice_hours,
              COALESCE(i.max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead,
              COALESCE(i.transmission_type, 'manual') AS transmission_type,
-             i.max_travel_minutes
+             i.max_travel_minutes,
+             COALESCE(i.request_to_book, false) AS request_to_book
       FROM instructors i
       WHERE i.id = ${instructorId}
         AND i.school_id = ${schoolId}
@@ -2030,6 +2041,7 @@ async function handleDurationsForSlot(req, res) {
       transmission_type: slotTransmissionType,
       social_video_opt_in: !!instructor.social_video_opt_in,
       social_video_discount_pct: instructor.social_video_opt_in ? SOCIAL_VIDEO_DISCOUNT_PCT : 0,
+      request_to_book: !!instructor.request_to_book,
       durations
     });
   } catch (err) {

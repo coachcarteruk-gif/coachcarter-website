@@ -1,6 +1,13 @@
 # Lesson Request System ("Request to Book") — Plan
 
-**Status: DRAFT — 2026-07-10. Not yet implemented.**
+**Status: IMPLEMENTED — 2026-07-10, branch `feat/lesson-requests` (roadmap entry 2.118).**
+Shipped as planned with these deltas: request creation lives in `api/slots.js`
+(`request-slot` / `checkout-request` / `my-requests` / `withdraw-request`) beside its
+booking twins rather than in `api/requests.js`, which hosts only the expire cron;
+instructor decisions live in `api/instructor.js`; shared lifecycle helpers in
+`api/_lesson-requests.js`. Added `released_at` (exactly-once hold release + crash
+sweep) and guest requests create a learner account up-front like guest checkout.
+Notifications go out as SMS via Twilio (`_whatsapp.js` sends real SMS) + email.
 
 ## Problem
 

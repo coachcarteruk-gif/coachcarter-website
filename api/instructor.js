@@ -1331,7 +1331,8 @@ async function handleProfile(req, res) {
              offered_lesson_types,
              COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
              COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled,
-             COALESCE(social_video_opt_in, false) AS social_video_opt_in
+             COALESCE(social_video_opt_in, false) AS social_video_opt_in,
+             COALESCE(request_to_book, false) AS request_to_book
       FROM instructors
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
@@ -1367,12 +1368,16 @@ async function handleUpdateProfile(req, res) {
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
     service_areas, languages, ical_feed_url, offered_lesson_types,
-    broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in
+    broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in,
+    request_to_book
   } = req.body;
 
   // Validate broadcast_offers_enabled if provided
   if (broadcast_offers_enabled !== undefined && broadcast_offers_enabled !== null && typeof broadcast_offers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'broadcast_offers_enabled must be true or false' });
+  }
+  if (request_to_book !== undefined && request_to_book !== null && typeof request_to_book !== 'boolean') {
+    return res.status(400).json({ error: 'request_to_book must be true or false' });
   }
   if (bulk_tiers_enabled !== undefined && bulk_tiers_enabled !== null && typeof bulk_tiers_enabled !== 'boolean') {
     return res.status(400).json({ error: 'bulk_tiers_enabled must be true or false' });
@@ -1496,6 +1501,8 @@ async function handleUpdateProfile(req, res) {
       ? bulk_tiers_enabled : null;
     const socialVideoVal = (social_video_opt_in !== undefined && social_video_opt_in !== null)
       ? social_video_opt_in : null;
+    const requestToBookVal = (request_to_book !== undefined && request_to_book !== null)
+      ? request_to_book : null;
     const prVal = (pass_rate !== undefined && pass_rate !== null)
       ? parseFloat(pass_rate) : null;
     const yeVal = (years_experience !== undefined && years_experience !== null)
@@ -1545,7 +1552,8 @@ async function handleUpdateProfile(req, res) {
         offered_lesson_types = CASE WHEN ${offeredChanged} THEN ${offeredVal}::jsonb ELSE offered_lesson_types END,
         broadcast_offers_enabled = COALESCE(${broVal}, broadcast_offers_enabled),
         bulk_tiers_enabled = COALESCE(${bulkVal}, bulk_tiers_enabled),
-        social_video_opt_in = COALESCE(${socialVideoVal}, social_video_opt_in)
+        social_video_opt_in = COALESCE(${socialVideoVal}, social_video_opt_in),
+        request_to_book = COALESCE(${requestToBookVal}, request_to_book)
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
       RETURNING id, name, email, phone, bio, photo_url,
@@ -1565,7 +1573,8 @@ async function handleUpdateProfile(req, res) {
                 offered_lesson_types,
                 COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
                 COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled,
-                COALESCE(social_video_opt_in, false) AS social_video_opt_in
+                COALESCE(social_video_opt_in, false) AS social_video_opt_in,
+                COALESCE(request_to_book, false) AS request_to_book
     `;
     if (updated) {
       updated.effective_hourly_rate_pence = await getEffectiveHourlyPence(sql, {
