@@ -41,7 +41,7 @@ function checkoutSessionPayloads(source) {
 }
 
 test('Stage 3 payment-method audit tracks expected Stripe checkout surfaces', () => {
-  expect(checkoutSessionPayloads(read('api/slots.js')).length, 'slots should have auth, guest, test-date, and reserved-block bank Checkout').toBe(4);
+  expect(checkoutSessionPayloads(read('api/slots.js')).length, 'slots should have auth, guest, test-date, reserved-block bank, and lesson-request hold Checkout').toBe(5);
   expect(checkoutSessionPayloads(read('api/offers.js')).length, 'lesson offers should have one Checkout surface').toBe(1);
   expect(checkoutSessionPayloads(read('api/credits.js')).length, 'retired credit checkout remains dormant for compatibility').toBe(1);
 });
@@ -59,6 +59,14 @@ test('Checkout Sessions rely on Stripe dynamic payment methods', () => {
 
     expect(payloads.length, `${relativePath} should create at least one Checkout Session`).toBeGreaterThan(0);
     for (const payload of payloads) {
+      if (payload.includes("capture_method: 'manual'")) {
+        // Deliberate exception (LESSON-REQUEST-PLAN.md): request-to-book
+        // holds authorize without capturing, which only cards support.
+        // Manual-capture sessions must pin card-only — a dynamic method
+        // like a bank redirect or BNPL cannot place an auth hold.
+        expect(payload, `${relativePath} manual-capture Checkout must pin card-only`).toContain("payment_method_types: ['card']");
+        continue;
+      }
       expect(payload, `${relativePath} should not pin Checkout to a manual method list`).not.toMatch(/(^|[^_])payment_method_types\s*:/);
       expect(payload, `${relativePath} should exclude retired Klarna while keeping dynamic methods`).toContain('excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES');
     }
