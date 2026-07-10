@@ -561,6 +561,22 @@ async function slotHasBlockingOverlap(sql, { instructorId, schoolId, date, start
   } catch (_) {}
 
   try {
+    const [requestConflict] = await sql`
+      SELECT id
+        FROM lesson_requests
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+         AND scheduled_date = ${date}::date
+         AND status = 'pending'
+         AND expires_at > NOW()
+         AND start_time < ${endTime}::time
+         AND end_time > ${startTime}::time
+       LIMIT 1
+    `;
+    if (requestConflict) return true;
+  } catch (_) {}
+
+  try {
     const [recurringHoldConflict] = await sql`
       SELECT rsbi.id
         FROM recurring_slot_block_items rsbi
@@ -654,6 +670,22 @@ async function testDateSlotOverlapConflictsPg(client, { instructorId, schoolId, 
       [instructorId, schoolId, dates, startTime, endTime]
     );
     addRows(offerConflicts.rows, 'pending_offer');
+  } catch (_) {}
+
+  try {
+    const requestConflicts = await client.query(
+      `SELECT scheduled_date::text AS date, start_time::text
+         FROM lesson_requests
+        WHERE instructor_id = $1
+          AND school_id = $2
+          AND scheduled_date = ANY($3::date[])
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND start_time < $5::time
+          AND end_time > $4::time`,
+      [instructorId, schoolId, dates, startTime, endTime]
+    );
+    addRows(requestConflicts.rows, 'pending_request');
   } catch (_) {}
 
   try {
@@ -1256,6 +1288,39 @@ async function handleAvailable(req, res) {
     // Merge pending offers into reservations so they block slots
     reservations = reservations.concat(pendingOffers);
 
+    // 2b-iii. Pending lesson requests block their slot exactly like offers
+    // (LESSON-REQUEST-PLAN.md).
+    let pendingRequests = [];
+    try {
+      pendingRequests = instructor_id
+        ? await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM lesson_requests
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND status = 'pending'
+              AND expires_at > NOW()
+              AND instructor_id = ${instructor_id}
+              AND school_id = ${schoolId}
+          `
+        : await sql`
+            SELECT instructor_id,
+                   scheduled_date::text AS scheduled_date,
+                   start_time::text     AS start_time,
+                   end_time::text       AS end_time
+            FROM lesson_requests
+            WHERE scheduled_date BETWEEN ${from} AND ${to}
+              AND status = 'pending'
+              AND expires_at > NOW()
+              AND school_id = ${schoolId}
+          `;
+    } catch (e) {
+      // Table may not exist yet
+    }
+    reservations = reservations.concat(pendingRequests);
+
     let recurringHolds = [];
     try {
       recurringHolds = instructor_id
@@ -1802,6 +1867,18 @@ async function handleDurationsForSlot(req, res) {
           AND school_id = ${schoolId}
       `;
     } catch (_) {}
+    let pendingRequests = [];
+    try {
+      pendingRequests = await sql`
+        SELECT start_time::text AS start_time, end_time::text AS end_time
+        FROM lesson_requests
+        WHERE scheduled_date = ${date}
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
+      `;
+    } catch (_) {}
     let recurringHolds = [];
     try {
       recurringHolds = await sql`
@@ -1851,6 +1928,9 @@ async function handleDurationsForSlot(req, res) {
     }
     for (const o of pendingOffers) {
       blocks.push({ start: timeToMinutes(o.start_time), end: timeToMinutes(o.end_time), postcode: null });
+    }
+    for (const pr of pendingRequests) {
+      blocks.push({ start: timeToMinutes(pr.start_time), end: timeToMinutes(pr.end_time), postcode: null });
     }
     for (const h of recurringHolds) {
       blocks.push({ start: timeToMinutes(h.start_time), end: timeToMinutes(h.end_time), postcode: null });
@@ -2071,6 +2151,10 @@ async function bookCreditFundedSlotsTransaction({
         [instructorId, schoolId, dateStrings, startTime]
       );
 
+      const requestConflictRows = await pendingRequestConflictsPg(client, {
+        instructorId, schoolId, dates: dateStrings, startTime,
+      });
+
       let recurringHoldConflictRows = [];
       const recurringItemsTable = await client.query(`SELECT to_regclass('public.recurring_slot_block_items') AS relation_name`);
       if (recurringItemsTable.rows[0]?.relation_name) {
@@ -2109,6 +2193,7 @@ async function bookCreditFundedSlotsTransaction({
         ...bookingConflicts.rows.map(row => ({ ...row, reason: 'already_booked' })),
         ...reservations.rows.map(row => ({ ...row, reason: 'reserved' })),
         ...offerConflicts.rows.map(row => ({ ...row, reason: 'pending_offer' })),
+        ...requestConflictRows.map(row => ({ ...row, reason: 'pending_request' })),
         ...recurringHoldConflictRows.map(row => ({ ...row, reason: 'pending_weekly_block' })),
         ...busyBlockConflictRows.map(row => ({ ...row, reason: 'busy_block' })),
       ];
@@ -2466,6 +2551,21 @@ async function buildRecurringSlotConflictIndex(sql, {
          AND end_time > ${startTime}::time
     `;
     offers.forEach(row => add(row.date, 'pending_offer'));
+  } catch (_) {}
+
+  try {
+    const requests = await sql`
+      SELECT scheduled_date::text AS date
+        FROM lesson_requests
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+         AND scheduled_date = ANY(${dates})
+         AND status = 'pending'
+         AND expires_at > NOW()
+         AND start_time < ${endTime}::time
+         AND end_time > ${startTime}::time
+    `;
+    requests.forEach(row => add(row.date, 'pending_request'));
   } catch (_) {}
 
   try {
@@ -2912,12 +3012,30 @@ async function createRecurringBlockBankHoldTransaction({
       busyBlockConflictRows = busyBlockConflicts.rows;
     } catch (_) {}
 
+    let requestConflictRows = [];
+    try {
+      const requestConflicts = await client.query(
+        `SELECT scheduled_date::text AS date
+           FROM lesson_requests
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = ANY($3::date[])
+            AND status = 'pending'
+            AND expires_at > NOW()
+            AND start_time < $5::time
+            AND end_time > $4::time`,
+        [instructorId, schoolId, dateStrings, startTime, endTime]
+      );
+      requestConflictRows = requestConflicts.rows;
+    } catch (_) {}
+
     const takenDates = new Set([
       ...bookingConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...reservationConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...offerConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...heldConflicts.rows.map(row => String(row.date).slice(0, 10)),
       ...busyBlockConflictRows.map(row => String(row.date).slice(0, 10)),
+      ...requestConflictRows.map(row => String(row.date).slice(0, 10)),
     ]);
     if (takenDates.size > 0) {
       return {
@@ -3850,10 +3968,15 @@ async function handleBook(req, res) {
             AND expires_at > NOW()
         `;
       } catch (e) { /* table may not exist yet */ }
+      // Also check pending lesson requests
+      const requestConflicts = await pendingRequestConflicts(sql, {
+        instructorId: instructor_id, schoolId, dates: dateStrings, startTime: start_time,
+      });
       const takenDates = new Set([
         ...conflicts.map(c => c.date),
         ...reservations.map(r => r.date),
-        ...offerConflicts.map(o => o.date)
+        ...offerConflicts.map(o => o.date),
+        ...requestConflicts.map(r => r.date)
       ]);
       if (takenDates.size > 0) {
         return res.status(409).json({
@@ -4699,6 +4822,21 @@ async function handleCheckoutSlot(req, res) {
         return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
     } catch (e) { /* table may not exist yet */ }
 
+    // Check slot isn't held by a pending lesson request
+    try {
+      const [existingRequest] = await sql`
+        SELECT id FROM lesson_requests
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND school_id = ${schoolId}
+      `;
+      if (existingRequest)
+        return res.status(409).json({ error: 'Someone has already requested this slot and the instructor is deciding. Try another slot.' });
+    } catch (e) { /* table may not exist yet */ }
+
     // Check instructor is valid (and belongs to this school)
     const [instructor] = await sql`
       SELECT id, name, offered_lesson_types,
@@ -4986,6 +5124,21 @@ async function handleCheckoutSlotGuest(req, res) {
       `;
       if (existingOffer)
         return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
+    } catch (e) { /* table may not exist yet */ }
+
+    // Check slot isn't held by a pending lesson request
+    try {
+      const [existingRequest] = await sql`
+        SELECT id FROM lesson_requests
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND school_id = ${schoolId}
+      `;
+      if (existingRequest)
+        return res.status(409).json({ error: 'Someone has already requested this slot and the instructor is deciding. Try another slot.' });
     } catch (e) { /* table may not exist yet */ }
 
     const [instructor] = await sql`
@@ -5436,6 +5589,26 @@ async function handleBookFreeTrial(req, res) {
         bufferMinutes
       )))
         return res.status(409).json({ error: 'This slot is currently held for a pending lesson offer.' });
+    } catch (e) { /* table may not exist yet */ }
+
+    try {
+      const existingRequests = await sql`
+        SELECT id, start_time::text AS start_time, end_time::text AS end_time
+        FROM lesson_requests
+        WHERE instructor_id = ${instructor_id}
+          AND scheduled_date = ${date}
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND school_id = ${schoolId}
+      `;
+      if (existingRequests.some(r => hasBufferedSlotConflict(
+        startMins,
+        endMins,
+        timeToMinutes(r.start_time),
+        timeToMinutes(r.end_time),
+        bufferMinutes
+      )))
+        return res.status(409).json({ error: 'Someone has already requested this slot and the instructor is deciding. Try another slot.' });
     } catch (e) { /* table may not exist yet */ }
 
     const pickupPostcode = extractPostcode(cleanAddr);
@@ -6407,6 +6580,27 @@ async function handleReservedPolicyMove(req, res) {
         });
       }
 
+      const pendingRequest = await client.query(
+        `SELECT id
+           FROM lesson_requests
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND scheduled_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+            AND status = 'pending'
+            AND expires_at > NOW()
+          LIMIT 1`,
+        [booking.instructor_id, schoolId, newDate, newStartTime, newEndTime]
+      );
+      if (pendingRequest.rowCount > 0) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'SLOT_HAS_PENDING_REQUEST',
+          message: 'That replacement slot has a pending lesson request',
+        });
+      }
+
       const recurringConflict = await client.query(
         `SELECT id, status
            FROM recurring_slot_block_items
@@ -6740,6 +6934,12 @@ async function handleReschedule(req, res) {
     `;
     if (existingReservation)
       return res.status(409).json({ error: 'Someone is currently booking that slot. Try another or wait a few minutes.' });
+
+    const rescheduleRequestConflicts = await pendingRequestConflicts(sql, {
+      instructorId: booking.instructor_id, schoolId, dates: [new_date], startTime: new_start_time,
+    });
+    if (rescheduleRequestConflicts.length > 0)
+      return res.status(409).json({ error: 'Someone has already requested that slot and the instructor is deciding. Please choose another.' });
 
     const stillAvailable = await slotFitsActiveAvailability(sql, {
       instructorId: booking.instructor_id,

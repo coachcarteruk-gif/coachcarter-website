@@ -2804,6 +2804,26 @@ async function handleCreateBooking(req, res) {
       }
     } catch (_) {}
 
+    // A learner's pending request holds real money against this slot — the
+    // instructor should answer it, not book over it.
+    try {
+      const [pendingRequest] = await sql`
+        SELECT id
+        FROM lesson_requests
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND scheduled_date = ${scheduled_date}::date
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND start_time < ${end_time}::time
+          AND end_time > ${start_time}::time
+        LIMIT 1
+      `;
+      if (pendingRequest) {
+        return res.status(409).json({ error: 'A learner has a pending lesson request on that time — accept or decline it from your dashboard first.' });
+      }
+    } catch (_) {}
+
     if (payMethod === 'credit') {
       const booked = await createInstructorCreditBookingTransaction({
         connectionString: process.env.POSTGRES_URL,
@@ -4194,6 +4214,20 @@ async function handleCreateOffer(req, res) {
       if (existingOffer)
         return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
 
+      try {
+        const [existingRequest] = await sql`
+          SELECT id FROM lesson_requests
+          WHERE instructor_id = ${instructor.id}
+            AND scheduled_date = ${scheduled_date}
+            AND start_time = ${start_time}::time
+            AND status = 'pending'
+            AND expires_at > NOW()
+            AND school_id = ${schoolId}
+        `;
+        if (existingRequest)
+          return res.status(409).json({ error: 'A learner has already requested that slot — accept or decline their request instead.' });
+      } catch (e) { /* table may not exist yet */ }
+
       let hasReservation = false;
       try {
         const [existingRes] = await sql`
@@ -4634,6 +4668,20 @@ async function handleCreateBroadcastOffer(req, res) {
     `;
     if (existingManualOffer)
       return res.status(409).json({ error: 'There is already a pending offer on that slot.' });
+
+    try {
+      const [existingRequest] = await sql`
+        SELECT id FROM lesson_requests
+        WHERE instructor_id = ${instructor.id}
+          AND scheduled_date = ${scheduled_date}
+          AND start_time = ${start_time}::time
+          AND status = 'pending'
+          AND expires_at > NOW()
+          AND school_id = ${schoolId}
+      `;
+      if (existingRequest)
+        return res.status(409).json({ error: 'A learner has already requested that slot — accept or decline their request instead.' });
+    } catch (e) { /* table may not exist yet */ }
 
     // Verify each learner is in this school AND has availability covering the slot.
     // We trust the frontend less than the DB — re-validate so a malicious client
