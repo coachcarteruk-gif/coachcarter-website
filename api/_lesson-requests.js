@@ -24,6 +24,31 @@ const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant'
 const { reportError } = require('./_error-alert');
 const { SCHEDULED } = require('./_booking-status');
 
+// Neon returns DATE columns as JS Date objects on RETURNING * / SELECT *
+// (feedback_neon_date_columns). Never String(...).slice(0,10) a scheduled_date
+// — always normalise through here (same pattern as offers.js dateOnly).
+function dateOnly(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return null;
+}
+
 const REQUEST_EXPIRY_HOURS = 48;
 // A request must be answerable before the lesson: it expires no later than
 // 2h before the slot starts, and can't be created at all inside that window.
@@ -424,7 +449,7 @@ async function bookAcceptedCardRequest(sql, { request, lessonType }) {
 // ── Learner notifications ─────────────────────────────────────────────────────
 
 function formatSlotDisplay(request) {
-  const iso = String(request.scheduled_date).slice(0, 10);
+  const iso = dateOnly(request.scheduled_date);
   const d = new Date(iso + 'T00:00:00Z');
   const dateStr = d.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
@@ -582,6 +607,7 @@ async function notifyInstructorNewRequest(request, instructor, { learnerDisplayN
 module.exports = {
   REQUEST_EXPIRY_HOURS,
   REQUEST_MIN_LEAD_MINUTES,
+  dateOnly,
   computeRequestExpiresAt,
   pendingRequestConflicts,
   pendingRequestConflictsPg,

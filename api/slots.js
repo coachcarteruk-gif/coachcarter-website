@@ -4785,7 +4785,7 @@ async function handleCheckoutRequest(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = user?.school_id
-      || (isGuest ? (await resolveSchoolFromRequest(req, sql)).schoolId : 1)
+      || (isGuest ? (await resolveSchoolFromRequest(req, { sql })).schoolId : 1)
       || 1;
 
     // ── Guest rate limiting (security rule 3): same limits as guest checkout ──

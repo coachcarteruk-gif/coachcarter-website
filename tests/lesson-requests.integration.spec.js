@@ -163,6 +163,15 @@ test.describe('lesson requests — credit hold lifecycle (integration)', () => {
     if (process.env.POSTGRES_URL_TEST === process.env.POSTGRES_URL) {
       throw new Error('POSTGRES_URL_TEST equals POSTGRES_URL — refusing to run against prod.');
     }
+    // Never touch real SMTP / Twilio from tests: point SMTP at a closed local
+    // port (fails fast, the notify helpers swallow send errors by design) and
+    // blank Twilio so sendWhatsApp takes its skipped no-op path.
+    process.env.SMTP_HOST = '127.0.0.1';
+    process.env.SMTP_PORT = '1';
+    process.env.SMTP_USER = 'test';
+    process.env.SMTP_PASS = 'test';
+    process.env.TWILIO_SID = '';
+    process.env.TWILIO_AUTH = '';
     sql = neon(process.env.POSTGRES_URL_TEST);
 
     ({ lockBalanceAndMutate } = require('../api/_credit-grant'));

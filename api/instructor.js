@@ -53,6 +53,7 @@ const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-he
 const { isLessonTypeOffered } = require('./_lesson-type-helpers');
 const { logAudit } = require('./_audit');
 const {
+  dateOnly: requestDateOnly,
   releaseRequestHold,
   captureRequestHold,
   refundCapturedRequest,
@@ -3907,7 +3908,7 @@ async function handleAcceptRequest(req, res) {
         learnerId: request.learner_id,
         instructorId: instructor.id,
         schoolId,
-        scheduledDate: String(request.scheduled_date).slice(0, 10),
+        scheduledDate: requestDateOnly(request.scheduled_date),
         startTime: String(request.start_time).slice(0, 5),
         endTime: String(request.end_time).slice(0, 5),
         lessonTypeId: request.lesson_type_id,
@@ -3986,7 +3987,7 @@ async function handleAcceptRequest(req, res) {
 
     // Confirmations — mirror the instructor-created-booking notifications.
     const withContact = await withLearnerContact(sql, request);
-    const dateStr = new Date(String(request.scheduled_date).slice(0, 10) + 'T00:00:00Z')
+    const dateStr = new Date(requestDateOnly(request.scheduled_date) + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
     const startDisplay = String(request.start_time).slice(0, 5);
     const endDisplay = String(request.end_time).slice(0, 5);
@@ -4039,7 +4040,7 @@ async function handleAcceptRequest(req, res) {
       ok: true,
       booking_id: booking.id,
       request_id: request.id,
-      scheduled_date: String(request.scheduled_date).slice(0, 10),
+      scheduled_date: requestDateOnly(request.scheduled_date),
       start_time: startDisplay,
       end_time: endDisplay,
     });
