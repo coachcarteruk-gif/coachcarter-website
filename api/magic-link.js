@@ -77,10 +77,6 @@ async function handleSendLink(req, res) {
       }
     } catch (e) { /* rate limit check failed — allow request through */ }
 
-    // Generate a secure random token
-    const token = generateToken();
-    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
-
     // Check if this email belongs to an instructor — redirect them early
     if (cleanEmail) {
       const instructorMatch = await sql`
@@ -95,6 +91,17 @@ async function handleSendLink(req, res) {
       }
     }
 
+    if (method !== 'sms') {
+      return res.status(410).json({
+        error: 'magic_link_retired',
+        message: 'Email login links have been retired. Please request a sign-in code instead.'
+      });
+    }
+
+    // Generate a secure random token
+    const token = generateToken();
+    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
+
     // Derive school_id from request (login pages pass it as a query/body param)
     const schoolId = parseInt(req.body.school_id || req.query.school_id) || 1;
     const referralCode = req.body.referral_code || null;
@@ -106,10 +113,6 @@ async function handleSendLink(req, res) {
 
     // Clean up expired tokens periodically
     await sql`DELETE FROM magic_link_tokens WHERE expires_at < NOW() OR used = true`;
-
-    // Send the link
-    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-    const magicUrl = `${baseUrl}/learner/login.html?token=${token}`;
 
     if (method === 'sms') {
       // SMS delivery — requires TWILIO_SID, TWILIO_AUTH, TWILIO_FROM env vars
@@ -294,7 +297,7 @@ async function handleSendEmailCode(req, res) {
     const { email, purpose } = req.body || {};
     const role = req.body?.role || 'learner';
     if (!email) return res.status(400).json({ error: 'Email address is required' });
-    if (purpose !== 'migration' && purpose !== 'reset') {
+    if (purpose !== 'login' && purpose !== 'migration' && purpose !== 'reset') {
       return res.status(400).json({ error: 'Invalid purpose' });
     }
 
@@ -324,7 +327,7 @@ async function handleSendEmailCode(req, res) {
     // actually send the email if the account exists.
     let shouldSend = true;
     if (role === 'learner') {
-      const [acct] = await sql`SELECT id, password_hash FROM learner_users WHERE email = ${cleanEmail}`;
+      const [acct] = await sql`SELECT id, password_hash FROM learner_users WHERE LOWER(email) = LOWER(${cleanEmail})`;
       if (!acct) {
         // No account — silently skip sending. Same outward response.
         shouldSend = false;
@@ -336,6 +339,13 @@ async function handleSendEmailCode(req, res) {
         // Can't reset what hasn't been set. Don't leak; don't send.
         shouldSend = false;
       }
+    } else if (role === 'instructor') {
+      const [acct] = await sql`
+        SELECT id
+          FROM instructors
+         WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND active = TRUE`;
+      shouldSend = !!acct && purpose === 'login';
     }
 
     if (!shouldSend) {
@@ -396,7 +406,7 @@ async function handleVerifyEmailCode(req, res) {
     const { email, code, purpose } = req.body || {};
     const role = req.body?.role || 'learner';
     if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
-    if (purpose !== 'migration' && purpose !== 'reset') {
+    if (purpose !== 'login' && purpose !== 'migration' && purpose !== 'reset') {
       return res.status(400).json({ error: 'Invalid purpose' });
     }
 
@@ -422,6 +432,95 @@ async function handleVerifyEmailCode(req, res) {
     }
 
     const linkRecord = rows[0];
+
+    if (purpose === 'login' && role === 'learner') {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
+
+      const [user] = await sql`
+        SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
+          FROM learner_users
+         WHERE LOWER(email) = LOWER(${cleanEmail})`;
+
+      if (!user) {
+        await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+        return res.status(400).json({
+          error: 'invalid_code',
+          message: 'Invalid or expired code. Please request a new one.'
+        });
+      }
+
+      const jwtPayload = { id: user.id, email: user.email || null, role: 'learner', school_id: user.school_id || 1 };
+      const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
+
+      await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+      try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch {}
+
+      appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
+      appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
+      return res.json({
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name || null,
+          email: user.email || null,
+          tier: user.current_tier,
+          school_id: user.school_id || 1
+        },
+        is_new_user: false,
+        needs_name: !user.name,
+        terms_accepted: !!user.terms_accepted_at
+      });
+    }
+
+    if (purpose === 'login' && role === 'instructor') {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
+
+      const [instructor] = await sql`
+        SELECT id, name, email, photo_url, school_id, onboarding_complete,
+               must_change_password, COALESCE(is_admin, FALSE) AS is_admin, active
+          FROM instructors
+         WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND active = TRUE`;
+
+      if (!instructor) {
+        await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+        return res.status(400).json({
+          error: 'invalid_code',
+          message: 'Invalid or expired code. Please request a new one.'
+        });
+      }
+
+      const jwtPayload = {
+        id: instructor.id,
+        email: instructor.email,
+        role: 'instructor',
+        school_id: instructor.school_id || 1
+      };
+      if (instructor.is_admin) jwtPayload.isAdmin = true;
+      const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
+
+      await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+
+      appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
+      appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
+      return res.json({
+        success: true,
+        instructor: {
+          id: instructor.id,
+          name: instructor.name,
+          email: instructor.email,
+          photo_url: instructor.photo_url,
+          is_admin: !!instructor.is_admin,
+          school_id: instructor.school_id || 1,
+          onboarding_complete: !!instructor.onboarding_complete
+        },
+        must_change_password: false
+      });
+    }
 
     // Mint a short-lived signed verification ticket (5 min) the caller will
     // present to set-password / reset-password. Reusing JWT for simplicity —

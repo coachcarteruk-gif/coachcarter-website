@@ -19,9 +19,11 @@
   var redirectTo   = urlParams.get('redirect') || '/learner/';
   var referralCode = urlParams.get('ref') || '';
   var expired      = urlParams.get('expired') === '1';
+  var emailParam    = urlParams.get('email') || '';
 
   // ── State ────────────────────────────────────────────────────────────────
   var pendingEmail = null;          // email being verified in migration / reset
+  var pendingEmailPurpose = 'login';
   var pendingTicket = null;         // ticket from verify-email-code
   var pendingResetEmail = null;     // for resend on reset screen
   var smsPhone = null;
@@ -34,6 +36,7 @@
     window.location.href = redirectTo;
   }
   if (expired) {
+    try { localStorage.removeItem('cc_learner'); } catch (_) {}
     var banner = document.getElementById('expired-banner');
     if (banner) banner.style.display = 'block';
   }
@@ -72,52 +75,39 @@
     e.preventDefault();
     clearError('error-msg');
     var email = document.getElementById('signin-email').value.trim();
-    var password = document.getElementById('signin-password').value;
-    if (!email || !password) {
-      setError('error-msg', 'Please enter your email and password.');
+    if (!email) {
+      setError('error-msg', 'Please enter your email address.');
       return;
     }
     var btn = document.getElementById('signin-btn');
-    btn.disabled = true; btn.textContent = 'Signing in…';
+    btn.disabled = true; btn.textContent = 'Sending code...';
 
-    // First, check if account exists & has password - routes us into either
-    // login OR migration flow. Single network round-trip, then we either
-    // POST /login or kick off /send-email-code.
-    fetch('/api/learner-auth?action=check-account', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email })
-    })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
-      .then(function (chk) {
-        if (!chk.ok) {
-          if (chk.data && chk.data.error === 'instructor_account') {
-            setError('error-msg', chk.data.message || 'This email is for an instructor account.');
-            setTimeout(function () { window.location.href = chk.data.redirect || '/instructor/login.html'; }, 1500);
-            return null;
-          }
-          setError('error-msg', (chk.data && chk.data.error) || 'Could not check account. Please try again.');
-          return null;
-        }
-        if (!chk.data.exists) {
-          // No account - nudge to sign-up tab and prefill email
-          setError('error-msg', 'No account found for that email. Try signing up instead.');
-          switchAuthMode('signup');
-          document.getElementById('signup-email').value = email;
-          return null;
-        }
-        if (!chk.data.has_password) {
-          // Existing user without password - start migration
-          return startMigration(email);
-        }
-        // Account has password - try login
-        return doLogin(email, password);
-      })
+    startEmailLogin(email)
       .catch(function () {
         setError('error-msg', 'Network error. Please check your connection and try again.');
       })
       .finally(function () {
-        btn.disabled = false; btn.textContent = 'Sign in';
+        btn.disabled = false; btn.textContent = 'Send sign-in code';
+      });
+  }
+
+  function handlePasswordSignIn(e) {
+    e.preventDefault();
+    clearError('password-error');
+    var email = document.getElementById('password-email').value.trim();
+    var password = document.getElementById('signin-password').value;
+    if (!email || !password) {
+      setError('password-error', 'Please enter your email and password.');
+      return;
+    }
+    var btn = document.getElementById('password-btn');
+    btn.disabled = true; btn.textContent = 'Signing in...';
+    doLogin(email, password)
+      .catch(function () {
+        setError('password-error', 'Network error. Please check your connection and try again.');
+      })
+      .finally(function () {
+        btn.disabled = false; btn.textContent = 'Sign in with password';
       });
   }
 
@@ -131,9 +121,9 @@
     }).then(function (out) {
       if (!out.ok) {
         if (out.data && out.data.error === 'locked') {
-          setError('error-msg', out.data.message);
+          setError('password-error', out.data.message);
         } else {
-          setError('error-msg', (out.data && out.data.message) || 'Email or password is incorrect.');
+          setError('password-error', (out.data && out.data.message) || 'Email or password is incorrect.');
         }
         return;
       }
@@ -141,8 +131,33 @@
     });
   }
 
+  function startEmailLogin(email) {
+    pendingEmail = email;
+    pendingEmailPurpose = 'login';
+    return fetch('/api/magic-link?action=send-email-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, purpose: 'login', role: 'learner' })
+    }).then(function (r) {
+      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+    }).then(function (out) {
+      if (!out.ok) {
+        setError('error-msg', (out.data && (out.data.message || out.data.error)) || 'Could not send code. Please try again.');
+        return;
+      }
+      document.getElementById('migration-title').textContent = 'Enter your sign-in code';
+      document.getElementById('migration-sub').innerHTML =
+        'Enter the 6-digit code we sent to <strong id="migration-email-display"></strong>.';
+      document.getElementById('migration-email-display').textContent = email;
+      document.getElementById('migration-verify-btn').textContent = 'Sign in';
+      showScreen('migration-code');
+      focusFirstCodeInput('migration-code-inputs');
+    });
+  }
+
   function startMigration(email) {
     pendingEmail = email;
+    pendingEmailPurpose = 'migration';
     return fetch('/api/magic-link?action=send-email-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -154,7 +169,11 @@
         setError('error-msg', (out.data && out.data.error) || 'Could not send code. Please try again.');
         return;
       }
+      document.getElementById('migration-title').textContent = 'Set up your password';
+      document.getElementById('migration-sub').innerHTML =
+        "Welcome back! We sent a 6-digit code to <strong id=\"migration-email-display\"></strong> to verify it's you.";
       document.getElementById('migration-email-display').textContent = email;
+      document.getElementById('migration-verify-btn').textContent = 'Continue';
       showScreen('migration-code');
       focusFirstCodeInput('migration-code-inputs');
     });
@@ -231,7 +250,7 @@
     fetch('/api/magic-link?action=verify-email-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingEmail, code: code, purpose: 'migration', role: 'learner' })
+      body: JSON.stringify({ email: pendingEmail, code: code, purpose: pendingEmailPurpose, role: 'learner' })
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (out) {
@@ -239,7 +258,11 @@
           setError('migration-code-error', (out.data && out.data.message) || 'Invalid code. Please try again.');
           clearCodeInputs('migration-code-inputs');
           focusFirstCodeInput('migration-code-inputs');
-          btn.disabled = false; btn.textContent = 'Continue';
+          btn.disabled = false; btn.textContent = pendingEmailPurpose === 'login' ? 'Sign in' : 'Continue';
+          return;
+        }
+        if (pendingEmailPurpose === 'login') {
+          finishLogin(out.data);
           return;
         }
         pendingTicket = out.data.ticket;
@@ -250,7 +273,7 @@
       })
       .catch(function () {
         setError('migration-code-error', 'Network error. Please try again.');
-        btn.disabled = false; btn.textContent = 'Continue';
+        btn.disabled = false; btn.textContent = pendingEmailPurpose === 'login' ? 'Sign in' : 'Continue';
       });
   }
 
@@ -261,7 +284,7 @@
     fetch('/api/magic-link?action=send-email-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: pendingEmail, purpose: 'migration', role: 'learner' })
+      body: JSON.stringify({ email: pendingEmail, purpose: pendingEmailPurpose, role: 'learner' })
     }).finally(function () {
       btn.textContent = 'Sent! Check again';
       setTimeout(function () {
@@ -522,7 +545,12 @@
           return;
         }
         pendingEmail = email;
+        pendingEmailPurpose = 'migration';
+        document.getElementById('migration-title').textContent = 'Set up your password';
+        document.getElementById('migration-sub').innerHTML =
+          "Welcome back! We sent a 6-digit code to <strong id=\"migration-email-display\"></strong> to verify it's you.";
         document.getElementById('migration-email-display').textContent = email;
+        document.getElementById('migration-verify-btn').textContent = 'Continue';
         showScreen('migration-code');
         focusFirstCodeInput('migration-code-inputs');
       })
@@ -670,6 +698,7 @@
   });
 
   document.getElementById('signin-form').addEventListener('submit', handleSignIn);
+  document.getElementById('password-form').addEventListener('submit', handlePasswordSignIn);
   document.getElementById('signup-form').addEventListener('submit', handleSignUp);
   document.getElementById('set-password-form').addEventListener('submit', handleSetPassword);
   document.getElementById('forgot-form').addEventListener('submit', handleForgot);
@@ -684,7 +713,16 @@
     showScreen('sms-phone');
     document.getElementById('sms-phone-input').focus();
   });
+  document.getElementById('btn-password-login').addEventListener('click', function () {
+    var email = document.getElementById('signin-email').value.trim();
+    if (email) document.getElementById('password-email').value = email;
+    showScreen('password');
+    document.getElementById('password-email').focus();
+  });
   document.getElementById('btn-back-from-forgot').addEventListener('click', function () {
+    showScreen('auth');
+  });
+  document.getElementById('btn-back-from-password').addEventListener('click', function () {
     showScreen('auth');
   });
   document.getElementById('btn-back-from-sms').addEventListener('click', function () {
@@ -718,6 +756,12 @@
   setupCodeInputs('migration-code-inputs', handleMigrationVerify, 'migration-verify-btn');
   setupCodeInputs('reset-code-inputs', handleResetVerify, 'reset-verify-btn');
   setupCodeInputs('code-inputs', handleSmsCodeVerify, 'verify-code-btn');
+
+  if (emailParam) {
+    document.getElementById('signin-email').value = emailParam;
+    document.getElementById('signup-email').value = emailParam;
+    document.getElementById('password-email').value = emailParam;
+  }
 
   // Referral banner (URL ?ref=CODE)
   if (referralCode) {

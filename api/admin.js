@@ -4395,22 +4395,13 @@ async function handleInviteLearner(req, res) {
       RETURNING id
     `;
 
-    // Generate magic link token with 7-day expiry
-    const token = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    await sql`
-      INSERT INTO magic_link_tokens (token, email, method, expires_at)
-      VALUES (${token}, ${normalised}, 'email', ${expiresAt.toISOString()})
-    `;
-
     // Get school name for email
     const [school] = await sql`SELECT name FROM schools WHERE id = ${schoolId}`;
     const schoolName = school?.name || 'your driving school';
 
     // Send invite email
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-    const inviteLink = `${baseUrl}/learner/login.html?token=${token}`;
+    const inviteLink = `${baseUrl}/learner/login.html?email=${encodeURIComponent(normalised)}`;
     const firstName = (name || '').split(' ')[0] || 'there';
     const mailer = createTransporter();
 
@@ -4425,7 +4416,7 @@ async function handleInviteLearner(req, res) {
       html: `
         <h2>Hi ${firstName},</h2>
         <p>You've been invited to join <strong>${schoolName}</strong> on CoachCarter.</p>
-        <p>Click the button below to set up your account and start booking lessons.</p>
+        <p>Click the button below, enter your email, and we'll send you a 6-digit code to sign in.</p>
         <p style="margin:28px 0">
           <a href="${inviteLink}"
              style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
@@ -4433,7 +4424,7 @@ async function handleInviteLearner(req, res) {
             Set up my account &rarr;
           </a>
         </p>
-        <p style="color:#888;font-size:0.85em">This link expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>
+        <p style="color:#888;font-size:0.85em">If you didn't expect this email, you can safely ignore it.</p>
       `
     });
 

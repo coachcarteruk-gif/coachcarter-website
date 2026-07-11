@@ -3,17 +3,16 @@
 // GET /api/setmore-welcome  (CRON_SECRET auth)
 //
 // Sends a one-time welcome email to learners who were auto-created by
-// the Setmore sync but have never logged in. Includes a magic link so
-// they can access their lessons/progress on CoachCarter.
+// the Setmore sync but have never logged in. Points learners to the
+// same-page email-code login flow.
 //
 // Processes up to 10 learners per invocation to stay within Vercel limits.
 
-const { createTransporter, generateToken } = require('./_auth-helpers');
+const { createTransporter } = require('./_auth-helpers');
 const { verifyCronAuth } = require('./_auth');
 const { withCronLock } = require('./_cron-lock');
 
 const BATCH_SIZE = 10;
-const TOKEN_EXPIRY_MINUTES = 60 * 24 * 7; // 7-day magic link for welcome emails
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
 
 function setCors(res) {
@@ -55,16 +54,7 @@ module.exports = async (req, res) => {
 
     for (const learner of learners) {
       try {
-        // Generate a long-lived magic link token (7 days)
-        const token = generateToken();
-        const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
-
-        await sql`
-          INSERT INTO magic_link_tokens (token, email, method, expires_at)
-          VALUES (${token}, ${learner.email}, 'email', ${expiresAt.toISOString()})
-        `;
-
-        const magicUrl = `${BASE_URL}/learner/verify.html?token=${token}`;
+        const loginUrl = `${BASE_URL}/learner/login.html?email=${encodeURIComponent(learner.email)}`;
         const firstName = (learner.name || '').split(' ')[0] || 'there';
 
         await mailer.sendMail({
@@ -75,7 +65,7 @@ module.exports = async (req, res) => {
           from: 'CoachCarter <bookings@coachcarter.uk>',
           to: learner.email,
           subject: `${firstName}, your driving lessons are now on CoachCarter`,
-          html: buildWelcomeHtml(firstName, magicUrl)
+          html: buildWelcomeHtml(firstName, loginUrl)
         });
 
         // Mark as sent so we never re-send
@@ -101,7 +91,7 @@ module.exports = async (req, res) => {
   });
 };
 
-function buildWelcomeHtml(firstName, magicUrl) {
+function buildWelcomeHtml(firstName, loginUrl) {
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
       <h1 style="font-size: 1.4rem; color: #262626;">Hi ${firstName}, welcome to CoachCarter!</h1>
@@ -119,15 +109,14 @@ function buildWelcomeHtml(firstName, magicUrl) {
         Your existing bookings are already in the system — just sign in to see everything.
       </p>
       <div style="text-align: center; margin: 28px 0;">
-        <a href="${magicUrl}"
+        <a href="${loginUrl}"
            style="background: #f58321; color: white; padding: 14px 36px; text-decoration: none;
                   border-radius: 8px; display: inline-block; font-weight: 600; font-size: 1rem;">
           Sign in to your account
         </a>
       </div>
       <p style="color: #999; font-size: 0.8rem; line-height: 1.5;">
-        This link is valid for 7 days. After that, you can request a new sign-in
-        link from the <a href="${magicUrl.split('/learner/')[0]}/learner/login.html" style="color: #f58321;">login page</a>.
+        Enter your email on the login page and we'll send a 6-digit sign-in code.
       </p>
       <p style="color: #999; font-size: 0.8rem; margin-top: 16px;">
         Questions? Just reply to this email — we're here to help.

@@ -1274,7 +1274,7 @@ CREATE INDEX IF NOT EXISTS idx_cookie_consents_visitor ON cookie_consents(visito
 -- ══════════════════════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS audit_log (
   id           SERIAL PRIMARY KEY,
-  admin_id     INTEGER NOT NULL,
+  admin_id     INTEGER,
   admin_email  TEXT,
   action       TEXT NOT NULL,
   target_type  TEXT,

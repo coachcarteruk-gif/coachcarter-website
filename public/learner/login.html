@@ -112,17 +112,14 @@
 
     <!-- Sign-in form -->
     <form id="signin-form" data-mode-form="signin">
+      <div class="card-sub" style="margin-bottom:18px;">Enter your email and we'll send a 6-digit sign-in code.</div>
       <div class="form-group">
         <label for="signin-email">Email address</label>
         <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email" required>
       </div>
-      <div class="form-group">
-        <label for="signin-password">Password</label>
-        <input type="password" id="signin-password" placeholder="" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn-primary" id="signin-btn">Sign in</button>
+      <button type="submit" class="btn-primary" id="signin-btn">Send sign-in code</button>
       <div class="small-link-row">
-        <button type="button" id="btn-forgot">Forgot password?</button>
+        <button type="button" id="btn-password-login">Use password instead</button>
         <button type="button" id="btn-sms-fallback" title="Use phone number instead">Use phone instead</button>
       </div>
     </form>
@@ -154,6 +151,30 @@
     </div>
   </div>
 
+  <div class="screen" id="screen-password">
+    <div class="card-title">Sign in with password</div>
+    <div class="card-sub">Use this if you've already set a password.</div>
+
+    <div class="error-msg" id="password-error"></div>
+
+    <form id="password-form">
+      <div class="form-group">
+        <label for="password-email">Email address</label>
+        <input type="email" id="password-email" placeholder="your@email.com" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label for="signin-password">Password</label>
+        <input type="password" id="signin-password" placeholder="" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-primary" id="password-btn">Sign in with password</button>
+    </form>
+
+    <div class="small-link-row" style="justify-content:space-between;">
+      <button type="button" id="btn-forgot">Forgot password?</button>
+      <button type="button" id="btn-back-from-password">Back to code sign-in</button>
+    </div>
+  </div>
+
   <!-- ═══════════════════════════════════════════════════════════════════════
        SCREEN 2 - Migration: existing user, no password yet (enter code)
        ═══════════════════════════════════════════════════════════════════════ -->
@@ -161,10 +182,9 @@
     <div class="result-icon orange">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
     </div>
-    <div class="result-title">Set up your password</div>
-    <div class="result-sub">
-      Welcome back! We've moved to email + password sign-in.<br>
-      We sent a 6-digit code to <strong id="migration-email-display"></strong> to verify it's you.
+    <div class="result-title" id="migration-title">Enter your sign-in code</div>
+    <div class="result-sub" id="migration-sub">
+      Enter the 6-digit code we sent to <strong id="migration-email-display"></strong>.
     </div>
     <div class="code-inputs" id="migration-code-inputs" role="group" aria-label="6-digit verification code">
       <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0" aria-label="Code digit 1">

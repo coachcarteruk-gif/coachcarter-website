@@ -59,7 +59,7 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
-       SCREEN 2 - Sign In (magic link)
+       SCREEN 2 - Sign In (email code)
        ═══════════════════════════════════════════════════════════════ -->
   <div class="screen" id="screen-sign-in">
     <button class="btn-back" data-screen="choice">
@@ -67,23 +67,68 @@
       Back
     </button>
     <div class="card-title">Instructor sign in</div>
-    <div class="card-sub">Enter your CoachCarter email and password.</div>
+    <div class="card-sub">Enter your CoachCarter email and we'll send a 6-digit sign-in code.</div>
     <div class="error-msg" id="loginError"></div>
     <form id="instr-login-form">
       <div class="form-group">
         <label for="loginEmail">Email address</label>
         <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email" required>
       </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Send sign-in code</button>
+    </form>
+    <div class="small-link-row" style="justify-content:space-between;margin-top:16px;">
+      <button type="button" id="usePasswordBtn">Use password instead</button>
+      <button type="button" data-screen="join">Join the team</button>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-password">
+    <button class="btn-back" data-screen="sign-in">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <div class="card-title">Sign in with password</div>
+    <div class="card-sub">Use this if you already have an instructor password.</div>
+    <div class="error-msg" id="passwordError"></div>
+    <form id="instr-password-form">
+      <div class="form-group">
+        <label for="passwordEmail">Email address</label>
+        <input type="email" id="passwordEmail" placeholder="your@email.com" autocomplete="email" required>
+      </div>
       <div class="form-group">
         <label for="loginPassword">Password</label>
         <input type="password" id="loginPassword" autocomplete="current-password" required>
       </div>
-      <button type="submit" class="btn-primary" id="loginBtn">Sign in</button>
+      <button type="submit" class="btn-primary" id="passwordBtn">Sign in with password</button>
     </form>
     <p class="hint" style="margin-top:14px;">
       Forgotten your password? Contact your administrator at
       <a href="mailto:bookings@coachcarter.uk">bookings@coachcarter.uk</a> to reset it.
     </p>
+  </div>
+
+  <div class="screen" id="screen-code" style="text-align:center;">
+    <div class="result-icon orange">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
+    </div>
+    <div class="result-title">Enter your sign-in code</div>
+    <div class="result-sub">
+      Enter the 6-digit code we sent to<br>
+      <strong id="codeEmail">-</strong>
+    </div>
+    <div class="code-inputs" id="code-inputs" role="group" aria-label="6-digit verification code">
+      <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0" aria-label="Code digit 1">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="1" aria-label="Code digit 2">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="2" aria-label="Code digit 3">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="3" aria-label="Code digit 4">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="4" aria-label="Code digit 5">
+      <input type="text" inputmode="numeric" maxlength="1" data-idx="5" aria-label="Code digit 6">
+    </div>
+    <div class="code-error" id="codeError"></div>
+    <button class="btn-primary" id="verifyCodeBtn" disabled>Sign in</button>
+    <button class="resend-link" id="resendCodeBtn" style="margin-top:14px;">
+      Didn't get it? Send again
+    </button>
   </div>
 
   <!-- Force change password (first login after admin set/reset) -->

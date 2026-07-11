@@ -1,31 +1,24 @@
-/* CoachCarter instructor login (May 2026 - password auth)
+/* CoachCarter instructor login
  *
- * Flows:
- *   - Choice screen (sign-in vs. join-the-team) - kept as-is
- *   - Sign in: email + password → either dashboard, or force-change-password
- *   - Force change password: required after admin sets/resets a password
- *   - Join the team: enquiry form - kept as-is
- *
- * Forgot-password is intentionally NOT self-serve. Instructors contact the
- * admin (see hint text on the sign-in screen). Admins use the admin portal
- * to issue a new password.
+ * Default sign-in is email + 6-digit code. Password login remains available
+ * as a secondary path for instructors who still need it.
  */
 (function () {
   'use strict';
 
-  // If already logged in, redirect
   var existing = null;
   try { existing = JSON.parse(localStorage.getItem('cc_instructor') || 'null'); } catch (_) {}
   if (existing && existing.instructor) {
     window.location.href = '/instructor/';
   }
 
-  var lastEmail = null;
-  var lastPassword = null;  // held briefly to satisfy change-password's current_password check
+  var lastPassword = null;
+  var pendingEmail = null;
 
-  // ── Screen management ──────────────────────────────────────────────────
   function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+    document.querySelectorAll('.screen').forEach(function (screen) {
+      screen.classList.remove('active');
+    });
     var el = document.getElementById('screen-' + id);
     if (el) el.classList.add('active');
   }
@@ -37,19 +30,62 @@
     if (msg) el.classList.add('show'); else el.classList.remove('show');
   }
 
-  // ── Sign in ────────────────────────────────────────────────────────────
+  function finishLogin(data) {
+    localStorage.setItem('cc_instructor', JSON.stringify({ instructor: data.instructor }));
+  }
+
   async function handleLoginSubmit(e) {
     e.preventDefault();
     setError('loginError', '');
     var email = document.getElementById('loginEmail').value.trim();
-    var password = document.getElementById('loginPassword').value;
-    if (!email || !password) {
-      setError('loginError', 'Please enter your email and password.');
+    if (!email) {
+      setError('loginError', 'Please enter your email address.');
       return;
     }
 
     var btn = document.getElementById('loginBtn');
-    btn.disabled = true; btn.textContent = 'Signing in…';
+    btn.disabled = true;
+    btn.textContent = 'Sending code...';
+
+    try {
+      var res = await fetch('/api/magic-link?action=send-email-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: email, purpose: 'login', role: 'instructor' }),
+      });
+      var data = await res.json();
+      if (!res.ok) {
+        setError('loginError', data.message || data.error || 'Could not send code. Please try again.');
+        return;
+      }
+
+      pendingEmail = email;
+      document.getElementById('codeEmail').textContent = email;
+      clearCodeInputs('code-inputs');
+      showScreen('code');
+      focusFirstCodeInput('code-inputs');
+    } catch (ex) {
+      setError('loginError', 'Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send sign-in code';
+    }
+  }
+
+  async function handlePasswordSubmit(e) {
+    e.preventDefault();
+    setError('passwordError', '');
+    var email = document.getElementById('passwordEmail').value.trim();
+    var password = document.getElementById('loginPassword').value;
+    if (!email || !password) {
+      setError('passwordError', 'Please enter your email and password.');
+      return;
+    }
+
+    var btn = document.getElementById('passwordBtn');
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
 
     try {
       var res = await fetch('/api/instructor-auth?action=login', {
@@ -60,39 +96,86 @@
       });
       var data = await res.json();
       if (!res.ok) {
-        if (data.error === 'locked') {
-          setError('loginError', data.message);
-        } else {
-          setError('loginError', data.message || 'Email or password is incorrect.');
-        }
+        setError('passwordError', data.error === 'locked'
+          ? data.message
+          : data.message || 'Email or password is incorrect.');
         return;
       }
 
-      // Persist display blob (auth lives in the cc_instructor httpOnly cookie)
-      localStorage.setItem('cc_instructor', JSON.stringify({ instructor: data.instructor }));
-
+      finishLogin(data);
       if (data.must_change_password) {
-        // Hold the password in memory so change-password can present it as
-        // current_password without asking the user to retype.
-        lastEmail = email;
         lastPassword = password;
         showScreen('change-password');
         setTimeout(function () {
-          var f = document.getElementById('changeNewPassword');
-          if (f) f.focus();
+          var field = document.getElementById('changeNewPassword');
+          if (field) field.focus();
         }, 100);
         return;
       }
 
       window.location.href = '/instructor/';
     } catch (ex) {
-      setError('loginError', 'Network error. Please try again.');
+      setError('passwordError', 'Network error. Please try again.');
     } finally {
-      btn.disabled = false; btn.textContent = 'Sign in';
+      btn.disabled = false;
+      btn.textContent = 'Sign in with password';
     }
   }
 
-  // ── Force change password ──────────────────────────────────────────────
+  async function handleCodeVerify() {
+    var code = collectCode('code-inputs');
+    if (code.length !== 6 || !pendingEmail) return;
+    var btn = document.getElementById('verifyCodeBtn');
+    btn.disabled = true;
+    btn.textContent = 'Verifying...';
+    setError('codeError', '');
+
+    try {
+      var res = await fetch('/api/magic-link?action=verify-email-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: pendingEmail, code: code, purpose: 'login', role: 'instructor' }),
+      });
+      var data = await res.json();
+      if (!res.ok) {
+        setError('codeError', data.message || 'Invalid code. Please try again.');
+        clearCodeInputs('code-inputs');
+        focusFirstCodeInput('code-inputs');
+        return;
+      }
+
+      finishLogin(data);
+      window.location.href = '/instructor/';
+    } catch (ex) {
+      setError('codeError', 'Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
+  }
+
+  async function handleCodeResend() {
+    if (!pendingEmail) return;
+    var btn = document.getElementById('resendCodeBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    try {
+      await fetch('/api/magic-link?action=send-email-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: pendingEmail, purpose: 'login', role: 'instructor' }),
+      });
+      btn.textContent = 'Sent! Check again';
+    } finally {
+      setTimeout(function () {
+        btn.textContent = "Didn't get it? Send again";
+        btn.disabled = false;
+      }, 5000);
+    }
+  }
+
   async function handleChangePwSubmit(e) {
     e.preventDefault();
     setError('changePwError', '');
@@ -108,16 +191,15 @@
     }
     if (!lastPassword) {
       setError('changePwError', 'Session lost. Please sign in again.');
-      setTimeout(function () { showScreen('sign-in'); }, 1500);
+      setTimeout(function () { showScreen('password'); }, 1500);
       return;
     }
 
     var btn = document.getElementById('changePwBtn');
-    btn.disabled = true; btn.textContent = 'Saving…';
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
 
     try {
-      // CSRF token rides via cc_csrf cookie + X-CSRF-Token header.
-      // The cookie was set on login, read it now.
       var csrf = '';
       var match = ('; ' + (document.cookie || '')).match(/; cc_csrf=([^;]*)/);
       if (match) { try { csrf = decodeURIComponent(match[1]); } catch (_) { csrf = match[1]; } }
@@ -130,17 +212,7 @@
       });
       var data = await res.json();
       if (!res.ok) {
-        if (data.error === 'invalid_password') {
-          setError('changePwError', data.message);
-        } else if (data.error === 'same_password') {
-          setError('changePwError', data.message);
-        } else if (data.error === 'invalid_current_password') {
-          // Shouldn't happen (we just used it to log in), but handle gracefully
-          setError('changePwError', 'Something went wrong. Please sign in again.');
-          setTimeout(function () { showScreen('sign-in'); }, 1500);
-        } else {
-          setError('changePwError', data.message || data.error || 'Could not save password.');
-        }
+        setError('changePwError', data.message || data.error || 'Could not save password.');
         return;
       }
 
@@ -149,16 +221,16 @@
     } catch (ex) {
       setError('changePwError', 'Network error. Please try again.');
     } finally {
-      btn.disabled = false; btn.textContent = 'Save and continue';
+      btn.disabled = false;
+      btn.textContent = 'Save and continue';
     }
   }
 
-  // ── Join the team enquiry (unchanged) ──────────────────────────────────
   async function handleJoinSubmit(e) {
     e.preventDefault();
-    var name    = document.getElementById('joinName').value.trim();
-    var email   = document.getElementById('joinEmail').value.trim();
-    var phone   = document.getElementById('joinPhone').value.trim();
+    var name = document.getElementById('joinName').value.trim();
+    var email = document.getElementById('joinEmail').value.trim();
+    var phone = document.getElementById('joinPhone').value.trim();
     var message = document.getElementById('joinMessage').value.trim();
     var website = (document.getElementById('joinWebsite') || {}).value || '';
 
@@ -169,14 +241,17 @@
 
     var btn = document.getElementById('joinBtn');
     setError('joinError', '');
-    btn.disabled = true; btn.textContent = 'Sending…';
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
 
     try {
       var res = await fetch('/api/enquiries?action=submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name, email: email, phone: phone,
+          name: name,
+          email: email,
+          phone: phone,
           enquiryType: 'join-team',
           message: message || null,
           marketing: false,
@@ -190,18 +265,107 @@
     } catch (ex) {
       setError('joinError', ex.message);
     } finally {
-      btn.disabled = false; btn.textContent = 'Send enquiry';
+      btn.disabled = false;
+      btn.textContent = 'Send enquiry';
     }
   }
 
-  // ── Wiring ─────────────────────────────────────────────────────────────
+  function setupCodeInputs(containerId, onComplete, btnId) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var inputs = container.querySelectorAll('input');
+    var btn = btnId ? document.getElementById(btnId) : null;
+
+    function update() {
+      var code = collectCode(containerId);
+      if (btn) btn.disabled = code.length < 6;
+      inputs.forEach(function (input) {
+        input.classList.toggle('filled', input.value.length > 0);
+      });
+    }
+
+    inputs.forEach(function (input, idx) {
+      input.addEventListener('input', function (event) {
+        var val = event.target.value.replace(/\D/g, '').slice(0, 1);
+        event.target.value = val;
+        update();
+        if (val && idx < inputs.length - 1) inputs[idx + 1].focus();
+        if (collectCode(containerId).length === 6 && onComplete) onComplete();
+      });
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Backspace' && !input.value && idx > 0) {
+          inputs[idx - 1].focus();
+          inputs[idx - 1].value = '';
+          update();
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (collectCode(containerId).length === 6 && onComplete) onComplete();
+        }
+      });
+      input.addEventListener('paste', function (event) {
+        event.preventDefault();
+        var pasted = (event.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+        pasted.split('').forEach(function (digit, i) {
+          if (inputs[i]) inputs[i].value = digit;
+        });
+        update();
+        if (pasted.length === 6 && onComplete) onComplete();
+      });
+    });
+  }
+
+  function collectCode(containerId) {
+    var inputs = document.querySelectorAll('#' + containerId + ' input');
+    return Array.from(inputs).map(function (input) { return input.value; }).join('');
+  }
+
+  function clearCodeInputs(containerId) {
+    document.querySelectorAll('#' + containerId + ' input').forEach(function (input) {
+      input.value = '';
+      input.classList.remove('filled');
+    });
+  }
+
+  function focusFirstCodeInput(containerId) {
+    setTimeout(function () {
+      var first = document.querySelector('#' + containerId + ' input[data-idx="0"]');
+      if (first) first.focus();
+    }, 100);
+  }
+
   document.querySelectorAll('[data-screen]').forEach(function (el) {
-    el.addEventListener('click', function (e) { e.preventDefault(); showScreen(el.dataset.screen); });
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      showScreen(el.dataset.screen);
+    });
   });
+
   var loginForm = document.getElementById('instr-login-form');
   if (loginForm) loginForm.addEventListener('submit', handleLoginSubmit);
+
+  var passwordForm = document.getElementById('instr-password-form');
+  if (passwordForm) passwordForm.addEventListener('submit', handlePasswordSubmit);
+
+  var passwordLink = document.getElementById('usePasswordBtn');
+  if (passwordLink) passwordLink.addEventListener('click', function () {
+    var email = document.getElementById('loginEmail').value.trim();
+    if (email) document.getElementById('passwordEmail').value = email;
+    showScreen('password');
+    document.getElementById('passwordEmail').focus();
+  });
+
+  var verifyCodeBtn = document.getElementById('verifyCodeBtn');
+  if (verifyCodeBtn) verifyCodeBtn.addEventListener('click', handleCodeVerify);
+
+  var resendCodeBtn = document.getElementById('resendCodeBtn');
+  if (resendCodeBtn) resendCodeBtn.addEventListener('click', handleCodeResend);
+
   var changePwForm = document.getElementById('instr-change-pw-form');
   if (changePwForm) changePwForm.addEventListener('submit', handleChangePwSubmit);
+
   var joinForm = document.getElementById('instr-join-form');
   if (joinForm) joinForm.addEventListener('submit', handleJoinSubmit);
+
+  setupCodeInputs('code-inputs', handleCodeVerify, 'verifyCodeBtn');
 })();

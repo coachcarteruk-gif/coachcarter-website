@@ -6054,23 +6054,6 @@ async function handleBookFreeTrial(req, res) {
       reportError('/api/slots?action=book-free-trial:ledger', ledgerErr);
     }
 
-    // ── Generate magic-link token (login from confirmation email) ──
-    // 7-day expiry to match the admin invite flow; long enough that the email
-    // sitting unread for a few days still works.
-    let magicUrl = null;
-    try {
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await sql`
-        INSERT INTO magic_link_tokens (token, email, method, expires_at, school_id)
-        VALUES (${token}, ${cleanEmail}, 'email', ${expiresAt}, ${schoolId})
-      `;
-      const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
-      magicUrl = `${baseUrl}/learner/login.html?token=${token}`;
-    } catch (tokenErr) {
-      console.warn('Free trial magic-link token generation failed:', tokenErr.message);
-    }
-
     // ── Send confirmation emails ──
     const lessonDate = new Date(date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -6080,10 +6063,10 @@ async function handleBookFreeTrial(req, res) {
       const transporter = createTransporter();
       const firstName = cleanName.split(' ')[0] || 'there';
 
-      const learnerCta = magicUrl
-        ? `<p style="margin-top:16px"><a href="${magicUrl}" style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Sign in &amp; manage booking →</a></p>
-           <p style="font-size:0.85rem;color:#797879">This sign-in link expires in 7 days.</p>`
-        : `<p style="margin-top:16px"><a href="https://coachcarter.uk/learner/login.html" style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Log in to manage booking →</a></p>`;
+      const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+      const learnerLoginUrl = `${baseUrl}/learner/login.html?email=${encodeURIComponent(cleanEmail)}`;
+      const learnerCta = `<p style="margin-top:16px"><a href="${learnerLoginUrl}" style="background:#f58321;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Sign in &amp; manage booking →</a></p>
+           <p style="font-size:0.85rem;color:#797879">Enter your email and we'll send a 6-digit sign-in code.</p>`;
 
       await transporter.sendMail({
         from:    'CoachCarter <bookings@coachcarter.uk>',
