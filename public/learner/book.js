@@ -31,6 +31,21 @@ let selectedDate  = null;
 let selectedSlot  = null;
 let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
+// Session memory for filter switches: "instructorId|lessonTypeId" -> slotCache
+// object. Lets switching back to an already-viewed instructor/length paint
+// instantly while a silent revalidate fetch runs. Must be emptied (via
+// resetFeedCaches) whenever slot state actually changes — booking, cancel,
+// reschedule, postcode change — not on mere filter switches.
+let feedCacheByFilter = {};
+// Incremented on every initFeed(); a fetch that finishes after a newer
+// initFeed started discards its results instead of painting stale slots.
+let feedLoadToken = 0;
+
+function resetFeedCaches() {
+  loadedRanges = [];
+  slotCache = {};
+  feedCacheByFilter = {};
+}
 let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
 const PLATFORM_MAX_DAYS = 84; // ceiling on instructors.max_booking_days_ahead
@@ -278,11 +293,11 @@ function init() {
                 sel.value = String(booking.instructor_id);
                 await loadLessonTypes();
                 chooseLessonTypeForExistingBooking(booking);
-                loadedRanges = []; slotCache = {}; selectedDate = null; clearSelectedSlot();
+                resetFeedCaches(); selectedDate = null; clearSelectedSlot();
                 await initFeed();
               } else {
                 chooseLessonTypeForExistingBooking(booking);
-                loadedRanges = []; slotCache = {}; selectedDate = null; clearSelectedSlot();
+                resetFeedCaches(); selectedDate = null; clearSelectedSlot();
                 await initFeed();
               }
               startRescheduleMode(
@@ -354,6 +369,11 @@ function updateCreditBadge() {
 }
 
 // ─── Lesson Types ───────────────────────────────────────────────────────────
+// Session cache keyed by request URL: lesson types + pricing for a given
+// instructor don't change mid-visit, and refetching them on every filter
+// switch was the main delay between picking an instructor and seeing slots.
+const lessonTypesCache = {};
+
 async function loadLessonTypes() {
   try {
     let url = '/api/lesson-types?action=list';
@@ -367,9 +387,13 @@ async function loadLessonTypes() {
       url += '&instructor_id=' + instrId;
       if (auth && auth.user && auth.user.id) url += '&learner_id=' + auth.user.id;
     }
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    let data = lessonTypesCache[url];
+    if (!data) {
+      const res = await fetch(url);
+      data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      lessonTypesCache[url] = data;
+    }
     lessonTypePricesExact = !!instrId;
     lessonTypes = data.lesson_types || [];
     hasFreeTrialSlot = lessonTypes.some(lt => lt && lt.slug === 'trial');
@@ -793,8 +817,7 @@ async function savePickupPostcode() {
     showToast('Pickup postcode saved - filtering slots by travel time', 'success');
 
     // Re-fetch slots with travel filter now active
-    loadedRanges = [];
-    slotCache = {};
+    resetFeedCaches();
     selectedDate = null;
     clearSelectedSlot();
     initFeed();
@@ -961,13 +984,13 @@ function resolveRescheduleDropoffAddress() {
 }
 
 async function onFilterChange() {
-  loadedRanges = []; slotCache = {};
   // Keep selectedDate so comparing instructors/lengths doesn't bounce the
   // learner back to the first available date; ensureSelectedDate() falls
   // back only when the kept date has no slots under the new filter.
   clearSelectedSlot();
   await loadLessonTypes();
-  if (auth) await loadTestDateAvailability();
+  // Renders its own panel when done — doesn't need to block the slot feed.
+  if (auth) loadTestDateAvailability();
   initFeed();
 }
 
@@ -975,34 +998,41 @@ async function initFeed() {
   choosePageLessonType();
   renderLessonLengthControls();
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
+  // Always fetch the full learner window in one go so learners don't need
+  // to reveal later dates manually, and so the empty state ("No slots with
+  // X") reflects the whole window.
   feedTo = clampToApiWindow(addDaysLocal(feedFrom, feedMaxDays()));
-  slotCache = {};
   loadedRanges = [];
   dateGridExpanded = false;
-  showLoading();
 
   const instructorId = document.getElementById('instructorFilter').value;
+  const ltId = slotFeedLessonTypeId || (selectedLessonType && selectedLessonType.id) || '';
+  const filterKey = `${instructorId}|${ltId}`;
 
-  // When a specific instructor is chosen, fetch their full learner window
-  // in one go so learners don't need to reveal later dates manually,
-  // and so the empty state ("No slots with X") reflects the whole window
-  // rather than just the first chunk.
-  if (instructorId) {
-    const fullTo = clampToApiWindow(addDaysLocal(feedFrom, feedMaxDays()));
-    const ok = await fetchFeedSlots(feedFrom, fullTo);
-    if (ok === false) return;
-    feedTo = fullTo;
+  // Instant paint from session memory when returning to a filter we've
+  // already loaded this visit; the fetch below still runs as a silent
+  // revalidate so slots booked out in the meantime don't linger.
+  const cached = feedCacheByFilter[filterKey];
+  if (cached) {
+    slotCache = cached;
     renderFeed();
-    return;
+  } else {
+    slotCache = {};
+    showLoading();
   }
 
-  // No specific instructor - still fetch the complete learner window immediately.
-  const ok = await fetchFeedSlots(feedFrom, feedTo);
+  const token = ++feedLoadToken;
+  const fresh = {};
+  const ok = await fetchFeedSlots(feedFrom, feedTo, fresh);
+  if (token !== feedLoadToken) return; // superseded by a newer filter switch
   if (ok === false) return;
+  slotCache = fresh;
+  feedCacheByFilter[filterKey] = fresh;
   renderFeed();
 }
 
-async function fetchFeedSlots(fromDate, toDate) {
+async function fetchFeedSlots(fromDate, toDate, target) {
+  if (!target) target = slotCache;
   const today = new Date(); today.setHours(0,0,0,0);
   let from = fmtDate(fromDate < today ? today : fromDate);
   let to = fmtDate(toDate);
@@ -1048,10 +1078,10 @@ async function fetchFeedSlots(fromDate, toDate) {
       if (data.travel_hidden) travelHidden += data.travel_hidden;
       const slots = data.slots || {};
       for (const ds in slots) {
-        if (!slotCache[ds]) slotCache[ds] = [];
+        if (!target[ds]) target[ds] = [];
         for (const s of slots[ds]) {
-          if (!slotCache[ds].find(x => x.date === s.date && x.start_time === s.start_time && x.instructor_id === s.instructor_id)) {
-            slotCache[ds].push(s);
+          if (!target[ds].find(x => x.date === s.date && x.start_time === s.start_time && x.instructor_id === s.instructor_id)) {
+            target[ds].push(s);
           }
         }
       }
@@ -3023,7 +3053,7 @@ function renderRecurringBlockConfirmed(data) {
 
 function refreshAfterBooking() {
   // Clear cache and reload
-  loadedRanges = []; slotCache = {};
+  resetFeedCaches();
   selectedDate = null;
   clearSelectedSlot();
   Promise.all([loadUpcoming(), initFeed()]);
@@ -3172,7 +3202,7 @@ async function confirmCancel() {
     updateCreditBadge();
     document.getElementById('cancelModal').classList.remove('open');
     showToast(data.message, data.credit_returned !== false ? 'success' : '');
-    loadedRanges = []; slotCache = {};
+    resetFeedCaches();
     selectedDate = null;
     clearSelectedSlot();
     await Promise.all([loadUpcoming(), initFeed()]);
@@ -3283,7 +3313,7 @@ async function confirmReschedule(newSlot) {
     closeRescheduleModal();
     cancelRescheduleMode();
     showToast(data.message || (isReservedMove ? 'Reserved lesson moved successfully!' : 'Lesson rescheduled successfully!'), 'success');
-    loadedRanges = []; slotCache = {};
+    resetFeedCaches();
     selectedDate = null;
     clearSelectedSlot();
     await Promise.all([loadUpcoming(), initFeed()]);
