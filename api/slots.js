@@ -1006,9 +1006,15 @@ async function handleAvailable(req, res) {
     // When minDurationOnly is set, we don't filter by offered_lesson_types —
     // the slot feed shows everyone, and per-duration filtering happens in
     // handleDurationsForSlot when the user clicks a slot.
+    //
+    // All of the data queries below (windows, overrides, bookings, holds,
+    // blackouts, external events, busy blocks) are independent of each other,
+    // so they are built as promises and awaited together in one Promise.all —
+    // the Neon HTTP driver pays a full round-trip per query, and running them
+    // sequentially dominated this endpoint's response time.
     const offeredFilterJson = JSON.stringify([lessonType.slug]);
     const implicitOfferAllowed = !isOptInOnlyLessonTypeSlug(lessonType.slug);
-    const windows = instructor_id
+    const windowsPromise = (async () => instructor_id
       ? (minDurationOnly
         ? await sql`
             SELECT ia.instructor_id, ia.day_of_week,
@@ -1100,11 +1106,11 @@ async function handleAvailable(req, res) {
               AND i.school_id = ${schoolId}
               AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
             ORDER BY ia.instructor_id, ia.day_of_week, ia.start_time
-          `);
+          `))();
 
-    let overrideWindows = [];
-    try {
-      overrideWindows = instructor_id
+    const overrideWindowsPromise = (async () => {
+      try {
+      return instructor_id
         ? (minDurationOnly
           ? await sql`
               SELECT iao.instructor_id,
@@ -1205,13 +1211,15 @@ async function handleAvailable(req, res) {
                 AND ((${implicitOfferAllowed} AND i.offered_lesson_types IS NULL) OR i.offered_lesson_types @> ${offeredFilterJson}::jsonb)
               ORDER BY iao.instructor_id, iao.override_date, iao.start_time
             `);
-    } catch (e) {
-      // Table may not exist before the availability override migration has run.
-    }
+      } catch (e) {
+        // Table may not exist before the availability override migration has run.
+        return [];
+      }
+    })();
 
     // 2. Load all confirmed/completed bookings in the date range
-    const bookings = instructor_id
-      ? await sql`
+    const bookingsPromise = instructor_id
+      ? sql`
           SELECT instructor_id,
                  scheduled_date::text AS scheduled_date,
                  start_time::text     AS start_time,
@@ -1223,7 +1231,7 @@ async function handleAvailable(req, res) {
             AND instructor_id = ${instructor_id}
             AND school_id = ${schoolId}
         `
-      : await sql`
+      : sql`
           SELECT instructor_id,
                  scheduled_date::text AS scheduled_date,
                  start_time::text     AS start_time,
@@ -1236,9 +1244,9 @@ async function handleAvailable(req, res) {
         `;
 
     // 2b. Also load active slot reservations (held during Stripe checkout)
-    let reservations = [];
-    try {
-      reservations = instructor_id
+    const reservationsPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT instructor_id,
                    scheduled_date::text AS scheduled_date,
@@ -1260,14 +1268,16 @@ async function handleAvailable(req, res) {
               AND expires_at > NOW()
               AND school_id = ${schoolId}
           `;
-    } catch (e) {
-      // Table may not exist yet — that's fine, no reservations
-    }
+      } catch (e) {
+        // Table may not exist yet — that's fine, no reservations
+        return [];
+      }
+    })();
 
     // 2b-ii. Also load pending lesson offers (instructor-initiated, awaiting acceptance)
-    let pendingOffers = [];
-    try {
-      pendingOffers = instructor_id
+    const pendingOffersPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT instructor_id,
                    scheduled_date::text AS scheduled_date,
@@ -1291,18 +1301,17 @@ async function handleAvailable(req, res) {
               AND expires_at > NOW()
               AND school_id = ${schoolId}
           `;
-    } catch (e) {
-      // Table may not exist yet
-    }
-
-    // Merge pending offers into reservations so they block slots
-    reservations = reservations.concat(pendingOffers);
+      } catch (e) {
+        // Table may not exist yet
+        return [];
+      }
+    })();
 
     // 2b-iii. Pending lesson requests block their slot exactly like offers
     // (LESSON-REQUEST-PLAN.md).
-    let pendingRequests = [];
-    try {
-      pendingRequests = instructor_id
+    const pendingRequestsPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT instructor_id,
                    scheduled_date::text AS scheduled_date,
@@ -1326,14 +1335,15 @@ async function handleAvailable(req, res) {
               AND expires_at > NOW()
               AND school_id = ${schoolId}
           `;
-    } catch (e) {
-      // Table may not exist yet
-    }
-    reservations = reservations.concat(pendingRequests);
+      } catch (e) {
+        // Table may not exist yet
+        return [];
+      }
+    })();
 
-    let recurringHolds = [];
-    try {
-      recurringHolds = instructor_id
+    const recurringHoldsPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT rsbi.instructor_id,
                    rsbi.scheduled_date::text AS scheduled_date,
@@ -1361,15 +1371,16 @@ async function handleAvailable(req, res) {
               AND rsb.expires_at > NOW()
               AND rsbi.school_id = ${schoolId}
           `;
-    } catch (e) {
-      // Table may not exist before the recurring block migration has run.
-    }
-    reservations = reservations.concat(recurringHolds);
+      } catch (e) {
+        // Table may not exist before the recurring block migration has run.
+        return [];
+      }
+    })();
 
     // 2c. Load blackout date ranges overlapping the requested window
-    let blackouts = [];
-    try {
-      blackouts = instructor_id
+    const blackoutsPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT ibd.instructor_id, ibd.blackout_date::text AS start_date, ibd.end_date::text
             FROM instructor_blackout_dates ibd
@@ -1387,11 +1398,11 @@ async function handleAvailable(req, res) {
               AND ibd.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `;
-    } catch (e) {
+      } catch (e) {
       console.warn('Blackout query failed (end_date column may be missing — run migration):', e.message);
       // Fallback: try single-date query without end_date
       try {
-        blackouts = instructor_id
+        return instructor_id
           ? await sql`
               SELECT ibd.instructor_id, ibd.blackout_date::text AS start_date, ibd.blackout_date::text AS end_date
               FROM instructor_blackout_dates ibd
@@ -1411,13 +1422,15 @@ async function handleAvailable(req, res) {
             `;
       } catch (e2) {
         // Table genuinely doesn't exist
+        return [];
       }
-    }
+      }
+    })();
 
     // 2d. Load external calendar events (iCal sync) in the date range
-    let externalEvents = [];
-    try {
-      externalEvents = instructor_id
+    const externalEventsPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT iee.instructor_id, iee.event_date::text AS event_date,
                    iee.start_time::text AS start_time, iee.end_time::text AS end_time, iee.is_all_day
@@ -1437,15 +1450,17 @@ async function handleAvailable(req, res) {
               AND iee.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `;
-    } catch (e) {
-      // Table may not exist yet
-    }
+      } catch (e) {
+        // Table may not exist yet
+        return [];
+      }
+    })();
 
     // 2e. Load instructor-entered busy blocks in the date range. Timed busy
     // blocks behave like bookings for availability generation.
-    let busyBlocks = [];
-    try {
-      busyBlocks = instructor_id
+    const busyBlocksPromise = (async () => {
+      try {
+      return instructor_id
         ? await sql`
             SELECT ibb.instructor_id, ibb.block_date::text AS block_date,
                    ibb.start_time::text AS start_time, ibb.end_time::text AS end_time
@@ -1465,9 +1480,23 @@ async function handleAvailable(req, res) {
               AND ibb.school_id = ${schoolId}
               AND i.school_id = ${schoolId}
           `;
-    } catch (e) {
-      // Table may not exist yet.
-    }
+      } catch (e) {
+        // Table may not exist yet.
+        return [];
+      }
+    })();
+
+    // Await everything in one round-trip wave.
+    const [windows, overrideWindows, bookings, reservationRows, pendingOffers,
+           pendingRequests, recurringHolds, blackouts, externalEvents, busyBlocks] =
+      await Promise.all([windowsPromise, overrideWindowsPromise, bookingsPromise,
+                         reservationsPromise, pendingOffersPromise, pendingRequestsPromise,
+                         recurringHoldsPromise, blackoutsPromise, externalEventsPromise,
+                         busyBlocksPromise]);
+
+    // Merge pending offers, pending requests and recurring holds into
+    // reservations so they all block slots identically.
+    const reservations = reservationRows.concat(pendingOffers, pendingRequests, recurringHolds);
 
     // Expand blackout ranges into individual "instructorId|date" entries for fast lookup
     const blackoutIndex = new Set();

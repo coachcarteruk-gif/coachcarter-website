@@ -24,15 +24,29 @@ function extractPostcode(address) {
 // ── Fast estimation (postcodes.io + haversine) ─────────────────────────────
 // Used for slot filtering — no API key needed, no rate limits
 
+// Module-level geocode cache. Postcode → coordinates never changes, and warm
+// serverless instances keep module state between invocations, so this saves a
+// blocking postcodes.io round-trip on most slot-feed requests. Failed lookups
+// are NOT cached (could be a transient API error). Capped to bound memory.
+const GEOCODE_CACHE_MAX = 5000;
+const geocodeCache = new Map();
+
 /** Bulk geocode UK postcodes via postcodes.io (free, up to 100 per call) */
 async function bulkGeocodeUK(postcodes) {
   if (!postcodes || postcodes.length === 0) return {};
   const unique = [...new Set(postcodes.map(p => p.replace(/\s+/g, ' ').toUpperCase()))];
   const map = {};
+  const misses = [];
+  for (const pc of unique) {
+    const cached = geocodeCache.get(pc);
+    if (cached) map[pc] = cached;
+    else misses.push(pc);
+  }
+  if (misses.length === 0) return map;
   try {
     // postcodes.io accepts up to 100 postcodes per bulk request
-    for (let i = 0; i < unique.length; i += 100) {
-      const batch = unique.slice(i, i + 100);
+    for (let i = 0; i < misses.length; i += 100) {
+      const batch = misses.slice(i, i + 100);
       const resp = await fetch('https://api.postcodes.io/postcodes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,10 +56,10 @@ async function bulkGeocodeUK(postcodes) {
       const data = await resp.json();
       for (const item of (data.result || [])) {
         if (item.result) {
-          map[item.query.toUpperCase().replace(/\s+/g, ' ')] = {
-            lat: item.result.latitude,
-            lon: item.result.longitude
-          };
+          const key = item.query.toUpperCase().replace(/\s+/g, ' ');
+          const coords = { lat: item.result.latitude, lon: item.result.longitude };
+          map[key] = coords;
+          if (geocodeCache.size < GEOCODE_CACHE_MAX) geocodeCache.set(key, coords);
         }
       }
     }
