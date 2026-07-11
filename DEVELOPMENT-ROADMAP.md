@@ -1,5 +1,17 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.119 - Per-Instructor Advance Booking Window (11 July 2026)
+
+Deliberate policy reversal of the 28-day platform booking cap: `instructors.max_booking_days_ahead` (1–84 days, set from the instructor profile) is now the learner-facing window, with 84 days as the platform ceiling. Motivating case: Simon set 84 days but learners only ever saw 28 because the effective window was min(28, setting). Server-side this is `MAX_DAYS_AHEAD = 84` in `api/slots.js` — the outer guard on every self-serve path (available/book/checkout/guest checkout/reschedule/free trial/create-offer/lesson requests), with the per-instructor `isDateWithinBookingWindow()` check unchanged beside it. `?action=available` keeps its 31-days-per-request limit; the feed already fetched in ≤31-day chunks.
+
+Learner feed (`book.js`): `FEED_MAX_DAYS = 28` replaced by `feedMaxDays()` — the chosen instructor's window, or the widest window in the school under "All instructors" (the server filters each slot by its own instructor's window). The public `?action=list` on `api/instructors.js` now returns `max_booking_days_ahead` (public-safe). Weekly-repeat option counts and empty-state copy follow the per-instructor window. The 2.115 week-grid date selector collapses past 6 weeks behind a "Show later dates" button so a 12-week window doesn't push time slots below the fold (auto-expands if the selected date is beyond the fold).
+
+Note: the DB column default is 84, so instructors who never touched the setting now expose a 12-week window (matching what their profile page always displayed); they can reduce it from the profile.
+
+**Files:** `api/slots.js`, `api/instructors.js`, `api/instructor.js`, `public/learner/book.js`, `public/learner/book.html`, `CLAUDE.md`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.118 - Lesson Requests: Request-to-Book with Payment Holds (10 July 2026)
 
 Per-instructor "Request to book" mode (LESSON-REQUEST-PLAN.md), built for instructors like Simon who can't always keep their diary current but still want to be asked. With `instructors.request_to_book = TRUE` (profile toggle), learners see the instructor's slots as normal but the feed reads "Request this slot" with an "On request" badge; sending a request holds the payment instead of taking it, and the instructor has up to 48 hours (never later than 2h before the slot) to accept or decline from a new dashboard card, nudged by SMS + email.

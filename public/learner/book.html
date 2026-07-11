@@ -383,7 +383,8 @@
       grid-template-columns: minmax(0, 1fr);
       gap: 18px;
     }
-    /* Week-by-week Mon–Sun grid covering the 28-day booking window.
+    /* Week-by-week Mon–Sun grid covering the instructor's booking window
+       (up to 12 weeks; collapsed to 6 weeks until "Show later dates").
        Phone-first: 7 equal columns fit a 375px viewport with ~44px cells. */
     .date-grid {
       display: grid;
@@ -401,6 +402,24 @@
       color: var(--muted);
       padding-bottom: 2px;
     }
+    .date-grid-more {
+      display: block;
+      max-width: 420px;
+      width: 100%;
+      margin-top: 8px;
+      padding: 9px 12px;
+      background: var(--bg);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .date-grid-more:hover { color: var(--primary); border-color: var(--primary); }
     .date-cell {
       position: relative;
       display: flex;

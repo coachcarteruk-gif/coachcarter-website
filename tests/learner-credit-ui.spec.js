@@ -218,7 +218,7 @@ test.describe('learner test date reminders', () => {
     expect(js).toContain('your driving test date');
     expect(js).toContain('selected-date-test-note');
     expect(js).toContain('function apiWindowMaxDateLocal()');
-    expect(js).toContain('clampToApiWindow(addDaysLocal(feedFrom, FEED_MAX_DAYS))');
+    expect(js).toContain('clampToApiWindow(addDaysLocal(feedFrom, feedMaxDays()))');
     expect(html).toContain('.date-cell-test');
     expect(html).toContain('.selected-date-test-note');
   });
