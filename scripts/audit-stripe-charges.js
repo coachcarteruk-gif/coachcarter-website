@@ -6,7 +6,7 @@
 // against `credit_transactions`. Classifies each session into one of three
 // buckets:
 //
-//   matched    - session.id found in credit_transactions.stripe_session_id
+//   matched    - session.id found in the durable table for its payment_type
 //   excluded   - paid session whose metadata.payment_type is NOT in the
 //                tracked set. Pre-PR-J this captured the legacy package /
 //                pass_guarantee flow that the retired handleCheckoutComplete
@@ -15,9 +15,8 @@
 //                "excluded" row here is from before PR-J shipped, OR a new
 //                untracked Stripe product (e.g. Stripe Dashboard manual
 //                charge) that the webhook never sees a payment_type for.
-//   suspicious - paid session whose metadata.payment_type IS tracked
-//                (credit_purchase, slot_booking, lesson_offer) but no
-//                credit_transactions row exists. These are the real gaps.
+//   suspicious - paid session whose metadata.payment_type IS tracked but no
+//                durable DB row exists. These are the real gaps.
 //
 // For every session, also resolves the underlying PaymentIntent and pulls
 // `latest_charge.balance_transaction.fee` so the script doubles as a fee
@@ -56,6 +55,14 @@ const TRACKED_PAYMENT_TYPES = new Set([
   'credit_purchase',
   'slot_booking',
   'lesson_offer',
+  'lesson_request_hold',
+  'recurring_block_bank_checkout',
+]);
+
+const CREDIT_TRANSACTION_PAYMENT_TYPES = new Set([
+  'credit_purchase',
+  'slot_booking',
+  'lesson_offer',
 ]);
 
 main().catch(err => {
@@ -75,15 +82,43 @@ async function main() {
   const piByPiId = await fetchPaymentIntentsForSessions(sessions);
   log(`  ${piByPiId.size} payment intents resolved`);
 
-  log('Querying credit_transactions for matches...');
+  log('Querying durable DB tables for matches...');
   const sessionIds = sessions.map(s => s.id);
-  const rows = sessionIds.length === 0 ? [] : await sql`
+  const creditTxSessionIds = sessions
+    .filter(s => CREDIT_TRANSACTION_PAYMENT_TYPES.has(s.metadata?.payment_type))
+    .map(s => s.id);
+  const requestHoldSessionIds = sessions
+    .filter(s => s.metadata?.payment_type === 'lesson_request_hold')
+    .map(s => s.id);
+  const recurringBlockSessionIds = sessions
+    .filter(s => s.metadata?.payment_type === 'recurring_block_bank_checkout')
+    .map(s => s.id);
+
+  const rows = creditTxSessionIds.length === 0 ? [] : await sql`
     SELECT stripe_session_id, id, amount_pence, type, created_at, learner_id
       FROM credit_transactions
-     WHERE stripe_session_id = ANY(${sessionIds})
+     WHERE stripe_session_id = ANY(${creditTxSessionIds})
+  `;
+  const requestRows = requestHoldSessionIds.length === 0 ? [] : await sql`
+    SELECT stripe_session_id, id, amount_pence, payment_method AS type, created_at, learner_id
+      FROM lesson_requests
+     WHERE stripe_session_id = ANY(${requestHoldSessionIds})
+  `;
+  const recurringRows = recurringBlockSessionIds.length === 0 ? [] : await sql`
+    SELECT stripe_checkout_session_id AS stripe_session_id,
+           id,
+           total_price_pence AS amount_pence,
+           funding_method AS type,
+           created_at,
+           learner_id
+      FROM recurring_slot_blocks
+     WHERE stripe_checkout_session_id = ANY(${recurringBlockSessionIds})
+       AND status = 'confirmed'
   `;
   const dbBySessionId = new Map(rows.map(r => [r.stripe_session_id, r]));
-  log(`  ${rows.length} matching credit_transactions rows`);
+  for (const r of requestRows) dbBySessionId.set(r.stripe_session_id, r);
+  for (const r of recurringRows) dbBySessionId.set(r.stripe_session_id, r);
+  log(`  ${dbBySessionId.size} matching durable rows`);
 
   // TSV header
   const headers = [

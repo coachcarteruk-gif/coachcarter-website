@@ -23,13 +23,15 @@ const { verifyCronAuth } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { withCronLock } = require('./_cron-lock');
 
-// payment_type values that the webhook persists to credit_transactions.
+// payment_type values that the webhook persists to a durable DB row.
 // The legacy pass_guarantee/calculator flow uses an in-memory Map and is
 // intentionally not reconciled here.
 const TRACKED_PAYMENT_TYPES = new Set([
   'credit_purchase',
   'slot_booking',
   'lesson_offer',
+  'lesson_request_hold',
+  'recurring_block_bank_checkout',
 ]);
 
 const LOOKBACK_SECONDS = 25 * 60 * 60; // 25h overlap with hourly schedule
@@ -68,14 +70,42 @@ module.exports = async (req, res) => {
       return { ok: true, checked: 0, missing: 0 };
     }
 
-    // Bulk lookup — single round-trip rather than one query per session.
-    const sessionIds = candidateSessions.map(s => s.id);
-    const rows = await sql`
+    // Bulk lookups by durable write target. Different checkout flows land in
+    // different tables: ordinary paid lessons/offers/legacy credit purchases
+    // create credit_transactions, request-to-book creates lesson_requests, and
+    // reserved weekly bank checkout updates recurring_slot_blocks.
+    const creditTxSessionIds = candidateSessions
+      .filter(s => ['credit_purchase', 'slot_booking', 'lesson_offer'].includes(s.metadata?.payment_type))
+      .map(s => s.id);
+    const requestHoldSessionIds = candidateSessions
+      .filter(s => s.metadata?.payment_type === 'lesson_request_hold')
+      .map(s => s.id);
+    const recurringBlockSessionIds = candidateSessions
+      .filter(s => s.metadata?.payment_type === 'recurring_block_bank_checkout')
+      .map(s => s.id);
+
+    const rows = creditTxSessionIds.length ? await sql`
       SELECT stripe_session_id
         FROM credit_transactions
-       WHERE stripe_session_id = ANY(${sessionIds})
-    `;
-    const seen = new Set(rows.map(r => r.stripe_session_id));
+       WHERE stripe_session_id = ANY(${creditTxSessionIds})
+    ` : [];
+    const requestRows = requestHoldSessionIds.length ? await sql`
+      SELECT stripe_session_id
+        FROM lesson_requests
+       WHERE stripe_session_id = ANY(${requestHoldSessionIds})
+    ` : [];
+    const recurringRows = recurringBlockSessionIds.length ? await sql`
+      SELECT stripe_checkout_session_id AS stripe_session_id
+        FROM recurring_slot_blocks
+       WHERE stripe_checkout_session_id = ANY(${recurringBlockSessionIds})
+         AND status = 'confirmed'
+    ` : [];
+
+    const seen = new Set([
+      ...rows.map(r => r.stripe_session_id),
+      ...requestRows.map(r => r.stripe_session_id),
+      ...recurringRows.map(r => r.stripe_session_id),
+    ]);
 
     const missing = candidateSessions.filter(s => !seen.has(s.id));
 
