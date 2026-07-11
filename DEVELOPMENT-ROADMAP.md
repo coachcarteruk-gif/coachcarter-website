@@ -8,6 +8,8 @@ Learner feed (`book.js`): `FEED_MAX_DAYS = 28` replaced by `feedMaxDays()` — t
 
 Note: the DB column default is 84, so instructors who never touched the setting now expose a 12-week window (matching what their profile page always displayed); they can reduce it from the profile.
 
+Follow-up (same day): the date grid now renders a full-width month heading before the first week and before each week that starts a new month, plus a small in-cell marker on day-1 cells for months beginning mid-week. Also fixed a lesson-requests UX trap: `?action=checkout-request` from a signed-in page whose cookie had expired returned 400 "Please enter your name" with no name field on screen; it now returns 401 `SESSION_EXPIRED` so `fetchAuthed` shows its sign-in-again prompt.
+
 **Files:** `api/slots.js`, `api/instructors.js`, `api/instructor.js`, `public/learner/book.js`, `public/learner/book.html`, `CLAUDE.md`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
 
 ---

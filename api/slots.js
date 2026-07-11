@@ -4754,6 +4754,12 @@ async function handleCheckoutRequest(req, res) {
   const isGuest = !user;
   let cleanGuestName = null, cleanGuestEmail = null, cleanGuestPhone = null;
   if (isGuest) {
+    // A signed-in learner whose cookie has expired sends no guest fields at
+    // all (the page hides them when it believes a session exists). Return
+    // 401 so fetchAuthed shows its session-expired prompt instead of a
+    // baffling "enter your name" error with no name field on screen.
+    if (guest_name === undefined && guest_email === undefined && guest_phone === undefined)
+      return res.status(401).json({ error: true, code: 'SESSION_EXPIRED', message: 'Your session has expired — please sign in again to request this slot.' });
     cleanGuestName = String(guest_name || '').trim();
     cleanGuestEmail = String(guest_email || '').trim().toLowerCase();
     cleanGuestPhone = String(guest_phone || '').replace(/\s+/g, '').trim();

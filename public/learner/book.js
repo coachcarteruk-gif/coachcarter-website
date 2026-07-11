@@ -1134,19 +1134,22 @@ function renderDateGrid(cache) {
   if (!dates.length) return '';
   const todayStr = fmtDate(new Date());
   const cells = [];
+  const cellDates = []; // parallel to cells; null for blank pads
 
   const firstDay = new Date(dates[0] + 'T00:00:00');
   const leadBlanks = (firstDay.getDay() + 6) % 7; // Monday-first column index
   for (let i = 0; i < leadBlanks; i++) {
     cells.push('<span class="date-cell date-cell-blank" aria-hidden="true"></span>');
+    cellDates.push(null);
   }
 
   for (const ds of dates) {
     const d = new Date(ds + 'T00:00:00');
     const count = (cache && cache[ds] && cache[ds].length) || 0;
     const dayNum = d.getDate();
-    const showMonth = dayNum === 1 || ds === dates[0];
-    const monthLabel = showMonth ? `<span class="date-cell-month">${esc(MON_SHORT[d.getMonth()])}</span>` : '';
+    // The 1st keeps a small in-cell marker so a month starting mid-week is
+    // never ambiguous (the full-width heading only appears at week starts).
+    const monthLabel = dayNum === 1 ? `<span class="date-cell-month">${esc(MON_SHORT[d.getMonth()])}</span>` : '';
     const todayClass = ds === todayStr ? ' date-cell-today' : '';
     const testDateClass = isLearnerTestDate(ds) ? ' date-cell-test' : '';
     const testDateBadge = isLearnerTestDate(ds) ? testDateMarkerHTML() : '';
@@ -1154,6 +1157,7 @@ function renderDateGrid(cache) {
     if (!count) {
       const testDateLabel = isLearnerTestDate(ds) ? ' aria-label="Your driving test date"' : '';
       cells.push(`<span class="date-cell date-cell-off${todayClass}${testDateClass}"${testDateLabel}>${monthLabel}<span class="date-cell-num">${dayNum}</span>${testDateBadge}</span>`);
+      cellDates.push(ds);
       continue;
     }
     const selected = ds === selectedDate;
@@ -1167,10 +1171,12 @@ function renderDateGrid(cache) {
       aria-label="${esc(label)}">
       ${monthLabel}<span class="date-cell-num">${dayNum}</span><span class="date-cell-dot" aria-hidden="true"></span>${testDateBadge}
     </button>`);
+    cellDates.push(ds);
   }
 
   while (cells.length % 7 !== 0) {
     cells.push('<span class="date-cell date-cell-blank" aria-hidden="true"></span>');
+    cellDates.push(null);
   }
 
   // Long windows (up to 12 weeks) would render a wall of rows that pushes
@@ -1180,15 +1186,37 @@ function renderDateGrid(cache) {
     dateGridExpanded = true;
   }
   let visibleCells = cells;
+  let visibleDates = cellDates;
   let expandBtn = '';
   if (!dateGridExpanded && cells.length > COLLAPSED_CELLS) {
     visibleCells = cells.slice(0, COLLAPSED_CELLS);
+    visibleDates = cellDates.slice(0, COLLAPSED_CELLS);
     expandBtn = `<button class="date-grid-more" type="button" data-action="expand-date-grid">Show later dates</button>`;
+  }
+
+  // Full-width month heading before the first week and before each week
+  // that starts a new month, so learners always know which month a row
+  // belongs to (a 12-week window can span four months).
+  const todayYear = new Date().getFullYear();
+  const body = [];
+  let lastLabelledMonth = null;
+  for (let r = 0; r < visibleCells.length; r += 7) {
+    const firstDs = visibleDates.slice(r, r + 7).find(Boolean);
+    if (firstDs) {
+      const monthKey = firstDs.slice(0, 7); // YYYY-MM
+      if (monthKey !== lastLabelledMonth) {
+        const d = new Date(firstDs + 'T00:00:00');
+        const yearSuffix = d.getFullYear() !== todayYear ? ` ${d.getFullYear()}` : '';
+        body.push(`<span class="date-grid-month">${esc(d.toLocaleDateString('en-GB', { month: 'long' }))}${yearSuffix}</span>`);
+        lastLabelledMonth = monthKey;
+      }
+    }
+    body.push(...visibleCells.slice(r, r + 7));
   }
 
   const header = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     .map(dl => `<span class="date-grid-head">${dl}</span>`).join('');
-  return `<div class="date-grid" role="group" aria-label="Choose a date">${header}${visibleCells.join('')}</div>${expandBtn}`;
+  return `<div class="date-grid" role="group" aria-label="Choose a date">${header}${body.join('')}</div>${expandBtn}`;
 }
 
 function slotStartMinutes(slot) {
