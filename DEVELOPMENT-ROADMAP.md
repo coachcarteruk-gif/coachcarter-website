@@ -1,5 +1,18 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.120 - Slot Feed Load-Time Optimization (11 July 2026)
+
+Performance-only pass on the learner slot feed — no UI, API-shape, or policy changes (responses verified byte-identical to the previous code). Four layers of serialization removed:
+
+1. **`api/slots.js` `handleAvailable`**: the ~12 data queries (availability windows, overrides, bookings, slot reservations, pending offers, pending requests, recurring holds, blackouts, external events, busy blocks) ran as sequential awaits — one Neon HTTP round-trip each. They are mutually independent, so they now build as promises and resolve in a single `Promise.all` wave after tenant + lesson-type resolution: 13 round-trips → 3. Per-optional-table "table may not exist" catch semantics preserved, including the blackout `end_date` fallback query.
+2. **`book.js` `fetchFeedSlots`**: the ≤31-day window chunks (up to 3 for an 84-day window) were fetched sequentially; now `Promise.all`.
+3. **`book.js` init (auth path)**: `initFeed()` was gated on six calls; it now waits only on its actual inputs (`loadInstructors`, `loadLessonTypes`, `loadLearnerProfile` — the profile supplies the pickup postcode, which changes travel-filtered results). Balance, upcoming lessons, pending requests, and test-date availability load in parallel without blocking the first slot render; the reserved-bank-return and reschedule paths still await everything.
+4. **`api/_travel-time.js`**: module-level in-memory postcode→coords cache (cap 5000, failures not cached) in front of postcodes.io, so warm instances skip the blocking external geocode call on travel-filtered requests.
+
+**Files:** `api/slots.js`, `public/learner/book.js`, `api/_travel-time.js`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.119 - Per-Instructor Advance Booking Window (11 July 2026)
 
 Deliberate policy reversal of the 28-day platform booking cap: `instructors.max_booking_days_ahead` (1–84 days, set from the instructor profile) is now the learner-facing window, with 84 days as the platform ceiling. Motivating case: Simon set 84 days but learners only ever saw 28 because the effective window was min(28, setting). Server-side this is `MAX_DAYS_AHEAD = 84` in `api/slots.js` — the outer guard on every self-serve path (available/book/checkout/guest checkout/reschedule/free trial/create-offer/lesson requests), with the per-instructor `isDateWithinBookingWindow()` check unchanged beside it. `?action=available` keeps its 31-days-per-request limit; the feed already fetched in ≤31-day chunks.

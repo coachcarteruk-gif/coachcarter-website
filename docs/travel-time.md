@@ -6,7 +6,7 @@
 
 ## Slot filtering (pre-booking)
 
-`handleAvailable()` in `slots.js` hides slots where the instructor can't travel between adjacent bookings in time. Uses postcodes.io (free, no key) for geocoding + haversine distance estimation. The learner's postcode is passed via `&pickup_postcode=` query param from `book.html`. Formula: gap between slots must be >= estimated drive time + 10 min buffer.
+`handleAvailable()` in `slots.js` hides slots where the instructor can't travel between adjacent bookings in time. Uses postcodes.io (free, no key) for geocoding + haversine distance estimation. The learner's postcode is passed via `&pickup_postcode=` query param from `book.html`. Formula: gap between slots must be >= estimated drive time + 10 min buffer. `bulkGeocodeUK()` keeps a module-level in-memory postcode→coords cache (July 2026), so warm serverless instances skip the postcodes.io round-trip for postcodes they've already seen; failed lookups are not cached.
 
 ## Booking warning (post-booking)
 

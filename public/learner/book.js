@@ -239,16 +239,25 @@ function init() {
     return;
   }
 
-  Promise.all([loadBalance(), loadInstructors(), loadUpcoming(), loadPendingRequests(), loadLearnerProfile(), loadLessonTypes()])
+  // Only the slot feed's own inputs gate initFeed(): instructors + lesson
+  // types build the request URL, and the learner profile supplies the pickup
+  // postcode (which changes the travel-filtered results). Balance, upcoming
+  // lessons, pending requests and test-date availability load in parallel
+  // without blocking the first slot render.
+  const secondaryLoads = Promise.all([loadBalance(), loadUpcoming(), loadPendingRequests()]);
+  Promise.all([loadInstructors(), loadLearnerProfile(), loadLessonTypes()])
     .then(async () => {
       preselectInstructor();
       // Re-load lesson types now that instructors are known, so
       // offered_lesson_types filtering and instructor-exact pricing apply
       if (preselectedInstructorSlug || preselectedInstructorId || instructors.length === 1) await loadLessonTypes();
-      await loadTestDateAvailability();
-      initFeed();
-      renderTestDatePanel();
+      const feedReady = initFeed();
+      // Renders its own panel (and the feed's TEST-date marker comes from the
+      // profile, already loaded), so this doesn't need to gate the feed.
+      loadTestDateAvailability();
       showPostcodePromptIfNeeded();
+      await feedReady;
+      await secondaryLoads;
 
       if (reservedBankReturn) {
         await handleReservedBankReturn(reservedBankBlockId, { cancelled: reservedBankCancelled });
@@ -1021,15 +1030,21 @@ async function fetchFeedSlots(fromDate, toDate) {
 
   try {
     let travelHidden = 0;
-    for (const chunk of chunks) {
+    // Fetch all chunks in parallel — each chunk is a separate serverless
+    // invocation, so awaiting them one at a time multiplied feed load time
+    // by the chunk count.
+    const pc = getLearnerPostcode();
+    const chunkResults = await Promise.all(chunks.map(async chunk => {
       let url = `/api/slots?action=available&from=${chunk.from}&to=${chunk.to}&min_duration_only=1`;
       if (instructorId) url += `&instructor_id=${instructorId}`;
       if (ltId) url += `&lesson_type_id=${ltId}`;
-      const pc = getLearnerPostcode();
       if (pc) url += `&pickup_postcode=${pc}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      return data;
+    }));
+    for (const data of chunkResults) {
       if (data.travel_hidden) travelHidden += data.travel_hidden;
       const slots = data.slots || {};
       for (const ds in slots) {
