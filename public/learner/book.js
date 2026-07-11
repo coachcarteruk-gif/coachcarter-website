@@ -1591,6 +1591,11 @@ function applyRequestModeUi(isGuest, ltPriceStr, chargeMins) {
 
   if (slotRequestMode) {
     requestUiApplied = true;
+    const repeatToggle = document.getElementById('repeatToggle');
+    const repeatOptions = document.getElementById('repeatOptions');
+    if (repeatToggle) repeatToggle.checked = false;
+    if (repeatOptions) repeatOptions.classList.remove('open');
+    repeatConflicts = [];
     if (repeatSection) repeatSection.style.display = 'none';
     document.getElementById('bookBtnLabel').textContent = 'Send request';
     document.getElementById('payBtnLabel').textContent = `Request — hold ${ltPriceStr}`;
@@ -2070,6 +2075,7 @@ function toggleRepeatOptions() {
 }
 
 function getRepeatWeeks() {
+  if (slotRequestMode) return 1;
   if (!document.getElementById('repeatToggle').checked) return 1;
   return parseInt(document.getElementById('repeatWeeksSelect').value, 10);
 }

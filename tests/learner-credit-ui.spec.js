@@ -73,6 +73,17 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).not.toContain('const hasCreds = balanceMinutes >= totalMins;');
   });
 
+  test('request-to-book credit eligibility is single-slot only', () => {
+    const js = read('public/learner/book.js');
+
+    expect(js).toContain('if (slotRequestMode) return 1;');
+    expect(js).toContain("const repeatToggle = document.getElementById('repeatToggle');");
+    expect(js).toContain("const repeatOptions = document.getElementById('repeatOptions');");
+    expect(js).toContain('if (repeatToggle) repeatToggle.checked = false;');
+    expect(js).toContain("if (repeatOptions) repeatOptions.classList.remove('open');");
+    expect(js).toContain('repeatConflicts = [];');
+  });
+
   test('booking modal does not link to retired buy-credit journeys', () => {
     const js = read('public/learner/book.js');
     const html = read('public/learner/book.html');
