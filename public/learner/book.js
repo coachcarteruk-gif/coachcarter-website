@@ -1104,6 +1104,12 @@ function getAvailableDateStrings(cache) {
     .filter(ds => cache && cache[ds] && cache[ds].length > 0);
 }
 
+function getDateGridRangeStrings(cache) {
+  const availableDates = getAvailableDateStrings(cache);
+  const gridFrom = availableDates[0] || fmtDate(feedFrom);
+  return getDateRangeStrings(new Date(gridFrom + 'T00:00:00'), feedTo);
+}
+
 function sortSlots(a, b) {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1;
   if (a.start_time !== b.start_time) return a.start_time < b.start_time ? -1 : 1;
@@ -1145,7 +1151,7 @@ function testDateMarkerHTML() {
    Days without availability stay visible but disabled so learners can map
    slots onto their weekly routine and see fully-booked days at a glance. */
 function renderDateGrid(cache) {
-  const dates = getDateRangeStrings(feedFrom, feedTo);
+  const dates = getDateGridRangeStrings(cache);
   if (!dates.length) return '';
   const todayStr = fmtDate(new Date());
   const cells = [];
