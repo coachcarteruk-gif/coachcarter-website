@@ -1164,11 +1164,6 @@ function renderDateGrid(cache) {
     cellDates.push(ds);
   }
 
-  while (cells.length % 7 !== 0) {
-    cells.push('<span class="date-cell date-cell-blank" aria-hidden="true"></span>');
-    cellDates.push(null);
-  }
-
   // Long windows (up to 12 weeks) would render a wall of rows that pushes
   // the time slots below the fold — collapse to 6 weeks until expanded.
   const COLLAPSED_DATES = 6 * 7;

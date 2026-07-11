@@ -24,6 +24,7 @@ test.describe('learner booking date grid', () => {
     expect(renderDateGrid).toContain('if (currentMonthKey) padMonthRow();');
     expect(renderDateGrid).toContain('const leadBlanks = (d.getDay() + 6) % 7;');
     expect(renderDateGrid).toContain('date-grid-month');
+    expect(renderDateGrid).not.toContain('cellDates.push(null)');
     expect(renderDateGrid).not.toContain('date-cell-month-start');
     expect(html).not.toContain('.date-cell-month-start');
   });
