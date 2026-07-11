@@ -54,7 +54,8 @@ async function handleList(req, res) {
     const schoolId = tenant.schoolId;
     const instructors = await sql`
       SELECT id, name, slug, bio, photo_url, active,
-             pass_rate, years_experience, specialisms
+             pass_rate, years_experience, specialisms,
+             COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead
       FROM instructors
       WHERE active = true
         AND school_id = ${schoolId}

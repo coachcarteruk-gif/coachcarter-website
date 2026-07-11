@@ -2,22 +2,23 @@
 const { test, expect } = require('@playwright/test');
 const { test: authedTest, expect: authedExpect } = require('./fixtures/auth');
 
-// 4-week platform advance booking cap (CLAUDE.md hard rule).
+// 84-day platform advance booking ceiling (CLAUDE.md hard rule, July 2026 —
+// instructors.max_booking_days_ahead is the learner-facing window; 84 is the cap).
 //
-// MAX_DAYS_AHEAD = 28 in api/slots.js. The cap covers ?action=available,
+// MAX_DAYS_AHEAD = 84 in api/slots.js. The ceiling covers ?action=available,
 // ?action=book, ?action=checkout-slot, ?action=reschedule, ?action=book-free-trial,
 // and api/instructor.js?action=create-offer. The legitimate paths past the cap
 // are bookOfferSeries() in api/offers.js, fanned out from the Stripe webhook,
 // and the narrow practical-test exception in ?action=test-date-availability,
-// ?action=book-test-date, and ?action=checkout-test-date. Instructors may
-// reduce their own learner-facing booking window via max_booking_days_ahead,
-// but may not extend ordinary self-serve booking beyond 28 days.
+// ?action=book-test-date, and ?action=checkout-test-date. Instructors set
+// their own learner-facing booking window via max_booking_days_ahead (1–84),
+// but ordinary self-serve booking may never exceed 84 days.
 //
 // What this exercises (live API):
-//   1. ?action=available rejects `to` > today + 28 days with the documented
+//   1. ?action=available rejects `to` > today + 84 days with the documented
 //      error message — this is the canonical user-visible cap.
-//   2. ?action=available accepts `to` = today + 28 days exactly (boundary).
-//   3. POST ?action=book with a date > today + 28 days returns 400 *or* 401
+//   2. ?action=available accepts `to` = today + 84 days exactly (boundary).
+//   3. POST ?action=book with a date > today + 84 days returns 400 *or* 401
 //      (auth runs first; the test asserts that no other status leaks
 //      through, which would mean a regression bypassed both gates).
 //   4. POST ?action=reschedule mirrors (3).
@@ -33,7 +34,7 @@ const { test: authedTest, expect: authedExpect } = require('./fixtures/auth');
 //   CC_TEST_BASE_URL=http://localhost:3000 CC_TEST_API=1 npm test -- advance-cap
 // where localhost:3000 is `vercel dev`, not `npx serve`.
 
-const CAP_DAYS = 28;
+const CAP_DAYS = 84;
 
 function ymd(d) {
   return d.toISOString().slice(0, 10);
@@ -46,10 +47,10 @@ function daysFromToday(n) {
   return ymd(d);
 }
 
-test.describe('4-week advance booking cap', () => {
+test.describe('84-day advance booking ceiling', () => {
   test.skip(() => !process.env.CC_TEST_API, 'set CC_TEST_API=1 with vercel dev to exercise the live cap');
 
-  test('?action=available rejects `to` past the 28-day cap', async ({ request }) => {
+  test('?action=available rejects `to` past the 84-day ceiling', async ({ request }) => {
     const from = daysFromToday(0);
     const to = daysFromToday(CAP_DAYS + 1);
     const res = await request.get(`/api/slots?action=available&from=${from}&to=${to}&lesson_type_id=1`);
@@ -57,10 +58,10 @@ test.describe('4-week advance booking cap', () => {
     const body = await res.json();
     // Error string is part of the public contract — bumping the cap should
     // be deliberate. If you change MAX_DAYS_AHEAD, update CAP_DAYS here too.
-    expect(body.error).toMatch(/28 days/);
+    expect(body.error).toMatch(/84 days/);
   });
 
-  test('?action=available accepts `to` exactly at the 28-day boundary', async ({ request }) => {
+  test('?action=available accepts `to` exactly at the 84-day boundary', async ({ request }) => {
     const from = daysFromToday(0);
     const to = daysFromToday(CAP_DAYS);
     const res = await request.get(`/api/slots?action=available&from=${from}&to=${to}&lesson_type_id=1`);
@@ -68,7 +69,7 @@ test.describe('4-week advance booking cap', () => {
     // dev DB — but NOT 400 for the cap reason.
     if (res.status() === 400) {
       const body = await res.json();
-      expect(body.error).not.toMatch(/28 days/);
+      expect(body.error).not.toMatch(/84 days/);
     } else {
       expect([200, 404]).toContain(res.status());
     }
@@ -132,7 +133,7 @@ test.describe('4-week advance booking cap', () => {
 // These upgrade the unauth'd 400-or-401 checks above into real 400 assertions
 // against the cap-check error string. They run only when the role credentials
 // are configured (CC_TEST_LEARNER_*, CC_TEST_INSTRUCTOR_*).
-authedTest.describe('4-week advance cap — authed', () => {
+authedTest.describe('84-day advance ceiling — authed', () => {
   authedTest('learner POST ?action=book past the cap returns 400 with cap message', async ({ learnerRequest }) => {
     const res = await learnerRequest.post('/api/slots?action=book', {
       data: {
@@ -145,7 +146,7 @@ authedTest.describe('4-week advance cap — authed', () => {
     });
     authedExpect(res.status()).toBe(400);
     const body = await res.json();
-    authedExpect(body.error).toMatch(/28 days/);
+    authedExpect(body.error).toMatch(/84 days/);
   });
 
   authedTest('learner POST ?action=reschedule past the cap returns 400 with cap message', async ({ learnerRequest }) => {
@@ -158,10 +159,10 @@ authedTest.describe('4-week advance cap — authed', () => {
     });
     authedExpect(res.status()).toBe(400);
     const body = await res.json();
-    authedExpect(body.error).toMatch(/28 days/);
+    authedExpect(body.error).toMatch(/84 days/);
   });
 
-  authedTest('instructor POST ?action=create-offer past the cap returns 400 with 4-week message', async ({ instructorRequest }) => {
+  authedTest('instructor POST ?action=create-offer past the cap returns 400 with 12-week message', async ({ instructorRequest }) => {
     const res = await instructorRequest.post('/api/instructor?action=create-offer', {
       data: {
         learner_name: 'Test',
@@ -171,10 +172,10 @@ authedTest.describe('4-week advance cap — authed', () => {
     });
     authedExpect(res.status()).toBe(400);
     const body = await res.json();
-    authedExpect(body.error).toMatch(/4 weeks/);
+    authedExpect(body.error).toMatch(/12 weeks/);
   });
 
-  authedTest('learner POST ?action=book at the boundary (today + 28) is NOT rejected for the cap', async ({ learnerRequest }) => {
+  authedTest('learner POST ?action=book at the boundary (today + 84) is NOT rejected for the platform ceiling', async ({ learnerRequest }) => {
     // The booking will likely fail for *other* reasons (no slot, no balance,
     // wrong duration) — we only assert the cap-message isn't the rejection.
     const res = await learnerRequest.post('/api/slots?action=book', {
@@ -188,7 +189,7 @@ authedTest.describe('4-week advance cap — authed', () => {
     });
     if (res.status() === 400) {
       const body = await res.json();
-      authedExpect(body.error || '').not.toMatch(/28 days/);
+      authedExpect(body.error || '').not.toMatch(/84 days/);
     }
   });
 });

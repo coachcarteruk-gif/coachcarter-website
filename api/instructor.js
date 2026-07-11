@@ -1394,8 +1394,8 @@ async function handleUpdateProfile(req, res) {
       return res.status(400).json({ error: 'Buffer time must be between 0 and 120 minutes' });
   }
 
-  // Validate max_booking_days_ahead if provided. This can only reduce the
-  // learner-facing window below the platform cap, never extend it.
+  // Validate max_booking_days_ahead if provided. This IS the learner-facing
+  // window (July 2026) — 84 days is the platform ceiling.
   if (max_booking_days_ahead !== undefined && max_booking_days_ahead !== null) {
     const maxDays = parseInt(max_booking_days_ahead, 10);
     if (isNaN(maxDays) || maxDays < 1 || maxDays > 84)
@@ -4149,13 +4149,13 @@ async function handleCreateOffer(req, res) {
     today.setUTCHours(0, 0, 0, 0);
     if (bookingDate < today)
       return res.status(400).json({ error: 'Cannot offer a lesson in the past' });
-    // First slot of the offer must be within the 4-week advance cap.
+    // First slot of the offer must be within the 84-day platform ceiling.
     // The series itself may run past it (the webhook creates the repeats with
     // the exemption justified by the instructor's explicit opt-in).
     const maxAhead = new Date(today);
-    maxAhead.setUTCDate(maxAhead.getUTCDate() + 28);
+    maxAhead.setUTCDate(maxAhead.getUTCDate() + 84);
     if (bookingDate > maxAhead)
-      return res.status(400).json({ error: 'Offer date cannot be more than 4 weeks in advance' });
+      return res.status(400).json({ error: 'Offer date cannot be more than 12 weeks in advance' });
     if (!start_time)
       return res.status(400).json({ error: 'start_time is required when scheduled_date is provided' });
   }

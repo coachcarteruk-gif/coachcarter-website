@@ -33,7 +33,34 @@ let slotCache     = {}; // dateStr -> [slot, ...]
 let loadedRanges  = [];
 let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
-const FEED_MAX_DAYS   = 28;
+const PLATFORM_MAX_DAYS = 84; // ceiling on instructors.max_booking_days_ahead
+const FEED_DEFAULT_DAYS = 28; // fallback when instructor windows are unknown
+let dateGridExpanded = false; // date grid shows 6 weeks until expanded
+
+// Learner-facing booking window (July 2026): each instructor's
+// max_booking_days_ahead IS the window; 84 days is the platform ceiling.
+function instructorWindowDays(instructorId) {
+  const inst = instructors.find(i => String(i.id) === String(instructorId));
+  const days = parseInt(inst && inst.max_booking_days_ahead, 10);
+  if (!Number.isFinite(days) || days <= 0) return FEED_DEFAULT_DAYS;
+  return Math.min(days, PLATFORM_MAX_DAYS);
+}
+
+// Effective feed window: the chosen instructor's window, or the widest
+// window across the school when browsing "All instructors" (the server
+// still filters each slot by its own instructor's window).
+function feedMaxDays() {
+  const selected = document.getElementById('instructorFilter')?.value;
+  if (selected) return instructorWindowDays(selected);
+  if (!instructors.length) return FEED_DEFAULT_DAYS;
+  return Math.max(...instructors.map(i => instructorWindowDays(i.id)));
+}
+
+function feedWindowWeeksLabel() {
+  const days = feedMaxDays();
+  const weeks = Math.max(1, Math.round(days / 7));
+  return days < 7 ? `${days} day${days === 1 ? '' : 's'}` : `${weeks} week${weeks === 1 ? '' : 's'}`;
+}
 let pendingSlot   = null;
 // Request-to-book mode: the pending slot's instructor confirms each booking
 // personally. Set from the slot dataset, re-confirmed by durations-for-slot.
@@ -939,19 +966,20 @@ async function initFeed() {
   choosePageLessonType();
   renderLessonLengthControls();
   feedFrom = new Date(); feedFrom.setHours(0,0,0,0);
-  feedTo = clampToApiWindow(addDaysLocal(feedFrom, FEED_MAX_DAYS));
+  feedTo = clampToApiWindow(addDaysLocal(feedFrom, feedMaxDays()));
   slotCache = {};
   loadedRanges = [];
+  dateGridExpanded = false;
   showLoading();
 
   const instructorId = document.getElementById('instructorFilter').value;
 
-  // When a specific instructor is chosen, fetch the full 4-week learner
-  // window in one go so learners don't need to reveal later dates manually,
+  // When a specific instructor is chosen, fetch their full learner window
+  // in one go so learners don't need to reveal later dates manually,
   // and so the empty state ("No slots with X") reflects the whole window
   // rather than just the first chunk.
   if (instructorId) {
-    const fullTo = clampToApiWindow(addDaysLocal(feedFrom, FEED_MAX_DAYS));
+    const fullTo = clampToApiWindow(addDaysLocal(feedFrom, feedMaxDays()));
     const ok = await fetchFeedSlots(feedFrom, fullTo);
     if (ok === false) return;
     feedTo = fullTo;
@@ -1145,9 +1173,22 @@ function renderDateGrid(cache) {
     cells.push('<span class="date-cell date-cell-blank" aria-hidden="true"></span>');
   }
 
+  // Long windows (up to 12 weeks) would render a wall of rows that pushes
+  // the time slots below the fold — collapse to 6 weeks until expanded.
+  const COLLAPSED_CELLS = 6 * 7;
+  if (!dateGridExpanded && selectedDate && dates.indexOf(selectedDate) >= COLLAPSED_CELLS - leadBlanks) {
+    dateGridExpanded = true;
+  }
+  let visibleCells = cells;
+  let expandBtn = '';
+  if (!dateGridExpanded && cells.length > COLLAPSED_CELLS) {
+    visibleCells = cells.slice(0, COLLAPSED_CELLS);
+    expandBtn = `<button class="date-grid-more" type="button" data-action="expand-date-grid">Show later dates</button>`;
+  }
+
   const header = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     .map(dl => `<span class="date-grid-head">${dl}</span>`).join('');
-  return `<div class="date-grid" role="group" aria-label="Choose a date">${header}${cells.join('')}</div>`;
+  return `<div class="date-grid" role="group" aria-label="Choose a date">${header}${visibleCells.join('')}</div>${expandBtn}`;
 }
 
 function slotStartMinutes(slot) {
@@ -1392,7 +1433,7 @@ function renderFeed() {
       document.getElementById('calContent').innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">📅</div>
-          <h3>No slots with ${esc(firstName(chosen.name))} in the next 4 weeks.</h3>
+          <h3>No slots with ${esc(firstName(chosen.name))} in the next ${feedWindowWeeksLabel()}.</h3>
           <p>Try a different lesson type, choose another instructor, or check back later.</p>
         </div>`;
     } else {
@@ -1400,7 +1441,7 @@ function renderFeed() {
         <div class="empty-state">
           <div class="empty-icon">📅</div>
           <h3>No slots available</h3>
-          <p>No slots found in the next 4 weeks. Try a different lesson type or check back later.</p>
+          <p>No slots found in the next ${feedWindowWeeksLabel()}. Try a different lesson type or check back later.</p>
         </div>`;
     }
     updateFeedFooter(0);
@@ -2001,7 +2042,8 @@ function maxRepeatLessonsForPendingSlot() {
   const today = new Date(); today.setUTCHours(0,0,0,0);
   const slotDate = new Date(pendingSlot.date + 'T00:00:00Z');
   const offsetDays = Math.max(0, Math.round((slotDate - today) / (24 * 60 * 60 * 1000)));
-  return Math.max(1, Math.min(4, Math.floor((FEED_MAX_DAYS - offsetDays) / 7) + 1));
+  const windowDays = instructorWindowDays(pendingSlot.instructor_id);
+  return Math.max(1, Math.min(4, Math.floor((windowDays - offsetDays) / 7) + 1));
 }
 
 function syncRepeatWindowOptions() {
@@ -3220,7 +3262,7 @@ function fmtDate(d) {
 function addDaysLocal(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function apiWindowMaxDateLocal() {
   const now = new Date();
-  return new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + FEED_MAX_DAYS);
+  return new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + feedMaxDays());
 }
 function clampToApiWindow(d) {
   const maxDate = apiWindowMaxDateLocal();
@@ -3318,6 +3360,9 @@ document.addEventListener('click', function (e) {
     renderTestDatePanel();
   } else if (action === 'select-date') {
     selectDate(target.dataset.date);
+  } else if (action === 'expand-date-grid') {
+    dateGridExpanded = true;
+    renderFeed();
   } else if (action === 'set-repeat-weeks') {
     setRepeatWeeks(target.dataset.repeatWeeks);
   } else if (action === 'withdraw-request') {

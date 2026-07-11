@@ -22,7 +22,7 @@ test.describe('test date lesson booking contract', () => {
 
   test('slots API exposes dedicated test-date actions without changing normal cap constants', () => {
     const slots = read('api/slots.js');
-    expect(slots).toContain('const MAX_DAYS_AHEAD      = 28');
+    expect(slots).toContain('const MAX_DAYS_AHEAD      = 84');
     expect(slots).toContain('const TEST_DATE_DURATION_MINUTES = 90');
     expect(slots).toContain('const TEST_DATE_MAX_DAYS_AHEAD = 366');
     expect(slots).toContain("action === 'test-date-availability'");
