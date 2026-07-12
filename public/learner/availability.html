@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>My Availability - CoachCarter</title>
+  <meta name="description" content="Set your usual free times for driving lessons.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
+  <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <style>
+    main {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 28px 18px 100px;
+    }
+    .page-header {
+      margin-bottom: 20px;
+    }
+    .page-kicker {
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .page-header h1 {
+      color: var(--primary);
+      font-family: var(--font-head);
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .page-header p {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.55;
+      margin: 8px 0 0;
+      max-width: 58ch;
+    }
+    .availability-panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(245,131,33,0.04);
+      overflow: hidden;
+    }
+    .availability-panel-head {
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      padding: 16px 18px;
+    }
+    .availability-panel-title {
+      color: var(--primary);
+      font-family: var(--font-head);
+      font-size: 1rem;
+      font-weight: 800;
+    }
+    .availability-status {
+      background: rgba(239,68,68,0.1);
+      border-radius: 20px;
+      color: #b91c1c;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 4px 10px;
+      white-space: nowrap;
+    }
+    .availability-status.is-ok {
+      background: rgba(34,197,94,0.1);
+      color: #15803d;
+    }
+    .availability-panel-body {
+      padding: 6px 18px 18px;
+    }
+    .avail-day-row {
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+      padding: 11px 0;
+    }
+    .avail-day-row:last-child {
+      border-bottom: none;
+    }
+    .avail-day-label {
+      color: var(--primary);
+      flex-shrink: 0;
+      font-size: 0.82rem;
+      font-weight: 800;
+      padding-top: 5px;
+      width: 50px;
+    }
+    .avail-chips {
+      align-items: center;
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+      gap: 7px;
+      min-height: 32px;
+    }
+    .avail-chip {
+      align-items: center;
+      background: var(--accent-lt);
+      border-radius: 20px;
+      color: var(--accent);
+      display: inline-flex;
+      font-size: 0.78rem;
+      font-weight: 700;
+      gap: 5px;
+      padding: 5px 11px;
+      white-space: nowrap;
+    }
+    .avail-chip-x {
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      margin-left: 2px;
+      opacity: 0.7;
+    }
+    .avail-chip-x:hover {
+      opacity: 1;
+    }
+    .avail-empty {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-style: italic;
+      padding-top: 6px;
+    }
+    .avail-add-btn {
+      background: none;
+      border: 1.5px dashed var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 5px 11px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .avail-add-btn:hover,
+    .avail-add-btn:focus {
+      border-color: var(--accent);
+      color: var(--accent);
+      outline: none;
+    }
+    .avail-add-row {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 7px;
+    }
+    .avail-add-row select {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      color: var(--primary);
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      padding: 6px 9px;
+    }
+    .avail-add-row select:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+    .avail-add-confirm {
+      background: var(--accent);
+      border: none;
+      border-radius: 7px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 800;
+      padding: 6px 13px;
+    }
+    .avail-add-cancel {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 5px;
+    }
+    .availability-actions {
+      align-items: center;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding: 16px 18px;
+    }
+    .availability-save-note {
+      color: var(--muted);
+      flex: 1;
+      font-size: 0.82rem;
+      min-height: 20px;
+    }
+    .availability-save {
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 800;
+      padding: 12px 22px;
+    }
+    .availability-save:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+    .booking-link {
+      color: var(--accent);
+      display: inline-flex;
+      font-weight: 800;
+      margin-top: 16px;
+      text-decoration: none;
+    }
+    .booking-link:hover,
+    .booking-link:focus {
+      text-decoration: underline;
+      outline: none;
+    }
+    .guest-hint {
+      background: var(--accent-lt, #fff4e6);
+      border: 1px solid var(--accent, #f58321);
+      border-radius: 10px;
+      display: none;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+    }
+    .guest-hint a {
+      color: var(--accent);
+      font-weight: 800;
+    }
+    @media (max-width: 520px) {
+      .availability-panel-head,
+      .availability-actions {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .availability-save {
+        width: 100%;
+      }
+      .avail-day-row {
+        gap: 9px;
+      }
+      .avail-day-label {
+        width: 42px;
+      }
+    }
+  </style>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/learner-auth.js"></script>
+  <script src="/auth-gate.js"></script>
+</head>
+<body>
+<main>
+  <div class="page-header">
+    <div class="page-kicker">Lessons</div>
+    <h1>My Availability</h1>
+    <p>Set the times you are usually free. These windows help filter the booking grid and tell us when to notify you about newly opened slots.</p>
+  </div>
+
+  <div class="guest-hint" id="guestHint">
+    <strong>Sign in to save availability.</strong> You can preview the page, but saved free times are linked to your learner account.
+  </div>
+
+  <section class="availability-panel" aria-labelledby="availabilityTitle">
+    <div class="availability-panel-head">
+      <div class="availability-panel-title" id="availabilityTitle">Usual free times</div>
+      <span class="availability-status" id="availBadge">Not set</span>
+    </div>
+    <div class="availability-panel-body">
+      <div id="availDays"></div>
+    </div>
+    <div class="availability-actions">
+      <span class="availability-save-note" id="availSaveNote"></span>
+      <button class="availability-save" id="btnSaveAvail" type="button">Save</button>
+    </div>
+  </section>
+
+  <a class="booking-link" href="/learner/book.html">Back to booking</a>
+</main>
+<script src="/learner/availability.js"></script>
+</body>
+</html>

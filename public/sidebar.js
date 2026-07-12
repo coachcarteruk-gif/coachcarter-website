@@ -230,6 +230,7 @@
       { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true },
+        { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true },
         { icon: 'shuffle', label: 'Test Swaps', href: '/learner/test-swaps.html', authOnly: true, badgeId: 'cc-test-swaps-badge' }
       ]},
       { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
@@ -265,7 +266,7 @@
         { icon: 'home', label: 'Dashboard', href: '/learner/',
           activeOn: [] },
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-          activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/test-swaps'] },
+          activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/test-swaps', '/learner/availability'] },
         { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
           activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
         { icon: 'play', label: 'Mark Scheme', href: '/learner/ask-examiner.html',

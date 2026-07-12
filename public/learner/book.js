@@ -30,6 +30,8 @@ let selectedLessonType = null; // current lesson type object
 let selectedDate  = null;
 let selectedSlot  = null;
 let slotCache     = {}; // dateStr -> [slot, ...]
+let learnerAvailability = [];
+let availabilityFilterMode = localStorage.getItem('cc_booking_availability_filter') === '1';
 let loadedRanges  = [];
 let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
@@ -94,6 +96,7 @@ let slotFeedLessonTypeId = null; // id of the lesson type whose duration we use 
 // ─── Init ────────────────────────────────────────────────────────────────────
 function init() {
   auth = ccAuth.getAuth();
+  updateAvailabilityFilterUI();
 
   if (localStorage.getItem('cc_welcome') === '1') {
     document.getElementById('welcomeBanner').style.display = 'flex';
@@ -245,7 +248,7 @@ function init() {
   // lessons, pending requests and test-date availability load in parallel
   // without blocking the first slot render.
   const secondaryLoads = Promise.all([loadBalance(), loadUpcoming(), loadPendingRequests()]);
-  Promise.all([loadInstructors(), loadLearnerProfile(), loadLessonTypes()])
+  Promise.all([loadInstructors(), loadLearnerProfile(), loadLearnerAvailability(), loadLessonTypes()])
     .then(async () => {
       preselectInstructor();
       // Re-load lesson types now that instructors are known, so
@@ -596,6 +599,99 @@ async function loadLearnerProfile() {
     const data = await res.json();
     learnerProfile = data.profile || {};
   } catch {}
+}
+
+async function loadLearnerAvailability() {
+  if (!auth) {
+    learnerAvailability = [];
+    updateAvailabilityFilterUI();
+    return;
+  }
+  try {
+    const res = await ccAuth.fetchAuthed('/api/learner?action=my-availability');
+    if (!res.ok) return;
+    const data = await res.json();
+    learnerAvailability = (data.availability || []).map(w => ({
+      day_of_week: parseInt(w.day_of_week, 10),
+      start_time: String(w.start_time || '').slice(0, 5),
+      end_time: String(w.end_time || '').slice(0, 5)
+    })).filter(w =>
+      Number.isInteger(w.day_of_week) &&
+      w.day_of_week >= 0 &&
+      w.day_of_week <= 6 &&
+      w.start_time &&
+      w.end_time
+    );
+  } catch (err) {
+    console.warn('load-learner-availability error:', err);
+    learnerAvailability = [];
+  }
+  updateAvailabilityFilterUI();
+}
+
+function isAvailabilityFilterActive() {
+  return !!(auth && availabilityFilterMode && learnerAvailability.length > 0);
+}
+
+function updateAvailabilityFilterUI() {
+  const wrap = document.getElementById('availabilityFilterWrap');
+  const checkbox = document.getElementById('availabilityFilter');
+  const link = document.getElementById('availabilityManageLink');
+  const note = document.getElementById('availabilityFilterNote');
+  if (!wrap || !checkbox || !link || !note) return;
+
+  const hasAvailability = learnerAvailability.length > 0;
+  wrap.hidden = !auth;
+  link.hidden = !auth;
+  note.hidden = !auth || hasAvailability;
+  checkbox.disabled = !hasAvailability;
+  checkbox.checked = isAvailabilityFilterActive();
+  note.textContent = hasAvailability ? '' : 'Set your usual free times to use this filter.';
+}
+
+function timeToMinutes(time) {
+  const parts = String(time || '').slice(0, 5).split(':').map(Number);
+  const h = Number.isFinite(parts[0]) ? parts[0] : 0;
+  const m = Number.isFinite(parts[1]) ? parts[1] : 0;
+  return h * 60 + m;
+}
+
+function slotEndMinutes(slot) {
+  if (slot && slot.end_time) return timeToMinutes(slot.end_time);
+  const duration = parseInt((selectedLessonType && selectedLessonType.duration_minutes) || slotFeedDuration, 10) || 0;
+  return slotStartMinutes(slot) + duration;
+}
+
+function slotMatchesLearnerAvailability(slot) {
+  if (!isAvailabilityFilterActive()) return true;
+  if (!slot || !slot.date || !slot.start_time) return false;
+  const day = new Date(slot.date + 'T00:00:00').getDay();
+  const start = slotStartMinutes(slot);
+  const end = slotEndMinutes(slot);
+  return learnerAvailability.some(w =>
+    w.day_of_week === day &&
+    start >= timeToMinutes(w.start_time) &&
+    end <= timeToMinutes(w.end_time)
+  );
+}
+
+function getFilteredSlotCache(cache) {
+  if (!isAvailabilityFilterActive()) return cache || {};
+  const filtered = {};
+  for (const ds in (cache || {})) {
+    const slots = (cache[ds] || []).filter(slotMatchesLearnerAvailability);
+    if (slots.length) filtered[ds] = slots;
+  }
+  return filtered;
+}
+
+function onAvailabilityFilterChange() {
+  const checkbox = document.getElementById('availabilityFilter');
+  availabilityFilterMode = !!(checkbox && checkbox.checked);
+  localStorage.setItem('cc_booking_availability_filter', availabilityFilterMode ? '1' : '0');
+  clearSelectedSlot();
+  updateAvailabilityFilterUI();
+  renderFeed();
 }
 
 function selectedTestDateInstructorId() {
@@ -1088,20 +1184,22 @@ function getDateRangeStrings(fromDate, toDate) {
 }
 
 function getVisibleSlotsFromCache(cache) {
+  const visibleCache = getFilteredSlotCache(cache);
   const allSlots = [];
   const fromStr = fmtDate(feedFrom);
   const toStr = fmtDate(feedTo);
-  for (const ds in (cache || {})) {
+  for (const ds in (visibleCache || {})) {
     if (ds < fromStr || ds > toStr) continue;
-    for (const s of cache[ds]) allSlots.push(s);
+    for (const s of visibleCache[ds]) allSlots.push(s);
   }
   allSlots.sort(sortSlots);
   return allSlots;
 }
 
 function getAvailableDateStrings(cache) {
+  const visibleCache = getFilteredSlotCache(cache);
   return getDateRangeStrings(feedFrom, feedTo)
-    .filter(ds => cache && cache[ds] && cache[ds].length > 0);
+    .filter(ds => visibleCache && visibleCache[ds] && visibleCache[ds].length > 0);
 }
 
 function getDateGridRangeStrings(cache) {
@@ -1151,6 +1249,7 @@ function testDateMarkerHTML() {
    Days without availability stay visible but disabled so learners can map
    slots onto their weekly routine and see fully-booked days at a glance. */
 function renderDateGrid(cache) {
+  const visibleCache = getFilteredSlotCache(cache);
   const dates = getDateGridRangeStrings(cache);
   if (!dates.length) return '';
   const todayStr = fmtDate(new Date());
@@ -1159,7 +1258,7 @@ function renderDateGrid(cache) {
 
   for (const ds of dates) {
     const d = new Date(ds + 'T00:00:00');
-    const count = (cache && cache[ds] && cache[ds].length) || 0;
+    const count = (visibleCache && visibleCache[ds] && visibleCache[ds].length) || 0;
     const dayNum = d.getDate();
     const todayClass = ds === todayStr ? ' date-cell-today' : '';
     const testDateClass = isLearnerTestDate(ds) ? ' date-cell-test' : '';
@@ -1325,9 +1424,10 @@ function renderTimeGroups(slotsForDate, opts) {
 
 function renderBookingCalendar(cache, opts) {
   opts = opts || {};
-  ensureSelectedDate(cache);
-  const slotsForDate = ((cache && cache[selectedDate]) || []).slice().sort(sortSlots);
-  const dateGrid = renderDateGrid(cache);
+  const visibleCache = getFilteredSlotCache(cache);
+  ensureSelectedDate(visibleCache);
+  const slotsForDate = ((visibleCache && visibleCache[selectedDate]) || []).slice().sort(sortSlots);
+  const dateGrid = renderDateGrid(visibleCache);
   const selectedParts = dateDisplayParts(selectedDate);
   const slotCount = slotsForDate.length;
   const testDateNote = isLearnerTestDate(selectedDate) ? '<span class="selected-date-test-note">Test date</span>' : '';
@@ -1473,6 +1573,20 @@ function renderFeed() {
   const allSlots = getVisibleSlotsFromCache(slotCache);
 
   if (allSlots.length === 0) {
+    if (isAvailabilityFilterActive()) {
+      document.getElementById('calContent').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">CAL</div>
+          <h3>No slots match your saved availability.</h3>
+          <p>Show all slots or update your usual free times.</p>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px">
+            <button class="btn-primary" type="button" data-action="clear-availability-filter">Show all slots</button>
+            <a class="availability-filter-link" href="/learner/availability.html">Update availability</a>
+          </div>
+        </div>`;
+      updateFeedFooter(0);
+      return;
+    }
     const chosenId = document.getElementById('instructorFilter').value;
     const chosen = instructors.find(i => String(i.id) === String(chosenId));
     if (chosen) {
@@ -3415,6 +3529,12 @@ document.addEventListener('click', function (e) {
   } else if (action === 'expand-date-grid') {
     dateGridExpanded = true;
     renderFeed();
+  } else if (action === 'clear-availability-filter') {
+    availabilityFilterMode = false;
+    localStorage.setItem('cc_booking_availability_filter', '0');
+    clearSelectedSlot();
+    updateAvailabilityFilterUI();
+    renderFeed();
   } else if (action === 'set-repeat-weeks') {
     setRepeatWeeks(target.dataset.repeatWeeks);
   } else if (action === 'withdraw-request') {
@@ -3430,6 +3550,8 @@ document.addEventListener('click', function (e) {
   if (rescheduleCancel) rescheduleCancel.addEventListener('click', cancelRescheduleMode);
   var instFilter = document.getElementById('instructorFilter');
   if (instFilter) instFilter.addEventListener('change', onFilterChange);
+  var availabilityFilter = document.getElementById('availabilityFilter');
+  if (availabilityFilter) availabilityFilter.addEventListener('change', onAvailabilityFilterChange);
   var savePostcodeBtn = document.getElementById('btnSavePostcode');
   if (savePostcodeBtn) savePostcodeBtn.addEventListener('click', savePickupPostcode);
   var loadMoreBtn = document.getElementById('btnLoadMore');
