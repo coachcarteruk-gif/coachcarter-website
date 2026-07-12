@@ -363,6 +363,45 @@
       transition: border-color 0.2s;
     }
     .filter-select:hover, .filter-select:focus { border-color: var(--accent); outline: none; }
+    .availability-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+    .availability-filter[hidden] { display: none; }
+    .availability-filter input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .availability-filter input:disabled { cursor: not-allowed; }
+    .availability-filter-link {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-decoration: none;
+      letter-spacing: 0.03em;
+    }
+    .availability-filter-link:hover,
+    .availability-filter-link:focus {
+      text-decoration: underline;
+      outline: none;
+    }
+    .availability-filter-note {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
 
     /* Travel-hidden banner */
     .travel-hidden-banner {
@@ -1346,6 +1385,12 @@
     <select class="filter-select" id="instructorFilter">
       <option value="">All instructors</option>
     </select>
+    <label class="availability-filter" id="availabilityFilterWrap" hidden>
+      <input type="checkbox" id="availabilityFilter">
+      <span>Only show times I&rsquo;m usually free</span>
+    </label>
+    <a class="availability-filter-link" id="availabilityManageLink" href="/learner/availability.html" hidden>Manage availability</a>
+    <span class="availability-filter-note" id="availabilityFilterNote" hidden></span>
   </div>
 
   <!-- Travel-filtered slots notice -->

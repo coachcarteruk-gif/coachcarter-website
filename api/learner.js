@@ -1051,10 +1051,11 @@ async function handleMyAvailability(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
     const rows = await sql`
       SELECT id, day_of_week, start_time::text, end_time::text
       FROM learner_availability
-      WHERE learner_id = ${user.id} AND active = true
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId} AND active = true
       ORDER BY day_of_week, start_time`;
     return res.json({ availability: rows });
   } catch (err) {
@@ -1087,14 +1088,15 @@ async function handleSetAvailability(req, res) {
     }
 
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = user.school_id || 1;
 
     // Delete all existing and re-insert
-    await sql`DELETE FROM learner_availability WHERE learner_id = ${user.id}`;
+    await sql`DELETE FROM learner_availability WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
 
     for (const w of windows) {
       await sql`
-        INSERT INTO learner_availability (learner_id, day_of_week, start_time, end_time)
-        VALUES (${user.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time})`;
+        INSERT INTO learner_availability (learner_id, school_id, day_of_week, start_time, end_time)
+        VALUES (${user.id}, ${schoolId}, ${w.day_of_week}, ${w.start_time}, ${w.end_time})`;
     }
 
     return res.json({ success: true, count: windows.length });

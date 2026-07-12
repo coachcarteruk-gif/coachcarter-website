@@ -421,7 +421,10 @@ async function loadAvailability() {
 
 function drawAvailDays() {
   const container = document.getElementById('availDays');
-  if (!container) return;
+  if (!container) {
+    updateAvailBadge();
+    return;
+  }
   let html = '';
   for (const day of DAY_ORDER) {
     const windows = AVAIL_WINDOWS.filter(w => w.day_of_week === day);
