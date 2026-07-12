@@ -133,6 +133,71 @@
     /* Legacy hooks - keep so JS doesn't choke */
     .credit-badge { display: none; }
 
+    /* ── GUEST DASHBOARD GATE ── */
+    .guest-dashboard-gate {
+      display: none;
+      padding: 34px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 22px;
+    }
+    .guest-dashboard-gate.show { display: block; }
+    .guest-gate-kicker {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.16em; text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .guest-gate-title {
+      font-family: var(--font-head);
+      font-size: clamp(1.45rem, 5vw, 1.9rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: var(--primary);
+      margin: 0 0 10px;
+    }
+    .guest-gate-copy {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.55;
+      max-width: 52ch;
+      margin: 0 0 22px;
+    }
+    .guest-gate-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .guest-gate-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-family: var(--font-head);
+      font-size: 0.92rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    }
+    .guest-gate-btn.primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(245,131,33,0.25);
+    }
+    .guest-gate-btn.secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+    .guest-gate-btn:hover {
+      transform: translateY(-1px);
+    }
+    .guest-gate-btn.primary:hover { background: var(--accent-dk); }
+    .guest-gate-btn.secondary:hover { border-color: var(--accent); background: var(--accent-mid); }
+
     /* ── NEXT LESSON HERO CARD (the one allowed gradient) ── */
     .next-lesson-card {
       background: linear-gradient(135deg, #f58321 0%, #e07518 100%);
@@ -488,7 +553,7 @@
 
     /* ── ACTION STRIP ── */
     .action-strip {
-      display: grid; grid-template-columns: repeat(3, 1fr);
+      display: grid; grid-template-columns: 1fr;
       gap: 10px;
       margin-bottom: 0;
     }
@@ -588,6 +653,16 @@
     </div>
   </section>
 
+  <section class="guest-dashboard-gate" id="guest-dashboard-gate">
+    <div class="guest-gate-kicker">Learner hub</div>
+    <h2 class="guest-gate-title">Log in to see your lessons.</h2>
+    <p class="guest-gate-copy">Your dashboard is for saved lessons, credit, referrals and profile details. If you are new, start with a free trial instead.</p>
+    <div class="guest-gate-actions">
+      <a class="guest-gate-btn primary" href="/learner/login.html?redirect=/learner/">Log in</a>
+      <a class="guest-gate-btn secondary" href="/free-trial.html">Book a free trial</a>
+    </div>
+  </section>
+
   <!-- TWIN STAT PANELS - Balance + Readiness -->
   <div class="stat-row">
     <a href="/learner/profile.html" class="stat-cell" id="stat-balance">
@@ -682,7 +757,7 @@
   </a>
 
   <!-- SHORTCUTS -->
-  <div class="section-label">Shortcuts</div>
+  <div class="section-label" id="shortcuts-label">Shortcuts</div>
 
   <!-- ACTION STRIP -->
   <div class="action-strip">
@@ -692,22 +767,6 @@
       </div>
       <div>
         <div class="action-btn-label">Book</div>
-      </div>
-    </a>
-    <a href="/learner/focused-practice.html" class="action-btn">
-      <div class="action-btn-icon practice">
-        <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-      </div>
-      <div>
-        <div class="action-btn-label">Practice</div>
-      </div>
-    </a>
-    <a href="/learner/ask-examiner.html" class="action-btn">
-      <div class="action-btn-icon learn">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </div>
-      <div>
-        <div class="action-btn-label">Mark Scheme</div>
       </div>
     </a>
   </div>
