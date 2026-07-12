@@ -230,18 +230,7 @@
       { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true },
-        { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true },
-        { icon: 'shuffle', label: 'Test Swaps', href: '/learner/test-swaps.html', authOnly: true, badgeId: 'cc-test-swaps-badge' }
-      ]},
-      { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html', children: [
-        { icon: 'home', label: 'Overview', href: '/learner/practice.html' },
-        { icon: 'play', label: 'Start a drive', href: '/learner/focused-practice.html' },
-        { icon: 'shield', label: 'Mock Test', href: '/learner/mock-test.html' },
-        { icon: 'dashboard', label: 'My driving plan', href: '/learner/progress.html' }
-      ]},
-      { icon: 'play', label: 'Mark Scheme', href: '/learner/ask-examiner.html', children: [
-        { icon: 'message', label: 'Check the scheme', href: '/learner/ask-examiner.html' },
-        { icon: 'clipboard', label: 'Quiz', href: '/learner/examiner-quiz.html' }
+        { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true }
       ]},
       { icon: 'gift', label: 'Refer a friend', href: '/learner/refer.html', authOnly: true },
       { icon: 'message', label: 'Feedback', href: '#feedback', action: 'feedback', authOnly: true },
@@ -266,11 +255,7 @@
         { icon: 'home', label: 'Dashboard', href: '/learner/',
           activeOn: [] },
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-          activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/test-swaps', '/learner/availability'] },
-        { icon: 'clipboard', label: 'Practice', href: '/learner/practice.html',
-          activeOn: ['/learner/log-session', '/learner/mock-test', '/learner/focused-practice', '/learner/progress'] },
-        { icon: 'play', label: 'Mark Scheme', href: '/learner/ask-examiner.html',
-          activeOn: ['/learner/learn', '/learner/examiner-quiz'] },
+          activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/availability'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
           activeOn: [], authOnly: true }
       ]

@@ -7,8 +7,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
 
   if (!AUTH) {
-    document.getElementById('welcome-msg').textContent = 'Welcome!';
-    document.getElementById('next-lesson-empty').classList.add('show');
+    renderGuestGate();
     removeSkeleton();
     return;
   }
@@ -22,6 +21,21 @@ window.addEventListener('DOMContentLoaded', async () => {
 function removeSkeleton() {
   var skel = document.getElementById('dashboard-skeleton');
   if (skel) skel.remove();
+}
+
+function renderGuestGate() {
+  var title = document.getElementById('welcome-msg');
+  if (title) title.textContent = 'Learner hub';
+  var gate = document.getElementById('guest-dashboard-gate');
+  if (gate) gate.classList.add('show');
+  var statRow = document.querySelector('.stat-row');
+  if (statRow) statRow.style.display = 'none';
+  var empty = document.getElementById('next-lesson-empty');
+  if (empty) empty.classList.remove('show');
+  var shortcuts = document.getElementById('shortcuts-label');
+  if (shortcuts) shortcuts.style.display = 'none';
+  var actionStrip = document.querySelector('.action-strip');
+  if (actionStrip) actionStrip.style.display = 'none';
 }
 
 // ── Profile Completion Card ──
