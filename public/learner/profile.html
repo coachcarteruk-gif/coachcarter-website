@@ -469,48 +469,12 @@
   <!-- PAGE HEADER -->
   <div class="page-header">
     <h1 id="page-title">My Profile</h1>
-    <p id="page-sub">Manage your details, test date and preferences.</p>
+    <p id="page-sub">Manage your details and preferences.</p>
   </div>
 
   <div id="guestHint" style="display:none;background:var(--accent-lt,#fff4e6);border:1px solid var(--accent,#f58321);border-radius:10px;padding:12px 14px;margin:0 0 16px;font-size:0.9rem;line-height:1.45">
     <strong>Browsing as a guest.</strong> This is what your profile area looks like once you join - <a href="/learner/login.html?redirect=/learner/profile.html" style="color:var(--accent);font-weight:700">sign in</a> to manage your details, or <a href="/free-trial.html" style="color:var(--accent);font-weight:700">try a free lesson</a> first.
   </div>
-
-  <section class="official-test-summary" id="officialTestSummary">
-    <div class="official-test-summary-top">
-      <div>
-        <div class="official-test-title">Your saved DVSA test details</div>
-      </div>
-      <button type="button" class="saved-row-edit" id="btnEditOfficialTest">Edit</button>
-    </div>
-    <div id="officialTestSummaryBody">
-      <div class="official-test-empty">Add your official test date, time and centre to keep your lesson plan accurate.</div>
-    </div>
-    <div class="official-test-edit" id="officialTestEditForm" style="display:none">
-      <div class="test-fields">
-        <div class="test-row">
-          <div class="test-field">
-            <label for="testDate">Date</label>
-            <input type="date" id="testDate">
-          </div>
-          <div class="test-field">
-            <label for="testTime">Time</label>
-            <input type="time" id="testTime">
-          </div>
-        </div>
-        <div class="test-field">
-          <label for="testCentre">Test centre</label>
-          <input type="text" id="testCentre" maxlength="160" placeholder="e.g. Sidcup Driving Test Centre">
-        </div>
-      </div>
-      <div id="testCountdown"></div>
-      <div class="test-save-row">
-        <button type="button" class="saved-row-edit" id="btnCancelTestEdit">Cancel</button>
-        <button type="button" class="btn-save-profile" id="btnSaveTest">Save</button>
-      </div>
-    </div>
-  </section>
-
 
   <!-- MY DETAILS -->
   <details class="acc-section" id="profile-card">
