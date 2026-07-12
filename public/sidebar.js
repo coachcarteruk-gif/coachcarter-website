@@ -226,16 +226,13 @@
       { icon: 'logIn', label: 'Login', href: '/learner/login.html' }
     ],
     learner: [
-      { icon: 'dashboard', label: 'Dashboard', href: '/learner/' },
       { icon: 'calendar', label: 'Lessons', href: '/learner/book.html', children: [
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
-        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true },
-        { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true }
+        { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true }
       ]},
-      { icon: 'gift', label: 'Refer a friend', href: '/learner/refer.html', authOnly: true },
-      { icon: 'message', label: 'Feedback', href: '#feedback', action: 'feedback', authOnly: true },
-      'divider',
-      { icon: 'user', label: 'My Profile', href: '/learner/profile.html', authOnly: true }
+      { icon: 'clipboard', label: 'Driving Test', href: '/learner/driving-test.html', authOnly: true },
+      { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true },
+      { icon: 'user', label: 'Profile', href: '/learner/profile.html', authOnly: true }
     ],
     instructor: [
       { icon: 'dashboard', label: 'Dashboard', href: '/instructor/dashboard.html' },
@@ -252,10 +249,12 @@
   var bottomSections = {
     learner: {
       tabs: [
-        { icon: 'home', label: 'Dashboard', href: '/learner/',
-          activeOn: [] },
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
-          activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/availability'] },
+          activeOn: ['/learner/lessons-hub', '/learner/lessons'] },
+        { icon: 'clipboard', label: 'Driving Test', href: '/learner/driving-test.html',
+          activeOn: [] },
+        { icon: 'clock', label: 'Availability', href: '/learner/availability.html',
+          activeOn: [] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
           activeOn: [] }
       ]

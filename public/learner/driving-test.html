@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Driving Test - CoachCarter</title>
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
+  <link rel="stylesheet" href="/shared/learner.css">
+  <script src="/shared/dark-mode.js"></script>
+  <style>
+    main { max-width: 720px; margin: 0 auto; padding: 32px 24px 110px; }
+    .page-header { margin-bottom: 24px; }
+    .page-header h1 { margin: 0 0 6px; font-family: var(--font-head, sans-serif); font-size: clamp(1.8rem, 5vw, 2.4rem); color: var(--primary); }
+    .page-header p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .test-card { background: var(--white); border-radius: 14px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .test-card h2 { margin: 0 0 6px; font-family: var(--font-head, sans-serif); font-size: 1.15rem; color: var(--primary); }
+    .test-card-intro { margin: 0 0 22px; color: var(--muted); font-size: .9rem; line-height: 1.5; }
+    .test-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .test-field { margin-bottom: 18px; }
+    .test-field label { display: block; margin-bottom: 7px; color: var(--primary); font-size: .78rem; font-weight: 700; }
+    .test-field input { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--primary); font: inherit; }
+    .test-field input:focus { outline: none; border-color: var(--accent); background: var(--white); }
+    .countdown { margin: 2px 0 20px; padding: 14px; border-radius: 9px; background: var(--accent-lt, #fff4e6); color: var(--primary); font-weight: 700; }
+    .save-row { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+    .status { flex: 1; color: var(--muted); font-size: .85rem; }
+    .save-btn { border: 0; border-radius: 8px; padding: 11px 22px; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .save-btn:hover { background: var(--accent-dk); }
+    .save-btn:disabled { opacity: .65; cursor: wait; }
+    @media (max-width: 520px) { main { padding: 24px 18px 110px; } .test-card { padding: 20px 16px; } .test-row { grid-template-columns: 1fr; gap: 0; } }
+  </style>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/learner-auth.js"></script>
+  <script src="/auth-gate.js"></script>
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <h1>Driving Test</h1>
+      <p>Keep your official DVSA test details up to date.</p>
+    </header>
+    <section class="test-card" aria-labelledby="test-details-heading">
+      <h2 id="test-details-heading">Test details</h2>
+      <p class="test-card-intro">These details help keep your lesson plan and test countdown accurate.</p>
+      <div class="test-row">
+        <div class="test-field"><label for="testDate">Date</label><input type="date" id="testDate"></div>
+        <div class="test-field"><label for="testTime">Time</label><input type="time" id="testTime"></div>
+      </div>
+      <div class="test-field"><label for="testCentre">Test centre</label><input type="text" id="testCentre" maxlength="160" placeholder="e.g. Sidcup Driving Test Centre"></div>
+      <div class="countdown" id="testCountdown">Loading your test details...</div>
+      <div class="save-row"><span class="status" id="saveStatus" role="status"></span><button type="button" class="save-btn" id="btnSaveTest">Save details</button></div>
+    </section>
+  </main>
+  <script src="/learner/driving-test.js"></script>
+</body>
+</html>
