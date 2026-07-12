@@ -1159,7 +1159,9 @@
       } catch(e) {}
 
       if (window.ccAuth && typeof window.ccAuth.fetchAuthed === 'function') {
-        window.ccAuth.fetchAuthed('/api/learner?action=progress')
+        // This is optional decoration and also runs on logged-out pages such
+        // as login. Its expected 401 must not be treated as session expiry.
+        window.ccAuth.fetchAuthed('/api/learner?action=progress', { suppressSessionExpired: true })
           .then(function(res) { return res.ok ? res.json() : null; })
           .then(function(data) {
             if (!data) return;

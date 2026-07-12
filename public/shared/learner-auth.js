@@ -47,6 +47,7 @@
    */
   function fetchAuthed(url, options) {
     options = options || {};
+    var suppressSessionExpired = options.suppressSessionExpired === true;
     var method = (options.method || 'GET').toUpperCase();
     var headers = new Headers(options.headers || {});
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
@@ -57,6 +58,7 @@
     }
     var merged = {};
     for (var k in options) if (Object.prototype.hasOwnProperty.call(options, k)) merged[k] = options[k];
+    delete merged.suppressSessionExpired;
     merged.credentials = 'include';
     merged.headers = headers;
     return fetch(url, merged).then(function (res) {
@@ -64,7 +66,7 @@
       // in (common on iOS Safari ITP: 7d cookie eviction, localStorage
       // persists longer). Clear the stale blob and prompt for re-login
       // inline rather than leaving the page silently broken.
-      if (res.status === 401 && url.indexOf('/api/magic-link') === -1) {
+      if (res.status === 401 && !suppressSessionExpired && url.indexOf('/api/magic-link') === -1) {
         try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         showSessionExpiredPrompt();
       }
