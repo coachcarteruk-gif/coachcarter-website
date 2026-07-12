@@ -257,7 +257,7 @@
         { icon: 'calendar', label: 'Lessons', href: '/learner/book.html',
           activeOn: ['/learner/lessons-hub', '/learner/lessons', '/learner/availability'] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
-          activeOn: [], authOnly: true }
+          activeOn: [] }
       ]
     },
     instructor: {

@@ -63,7 +63,7 @@ function renderOfficialTestSummary() {
   const time = PROGRESS.test_time || '';
   const centre = PROGRESS.test_centre || '';
   if (!date || !time || !centre) {
-    body.innerHTML = '<div class="official-test-empty">Add your official test date, time and centre to unlock test swaps.</div>';
+    body.innerHTML = '<div class="official-test-empty">Add your official test date, time and centre to keep your lesson plan accurate.</div>';
     return;
   }
   body.innerHTML =
@@ -87,15 +87,6 @@ function render() {
 
   // Driving test
   renderTestDate();
-
-  // Contact preference
-  if (PROGRESS.prefer_contact_before !== undefined) {
-    document.getElementById('contactToggle').checked = PROGRESS.prefer_contact_before;
-    updatePrefSub(PROGRESS.prefer_contact_before);
-  }
-
-  // Availability (async, non-blocking)
-  loadAvailability();
 
   // Stats
   const s = PROGRESS.stats;
@@ -301,7 +292,7 @@ function renderTestDate() {
   const dateInput = document.getElementById('testDate');
   const timeInput = document.getElementById('testTime');
   const centreInput = document.getElementById('testCentre');
-  const countdownEl = document.getElementById('testCountdown');
+  if (!dateInput || !timeInput) return;
 
   if (PROGRESS.test_date) {
     dateInput.value = PROGRESS.test_date;
@@ -318,14 +309,17 @@ function renderTestDate() {
 
 function updateTestCountdown() {
   const countdownEl = document.getElementById('testCountdown');
-  const testDate = document.getElementById('testDate').value;
+  const testDateInput = document.getElementById('testDate');
+  if (!countdownEl || !testDateInput) return;
+  const testDate = testDateInput.value;
 
   if (!testDate) {
     countdownEl.innerHTML = '<div class="test-encouragement">Haven\'t booked your test yet? We\'ll help you get test-ready.</div>';
     return;
   }
 
-  const testTime = document.getElementById('testTime').value || '09:00';
+  const testTimeEl = document.getElementById('testTime');
+  const testTime = (testTimeEl && testTimeEl.value) || '09:00';
   const testDateTime = new Date(testDate + 'T' + testTime);
   const now = new Date();
   const diffMs = testDateTime.getTime() - now.getTime();
@@ -363,6 +357,7 @@ async function saveTest() {
     PROGRESS.test_centre = testCentre;
     renderOfficialTestSummary();
     updateTestCountdown();
+    hideTestEditForm();
     btn.textContent = 'Saved \u2713';
     setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
   } catch (err) {
@@ -371,187 +366,20 @@ async function saveTest() {
   }
 }
 
-// ── Contact preference toggle ──
-function updatePrefSub(isOn) {
-  const sub = document.getElementById('pref-sub');
-  sub.textContent = isOn
-    ? 'Your instructor will be notified to contact you before your first session.'
-    : 'Let your instructor know you\'d like a call or message before your first session.';
+function showTestEditForm() {
+  var form = document.getElementById('officialTestEditForm');
+  if (!form) return;
+  form.style.display = 'block';
+  renderTestDate();
+  setTimeout(function () {
+    var el = document.getElementById('testDate');
+    if (el) el.focus();
+  }, 0);
 }
 
-async function toggleContactPref() {
-  const toggle = document.getElementById('contactToggle');
-  const val = toggle.checked;
-  updatePrefSub(val);
-
-  try {
-    const res = await ccAuth.fetchAuthed('/api/learner?action=set-contact-pref', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefer_contact_before: val })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-  } catch (err) {
-    toggle.checked = !val;
-    updatePrefSub(!val);
-    console.error('contact-pref error:', err);
-  }
-}
-
-// ── Availability ──
-let AVAIL_WINDOWS = [];
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-// Display order: Mon-Sun
-const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-
-async function loadAvailability() {
-  try {
-    const res = await ccAuth.fetchAuthed('/api/learner?action=my-availability');
-    if (!res.ok) return;
-    const data = await res.json();
-    AVAIL_WINDOWS = (data.availability || []).map(w => ({
-      day_of_week: w.day_of_week,
-      start_time: w.start_time.slice(0, 5),
-      end_time: w.end_time.slice(0, 5)
-    }));
-  } catch (e) { console.error('load-availability error:', e); }
-  drawAvailDays();
-}
-
-function drawAvailDays() {
-  const container = document.getElementById('availDays');
-  if (!container) {
-    updateAvailBadge();
-    return;
-  }
-  let html = '';
-  for (const day of DAY_ORDER) {
-    const windows = AVAIL_WINDOWS.filter(w => w.day_of_week === day);
-    html += `<div class="avail-day-row" data-day="${day}">
-      <div class="avail-day-label">${DAY_NAMES[day]}</div>
-      <div class="avail-chips">`;
-    if (windows.length === 0) {
-      html += `<span class="avail-empty">No times set</span>`;
-    } else {
-      for (let i = 0; i < windows.length; i++) {
-        const w = windows[i];
-        html += `<span class="avail-chip">${fmtTime(w.start_time)} – ${fmtTime(w.end_time)}<span class="avail-chip-x" data-action="remove-avail-window" data-day="${day}" data-idx="${i}">&times;</span></span>`;
-      }
-    }
-    html += `<button type="button" class="avail-add-btn" data-action="show-add-row" data-day="${day}">+</button>`;
-    html += `</div></div>`;
-  }
-  container.innerHTML = html;
-  updateAvailBadge();
-}
-
-function fmtTime(t) {
-  const [h, m] = t.split(':').map(Number);
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2,'0')}${ampm}`;
-}
-
-function updateAvailBadge() {
-  const badge = document.getElementById('availBadge');
-  if (AVAIL_WINDOWS.length === 0) {
-    badge.textContent = 'Not set';
-    badge.className = 'acc-status is-warn';
-  } else {
-    badge.textContent = AVAIL_WINDOWS.length + ' slot' + (AVAIL_WINDOWS.length !== 1 ? 's' : '') + ' set';
-    badge.className = 'acc-status is-ok';
-  }
-}
-
-function showAddRow(btn, day) {
-  // Remove any existing add row
-  document.querySelectorAll('.avail-add-row').forEach(el => el.remove());
-
-  const row = document.createElement('div');
-  row.className = 'avail-add-row';
-
-  // Build time options (07:00 to 21:00 in 30-min steps)
-  let opts = '';
-  for (let h = 7; h <= 21; h++) {
-    for (const m of ['00', '30']) {
-      if (h === 21 && m === '30') continue;
-      const val = String(h).padStart(2, '0') + ':' + m;
-      opts += `<option value="${val}">${fmtTime(val)}</option>`;
-    }
-  }
-
-  row.innerHTML = `
-    <select class="avail-sel-start">${opts}</select>
-    <span style="color:var(--muted);font-size:0.8rem">to</span>
-    <select class="avail-sel-end">${opts}</select>
-    <button type="button" class="avail-add-confirm" data-action="confirm-add-window" data-day="${day}">Add</button>
-    <button type="button" class="avail-add-cancel" data-action="remove-parent">&times;</button>
-  `;
-
-  // Default: start 09:00, end 17:00
-  btn.parentElement.appendChild(row);
-  row.querySelector('.avail-sel-start').value = '09:00';
-  row.querySelector('.avail-sel-end').value = '17:00';
-}
-
-function confirmAddWindow(btn, day) {
-  const row = btn.parentElement;
-  const start = row.querySelector('.avail-sel-start').value;
-  const end = row.querySelector('.avail-sel-end').value;
-  if (start >= end) {
-    alert('End time must be after start time');
-    return;
-  }
-  // Check overlap with existing windows for this day
-  const existing = AVAIL_WINDOWS.filter(w => w.day_of_week === day);
-  for (const w of existing) {
-    if (start < w.end_time && end > w.start_time) {
-      alert('This overlaps with an existing time slot');
-      return;
-    }
-  }
-  AVAIL_WINDOWS.push({ day_of_week: day, start_time: start, end_time: end });
-  drawAvailDays();
-}
-
-function removeAvailWindow(day, idx) {
-  const dayWindows = AVAIL_WINDOWS.filter(w => w.day_of_week === day);
-  const toRemove = dayWindows[idx];
-  if (!toRemove) return;
-  const globalIdx = AVAIL_WINDOWS.findIndex(w =>
-    w.day_of_week === toRemove.day_of_week &&
-    w.start_time === toRemove.start_time &&
-    w.end_time === toRemove.end_time
-  );
-  if (globalIdx !== -1) AVAIL_WINDOWS.splice(globalIdx, 1);
-  drawAvailDays();
-}
-
-async function saveAvailability() {
-  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
-  const btn = document.getElementById('btnSaveAvail');
-  const note = document.getElementById('availSaveNote');
-  btn.disabled = true; btn.textContent = 'Saving\u2026';
-  note.style.color = '';
-
-  try {
-    const res = await ccAuth.fetchAuthed('/api/learner?action=set-availability', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ windows: AVAIL_WINDOWS })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    btn.textContent = 'Saved \u2713';
-    note.textContent = '';
-    setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
-  } catch (err) {
-    btn.textContent = 'Save'; btn.disabled = false;
-    note.textContent = err.message || 'Failed to save. Please try again.';
-    note.style.color = '#e74c3c';
-    console.error('save-availability error:', err);
-  }
+function hideTestEditForm() {
+  var form = document.getElementById('officialTestEditForm');
+  if (form) form.style.display = 'none';
 }
 
 // ── GDPR: Request Account Deletion ──
@@ -573,35 +401,17 @@ async function requestDeletion(btn) {
   btn.disabled = false; btn.style.opacity = '1';
 }
 
-document.addEventListener('click', function (e) {
-  var target = e.target.closest('[data-action]');
-  if (!target) return;
-  var action = target.dataset.action;
-  if (action === 'remove-avail-window') removeAvailWindow(parseInt(target.dataset.day, 10), parseInt(target.dataset.idx, 10));
-  else if (action === 'show-add-row') showAddRow(target, parseInt(target.dataset.day, 10));
-  else if (action === 'confirm-add-window') confirmAddWindow(target, parseInt(target.dataset.day, 10));
-  else if (action === 'remove-parent') { if (target.parentElement) target.parentElement.remove(); }
-});
 (function wire() {
   var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
   bind('btnLookup', lookupPostcode);
   bind('btnSaveProfile', saveProfile);
   bind('btnSaveTest', saveTest);
-  bind('btnSaveAvail', saveAvailability);
   bind('btnEditPhone', function () { showProfileEditForm('phone'); });
   bind('btnEditAddress', function () { showProfileEditForm('address'); });
-  bind('btnEditOfficialTest', function () {
-    var card = document.getElementById('test-card');
-    if (card) {
-      card.open = true;
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setTimeout(function () { var el = document.getElementById('testDate'); if (el) el.focus(); }, 250);
-    }
-  });
+  bind('btnEditOfficialTest', showTestEditForm);
+  bind('btnCancelTestEdit', hideTestEditForm);
   var addressLine = document.getElementById('addressLine');
   if (addressLine) addressLine.addEventListener('input', buildFullAddress);
-  var contactToggle = document.getElementById('contactToggle');
-  if (contactToggle) contactToggle.addEventListener('change', toggleContactPref);
   var cookieLink = document.getElementById('link-cookie-prefs');
   if (cookieLink) cookieLink.addEventListener('click', function (e) { e.preventDefault(); if (window.ccCookieConsent) window.ccCookieConsent.show(); });
   var delBtn = document.getElementById('btn-request-deletion');

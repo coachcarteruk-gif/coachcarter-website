@@ -693,7 +693,7 @@
 
 
   // ── Wiring ───────────────────────────────────────────────────────────────
-  document.querySelectorAll('.auth-tab').forEach(function (tab) {
+  document.querySelectorAll('.auth-tab:not([hidden])').forEach(function (tab) {
     tab.addEventListener('click', function () { switchAuthMode(tab.dataset.mode); });
   });
 
@@ -709,11 +709,13 @@
     showScreen('forgot');
     document.getElementById('forgot-email').focus();
   });
-  document.getElementById('btn-sms-fallback').addEventListener('click', function () {
+  var smsFallbackBtn = document.getElementById('btn-sms-fallback');
+  if (smsFallbackBtn) smsFallbackBtn.addEventListener('click', function () {
     showScreen('sms-phone');
     document.getElementById('sms-phone-input').focus();
   });
-  document.getElementById('btn-password-login').addEventListener('click', function () {
+  var passwordLoginBtn = document.getElementById('btn-password-login');
+  if (passwordLoginBtn) passwordLoginBtn.addEventListener('click', function () {
     var email = document.getElementById('signin-email').value.trim();
     if (email) document.getElementById('password-email').value = email;
     showScreen('password');
@@ -769,9 +771,6 @@
     if (rbanner) rbanner.style.display = 'block';
     var refInput = document.getElementById('signup-referral');
     if (refInput) refInput.value = referralCode;
-    // Auto-switch to signup if a referral code is present (referrer is
-    // expecting a new account)
-    switchAuthMode('signup');
   }
 
 })();

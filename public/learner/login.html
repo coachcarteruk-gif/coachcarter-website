@@ -32,11 +32,12 @@
       flex-shrink: 0; cursor: pointer;
     }
     .terms-check a { color: #f58321; text-decoration: underline; }
-    /* Auth-mode tabs (Sign in / Sign up) */
+    /* Auth-mode tabs (legacy sign-up tab is hidden while onboarding starts via free trial/booking) */
     .auth-tabs {
       display: flex; gap: 4px; padding: 4px;
       background: #f1f1f1; border-radius: 12px; margin-bottom: 22px;
     }
+    .auth-tabs[hidden] { display: none !important; }
     .auth-tab {
       flex: 1; padding: 10px 12px; border: none;
       background: transparent; border-radius: 8px;
@@ -103,9 +104,9 @@
        SCREEN 1 - Sign in / Sign up (default landing)
        ═══════════════════════════════════════════════════════════════════════ -->
   <div class="screen active" id="screen-auth">
-    <div class="auth-tabs" role="tablist">
+    <div class="auth-tabs" role="tablist" hidden>
       <button class="auth-tab active" id="tab-signin" data-mode="signin" role="tab">Sign in</button>
-      <button class="auth-tab" id="tab-signup" data-mode="signup" role="tab">Sign up</button>
+      <button class="auth-tab" id="tab-signup" data-mode="signup" role="tab" hidden>Sign up</button>
     </div>
 
     <div class="error-msg" id="error-msg"></div>
@@ -118,9 +119,8 @@
         <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email" required>
       </div>
       <button type="submit" class="btn-primary" id="signin-btn">Send sign-in code</button>
-      <div class="small-link-row">
-        <button type="button" id="btn-password-login">Use password instead</button>
-        <button type="button" id="btn-sms-fallback" title="Use phone number instead">Use phone instead</button>
+      <div class="small-link-row" style="justify-content:center;">
+        <a href="/free-trial.html" style="color:#f58321;text-decoration:underline;">New here? Book a free trial</a>
       </div>
     </form>
 
@@ -147,7 +147,7 @@
     </form>
 
     <div class="referral-banner" id="referral-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;margin-top:14px;font-size:0.85rem;color:#166534;text-align:center;">
-      You were referred! Sign up to get <strong>free lesson time</strong>.
+      You were referred! Book your free trial to get started with <strong>free lesson time</strong>.
     </div>
   </div>
 
