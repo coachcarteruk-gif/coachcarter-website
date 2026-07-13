@@ -1338,7 +1338,31 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   request_count INTEGER NOT NULL DEFAULT 1,
   window_start  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_rate_limits_key ON rate_limits(key);
+
+-- Rate-limit rows are ephemeral. Keep the newest row for each key before
+-- enforcing uniqueness so this migration also succeeds on databases where
+-- concurrent requests previously created duplicates. The table lock keeps a
+-- live request from inserting another duplicate between cleanup and index
+-- creation. Ties on window_start keep the row with the greatest id.
+DO $$
+BEGIN
+  LOCK TABLE rate_limits IN ACCESS EXCLUSIVE MODE;
+
+  DELETE FROM rate_limits AS stale
+  USING rate_limits AS newest
+  WHERE stale.key = newest.key
+    AND (
+      stale.window_start < newest.window_start
+      OR (stale.window_start = newest.window_start AND stale.id < newest.id)
+    );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_rate_limits_key_unique
+    ON rate_limits(key);
+END $$;
+
+-- Superseded by the unique index above. Existing installations may still
+-- have this original non-unique index from an earlier migration run.
+DROP INDEX IF EXISTS idx_rate_limits_key;
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- PERFORMANCE: FOREIGN KEY INDEXES (HIGH PRIORITY)

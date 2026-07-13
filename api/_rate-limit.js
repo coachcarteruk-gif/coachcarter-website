@@ -31,34 +31,35 @@
  */
 async function checkRateLimit(sql, { key, max, windowSeconds }) {
   try {
-    const cutoff = new Date(Date.now() - windowSeconds * 1000);
-
-    // Opportunistic cleanup of rows older than the window.
-    await sql`DELETE FROM rate_limits WHERE window_start < ${cutoff}`;
-
-    const [existing] = await sql`
-      SELECT request_count FROM rate_limits
-      WHERE key = ${key} AND window_start > ${cutoff}
+    // One statement is essential here. A SELECT followed by UPDATE/INSERT lets
+    // concurrent first requests create duplicate rows or lose increments. The
+    // unique key installed by db/migration.sql makes this upsert atomic.
+    //
+    // Window expiry is evaluated for this key only. Do not clean unrelated
+    // rows using the caller's window: endpoints intentionally use different
+    // windows, and a short-window request must not erase a longer limit.
+    const [row] = await sql`
+      INSERT INTO rate_limits (key, request_count, window_start)
+      VALUES (${key}, 1, NOW())
+      ON CONFLICT (key) DO UPDATE SET
+        request_count = CASE
+          WHEN rate_limits.window_start <= NOW() - (${windowSeconds} * INTERVAL '1 second')
+            THEN 1
+          ELSE rate_limits.request_count + 1
+        END,
+        window_start = CASE
+          WHEN rate_limits.window_start <= NOW() - (${windowSeconds} * INTERVAL '1 second')
+            THEN NOW()
+          ELSE rate_limits.window_start
+        END
+      RETURNING request_count
     `;
 
-    if (existing && existing.request_count >= max) {
-      return { allowed: false, remaining: 0 };
-    }
-
-    if (existing) {
-      await sql`
-        UPDATE rate_limits SET request_count = request_count + 1
-        WHERE key = ${key} AND window_start > ${cutoff}
-      `;
-    } else {
-      await sql`
-        INSERT INTO rate_limits (key, request_count, window_start)
-        VALUES (${key}, 1, NOW())
-      `;
-    }
-
-    const used = (existing?.request_count || 0) + 1;
-    return { allowed: true, remaining: Math.max(0, max - used) };
+    const used = Number(row.request_count);
+    return {
+      allowed: used <= max,
+      remaining: Math.max(0, max - used),
+    };
   } catch (e) {
     // Fail-open — a DB blip must not lock users out. Matches prior behaviour
     // of all three existing call sites before extraction.
