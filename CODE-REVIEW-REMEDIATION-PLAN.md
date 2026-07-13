@@ -26,7 +26,7 @@ Before starting any item:
 
 ## Recommended implementation order
 
-- [ ] P1.1 Make the shared rate limiter atomic and window-safe
+- [x] P1.1 Make the shared rate limiter atomic and window-safe
 - [ ] P1.2 Enforce learner role and tenant scope in AI personalization
 - [ ] P1.3 Add abuse and input controls to public AI endpoints
 - [ ] P1.4 Upgrade vulnerable production dependencies
@@ -555,4 +555,3 @@ To keep reviews safe and reversible:
 ## Starting prompt for the next Codex session
 
 > Read `AGENTS.md`, `CLAUDE.md`, and `CODE-REVIEW-REMEDIATION-PLAN.md`. Start with the first unchecked item only. Verify the issue against current `main`, create a fresh `codex/` branch, implement the scoped fix with focused tests, run the relevant verification commands, and report any assumptions or contract changes. Do not combine unrelated remediation items or restore intentionally removed product features.
-

@@ -104,8 +104,10 @@ module.exports = async (req, res) => {
     // 8. Clean up old cookie consent records >2 years
     await sql`DELETE FROM cookie_consents WHERE consented_at < NOW() - INTERVAL '2 years'`;
 
-    // 9. Clean up expired rate limit entries
-    await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '2 hours'`;
+    // 9. Clean up old rate-limit entries using a fixed conservative horizon.
+    //    This must stay independent of individual endpoint windows so cleanup
+    //    cannot reset an otherwise valid longer-lived limit.
+    await sql`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '7 days'`;
 
     // 10. Purge notification_log entries >90 days (PR-N, May 2026).
     //     Operational log for support triage, not a GDPR record. 90 days is
