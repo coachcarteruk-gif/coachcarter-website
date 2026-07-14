@@ -12,6 +12,7 @@ test('optional sidebar learner request cannot trigger the session-expired prompt
     "fetchAuthed('/api/learner?action=progress', { suppressSessionExpired: true })"
   );
   expect(auth).toContain('var suppressSessionExpired = options.suppressSessionExpired === true;');
-  expect(auth).toContain('res.status === 401 && !suppressSessionExpired');
+  expect(auth).toContain('var hadStoredAuth = !!getAuth();');
+  expect(auth).toContain('res.status === 401 && hadStoredAuth && !suppressSessionExpired');
   expect(auth).toContain('delete merged.suppressSessionExpired;');
 });

@@ -59,6 +59,26 @@
 
   function clearError(elId) { setError(elId, ''); }
 
+  function setMigrationAccountRecovery(visible) {
+    var recovery = document.getElementById('migration-account-recovery');
+    if (recovery) recovery.style.display = visible ? 'block' : 'none';
+  }
+
+  function showOfflineSignup() {
+    clearError('error-msg');
+    var email = pendingEmail || document.getElementById('signin-email').value.trim();
+    if (email) document.getElementById('signup-email').value = email;
+    showScreen('auth');
+    switchAuthMode('signup');
+    setTimeout(function () { document.getElementById('signup-name').focus(); }, 0);
+  }
+
+  function showSignIn() {
+    showScreen('auth');
+    switchAuthMode('signin');
+    setTimeout(function () { document.getElementById('signin-email').focus(); }, 0);
+  }
+
   // ── Mode tabs (Sign in / Sign up) ────────────────────────────────────────
   function switchAuthMode(mode) {
     document.querySelectorAll('.auth-tab').forEach(function (t) {
@@ -147,9 +167,10 @@
       }
       document.getElementById('migration-title').textContent = 'Enter your sign-in code';
       document.getElementById('migration-sub').innerHTML =
-        'Enter the 6-digit code we sent to <strong id="migration-email-display"></strong>.';
+        'If this email belongs to an existing account, a 6-digit code will arrive at <strong id="migration-email-display"></strong>.';
       document.getElementById('migration-email-display').textContent = email;
       document.getElementById('migration-verify-btn').textContent = 'Sign in';
+      setMigrationAccountRecovery(true);
       showScreen('migration-code');
       focusFirstCodeInput('migration-code-inputs');
     });
@@ -174,6 +195,7 @@
         "Welcome back! We sent a 6-digit code to <strong id=\"migration-email-display\"></strong> to verify it's you.";
       document.getElementById('migration-email-display').textContent = email;
       document.getElementById('migration-verify-btn').textContent = 'Continue';
+      setMigrationAccountRecovery(false);
       showScreen('migration-code');
       focusFirstCodeInput('migration-code-inputs');
     });
@@ -280,18 +302,30 @@
   function handleMigrationResend() {
     if (!pendingEmail) return;
     var btn = document.getElementById('migration-resend-btn');
+    clearError('migration-code-error');
     btn.disabled = true; btn.textContent = 'Sending…';
     fetch('/api/magic-link?action=send-email-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: pendingEmail, purpose: pendingEmailPurpose, role: 'learner' })
-    }).finally(function () {
-      btn.textContent = 'Sent! Check again';
-      setTimeout(function () {
-        btn.textContent = "Didn't get it? Send again";
-        btn.disabled = false;
-      }, 5000);
-    });
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (out) {
+        if (!out.ok) {
+          setError('migration-code-error', (out.data && (out.data.message || out.data.error)) || 'Could not resend the code. Please try again.');
+          btn.disabled = false; btn.textContent = "Didn't get it? Send again";
+          return;
+        }
+        btn.textContent = 'Sent! Check again';
+        setTimeout(function () {
+          btn.textContent = "Didn't get it? Send again";
+          btn.disabled = false;
+        }, 5000);
+      })
+      .catch(function () {
+        setError('migration-code-error', 'Network error. Please check your connection and try again.');
+        btn.disabled = false; btn.textContent = "Didn't get it? Send again";
+      });
   }
 
   // ── Set password (used for migration AND reset) ──────────────────────────
@@ -417,18 +451,30 @@
   function handleResetResend() {
     if (!pendingResetEmail) return;
     var btn = document.getElementById('reset-resend-btn');
+    clearError('reset-code-error');
     btn.disabled = true; btn.textContent = 'Sending…';
     fetch('/api/learner-auth?action=request-reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: pendingResetEmail })
-    }).finally(function () {
-      btn.textContent = 'Sent! Check again';
-      setTimeout(function () {
-        btn.textContent = "Didn't get it? Send again";
-        btn.disabled = false;
-      }, 5000);
-    });
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (out) {
+        if (!out.ok) {
+          setError('reset-code-error', (out.data && (out.data.message || out.data.error)) || 'Could not resend the reset code. Please try again.');
+          btn.disabled = false; btn.textContent = "Didn't get it? Send again";
+          return;
+        }
+        btn.textContent = 'Sent! Check again';
+        setTimeout(function () {
+          btn.textContent = "Didn't get it? Send again";
+          btn.disabled = false;
+        }, 5000);
+      })
+      .catch(function () {
+        setError('reset-code-error', 'Network error. Please check your connection and try again.');
+        btn.disabled = false; btn.textContent = "Didn't get it? Send again";
+      });
   }
 
   // ── Phone fallback (SMS code login - preserves old behaviour) ────────────
@@ -506,18 +552,30 @@
   function handleSmsResend() {
     if (!smsPhone) return;
     var btn = document.getElementById('code-resend-btn');
+    clearError('code-error');
     btn.disabled = true; btn.textContent = 'Sending…';
     fetch('/api/magic-link?action=send-link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ method: 'sms', phone: smsPhone })
-    }).finally(function () {
-      btn.textContent = 'Sent! Check again';
-      setTimeout(function () {
-        btn.textContent = "Didn't get it? Send again";
-        btn.disabled = false;
-      }, 5000);
-    });
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (out) {
+        if (!out.ok) {
+          setError('code-error', (out.data && (out.data.message || out.data.error)) || 'Could not resend the code. Please try again.');
+          btn.disabled = false; btn.textContent = "Didn't get it? Send again";
+          return;
+        }
+        btn.textContent = 'Sent! Check again';
+        setTimeout(function () {
+          btn.textContent = "Didn't get it? Send again";
+          btn.disabled = false;
+        }, 5000);
+      })
+      .catch(function () {
+        setError('code-error', 'Network error. Please check your connection and try again.');
+        btn.disabled = false; btn.textContent = "Didn't get it? Send again";
+      });
   }
 
   // ── Add email (phone-only user migrating) ────────────────────────────────
@@ -551,6 +609,7 @@
           "Welcome back! We sent a 6-digit code to <strong id=\"migration-email-display\"></strong> to verify it's you.";
         document.getElementById('migration-email-display').textContent = email;
         document.getElementById('migration-verify-btn').textContent = 'Continue';
+        setMigrationAccountRecovery(false);
         showScreen('migration-code');
         focusFirstCodeInput('migration-code-inputs');
       })
@@ -704,6 +763,9 @@
   document.getElementById('forgot-form').addEventListener('submit', handleForgot);
   document.getElementById('sms-phone-form').addEventListener('submit', handleSmsPhone);
   document.getElementById('add-email-form').addEventListener('submit', handleAddEmail);
+  document.getElementById('btn-offline-signup').addEventListener('click', showOfflineSignup);
+  document.getElementById('btn-code-offline-signup').addEventListener('click', showOfflineSignup);
+  document.getElementById('btn-back-from-signup').addEventListener('click', showSignIn);
 
   document.getElementById('btn-forgot').addEventListener('click', function () {
     showScreen('forgot');
