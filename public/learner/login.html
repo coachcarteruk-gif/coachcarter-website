@@ -22,6 +22,11 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
+    :root { --auth-link: #ad4e00; }
+    @media (prefers-color-scheme: dark) {
+      :root:not(.light-mode) { --auth-link: #ff9a45; }
+    }
+    :root.dark-mode { --auth-link: #ff9a45; }
     .terms-check {
       display: flex; align-items: flex-start; gap: 10px;
       text-align: left; margin: 24px 0 20px; cursor: pointer;
@@ -71,6 +76,27 @@
       border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
       font-size: 0.88rem; line-height: 1.5;
     }
+    .auth-help-links {
+      display: flex; flex-direction: column; gap: 4px; margin-top: 12px;
+      align-items: stretch;
+    }
+    .auth-help-link {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; min-height: 44px; padding: 8px 10px;
+      border: 0; background: none; color: var(--auth-link);
+      font: inherit; font-size: 0.85rem; line-height: 1.35;
+      text-align: center; text-decoration: underline; cursor: pointer;
+      border-radius: 8px;
+    }
+    .auth-help-link:hover { background: var(--accent-mid); }
+    .auth-help-link:focus-visible { outline: 3px solid rgba(245,131,33,0.35); outline-offset: 2px; }
+    .account-recovery {
+      margin: 16px 0 4px; padding: 12px 14px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface); color: var(--muted); font-size: 0.84rem; line-height: 1.45;
+    }
+    .account-recovery strong { display: block; color: var(--primary); margin-bottom: 2px; }
+    .account-recovery .auth-help-link { margin-top: 4px; }
   </style>
   <script src="/sidebar.js"></script>
   <script src="/shared/learner-auth.js"></script>
@@ -96,8 +122,8 @@
   <h1 class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Sign in to CoachCarter</h1>
 
   <div id="expired-banner" style="display:none;background:#fff4ec;border:1px solid #f8c89a;color:#7a3d00;border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:0.88rem;line-height:1.4;">
-    <strong style="font-weight:700;">Session expired.</strong>
-    Sign in again to pick up where you left off.
+    <strong style="font-weight:700;">Please sign in again.</strong>
+    We couldn't confirm an active sign-in on this device.
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════
@@ -109,7 +135,7 @@
       <button class="auth-tab" id="tab-signup" data-mode="signup" role="tab" hidden>Sign up</button>
     </div>
 
-    <div class="error-msg" id="error-msg"></div>
+    <div class="error-msg" id="error-msg" role="alert" aria-live="polite"></div>
 
     <!-- Sign-in form -->
     <form id="signin-form" data-mode-form="signin">
@@ -119,13 +145,16 @@
         <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email" required>
       </div>
       <button type="submit" class="btn-primary" id="signin-btn">Send sign-in code</button>
-      <div class="small-link-row" style="justify-content:center;">
-        <a href="/free-trial.html" style="color:#f58321;text-decoration:underline;">New here? Book a free trial</a>
+      <div class="auth-help-links">
+        <a href="/free-trial.html" class="auth-help-link">New here? Book a free trial</a>
+        <button type="button" class="auth-help-link" id="btn-offline-signup">Already had a lesson or trial? Create your learner account</button>
       </div>
     </form>
 
     <!-- Sign-up form -->
     <form id="signup-form" data-mode-form="signup" style="display:none;">
+      <div class="card-title">Create your learner account</div>
+      <div class="card-sub" style="margin-bottom:18px;">Use this if your lesson or trial was arranged outside the CoachCarter booking system.</div>
       <div class="form-group">
         <label for="signup-name">Your name</label>
         <input type="text" id="signup-name" placeholder="e.g. Alex Smith" autocomplete="name" required>
@@ -143,7 +172,10 @@
         <label for="signup-referral">Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
         <input type="text" id="signup-referral" placeholder="e.g. FRASER-A1B2" autocomplete="off" style="text-transform:uppercase;">
       </div>
-      <button type="submit" class="btn-primary" id="signup-btn">Create account</button>
+      <button type="submit" class="btn-primary" id="signup-btn">Create learner account</button>
+      <div class="auth-help-links">
+        <button type="button" class="auth-help-link" id="btn-back-from-signup">Back to sign in</button>
+      </div>
     </form>
 
     <div class="referral-banner" id="referral-banner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;margin-top:14px;font-size:0.85rem;color:#166534;text-align:center;">
@@ -183,8 +215,8 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
     </div>
     <div class="result-title" id="migration-title">Enter your sign-in code</div>
-    <div class="result-sub" id="migration-sub">
-      Enter the 6-digit code we sent to <strong id="migration-email-display"></strong>.
+    <div class="result-sub" id="migration-sub" aria-live="polite">
+      If this email belongs to an existing account, a 6-digit code will arrive at <strong id="migration-email-display"></strong>.
     </div>
     <div class="code-inputs" id="migration-code-inputs" role="group" aria-label="6-digit verification code">
       <input type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" data-idx="0" aria-label="Code digit 1">
@@ -194,12 +226,17 @@
       <input type="text" inputmode="numeric" maxlength="1" data-idx="4" aria-label="Code digit 5">
       <input type="text" inputmode="numeric" maxlength="1" data-idx="5" aria-label="Code digit 6">
     </div>
-    <div class="code-error" id="migration-code-error"></div>
+    <div class="code-error" id="migration-code-error" role="alert" aria-live="polite"></div>
     <button class="btn-primary" id="migration-verify-btn" disabled>Continue</button>
     <button class="resend-link" id="migration-resend-btn" style="margin-top: 14px;">
       Didn't get it? Send again
     </button>
     <p class="hint" style="margin-top: 10px;">The code expires in 15 minutes.</p>
+    <div class="account-recovery" id="migration-account-recovery" style="display:none;">
+      <strong>Already had a lesson or trial?</strong>
+      If it was arranged outside this system, you may not have a learner account yet.
+      <button type="button" class="auth-help-link" id="btn-code-offline-signup">Create your learner account</button>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════

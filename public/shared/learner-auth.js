@@ -48,6 +48,11 @@
   function fetchAuthed(url, options) {
     options = options || {};
     var suppressSessionExpired = options.suppressSessionExpired === true;
+    // Remember whether this request genuinely started from a browser that
+    // believed it was signed in. A plain guest can legitimately receive a
+    // 401 from optional learner decoration; that must not become a false
+    // "session expired" prompt.
+    var hadStoredAuth = !!getAuth();
     var method = (options.method || 'GET').toUpperCase();
     var headers = new Headers(options.headers || {});
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
@@ -66,7 +71,7 @@
       // in (common on iOS Safari ITP: 7d cookie eviction, localStorage
       // persists longer). Clear the stale blob and prompt for re-login
       // inline rather than leaving the page silently broken.
-      if (res.status === 401 && !suppressSessionExpired && url.indexOf('/api/magic-link') === -1) {
+      if (res.status === 401 && hadStoredAuth && !suppressSessionExpired && url.indexOf('/api/magic-link') === -1) {
         try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         showSessionExpiredPrompt();
       }
@@ -107,9 +112,9 @@
             '<path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
         '</div>' +
         '<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:1.25rem;' +
-          'font-weight:700;color:#262626;margin-bottom:8px;">Session expired</div>' +
+          'font-weight:700;color:#262626;margin-bottom:8px;">Sign in again</div>' +
         '<div style="font-size:0.9rem;color:#797879;line-height:1.5;margin-bottom:24px;">' +
-          'You\'ve been signed out for security. Sign in again to continue where you left off.' +
+          'We couldn\'t confirm an active sign-in on this device. Sign in again to continue where you left off.' +
         '</div>' +
         '<a href="' + loginHref + '" style="display:block;width:100%;background:#f58321;' +
           'color:#fff;border-radius:10px;font-family:\'Bricolage Grotesque\',sans-serif;' +
