@@ -10,7 +10,10 @@ const learnerAuthScript = fs.readFileSync(
 );
 
 test.describe('learner login recovery', () => {
-  test.use({ viewport: { width: 375, height: 812 } });
+  test.use({
+    viewport: { width: 375, height: 812 },
+    serviceWorkers: 'block',
+  });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
