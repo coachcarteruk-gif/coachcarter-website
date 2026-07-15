@@ -28,6 +28,7 @@
     });
 
     document.getElementById('trialForm').addEventListener('submit', handleSubmit);
+    setupFieldValidation();
 
     loadSlots();
   });
@@ -115,7 +116,7 @@
     if (prefDate) {
       var target = picker.querySelector('.day-group--preselected');
       if (target && typeof target.scrollIntoView === 'function') {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollToElement(target, 'center');
       }
     }
   }
@@ -145,16 +146,15 @@
 
     updateSummary();
 
-    var submit = document.getElementById('submitBtn');
-    submit.disabled = false;
-    submit.textContent = 'Book my free trial';
+    clearSlotSelectionError();
+    setSubmitState();
 
     // QoL: auto-scroll to the details form so the learner can immediately
     // see what to do next. Without this, the slot just changes colour and
     // the form stays out of view - common cause of drop-off.
     var formAnchor = document.getElementById('step-2-heading');
     if (formAnchor && typeof formAnchor.scrollIntoView === 'function') {
-      formAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollToElement(formAnchor, 'start');
     }
   }
 
@@ -176,7 +176,7 @@
     errEl.textContent = '';
 
     if (!selectedSlot) {
-      showError('Please pick a slot first.');
+      promptForSlot();
       return;
     }
 
@@ -193,18 +193,10 @@
     };
     if (referralCode) payload.referral_code = referralCode;
 
-    // Client-side validation (server does authoritative checks)
-    if (!payload.guest_name) { showError('Please enter your name.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.guest_email)) { showError('Please enter a valid email.'); return; }
-    if (!/^(?:07\d{9}|\+447\d{9})$/.test(payload.guest_phone.replace(/\s+/g, ''))) {
-      showError('Please enter a valid UK mobile (07xxx xxx xxx).');
-      return;
-    }
-    if (!payload.guest_pickup_address) { showError('Please enter a pickup address.'); return; }
+    // Client-side validation (server does authoritative checks).
+    if (!validateForm()) return;
 
-    var submitBtn = document.getElementById('submitBtn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Booking…';
+    setSubmitState(true);
 
     posthogCapture('free_trial_submitted', { instructor_id: payload.instructor_id });
 
@@ -232,33 +224,147 @@
         showError(r.body.error || 'Sorry, that slot was just taken. Please pick another.');
         loadSlots(); // refresh the picker
         selectedSlot = null;
+        updateSummary();
       } else if (r.status === 429) {
         showError(r.body.error || 'Too many attempts. Please try again in an hour.');
       } else {
         showError(r.body.error || r.body.message || 'Could not book - please try again.');
       }
 
-      submitBtn.disabled = false;
-      submitBtn.textContent = selectedSlot ? 'Book my free trial' : 'Pick a time first';
+      setSubmitState();
     }).catch(function (err) {
       console.error('Submit failed:', err);
       showError('Connection failed. Please try again.');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Book my free trial';
+      setSubmitState();
     });
+  }
+
+  function setSubmitState(isBooking) {
+    var submitBtn = document.getElementById('submitBtn');
+    if (!submitBtn) return;
+
+    if (isBooking) {
+      submitBtn.disabled = true;
+      submitBtn.classList.remove('needs-slot');
+      submitBtn.textContent = 'Booking…';
+      return;
+    }
+
+    submitBtn.disabled = false;
+    if (selectedSlot) {
+      submitBtn.classList.remove('needs-slot');
+      submitBtn.textContent = 'Book my free trial';
+    } else {
+      submitBtn.classList.add('needs-slot');
+      submitBtn.textContent = 'Choose a time above';
+    }
+  }
+
+  function promptForSlot() {
+    var slotError = document.getElementById('slotSelectionError');
+    if (slotError) slotError.textContent = 'Choose an available time before continuing.';
+
+    var stepHeading = document.getElementById('step-1-heading');
+    if (stepHeading) {
+      stepHeading.setAttribute('tabindex', '-1');
+      scrollToElement(stepHeading, 'start');
+      try { stepHeading.focus({ preventScroll: true }); } catch (e) { stepHeading.focus(); }
+    }
+  }
+
+  function clearSlotSelectionError() {
+    var slotError = document.getElementById('slotSelectionError');
+    if (slotError) slotError.textContent = '';
+  }
+
+  function setupFieldValidation() {
+    ['guest_name', 'guest_email', 'guest_phone', 'guest_pickup_address'].forEach(function (id) {
+      var input = document.getElementById(id);
+      if (!input) return;
+
+      input.addEventListener('blur', function () {
+        validateField(id);
+      });
+      input.addEventListener('input', function () {
+        if (input.getAttribute('aria-invalid') === 'true' && !getFieldError(id)) {
+          clearFieldError(id);
+        }
+      });
+    });
+  }
+
+  function validateForm() {
+    var firstInvalid = null;
+    ['guest_name', 'guest_email', 'guest_phone', 'guest_pickup_address'].forEach(function (id) {
+      if (!validateField(id) && !firstInvalid) firstInvalid = document.getElementById(id);
+    });
+
+    if (firstInvalid) {
+      firstInvalid.focus();
+      return false;
+    }
+    return true;
+  }
+
+  function validateField(id) {
+    var error = getFieldError(id);
+    if (error) {
+      setFieldError(id, error);
+      return false;
+    }
+    clearFieldError(id);
+    return true;
+  }
+
+  function getFieldError(id) {
+    var value = val(id);
+    if (id === 'guest_name') return value ? '' : 'Enter your full name.';
+    if (id === 'guest_email') {
+      if (!value) return 'Enter your email address.';
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? '' : 'Enter a valid email address.';
+    }
+    if (id === 'guest_phone') {
+      if (!value) return 'Enter your UK mobile number.';
+      return /^(?:07\d{9}|\+447\d{9})$/.test(value.replace(/\s+/g, ''))
+        ? ''
+        : 'Enter a valid UK mobile number, such as 07123 456 789.';
+    }
+    if (id === 'guest_pickup_address') return value ? '' : 'Enter your pickup address.';
+    return '';
+  }
+
+  function setFieldError(id, message) {
+    var input = document.getElementById(id);
+    var error = document.getElementById(id + '_error');
+    if (input) input.setAttribute('aria-invalid', 'true');
+    if (error) error.textContent = message;
+  }
+
+  function clearFieldError(id) {
+    var input = document.getElementById(id);
+    var error = document.getElementById(id + '_error');
+    if (input) input.removeAttribute('aria-invalid');
+    if (error) error.textContent = '';
   }
 
   function showError(msg) {
     var errEl = document.getElementById('formError');
     errEl.textContent = msg;
     errEl.classList.add('visible');
-    errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    scrollToElement(errEl, 'center');
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function val(id) {
     var el = document.getElementById(id);
     return el ? el.value.trim() : '';
+  }
+
+  function scrollToElement(element, block) {
+    if (!element || typeof element.scrollIntoView !== 'function') return;
+    var reduceMotion = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: block || 'start' });
   }
 
   function ymd(d) {
