@@ -1,5 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.122 - Free-Trial Passwordless Journey Copy and Form UX (15 July 2026)
+
+Aligns the public free-trial journey with learner email-code authentication without adding verification friction to the booking itself. The details card now explains that the booking confirmation is emailed immediately and a 6-digit code is requested only when the learner later signs in; existing learners are told to use the same email so the booking appears in their account. Mobile and pickup-address helper text now explains how those details are used. The initial CTA is a neutral, actionable "Choose a time above" control that returns keyboard focus to step 1 and shows a slot-level message, then becomes the orange "Book my free trial" action after selection. Required-field failures render beside their inputs with `aria-invalid`, live announcements, validation on blur, and focus on the first invalid field; async submission still uses a true disabled loading state. Smooth scrolling respects reduced-motion preferences. The success page and learner WhatsApp confirmation now describe 6-digit-code sign-in consistently. Booking creation, eligibility, trial accounting, and instructor notification behaviour are unchanged.
+
+**Files:** `public/free-trial.html`, `public/free-trial.js`, `public/free-trial-success.html`, `api/slots.js`, `tests/free-trial-passwordless-journey.spec.js`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.121 - Passwordless Offline Learner Account Creation (15 July 2026)
 
 Completes the learner email-code transition for people whose lesson or trial was arranged outside the booking system. The recovery form now asks only for name and email, sends a rate-limited `purpose: 'signup'` 6-digit code, and creates the learner only after a short-lived purpose-bound verification ticket is redeemed. The new account is email-verified, audit-logged, receives the normal httpOnly session + CSRF cookies, and deliberately starts with zero credit and no free-trial ledger row so an offline trial is not awarded twice. Existing-account and instructor-email conflicts route the person back to the correct sign-in path. Legacy password endpoints remain compatibility-only and are no longer used by this user-facing signup journey.

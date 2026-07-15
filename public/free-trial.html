@@ -117,6 +117,12 @@ a { color: var(--accent); }
   margin-bottom: 4px;
 }
 
+#step-1-heading:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 .card .step-num {
   display: inline-block;
   background: var(--primary);
@@ -249,10 +255,38 @@ a { color: var(--accent); }
   border-color: var(--accent);
 }
 
+.form-group input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+.form-group input[aria-invalid="true"]:focus {
+  outline-color: var(--red);
+}
+
 .form-group .field-help {
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 4px;
+}
+
+.field-error,
+.slot-selection-error {
+  color: var(--red);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 5px;
+}
+
+.field-error:empty,
+.slot-selection-error:empty {
+  display: none;
+}
+
+.required-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: -8px 0 16px;
 }
 
 .form-error {
@@ -282,6 +316,13 @@ a { color: var(--accent); }
   transition: background 0.12s ease;
 }
 .submit-btn:hover:not(:disabled) { background: var(--accent-dk); }
+.submit-btn.needs-slot {
+  background: #e5e7eb;
+  color: #374151;
+}
+.submit-btn.needs-slot:hover {
+  background: #d1d5db;
+}
 .submit-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -327,11 +368,13 @@ a { color: var(--accent); }
       <div id="slotPicker">
         <div class="slot-loading">Loading available slots…</div>
       </div>
+      <div id="slotSelectionError" class="slot-selection-error" role="alert" aria-live="polite"></div>
     </section>
 
     <section class="card" aria-labelledby="step-2-heading">
       <h2 id="step-2-heading"><span class="step-num">2</span>Your details</h2>
-      <p class="helper">We'll send a confirmation and a sign-in link to your email.</p>
+      <p class="helper">We'll email your booking confirmation. No password is needed—when you sign in later, we'll send a 6-digit code.</p>
+      <p class="required-note">All fields are required.</p>
 
       <div id="summaryBar" class="summary-bar" style="display:none"></div>
       <div id="formError" class="form-error" role="alert"></div>
@@ -339,27 +382,32 @@ a { color: var(--accent); }
       <form id="trialForm" novalidate>
         <div class="form-group">
           <label for="guest_name">Full name</label>
-          <input type="text" id="guest_name" name="guest_name" autocomplete="name" required>
+          <input type="text" id="guest_name" name="guest_name" autocomplete="name" aria-describedby="guest_name_error" required>
+          <div class="field-error" id="guest_name_error" aria-live="polite"></div>
         </div>
 
         <div class="form-group">
           <label for="guest_email">Email</label>
-          <input type="email" id="guest_email" name="guest_email" autocomplete="email" required>
-          <div class="field-help">If you already have an account, we'll send a sign-in link instead.</div>
+          <input type="email" id="guest_email" name="guest_email" autocomplete="email" aria-describedby="guest_email_help guest_email_error" required>
+          <div class="field-help" id="guest_email_help">Already have an account? Use the same email so this booking appears there.</div>
+          <div class="field-error" id="guest_email_error" aria-live="polite"></div>
         </div>
 
         <div class="form-group">
           <label for="guest_phone">UK mobile</label>
-          <input type="tel" id="guest_phone" name="guest_phone" autocomplete="tel" placeholder="07xxx xxx xxx" required>
+          <input type="tel" id="guest_phone" name="guest_phone" autocomplete="tel" inputmode="tel" placeholder="07xxx xxx xxx" aria-describedby="guest_phone_help guest_phone_error" required>
+          <div class="field-help" id="guest_phone_help">We'll use this for important booking updates.</div>
+          <div class="field-error" id="guest_phone_error" aria-live="polite"></div>
         </div>
 
         <div class="form-group">
           <label for="guest_pickup_address">Pickup address</label>
-          <input type="text" id="guest_pickup_address" name="guest_pickup_address" autocomplete="street-address" placeholder="House number and postcode" required>
-          <div class="field-help">We pick you up from here.</div>
+          <input type="text" id="guest_pickup_address" name="guest_pickup_address" autocomplete="street-address" placeholder="e.g. 24 Station Road, RG1 1AA" aria-describedby="guest_pickup_address_help guest_pickup_address_error" required>
+          <div class="field-help" id="guest_pickup_address_help">Enter the exact address where you'd like your instructor to meet you.</div>
+          <div class="field-error" id="guest_pickup_address_error" aria-live="polite"></div>
         </div>
 
-        <button type="submit" class="submit-btn" id="submitBtn" disabled>Pick a time first</button>
+        <button type="submit" class="submit-btn needs-slot" id="submitBtn">Choose a time above</button>
       </form>
 
       <div class="fineprint">

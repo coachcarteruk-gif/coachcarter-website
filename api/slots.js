@@ -6152,7 +6152,7 @@ async function handleBookFreeTrial(req, res) {
 
     // ── WhatsApp notifications (non-blocking) ──
     sendWhatsApp(cleanPhone,
-      `✅ Free trial booked!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nCheck your email for a sign-in link.`
+      `✅ Free trial booked!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nCheck your email for confirmation. To manage your booking, use learner sign-in and request a 6-digit code.`
     );
     sendWhatsApp(instructor.phone,
       `📋 New free trial!\n\n👤 ${cleanName}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n📍 ${cleanAddr}\n\nView schedule: https://coachcarter.uk/instructor/`
