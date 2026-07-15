@@ -12,21 +12,23 @@
   <title>CoachCarter - Free Trial Booked</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,900;1,900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <script src="/shared/dark-mode.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --primary:    #262626;
-  --accent:     #f58321;
-  --accent-lt:  #fff4ec;
-  --muted:      #595959;
-  --bg:         #ffffff;
-  --surface:    #f9f9f9;
-  --border:     #e5e5e5;
-  --green:      #1a9e5c;
-  --font-head:  'Bricolage Grotesque', sans-serif;
-  --font-body:  'Lato', sans-serif;
+  --primary:    #1A1A1A;
+  --accent:     #F58220;
+  --accent-under: #C4650A;
+  --accent-text: #D96C0D;
+  --accent-lt:  #FFF4EC;
+  --muted:      #6B6B6B;
+  --faint:      #9A9A9A;
+  --bg:         #FFFFFF;
+  --surface:    #F7F7F7;
+  --border:     #E5E5E5;
+  --font-head:  'Archivo', sans-serif;
+  --font-body:  'Instrument Sans', Helvetica, Arial, sans-serif;
 }
 body {
   font-family: var(--font-body);
@@ -34,75 +36,112 @@ body {
   color: var(--primary);
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 32px 20px;
   -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+a:hover { color: var(--accent-text); }
+.page-logo {
+  height: 68px;
+  width: auto;
+  margin-bottom: 32px;
 }
 .card {
-  max-width: 460px;
+  max-width: 480px;
+  width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 36px 28px;
+  border-radius: 20px;
+  padding: 40px 28px;
   text-align: center;
 }
+@keyframes tick-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
 .tick {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--accent);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.6rem;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
   font-weight: 700;
-  margin: 0 auto 20px;
+  margin: 0 auto 22px;
+  box-shadow: 0 3px 0 var(--accent-under);
+  animation: tick-pop 0.4s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick { animation: none; }
 }
 h1 {
   font-family: var(--font-head);
-  font-weight: 800;
-  font-size: 1.6rem;
+  font-weight: 900;
+  font-size: clamp(28px, 5vw, 34px);
+  letter-spacing: -0.02em;
+  line-height: 1.08;
   margin-bottom: 12px;
 }
-p {
+.lede {
   color: var(--muted);
-  font-size: 1rem;
+  font-size: 16.5px;
   line-height: 1.6;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 .note {
-  font-size: 0.85rem;
   background: var(--accent-lt);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-top: 20px;
-  color: var(--primary);
+  border-radius: 12px;
+  padding: 16px 18px;
   text-align: left;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+  color: var(--primary);
 }
 .note strong { color: var(--primary); }
+.spam-note {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 6px;
+  text-align: left;
+}
+.spam-note strong { color: var(--primary); }
 .home-link {
   display: inline-block;
-  margin-top: 20px;
-  color: var(--muted);
-  font-size: 0.9rem;
+  margin-top: 24px;
+  color: var(--faint);
+  font-size: 14.5px;
 }
 </style>
 </head>
 <body>
+  <img class="page-logo" src="/Logo.png" alt="CoachCarter Driving School">
   <main class="card" role="main">
     <div class="tick" aria-hidden="true">&#10003;</div>
-    <h1>Free trial booked.</h1>
-    <p>
-      We've emailed your booking confirmation. To manage your booking, sign in
-      with the same email and we'll send you a 6-digit code.
+    <h1>You're booked in.</h1>
+    <p class="lede">
+      Your free lesson is confirmed &mdash; a confirmation email is on its way
+      with everything you need to know.
     </p>
     <div class="note">
+      <strong>What happens next?</strong> Your instructor will meet you at your
+      pickup address. Bring your provisional licence &mdash; nothing else needed.
+      To manage your booking, sign in with the same email and we'll send you a
+      6-digit code.
+    </div>
+    <div class="spam-note">
       <strong>Email not arrived in 5 minutes?</strong> Check your spam folder. You can
       also <a href="/learner/login.html">open learner sign-in</a> and request a fresh 6-digit code.
     </div>
-    <a class="home-link" href="/">Back to homepage</a>
   </main>
+  <a class="home-link" href="/">Back to homepage</a>
 </body>
 </html>
