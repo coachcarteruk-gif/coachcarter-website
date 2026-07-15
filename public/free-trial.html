@@ -20,25 +20,29 @@
   <link rel="canonical" href="https://coachcarter.uk/free-trial.html">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,900;1,900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <script src="/shared/dark-mode.js" defer></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary:    #262626;
-  --accent:     #f58321;
-  --accent-dk:  #e07518;
-  --accent-lt:  #fff4ec;
-  --muted:      #595959;
-  --bg:         #ffffff;
-  --surface:    #f9f9f9;
-  --border:     #e5e5e5;
+  --primary:    #1A1A1A;
+  --body-text:  #444444;
+  --accent:     #F58220;
+  --accent-dk:  #E07314;
+  --accent-under: #C4650A;
+  --accent-text: #D96C0D;
+  --accent-lt:  #FFF4EC;
+  --muted:      #6B6B6B;
+  --faint:      #9A9A9A;
+  --bg:         #FFFFFF;
+  --surface:    #F7F7F7;
+  --border:     #E5E5E5;
   --green:      #1a9e5c;
   --red:        #c0392b;
-  --font-head:  'Bricolage Grotesque', sans-serif;
-  --font-body:  'Lato', sans-serif;
-  --radius:     14px;
+  --font-head:  'Archivo', sans-serif;
+  --font-body:  'Instrument Sans', Helvetica, Arial, sans-serif;
+  --radius:     16px;
 }
 
 body {
@@ -49,56 +53,55 @@ body {
   line-height: 1.5;
 }
 
-a { color: var(--accent); }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+a:hover { color: var(--accent-text); }
 
 .page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 32px 20px 80px;
+  padding: 28px 20px 80px;
 }
 
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 1.1rem;
-  margin-bottom: 32px;
-  color: var(--primary);
+  display: block;
+  width: fit-content;
+  margin-bottom: 28px;
   text-decoration: none;
 }
 
-.brand img { height: 32px; }
+.brand img { height: 76px; display: block; }
 
 .hero {
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
 .hero-eyebrow {
   display: inline-block;
   background: var(--accent-lt);
-  color: var(--accent-dk);
+  color: var(--accent-text);
   font-weight: 700;
-  font-size: 0.78rem;
-  padding: 4px 12px;
+  font-size: 12.5px;
+  padding: 5px 14px;
   border-radius: 999px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .hero h1 {
   font-family: var(--font-head);
-  font-weight: 800;
-  font-size: clamp(1.8rem, 5vw, 2.6rem);
-  line-height: 1.1;
+  font-weight: 900;
+  font-size: clamp(34px, 5.4vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
   margin-bottom: 12px;
 }
 
+.hero h1 .accent-italic { color: var(--accent); font-style: italic; }
+
 .hero p {
   color: var(--muted);
-  font-size: 1.05rem;
+  font-size: 17.5px;
   max-width: 540px;
 }
 
@@ -106,15 +109,19 @@ a { color: var(--accent); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: 26px 24px;
   margin-bottom: 20px;
 }
 
 .card h2 {
   font-family: var(--font-head);
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 900;
+  font-size: 19px;
+  letter-spacing: -0.01em;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 #step-1-heading:focus {
@@ -124,23 +131,22 @@ a { color: var(--accent); }
 }
 
 .card .step-num {
-  display: inline-block;
   background: var(--primary);
   color: #fff;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
   border-radius: 50%;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 14px;
   font-weight: 700;
-  margin-right: 8px;
-  line-height: 24px;
+  line-height: 26px;
 }
 
 .card .helper {
   color: var(--muted);
-  font-size: 0.9rem;
-  margin-bottom: 16px;
+  font-size: 14.5px;
+  margin-bottom: 20px;
 }
 
 /* Slot picker */
@@ -150,12 +156,12 @@ a { color: var(--accent); }
   text-align: center;
   padding: 32px 16px;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 15px;
 }
 .slot-error { color: var(--red); }
 
 .day-group {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .day-group--preselected {
   padding: 10px 12px;
@@ -171,15 +177,15 @@ a { color: var(--accent); }
 .day-group--preselected .day-label::after {
   content: ' - picked from your slot';
   font-weight: 500;
-  font-size: 0.78rem;
+  font-size: 12.5px;
   color: rgb(21, 128, 61);
   opacity: 0.85;
 }
 
 .day-label {
-  font-weight: 700;
-  font-size: 0.95rem;
-  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 10px;
   color: var(--primary);
 }
 
@@ -196,16 +202,18 @@ a { color: var(--accent); }
   border-radius: 10px;
   padding: 10px 8px;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 14.5px;
   font-weight: 600;
+  color: var(--primary);
   cursor: pointer;
   text-align: center;
+  min-height: 44px;
   transition: all 0.12s ease;
 }
 .slot-btn .slot-instructor {
   display: block;
   font-weight: 400;
-  font-size: 0.78rem;
+  font-size: 12.5px;
   color: var(--muted);
   margin-top: 2px;
 }
@@ -234,15 +242,15 @@ a { color: var(--accent); }
 .form-group label {
   display: block;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 14.5px;
   margin-bottom: 6px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px 14px;
+  padding: 13px 14px;
   font: inherit;
-  font-size: 1rem;
+  font-size: 16px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #fff;
@@ -264,15 +272,15 @@ a { color: var(--accent); }
 }
 
 .form-group .field-help {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 4px;
+  font-size: 13px;
+  color: var(--faint);
+  margin-top: 5px;
 }
 
 .field-error,
 .slot-selection-error {
   color: var(--red);
-  font-size: 0.82rem;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
   margin-top: 5px;
@@ -284,9 +292,9 @@ a { color: var(--accent); }
 }
 
 .required-note {
-  color: var(--muted);
-  font-size: 0.82rem;
-  margin: -8px 0 16px;
+  color: var(--faint);
+  font-size: 13px;
+  margin: -2px 0 20px;
 }
 
 .form-error {
@@ -296,7 +304,7 @@ a { color: var(--accent); }
   padding: 12px 14px;
   border-radius: 10px;
   margin-bottom: 16px;
-  font-size: 0.92rem;
+  font-size: 14.5px;
   display: none;
 }
 .form-error.visible { display: block; }
@@ -309,16 +317,18 @@ a { color: var(--accent); }
   color: #fff;
   padding: 16px 24px;
   font: inherit;
-  font-size: 1.05rem;
+  font-size: 17px;
   font-weight: 700;
   border-radius: 12px;
   cursor: pointer;
+  box-shadow: 0 3px 0 var(--accent-under);
   transition: background 0.12s ease;
 }
-.submit-btn:hover:not(:disabled) { background: var(--accent-dk); }
+.submit-btn:hover:not(:disabled):not(.needs-slot) { background: var(--accent-dk); }
 .submit-btn.needs-slot {
   background: #e5e7eb;
   color: #374151;
+  box-shadow: none;
 }
 .submit-btn.needs-slot:hover {
   background: #d1d5db;
@@ -333,32 +343,68 @@ a { color: var(--accent); }
   border: 1px solid var(--accent);
   border-radius: 10px;
   padding: 12px 14px;
-  margin-bottom: 16px;
-  font-size: 0.92rem;
+  margin-bottom: 18px;
+  font-size: 14.5px;
   color: var(--primary);
 }
-.summary-bar strong { color: var(--accent-dk); }
+.summary-bar strong { color: var(--accent-text); }
+
+/* Sticky submit dock (mobile only) */
+.sticky-summary {
+  display: none;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 8px;
+}
 
 .fineprint {
-  margin-top: 24px;
-  font-size: 0.78rem;
-  color: var(--muted);
+  margin-top: 22px;
+  font-size: 12.5px;
+  color: var(--faint);
   text-align: center;
   line-height: 1.6;
 }
-.fineprint a { color: var(--muted); }
+.fineprint a { color: var(--faint); }
+
+@media (max-width: 767px) {
+  .page { padding: 20px 16px 140px; }
+  .brand { margin: 0 auto 24px; }
+  .brand img { height: 64px; }
+  .hero { margin-bottom: 28px; text-align: center; }
+  .hero h1 { font-size: 32px; }
+  .hero p { font-size: 15.5px; margin: 0 auto; }
+  .card { padding: 20px 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 17px; gap: 9px; }
+  .card .step-num { width: 24px; height: 24px; font-size: 13px; line-height: 24px; }
+  .card .helper { font-size: 13.5px; margin-bottom: 16px; }
+  .slot-row { grid-template-columns: repeat(3, 1fr); }
+
+  .submit-dock {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255,255,255,0.94);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    z-index: 50;
+  }
+  .sticky-summary:not(:empty) { display: block; }
+}
 </style>
 </head>
 <body>
   <main class="page">
     <a class="brand" href="/">
       <img src="/Logo.png" alt="CoachCarter">
-      <span>CoachCarter</span>
     </a>
 
     <div class="hero">
       <span class="hero-eyebrow">Free first lesson</span>
-      <h1>Try a 1-hour driving lesson - on us.</h1>
+      <h1>Try a 1-hour driving lesson &mdash; <span class="accent-italic">on us.</span></h1>
       <p>No card needed. Pick a time that works, give us a few details, and we'll see you at your front door.</p>
     </div>
 
@@ -407,7 +453,10 @@ a { color: var(--accent); }
           <div class="field-error" id="guest_pickup_address_error" aria-live="polite"></div>
         </div>
 
-        <button type="submit" class="submit-btn needs-slot" id="submitBtn">Choose a time above</button>
+        <div class="submit-dock">
+          <div id="stickySummary" class="sticky-summary" aria-hidden="true"></div>
+          <button type="submit" class="submit-btn needs-slot" id="submitBtn">Choose a time above</button>
+        </div>
       </form>
 
       <div class="fineprint">
@@ -418,5 +467,6 @@ a { color: var(--accent); }
   </main>
 
   <script src="/free-trial.js"></script>
+  <script src="/free-trial-sticky.js"></script>
 </body>
 </html>

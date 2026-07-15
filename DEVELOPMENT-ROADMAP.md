@@ -1456,6 +1456,24 @@ Until 4g lands, credit-funded bookings keep `lesson_bookings.stripe_fee_pence = 
 
 ---
 
+### 2.71 — Free-Trial Funnel Redesign ✅ Complete (15 July 2026)
+
+**What:** Implemented the designer handoff bundle for the free-trial acquisition funnel: a new direct-response landing page plus restyles of the booking and confirmation pages. The whole funnel points at one action — book the free first lesson. "If you continue" pricing, portal marketing, and owner-bio content deliberately omitted to reduce friction.
+
+**Built:**
+- `public/free-lesson.html` (new) — direct-response landing page: hero ("Your licence, this year."), pain section, method cards, booking steps, testimonials, instructor strip, FAQ accordion (native `details`/`summary`, no JS), closing CTA. One responsive page; below 768px the dark/grey sections become inset rounded cards and a fixed sticky CTA bar appears. All CTAs → `/free-trial.html`. Testimonial photos are styled placeholders — swap in real photos before launch.
+- `public/free-trial.html` — restyled to the new design system (Archivo 900 headings / Instrument Sans body, `#F58220` accent, `0 3px 0 #C4650A` button underside). Structure, IDs, and all aria/validation behaviour preserved — `free-trial.js` untouched. Mobile adds a fixed submit dock with the selected-slot summary above the button.
+- `public/free-trial-sticky.js` (new) — display-only MutationObserver that mirrors `#summaryBar` (owned by `free-trial.js`) into the mobile dock's `#stickySummary`. External file per the no-inline-script CSP rule.
+- `public/free-trial-success.html` — restyled confirmation: orange tick with pop animation (`prefers-reduced-motion` respected), "You're booked in." H1, `#FFF4EC` "What happens next?" note (pickup, provisional licence, 6-digit code), spam note + learner sign-in link. Booking-summary rows from the design were skipped because `book-free-trial` returns only a static `redirect_url` — generic copy kept per the handoff README's fallback.
+
+**Fonts note:** these three pages now use Archivo + Instrument Sans, replacing Bricolage Grotesque/Lato *on these pages only*. The handoff README flags deciding whether to roll the pairing out site-wide.
+
+**Validation:** all 14 `free-trial-*.spec.js` Playwright tests pass unchanged; pages verified in browser at 375px and 1280px (tokens, breakpoint behaviour, sticky dock mirror, zero horizontal overflow).
+
+**Files:** `public/free-lesson.html` (new), `public/free-trial-sticky.js` (new), `public/free-trial.html`, `public/free-trial-success.html`.
+
+---
+
 ## Phase 4: Future Considerations (Not Yet Scoped)
 
 - ~~**T&Cs acceptance on login** — add checkbox to magic link login flow ("I agree to Terms & Privacy Policy"), record acceptance with timestamp in DB. Also update terms.html to platform model language.~~ ✅ Done (2.54)

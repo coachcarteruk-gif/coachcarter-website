@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Free First Driving Lesson in Reading - CoachCarter Driving School</title>
+  <meta name="description" content="Your first hour with a patient, DVSA-approved driving instructor in Reading is completely free. No card. No obligation. Book a real slot in about two minutes.">
+  <meta property="og:title" content="Try us for an hour, commit to nothing - free first driving lesson">
+  <meta property="og:description" content="A completely free 1-hour driving lesson in Reading. No card, no obligation. Pick a real slot from the next 14 days.">
+  <meta property="og:image" content="https://coachcarter.uk/Logo.png">
+  <meta property="og:url" content="https://coachcarter.uk/free-lesson.html">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://coachcarter.uk/free-lesson.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,900;1,900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <script src="/shared/dark-mode.js" defer></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:        #1A1A1A;
+  --body-text:  #444444;
+  --muted:      #6B6B6B;
+  --faint:      #9A9A9A;
+  --accent:     #F58220;
+  --accent-dk:  #E07314;
+  --accent-under: #C4650A;
+  --accent-text: #D96C0D;
+  --accent-lt:  #FFF4EC;
+  --bg:         #FFFFFF;
+  --surface:    #F7F7F7;
+  --border:     #E5E5E5;
+  --dark-body:  #BFBFBF;
+  --font-head:  'Archivo', sans-serif;
+  --font-body:  'Instrument Sans', Helvetica, Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+a:hover { color: var(--accent-text); }
+
+h1, h2, h3 { font-family: var(--font-head); }
+
+.accent-italic { color: var(--accent); font-style: italic; }
+
+/* CTA buttons */
+.cta {
+  display: inline-block;
+  background: var(--accent);
+  color: #FFFFFF;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 19px;
+  padding: 18px 42px;
+  border-radius: 10px;
+  box-shadow: 0 3px 0 var(--accent-under);
+  transition: background 0.12s ease;
+}
+.cta:hover { background: var(--accent-dk); color: #FFFFFF; }
+.cta--mid { font-size: 18px; padding: 17px 36px; }
+.cta--closing { padding: 18px 44px; box-shadow: none; }
+.cta--closing:hover { background: #FF9436; }
+
+.cta-microcopy {
+  font-size: 13.5px;
+  color: var(--faint);
+  margin-top: 18px;
+}
+
+/* 1. Logo + proof bar */
+.proof-header {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 28px 24px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.proof-header img { height: 84px; width: auto; }
+.proof-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+.stars { color: var(--accent); letter-spacing: 2px; font-size: 13px; }
+
+/* 2. Hero */
+.hero {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 72px 24px 48px;
+  text-align: center;
+}
+.hero h1 {
+  font-weight: 900;
+  font-size: clamp(44px, 6.4vw, 76px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin-bottom: 14px;
+}
+.hero-tagline { font-size: 20px; color: var(--muted); margin-bottom: 26px; }
+.hero-support {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--body-text);
+  margin: 0 auto 34px;
+  max-width: 600px;
+}
+
+/* 3. Pain section */
+.section-dark {
+  background: var(--ink);
+  color: #F5F5F5;
+  padding: 72px 24px;
+}
+.section-dark .inner { max-width: 720px; margin: 0 auto; }
+.section-dark h2 {
+  font-weight: 900;
+  font-size: clamp(28px, 3.6vw, 38px);
+  letter-spacing: -0.02em;
+  margin-bottom: 36px;
+}
+.pain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  font-size: 18px;
+  line-height: 1.55;
+}
+.pain-item { display: flex; gap: 14px; }
+.pain-item .dash { color: var(--accent); flex-shrink: 0; }
+.pain-close {
+  font-size: 18px;
+  line-height: 1.6;
+  margin-top: 36px;
+  color: var(--dark-body);
+}
+
+/* 4. The method */
+.section-grey { background: var(--surface); padding: 72px 24px; }
+.section-grey .inner, .section-plain .inner { max-width: 1040px; margin: 0 auto; }
+.section-heading {
+  font-weight: 900;
+  font-size: clamp(28px, 3.6vw, 38px);
+  letter-spacing: -0.02em;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.section-sub {
+  font-size: 18px;
+  color: var(--muted);
+  text-align: center;
+  margin: 0 auto 44px;
+  max-width: 560px;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+.method-card {
+  background: #FFFFFF;
+  border-radius: 14px;
+  padding: 32px 28px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.method-num {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 15px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.method-card h3 {
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+.method-card p { font-size: 16px; line-height: 1.65; color: var(--body-text); }
+.section-cta { text-align: center; margin-top: 44px; }
+.section-cta .cta-microcopy { margin-top: 14px; }
+
+/* 5. What happens when you book */
+.section-plain { max-width: 1040px; margin: 0 auto; padding: 72px 24px; }
+.section-plain .section-heading { margin-bottom: 44px; }
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.step { text-align: center; padding: 0 12px; }
+.step-circle {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 16px;
+  background: var(--ink);
+  color: #FFFFFF;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 19px;
+}
+.step h3 { font-family: var(--font-body); font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.step p { font-size: 15.5px; line-height: 1.6; color: var(--body-text); }
+
+/* 6. Testimonials */
+.testimonial-card {
+  background: #FFFFFF;
+  border-radius: 14px;
+  padding: 28px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.testimonial-photo {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  background: var(--border);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  font-size: 13.5px;
+  text-align: center;
+  padding: 12px;
+  overflow: hidden;
+}
+.testimonial-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+.testimonial-quote { font-size: 16.5px; line-height: 1.6; font-style: italic; }
+.testimonial-who { font-size: 14.5px; color: var(--muted); line-height: 1.55; }
+.testimonial-who strong { color: var(--ink); }
+.testimonial-closing {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  margin-bottom: 18px;
+}
+
+/* 7. Instructor strip */
+.instructor-strip {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 72px 24px;
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.instructor-photo {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.instructor-strip .bio { flex: 1; min-width: 260px; }
+.instructor-strip h2 {
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+}
+.instructor-strip p { font-size: 16.5px; line-height: 1.65; color: var(--body-text); }
+
+/* 8. FAQs */
+.faq-section { max-width: 720px; margin: 0 auto; padding: 0 24px 72px; }
+.faq-section h2 {
+  font-weight: 900;
+  font-size: clamp(28px, 3.6vw, 38px);
+  letter-spacing: -0.02em;
+  margin-bottom: 32px;
+}
+.faq-section details { border-top: 1px solid var(--border); padding: 20px 0; }
+.faq-section details:last-child { border-bottom: 1px solid var(--border); }
+.faq-section summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  font-size: 17.5px;
+  font-weight: 600;
+  list-style: none;
+}
+.faq-section summary::-webkit-details-marker { display: none; }
+.faq-chev {
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 400;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+details[open] .faq-chev { transform: rotate(45deg); }
+.faq-section details p {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--body-text);
+  margin-top: 14px;
+}
+
+/* 9. Closing CTA */
+.closing {
+  background: var(--ink);
+  color: #F5F5F5;
+  padding: 88px 24px;
+  text-align: center;
+}
+.closing .inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+.closing h2 {
+  font-weight: 900;
+  font-size: clamp(34px, 4.8vw, 54px);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.closing p {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--dark-body);
+  max-width: 480px;
+}
+.closing-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+.logo-chip { background: #FFFFFF; border-radius: 12px; padding: 10px 18px; }
+.logo-chip img { height: 64px; width: auto; display: block; }
+.closing-brand .strapline { font-size: 13.5px; color: var(--faint); }
+
+/* Sticky mobile CTA bar */
+.sticky-cta {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255,255,255,0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  z-index: 50;
+}
+.sticky-cta a {
+  display: block;
+  background: var(--accent);
+  color: #FFFFFF;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 17px;
+  text-align: center;
+  padding: 15px 20px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--accent-under);
+}
+.sticky-cta a:hover { background: var(--accent-dk); color: #FFFFFF; }
+
+/* Mobile layout */
+@media (max-width: 767px) {
+  body { padding-bottom: 92px; }
+
+  .proof-header { padding-top: 24px; }
+  .proof-header img { height: 72px; }
+  .proof-line { font-size: 13px; }
+
+  .hero { padding: 48px 20px 40px; }
+  .hero h1 { font-size: 48px; line-height: 1.0; margin-bottom: 12px; }
+  .hero-tagline { font-size: 17px; margin-bottom: 20px; }
+  .hero-support { font-size: 16px; margin-bottom: 28px; }
+  .hero .cta { display: block; font-size: 18px; padding: 17px 24px; border-radius: 12px; }
+  .cta-microcopy { font-size: 12.5px; margin-top: 14px; }
+
+  .section-dark {
+    border-radius: 20px;
+    margin: 0 12px;
+    padding: 48px 20px;
+  }
+  .section-dark h2 { font-size: 26px; margin-bottom: 24px; }
+  .pain-list { gap: 18px; font-size: 16px; }
+  .pain-close { font-size: 16px; margin-top: 24px; }
+
+  .section-grey {
+    border-radius: 20px;
+    margin: 0 12px;
+    padding: 48px 20px;
+  }
+  .section-heading { font-size: 26px; margin-bottom: 8px; }
+  .section-sub { font-size: 16px; margin-bottom: 28px; }
+  .method-card { padding: 22px 20px; }
+  .method-card h3 { font-size: 18px; }
+  .method-card p { font-size: 15px; }
+  .card-grid { gap: 14px; }
+
+  .section-plain { padding: 56px 20px; }
+  .section-plain .section-heading { text-align: left; margin-bottom: 24px; }
+  .steps-grid { gap: 20px; }
+  .step { display: flex; gap: 16px; text-align: left; padding: 0; }
+  .step-circle { width: 36px; height: 36px; margin: 0; font-size: 16px; flex-shrink: 0; }
+  .step h3 { font-size: 16px; margin-bottom: 4px; }
+  .step p { font-size: 14.5px; }
+
+  .testimonial-card { padding: 22px; gap: 12px; }
+  .testimonial-quote { font-size: 15.5px; }
+  .testimonial-who { font-size: 13.5px; }
+  .testimonial-closing { font-size: 18px; }
+
+  .instructor-strip { padding: 48px 20px; gap: 18px; flex-wrap: nowrap; }
+  .instructor-strip .bio { min-width: 0; }
+  .instructor-photo { width: 88px; height: 88px; }
+  .instructor-strip h2 { font-size: 19px; margin-bottom: 6px; }
+  .instructor-strip p { font-size: 14.5px; }
+
+  .faq-section { padding: 0 20px 48px; }
+  .faq-section h2 { font-size: 26px; margin-bottom: 20px; }
+  .faq-section details { padding: 16px 0; }
+  .faq-section summary { font-size: 16px; gap: 14px; }
+  .faq-chev { font-size: 20px; }
+  .faq-section details p { font-size: 15px; margin-top: 12px; }
+
+  .closing {
+    border-radius: 20px 20px 0 0;
+    margin: 0 12px;
+    padding: 56px 24px;
+  }
+  .closing h2 { font-size: 36px; }
+  .closing p { font-size: 15.5px; }
+  .closing .cta { display: block; width: 100%; font-size: 18px; padding: 17px 24px; border-radius: 12px; }
+  .logo-chip { border-radius: 10px; padding: 8px 14px; }
+  .logo-chip img { height: 52px; }
+  .closing-brand .strapline { font-size: 12.5px; }
+
+  .sticky-cta { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .faq-chev { transition: none; }
+}
+</style>
+</head>
+<body>
+
+  <!-- 1. Logo + social proof -->
+  <header class="proof-header">
+    <img src="/Logo.png" alt="CoachCarter Driving School">
+    <div class="proof-line">
+      <span class="stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+      <span>5-star rated by learners across Reading</span>
+    </div>
+  </header>
+
+  <!-- 2. Hero -->
+  <section class="hero">
+    <h1>Try us for an hour.<br><span class="accent-italic">Commit to nothing.</span></h1>
+    <p class="hero-tagline">Worst case? You get to drive for an hour, for free.</p>
+    <p class="hero-support">Your first hour with a patient, DVSA-approved instructor in Reading is completely free. No card. No obligation. </p>
+    <a class="cta" href="/free-trial.html">Book my free lesson</a>
+    <p class="cta-microcopy">Pick a real slot from the next 14 days. Takes about two minutes.</p>
+  </section>
+
+  <!-- 3. Pain -->
+  <section class="section-dark">
+    <div class="inner">
+      <h2>Sound familiar?</h2>
+      <div class="pain-list">
+        <div class="pain-item"><span class="dash" aria-hidden="true">&mdash;</span><span>"I've had lessons before, but I still don't really know how close I am to test standard."</span></div>
+        <div class="pain-item"><span class="dash" aria-hidden="true">&mdash;</span><span>"I know what I did wrong on my test. I just don't understand why it keeps happening."</span></div>
+        <div class="pain-item"><span class="dash" aria-hidden="true">&mdash;</span><span>"I get anxious before every lesson, and I dread feeling judged or patronised."</span></div>
+        <div class="pain-item"><span class="dash" aria-hidden="true">&mdash;</span><span>"I don't want to pay for a block of ten lessons before I know if we even get on."</span></div>
+      </div>
+      <p class="pain-close">None of that means you're a bad driver. It usually means nobody has taken the time to explain what to notice, when to act, and why it matters. The free lesson is where that changes.</p>
+    </div>
+  </section>
+
+  <!-- 4. What your free hour looks like -->
+  <section class="section-grey">
+    <div class="inner">
+      <h2 class="section-heading">What your free hour looks like</h2>
+      <p class="section-sub">Calm and enjoyable lesson.</p>
+      <div class="card-grid">
+        <div class="method-card">
+          <div class="method-num">01</div>
+          <h3>A real lesson</h3>
+          <p>A qualified instructor with a dual-controlled car starting the lesson at your chosen address.</p>
+        </div>
+        <div class="method-card">
+          <div class="method-num">02</div>
+          <h3>Stress Free Introduction</h3>
+          <p>Our goal is to help you make as much progress in one hour as possible, whilst maintaining a safe and relaxed environment.</p>
+        </div>
+        <div class="method-card">
+          <div class="method-num">03</div>
+          <h3>An honest opinion of your level</h3>
+          <p>You leave knowing exactly where you stand and what's needed for you to pass your test.</p>
+        </div>
+      </div>
+      <div class="section-cta">
+        <a class="cta cta--mid" href="/free-trial.html">Book my free lesson</a>
+        <p class="cta-microcopy">No card. No obligation. One hour behind the wheel.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. What happens when you book -->
+  <section class="section-plain">
+    <h2 class="section-heading">What happens when you book</h2>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-circle" aria-hidden="true">1</div>
+        <div>
+          <h3>Pick a slot</h3>
+          <p>Choose a genuine available time from the next 14 days and enter your name, contact details, and pickup address. No payment card is asked for.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-circle" aria-hidden="true">2</div>
+        <div>
+          <h3>We come to you</h3>
+          <p>You get a confirmation, and your instructor meets you at your pickup address for the full one-hour lesson.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-circle" aria-hidden="true">3</div>
+        <div>
+          <h3>You decide</h3>
+          <p>You leave with an honest picture of your level and next priorities. If it feels right, you keep going. If not, that's genuinely fine; no follow-up pressure.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Testimonials -->
+  <section class="section-grey">
+    <div class="inner">
+      <h2 class="section-heading">Learners who were where you are</h2>
+      <p class="section-sub">Real reviews from CoachCarter learners in Reading. Results are examples, not promises.</p>
+      <div class="card-grid">
+        <div class="testimonial-card">
+          <div class="testimonial-photo"><img src="/pete-pass.jpg" alt="Pete holding his pass certificate next to the CoachCarter car"></div>
+          <div class="stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="testimonial-quote">"In just a few lessons I went from a liability on the road, to passing on the first try!"</p>
+          <div class="testimonial-who"><strong>Pete Humphries</strong> : had failed nine tests elsewhere and was close to giving up. Fraser taught him what to be mindful of, when, and why. He passed on his next attempt.</div>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-photo"><img src="/chloe-pass.jpg" alt="Learner holding her pass certificate next to the CoachCarter car"></div>
+          <div class="stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="testimonial-quote">"Extremely patient and laid back and made me feel confident driving."</p>
+          <div class="testimonial-who"><strong>Chloe Westwood</strong> : After searching for someone to fit lessons around work and family, evening sessions helped Chloe pass first time</div>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-photo"><img src="/olivia-pass.jpg" alt="Olivia holding her pass certificate next to the CoachCarter car"></div>
+          <div class="stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="testimonial-quote">"I ended up looking forward to my lessons instead of dreading them."</p>
+          <div class="testimonial-who"><strong>Olivia May</strong> : used to dread lessons because of anxiety. Calm, clear, kind feedback from the first lesson helped her focus, and she passed with only one minor.</div>
+        </div>
+      </div>
+      <div class="section-cta">
+        <p class="testimonial-closing">The worst case is a free hour of driving practice.</p>
+        <a class="cta cta--mid" href="/free-trial.html">Book my free lesson</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Instructor strip -->
+  <section class="instructor-strip">
+    <img class="instructor-photo" src="/FraserDiag.webp" alt="Fraser, your driving instructor">
+    <div class="bio">
+      <h2>You'll be driving with Fraser</h2>
+      <p>A DVSA-approved instructor in Reading who teaches with patience and fun. No pressure, just working out if we're the right fit for you.</p>
+    </div>
+  </section>
+
+  <!-- 8. FAQs -->
+  <section class="faq-section">
+    <h2>Questions learners actually ask</h2>
+    <div>
+      <details>
+        <summary>Is the free lesson really free, or is there a catch?<span class="faq-chev" aria-hidden="true">+</span></summary>
+        <p>Really free. No card details are taken, and there's nothing to cancel afterwards. It exists so you can judge the teaching fit before spending anything &mdash; if it's not for you, that's a perfectly good outcome.</p>
+      </details>
+      <details>
+        <summary>No one else in Reading is doing free trials, so why are you?<span class="faq-chev" aria-hidden="true">+</span></summary>
+        <p>Those who have done the free trial with us thought it might have been a scam. We believe our instructors are not just high quality instructors but easy to get on with as well. Finding an instructor who makes you feel comfortable is so important. We're confident that you'll love your lesson :)</p>
+      </details>
+      <details>
+        <summary>Will I be picked up from home?<span class="faq-chev" aria-hidden="true">+</span></summary>
+        <p>Yes. You give your pickup address when you book, and your instructor meets you there.</p>
+      </details>
+      <details>
+        <summary>Can I get a time that fits around my week?<span class="faq-chev" aria-hidden="true">+</span></summary>
+        <p>The booking page shows genuine live availability over the next 14 days, so you only ever see times that actually work.</p>
+      </details>
+      <details>
+        <summary>What if I need to cancel or reschedule?<span class="faq-chev" aria-hidden="true">+</span></summary>
+        <p>No problem, you can rearrange your slot easily, with no awkward text exchanges. Life happens; the system is built for it.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- 9. Closing CTA -->
+  <section class="closing">
+    <div class="inner">
+      <h2>Try us for an hour. <span class="accent-italic">Commit to nothing.</span></h2>
+      <p>It starts with one free hour. No card, no commitment, no hard sell at the end.</p>
+      <a class="cta cta--closing" href="/free-trial.html">Book my free lesson</a>
+      <div class="closing-brand">
+        <div class="logo-chip">
+          <img src="/Logo.png" alt="CoachCarter Driving School">
+        </div>
+        <div class="strapline">CoachCarter Driving School &middot; Reading</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sticky mobile CTA -->
+  <div class="sticky-cta">
+    <a href="/free-trial.html">Book my free lesson: Find a time</a>
+  </div>
+
+</body>
+</html>
