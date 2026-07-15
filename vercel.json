@@ -29,6 +29,11 @@
       "permanent": false
     },
     {
+      "source": "/",
+      "destination": "/free-lesson.html",
+      "permanent": false
+    },
+    {
       "source": "/classroom",
       "destination": "/",
       "permanent": false
