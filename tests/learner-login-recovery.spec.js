@@ -9,15 +9,21 @@ const learnerAuthScript = fs.readFileSync(
   'utf8'
 );
 
-async function chooseNecessaryCookies(page) {
-  const rejectAll = page.locator('#cc-reject-all');
-  if (await rejectAll.count() && await rejectAll.isVisible()) {
-    await rejectAll.click();
-  }
-}
-
 test.describe('learner login recovery', () => {
-  test.use({ viewport: { width: 375, height: 812 } });
+  test.use({
+    viewport: { width: 375, height: 812 },
+    serviceWorkers: 'block',
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({
+        analytics: false,
+        version: 1,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      }));
+    });
+  });
 
   test('a genuine guest 401 does not show a signed-out prompt', async ({ page }) => {
     await page.route('**/api/guest-probe', (route) => route.fulfill({
@@ -26,7 +32,6 @@ test.describe('learner login recovery', () => {
       body: JSON.stringify({ error: 'Unauthorised' }),
     }));
     await page.goto('/');
-    await chooseNecessaryCookies(page);
     await page.evaluate(() => localStorage.clear());
     await page.addScriptTag({ content: learnerAuthScript });
 
@@ -42,7 +47,6 @@ test.describe('learner login recovery', () => {
       body: JSON.stringify({ error: 'Unauthorised' }),
     }));
     await page.goto('/');
-    await chooseNecessaryCookies(page);
     await page.evaluate(() => {
       localStorage.setItem('cc_learner', JSON.stringify({ user: { id: 7, name: 'Test Learner' } }));
     });
@@ -74,7 +78,6 @@ test.describe('learner login recovery', () => {
       });
     });
     await page.goto('/learner/login.html');
-    await chooseNecessaryCookies(page);
 
     await page.getByRole('button', { name: 'Already had a lesson or trial? Create your learner account' }).click();
     await expect(page.locator('#signup-form')).toBeVisible();
@@ -100,7 +103,6 @@ test.describe('learner login recovery', () => {
       body: JSON.stringify({ success: true, message: 'If that email matches an account, a code has been sent.' }),
     }));
     await page.goto('/learner/login.html');
-    await chooseNecessaryCookies(page);
     await page.locator('#signin-email').fill('offline@example.test');
     await page.locator('#signin-btn').click();
 
@@ -126,7 +128,6 @@ test.describe('learner login recovery', () => {
       });
     });
     await page.goto('/learner/login.html');
-    await chooseNecessaryCookies(page);
     await page.locator('#signin-email').fill('learner@example.test');
     await page.locator('#signin-btn').click();
     await page.locator('#migration-resend-btn').click();
@@ -138,7 +139,6 @@ test.describe('learner login recovery', () => {
 
   test('account-recovery controls stay touch-friendly without horizontal overflow', async ({ page }) => {
     await page.goto('/learner/login.html');
-    await chooseNecessaryCookies(page);
 
     const recoveryButton = page.locator('#btn-offline-signup');
     const recoveryBox = await recoveryButton.boundingBox();
