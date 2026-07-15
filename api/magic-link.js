@@ -280,7 +280,9 @@ async function handleVerifyCode(req, res) {
 
 // ── Send email code (May 2026) ──────────────────────────────────────────────
 //
-// Used by the new password auth flow for two purposes:
+// Used by current code authentication for four purposes:
+//   - 'login': passwordless sign-in for an existing learner/instructor.
+//   - 'signup': verify a new learner email before zero-credit account creation.
 //   - 'migration': existing user with no password — verify they own the email,
 //     then let them set one in the PWA (no cross-context bug).
 //   - 'reset': forgot-password flow alternative for PWA users who can't tap
@@ -289,7 +291,7 @@ async function handleVerifyCode(req, res) {
 // Distinct from `send-link` which keeps the long URL token for password reset
 // emails (those are tapped from desktop and don't need code entry).
 //
-// Body: { email, purpose: 'migration'|'reset', role?: 'learner', school_id? }
+// Body: { email, purpose: 'login'|'signup'|'migration'|'reset', role?: 'learner', school_id? }
 async function handleSendEmailCode(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -297,7 +299,7 @@ async function handleSendEmailCode(req, res) {
     const { email, purpose } = req.body || {};
     const role = req.body?.role || 'learner';
     if (!email) return res.status(400).json({ error: 'Email address is required' });
-    if (purpose !== 'login' && purpose !== 'migration' && purpose !== 'reset') {
+    if (purpose !== 'login' && purpose !== 'signup' && purpose !== 'migration' && purpose !== 'reset') {
       return res.status(400).json({ error: 'Invalid purpose' });
     }
 
@@ -321,14 +323,37 @@ async function handleSendEmailCode(req, res) {
       }
     } catch { /* fail open */ }
 
-    // For 'migration' on learner role: confirm an account actually exists with
-    // this email (otherwise an attacker could probe for valid emails). We
-    // *always* respond success to avoid email-enumeration leaks — but only
-    // actually send the email if the account exists.
+    // Existing-account actions keep an enumeration-safe outward response.
+    // Signup may report a conflict, matching the public learner signup contract.
+    const schoolId = parseInt(req.body?.school_id || req.query.school_id, 10) || 1;
     let shouldSend = true;
     if (role === 'learner') {
-      const [acct] = await sql`SELECT id, password_hash FROM learner_users WHERE LOWER(email) = LOWER(${cleanEmail})`;
-      if (!acct) {
+      const [acct] = purpose === 'signup'
+        ? await sql`
+            SELECT id, password_hash FROM learner_users
+             WHERE LOWER(email) = LOWER(${cleanEmail})
+               AND school_id = ${schoolId}`
+        : await sql`SELECT id, password_hash FROM learner_users WHERE LOWER(email) = LOWER(${cleanEmail})`;
+      if (purpose === 'signup') {
+        const [instr] = await sql`
+          SELECT id FROM instructors
+           WHERE LOWER(email) = LOWER(${cleanEmail})
+             AND school_id = ${schoolId}
+             AND active = TRUE`;
+        if (instr) {
+          return res.status(400).json({
+            error: 'instructor_account',
+            message: 'This email is linked to an instructor account.',
+            redirect: '/instructor/login.html'
+          });
+        }
+        if (acct) {
+          return res.status(409).json({
+            error: 'account_exists',
+            message: 'A learner account with that email already exists. Sign in instead.'
+          });
+        }
+      } else if (!acct) {
         // No account — silently skip sending. Same outward response.
         shouldSend = false;
       } else if (purpose === 'migration' && acct.password_hash) {
@@ -359,8 +384,6 @@ async function handleSendEmailCode(req, res) {
     const emailCode = generateSmsCode();
     const longToken = generateToken();
     const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
-    const schoolId = parseInt(req.body.school_id || req.query.school_id) || 1;
-
     // Invalidate any prior unused codes for this (email, purpose, role)
     await sql`UPDATE magic_link_tokens
                  SET used = true
@@ -406,7 +429,7 @@ async function handleVerifyEmailCode(req, res) {
     const { email, code, purpose } = req.body || {};
     const role = req.body?.role || 'learner';
     if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
-    if (purpose !== 'login' && purpose !== 'migration' && purpose !== 'reset') {
+    if (purpose !== 'login' && purpose !== 'signup' && purpose !== 'migration' && purpose !== 'reset') {
       return res.status(400).json({ error: 'Invalid purpose' });
     }
 
@@ -528,10 +551,11 @@ async function handleVerifyEmailCode(req, res) {
     const secret = process.env.JWT_SECRET;
     if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
 
+    const ticketAudience = purpose === 'signup' ? 'learner-signup' : 'password-set';
     const ticket = jwt.sign(
       { sub: cleanEmail, role, purpose, token_id: linkRecord.id, school_id: linkRecord.school_id },
       secret,
-      { expiresIn: '5m', audience: 'password-set' }
+      { expiresIn: '5m', audience: ticketAudience }
     );
 
     // Mark the token as used now — ticket is what authorises the next step.
@@ -608,13 +632,23 @@ async function sendReferralUsedEmail(referrerEmail, referrerName, newLearnerName
 
 async function sendEmailCodeEmail(email, code, purpose) {
   const mailer = createTransporter();
-  const subject = purpose === 'reset'
+  const isReset = purpose === 'reset';
+  const isSignup = purpose === 'signup';
+  const subject = isReset
     ? 'Your CoachCarter password reset code'
-    : 'Your CoachCarter sign-in code';
-  const headline = purpose === 'reset' ? 'Reset your password' : 'Sign in to CoachCarter';
-  const lead = purpose === 'reset'
+    : isSignup
+      ? 'Verify your CoachCarter email'
+      : 'Your CoachCarter sign-in code';
+  const headline = isReset
+    ? 'Reset your password'
+    : isSignup
+      ? 'Create your learner account'
+      : 'Sign in to CoachCarter';
+  const lead = isReset
     ? 'Enter the code below to reset your password. It expires in 15 minutes.'
-    : 'Enter the code below to sign in. It expires in 15 minutes.';
+    : isSignup
+      ? 'Enter the code below to verify your email and create your learner account. It expires in 15 minutes.'
+      : 'Enter the code below to sign in. It expires in 15 minutes.';
   await mailer.sendMail({
     from:    'CoachCarter <bookings@coachcarter.uk>',
     to:      email,

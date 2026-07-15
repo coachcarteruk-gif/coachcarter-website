@@ -61,9 +61,27 @@ test.describe('learner login recovery', () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('cc_learner'))).toBeNull();
   });
 
-  test('an offline learner can reveal and submit the existing account form', async ({ page }) => {
+  test('an offline learner verifies their email and creates an account without a password', async ({ page }) => {
+    let sendCodePayload;
+    let verifyCodePayload;
     let signupPayload;
-    await page.route('**/api/learner-auth?action=signup', async (route) => {
+    await page.route('**/api/magic-link?action=send-email-code', async (route) => {
+      sendCodePayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+    await page.route('**/api/magic-link?action=verify-email-code', async (route) => {
+      verifyCodePayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, ticket: 'verified-signup-ticket' }),
+      });
+    });
+    await page.route('**/api/learner-auth?action=signup-with-code', async (route) => {
       signupPayload = route.request().postDataJSON();
       await route.fulfill({
         status: 200,
@@ -82,18 +100,35 @@ test.describe('learner login recovery', () => {
     await page.getByRole('button', { name: 'Already had a lesson or trial? Create your learner account' }).click();
     await expect(page.locator('#signup-form')).toBeVisible();
     await expect(page.locator('#signin-form')).toBeHidden();
+    await expect(page.locator('#signup-password')).toHaveCount(0);
 
     await page.locator('#signup-name').fill('Alex Rider');
     await page.locator('#signup-email').fill('alex@example.test');
-    await page.locator('#signup-password').fill('safe-password-123');
     await page.locator('#signup-btn').click();
 
+    await expect(page.locator('#screen-migration-code')).toHaveClass(/active/);
+    await expect(page.locator('#migration-title')).toHaveText('Verify your email');
+    const codeInputs = page.locator('#migration-code-inputs input');
+    await codeInputs.first().click();
+    await page.keyboard.type('123456');
+
     await expect(page.locator('#screen-terms')).toHaveClass(/active/);
+    expect(sendCodePayload).toMatchObject({
+      email: 'alex@example.test',
+      purpose: 'signup',
+      role: 'learner',
+    });
+    expect(verifyCodePayload).toMatchObject({
+      email: 'alex@example.test',
+      code: '123456',
+      purpose: 'signup',
+      role: 'learner',
+    });
     expect(signupPayload).toMatchObject({
       name: 'Alex Rider',
-      email: 'alex@example.test',
-      password: 'safe-password-123',
+      ticket: 'verified-signup-ticket',
     });
+    expect(signupPayload.password).toBeUndefined();
   });
 
   test('unknown-email code screen uses privacy-safe copy and offers account creation', async ({ page }) => {

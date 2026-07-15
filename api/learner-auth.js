@@ -1,20 +1,21 @@
 /**
- * Learner password authentication (May 2026).
+ * Learner authentication (email-code primary; legacy password compatibility).
  *
- * Replaces the magic-link login flow. Existing magic-link API
- * (api/magic-link.js) is kept for SMS code login, password-reset emails, and
- * the new email-code migration flow.
+ * The primary learner UI uses email codes for sign-in and account creation.
+ * Password endpoints remain available only for older clients and account
+ * migration/reset compatibility.
  *
  * Endpoints:
  *   POST ?action=login          { email, password }
- *   POST ?action=signup         { email, password, name?, referral_code?, school_id? }
+ *   POST ?action=signup         { email, password, name?, referral_code?, school_id? } (legacy)
+ *   POST ?action=signup-with-code { ticket, name, referral_code? }
  *   POST ?action=set-password   { ticket, password } — completes migration / reset
  *   POST ?action=request-reset  { email } — sends reset link (no enumeration leak)
  *   POST ?action=add-email      { phone, email } — phone-only users adding email
  *
  * Sets the standard cc_learner httpOnly session cookie + cc_csrf double-submit
- * cookie on success. Login/signup/set-password issue a JWT immediately; reset
- * issues a verification ticket the user redeems via set-password.
+ * cookie on success. Login/legacy signup/signup-with-code/set-password issue a
+ * JWT immediately; reset issues a verification ticket redeemed via set-password.
  *
  * Audit logging: signup, set-password, password reset are all logged via
  * api/_audit.js since these are sensitive auth-state mutations.
@@ -42,6 +43,7 @@ module.exports = async (req, res) => {
   const action = req.query.action;
   if (action === 'login')                    return handleLogin(req, res);
   if (action === 'signup')                   return handleSignup(req, res);
+  if (action === 'signup-with-code')         return handleSignupWithCode(req, res);
   if (action === 'set-password')             return handleSetPassword(req, res);
   if (action === 'set-password-from-offer')  return handleSetPasswordFromOffer(req, res);
   if (action === 'request-reset')            return handleRequestReset(req, res);
@@ -276,6 +278,129 @@ async function handleSignup(req, res) {
     console.error('signup error:', err);
     reportError('/api/learner-auth', err);
     return res.status(500).json({ error: 'Signup failed' });
+  }
+}
+
+// Creates a zero-credit account for someone whose lesson or trial was handled
+// outside the booking system. The email-code ticket proves ownership; no
+// password is created and no additional free-trial entitlement is granted.
+async function handleSignupWithCode(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    const ticket = typeof req.body?.ticket === 'string' ? req.body.ticket.trim() : '';
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const referralCode = typeof req.body?.referral_code === 'string'
+      ? req.body.referral_code.trim()
+      : '';
+
+    if (!ticket) {
+      return res.status(400).json({
+        error: 'invalid_ticket',
+        message: 'Email verification is required. Please request a new code.'
+      });
+    }
+    if (!name || name.length > 200) {
+      return res.status(400).json({ error: 'invalid_name', message: 'Please enter your name.' });
+    }
+
+    const secret = process.env.JWT_SECRET;
+    let claims;
+    try {
+      claims = jwt.verify(ticket, secret, { audience: 'learner-signup' });
+    } catch {
+      return res.status(400).json({
+        error: 'invalid_ticket',
+        message: 'This verification has expired. Please request a new code.'
+      });
+    }
+
+    if (claims.role !== ROLE || claims.purpose !== 'signup') {
+      return res.status(400).json({
+        error: 'invalid_ticket',
+        message: 'Verification is for a different account action.'
+      });
+    }
+
+    const cleanEmail = sanitizeEmail(claims.sub);
+    const schoolId = parseInt(claims.school_id, 10) || 1;
+    if (!cleanEmail) return res.status(400).json({ error: 'invalid_ticket' });
+
+    const sql = neon(process.env.POSTGRES_URL);
+
+    const [instr] = await sql`
+      SELECT id FROM instructors
+       WHERE LOWER(email) = LOWER(${cleanEmail})
+         AND school_id = ${schoolId}
+         AND active = TRUE`;
+    if (instr) {
+      return res.status(400).json({
+        error: 'instructor_account',
+        message: 'This email is linked to an instructor account.',
+        redirect: '/instructor/login.html'
+      });
+    }
+
+    const [existing] = await sql`
+      SELECT id FROM learner_users
+       WHERE LOWER(email) = LOWER(${cleanEmail})
+         AND school_id = ${schoolId}`;
+    if (existing) {
+      return res.status(409).json({
+        error: 'account_exists',
+        message: 'A learner account with that email already exists. Sign in instead.'
+      });
+    }
+
+    let referrerId = null;
+    if (referralCode) {
+      try {
+        const [ref] = await sql`
+          SELECT learner_id FROM referrals
+           WHERE code = ${referralCode}
+             AND school_id = ${schoolId}`;
+        if (ref) referrerId = ref.learner_id;
+      } catch {}
+    }
+
+    const [user] = await sql`
+      INSERT INTO learner_users
+        (email, name, credit_balance, school_id, referred_by, email_verified, last_activity_at)
+      VALUES
+        (${cleanEmail}, ${name}, 0, ${schoolId}, ${referrerId}, TRUE, NOW())
+      RETURNING id, name, email, phone, school_id, current_tier, terms_accepted_at`;
+
+    try {
+      await logAudit(sql, {
+        adminId: null, adminEmail: cleanEmail,
+        action: 'learner.signup',
+        targetType: 'learner_users', targetId: user.id,
+        details: {
+          method: 'email_code',
+          source: 'offline_lesson_or_trial',
+          free_trial_credit_minutes: 0
+        },
+        schoolId, req
+      });
+    } catch {}
+
+    issueSession(res, user);
+    return res.json({
+      success: true,
+      user: publicUser(user),
+      is_new_user: true,
+      needs_name: false,
+      terms_accepted: !!user.terms_accepted_at
+    });
+  } catch (err) {
+    if (err?.code === '23505') {
+      return res.status(409).json({
+        error: 'account_exists',
+        message: 'A learner account with that email already exists. Sign in instead.'
+      });
+    }
+    console.error('signup-with-code error:', err);
+    reportError('/api/learner-auth', err);
+    return res.status(500).json({ error: 'Could not create account' });
   }
 }
 

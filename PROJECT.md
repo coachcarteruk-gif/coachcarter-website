@@ -306,7 +306,7 @@ Social video filming is an instructor opt-in (`instructors.social_video_opt_in`)
 
 ### Authentication
 
-**Password login** at `/learner/login.html` (May 2026 — replaced magic links). Learner enters email + password. Existing accounts without a password (created via the old magic-link or SMS flow) are migrated on next login: a 6-digit code is emailed, they verify it, then choose a password. Phone-only learners (no email on the account) are prompted to add an email first.
+**Passwordless email-code login** at `/learner/login.html` (July 2026). Existing learners enter their email, receive a 6-digit code, and are signed in after verification. Learners whose lesson or trial was arranged outside the booking system can create an account with name + email: `purpose: 'signup'` verifies the email, then a 5-minute `audience: 'learner-signup'` ticket authorises `signup-with-code`. That recovery route creates a verified zero-credit account and deliberately grants no additional free-trial entitlement. Legacy password endpoints remain compatibility-only for old accounts and accepted-offer/reset flows; password fields are not part of the primary learner UI.
 
 JWT lives in an httpOnly cookie (`cc_learner`); the `cc_learner` localStorage key holds a display-only blob `{ user: { id, name, email, school_id, tier } }` so the sidebar doesn't need an extra API call.
 
@@ -318,7 +318,8 @@ JWT lives in an httpOnly cookie (`cc_learner`); the `cc_learner` localStorage ke
 |---|---|---|---|
 | `check-account` | POST | No | Routes login UI: `{ exists, has_password }` for an email. Blocks instructor emails. Body: `{ email }` |
 | `login` | POST | No | Email + password sign-in. 5-fail / 15-min lockout per email. Body: `{ email, password }` |
-| `signup` | POST | No | Create account with password. Free-trial credit + audit-logged. Body: `{ email, password, name?, referral_code?, school_id? }` |
+| `signup` | POST | No | Legacy password account creation; retained for compatibility, not used by the primary learner UI. |
+| `signup-with-code` | POST | No (ticket) | Create a verified zero-credit account for an offline lesson/trial learner. Audit-logged; issues session cookies. Body: `{ ticket, name, referral_code? }` where ticket has `audience: 'learner-signup'`. |
 | `set-password` | POST | No (ticket) | Completes migration or reset. Body: `{ ticket, password }` (ticket from `verify-email-code`) |
 | `set-password-from-offer` | POST | No (offer token) | Bridges a paid lesson offer to an authed session for guest learners on `offer-success.html`. Verifies offer is `accepted`, learner has no password yet, and `accepted_at` is within 24h. Sets password + issues session. Audit-logged as `learner.password_set` with `purpose: 'offer_signup'`. Body: `{ offer_token, password }` |
 | `request-reset` | POST | No | Sends reset email (code + link). Enumeration-safe. Body: `{ email }` |
@@ -326,7 +327,7 @@ JWT lives in an httpOnly cookie (`cc_learner`); the `cc_learner` localStorage ke
 
 ### API — `api/magic-link.js` (legacy + email-code paths)
 
-Kept for SMS code login, password-reset emails, and the migration code flow. Magic-link login (long URL token) is no longer the primary path for learners but `verify` is preserved for in-flight emails during deploys.
+Handles current learner/instructor email-code sign-in, passwordless learner signup verification, SMS fallback, and retained reset/migration flows. Long URL login tokens are legacy-only.
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
@@ -334,8 +335,8 @@ Kept for SMS code login, password-reset emails, and the migration code flow. Mag
 | `validate` | GET | No | Lightweight token check (legacy) |
 | `verify` | POST | No | Legacy magic-link consume + login. Body: `{ token }` |
 | `verify-code` | POST | No | SMS 6-digit code → JWT. Body: `{ code, phone }` |
-| `send-email-code` | POST | No | Sends a 6-digit email code for `purpose: 'migration'\|'reset'`. Enumeration-safe. Body: `{ email, purpose, role? }` |
-| `verify-email-code` | POST | No | Verifies a 6-digit email code, returns a 5-min ticket the caller exchanges via `learner-auth?action=set-password`. Body: `{ email, code, purpose, role? }` |
+| `send-email-code` | POST | No | Sends a rate-limited 6-digit code for `purpose: 'login'\|'signup'\|'migration'\|'reset'`. Existing-account actions are enumeration-safe; signup may return `account_exists`. Body: `{ email, purpose, role?, school_id? }` |
+| `verify-email-code` | POST | No | Login verification issues the appropriate session. Signup returns a 5-minute `audience: 'learner-signup'` ticket; migration/reset return a `password-set` ticket for retained compatibility flows. Body: `{ email, code, purpose, role? }` |
 | `logout` | POST | No | Clears `cc_learner` + `cc_csrf` cookies |
 
 ### API — `api/learner.js`

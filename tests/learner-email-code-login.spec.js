@@ -156,6 +156,67 @@ test.describe('learner email-code login', () => {
     });
   });
 
+  test('a new offline learner can request a passwordless signup code', async () => {
+    const sql = makeSql({ learner: null });
+    const sent = [];
+
+    await withMockedMagicLink(sql, async (mail) => sent.push(mail), async (handler) => {
+      const res = await call(handler, {
+        action: 'send-email-code',
+        body: { email: 'NewLearner@Example.test', purpose: 'signup', role: 'learner' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(sent).toHaveLength(1);
+      expect(sent[0].subject).toBe('Verify your CoachCarter email');
+      expect(sql.calls.some((entry) =>
+        /INSERT INTO magic_link_tokens/i.test(entry.text) &&
+        entry.values.includes('signup')
+      )).toBe(true);
+    });
+  });
+
+  test('passwordless signup reports an existing learner and sends no code', async () => {
+    const sql = makeSql({ learner: { id: 8, password_hash: null } });
+    const sent = [];
+
+    await withMockedMagicLink(sql, async (mail) => sent.push(mail), async (handler) => {
+      const res = await call(handler, {
+        action: 'send-email-code',
+        body: { email: 'Existing@Example.test', purpose: 'signup', role: 'learner' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.error).toBe('account_exists');
+      expect(sent).toHaveLength(0);
+    });
+  });
+
+  test('successful signup code verification returns a purpose-bound ticket, not a session', async () => {
+    const sql = makeSql({ learner: null, tokenRows: [{ id: 55, school_id: 3 }] });
+
+    await withMockedMagicLink(sql, async () => {}, async (handler) => {
+      const res = await call(handler, {
+        action: 'verify-email-code',
+        body: { email: 'new@example.test', code: '123456', purpose: 'signup', role: 'learner' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.getHeader('Set-Cookie')).toBeUndefined();
+
+      const claims = jwt.verify(res.body.ticket, process.env.JWT_SECRET, { audience: 'learner-signup' });
+      expect(claims).toMatchObject({
+        sub: 'new@example.test',
+        role: 'learner',
+        purpose: 'signup',
+        token_id: 55,
+        school_id: 3,
+      });
+    });
+  });
+
   test('invalid or expired login code fails without setting cookies', async () => {
     const sql = makeSql({ learner: { id: 9, password_hash: null }, tokenRows: [] });
 
