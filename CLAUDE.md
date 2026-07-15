@@ -22,24 +22,24 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 - **Don't inline booking-status string literals.** Use the constants and predicates in `api/_booking-status.js` (`SCHEDULED`, `CHARGEABLE`, `REFUNDED`, `BLOCKING_STATUSES`, `isChargeable()`, …). Frontend display code may read the strings directly since they're untrusted display data, not control flow. See [`docs/booking-statuses.md`](docs/booking-statuses.md).
 - **Instructor is paid for every lesson on their calendar unless the learner gave 48h+ notice.** This is the load-bearing principle behind the three-state booking model. Late-cancel under 48h sets `lesson_bookings.credit_forfeited = TRUE` and leaves the booking `scheduled` until the cron flips it to `chargeable`. Don't reintroduce a "did the lesson happen?" prompt — the dual-confirmation flow was deleted in May 2026.
 
-## Password auth (May 2026)
+## Authentication (passwordless user sign-in, July 2026)
 
-All three roles use email + password sign-in. Magic-link login was retired entirely. Magic-link infrastructure survives only for the SMS code flow, learner password-reset codes, and a one-time email-code migration path for learner accounts created before passwords shipped.
+Learner and instructor user-facing sign-in uses a 6-digit email code. Admins retain password authentication. Legacy learner/instructor password columns and endpoints remain for compatibility with old accounts, password-reset links, and accepted-offer flows, but must not be reintroduced into the primary learner or instructor login UI.
 
 **Per-role auth model:**
-- **Learner** — self-serve signup + login + forgot-password (code-based reset). `api/learner-auth.js`.
-- **Instructor** — invite-only (no public signup). Admin sets/resets password via the admin portal; instructor is forced through change-password screen on first login. No self-serve forgot-password — instructors contact the admin. `api/instructor-auth.js`.
-- **Admin** — password login (predates this module, lives in `api/admin.js`). Self-serve forgot-password via 6-digit code added May 2026.
+- **Learner** — existing accounts sign in with an email code. People whose lesson/trial was arranged outside the system create a zero-credit account by verifying their email code; they do not choose a password and do not receive another trial entitlement. `api/magic-link.js`, `api/learner-auth.js`.
+- **Instructor** — invite-only (no public signup); the current login UI uses an email code. Legacy admin-set password support remains compatibility-only.
+- **Admin** — password login in `api/admin.js`, with code-based self-serve password reset.
 
 **Hard rules:**
-1. **Use `api/_password.js`** for all hash/verify/validate/lockout in new code. `api/admin.js` keeps its own `bcrypt` calls (predates the shared module — left alone deliberately).
-2. **All password mutations must be audit-logged** via `api/_audit.js`. Action names: `learner.signup`, `learner.password_set`, `learner.password_reset`, `instructor.password_change`, `admin.instructor_password_set`, `admin.password_reset`.
-3. **No password-set or login endpoint may leak account existence.** Generic "Email or password is incorrect" / "If that email matches an account, we've sent a code." Only the learner `signup` endpoint may return `account_exists` (since the user just typed it).
-4. **Email-code flows for the PWA**: any "magic" that needs to land back inside an installed PWA must use a 6-digit code, not a clickable link. The link goes to the OS browser, breaking session continuity. See `magic-link.js?action=send-email-code` / `verify-email-code`, and `admin.js?action=request-reset` / `reset-password`.
-5. **`*.password_hash` is nullable** — accounts created before May 2026 (or via SMS-only signup) have no password until they migrate. Login APIs must handle the null case gracefully (return invalid_credentials; route the UI into migration if applicable).
-6. **Verification tickets** (5-minute JWT, `audience: 'password-set'`) bridge learner `verify-email-code` → `set-password`. Don't issue a session JWT until the password is actually saved.
-7. **Admin-set instructor passwords** mark `instructors.must_change_password = TRUE`. The instructor login flow checks this on success and forces a change-password screen before the dashboard. Cleared on successful change.
-8. **Admin support access to instructor accounts uses impersonation, not passwords.** `api/admin.js?action=access-instructor-account` may mint a short-lived, audit-logged `cc_instructor` session for an active same-school instructor. Do not reveal, reuse, or reset an instructor password just so admin can access their portal.
+1. **Do not add password fields to learner or instructor signup/sign-in UI.** Use `send-email-code` / `verify-email-code`; retain legacy password endpoints only while old flows still depend on them.
+2. **Keep login enumeration-safe.** Existing-account code requests always return generic copy. Account creation may return `account_exists` because the person explicitly chose the signup path.
+3. **Purpose-bind verification.** Existing-account `purpose: 'login'` verification may issue the session directly. New learner `purpose: 'signup'` verification returns a 5-minute `audience: 'learner-signup'` ticket, which `signup-with-code` consumes before creating the account and session.
+4. **Offline lesson/trial signup grants zero credit.** It must not insert a free-trial credit transaction or silently create another trial entitlement.
+5. **Use 6-digit codes inside the PWA**, not clickable login links; links open in the OS browser and break session continuity.
+6. **Auth state mutations are audit-logged.** This includes passwordless learner account creation (`learner.signup`, method `email_code`) and every retained password mutation.
+7. **Use `api/_password.js` for retained password operations.** Never roll a local password hash or lockout implementation.
+8. **Admin support access to instructor accounts uses impersonation, not passwords.** Do not reveal, reuse, or reset an instructor password just so admin can access their portal.
 
 ## Multi-tenancy rules
 

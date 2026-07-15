@@ -1,8 +1,8 @@
-/* CoachCarter learner login (May 2026 - password auth)
+/* CoachCarter learner login (July 2026 - email-code auth)
  *
  * State machine:
  *   ┌─ screen-auth (Sign in / Sign up tabs) ─┬─ signin     ─→ screen-success / new-user / terms
- *   │                                        ├─ signup     ─→ screen-success / new-user / terms
+ *   │                                        ├─ signup     ─→ email code → account → terms
  *   │                                        └─ migration  ─→ screen-migration-code → screen-set-password → success
  *   ├─ screen-forgot ─→ screen-reset → screen-set-password → success
  *   ├─ screen-sms-phone ─→ screen-code → success
@@ -25,6 +25,8 @@
   var pendingEmail = null;          // email being verified in migration / reset
   var pendingEmailPurpose = 'login';
   var pendingTicket = null;         // ticket from verify-email-code
+  var pendingSignupName = null;
+  var pendingSignupReferral = null;
   var pendingResetEmail = null;     // for resend on reset screen
   var smsPhone = null;
   var skipReferral = false;
@@ -207,28 +209,24 @@
     clearError('error-msg');
     var name = document.getElementById('signup-name').value.trim();
     var email = document.getElementById('signup-email').value.trim();
-    var password = document.getElementById('signup-password').value;
     var ref = document.getElementById('signup-referral')
       ? document.getElementById('signup-referral').value.trim()
       : '';
-    if (!name || !email || !password) {
-      setError('error-msg', 'Please fill in your name, email and password.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('error-msg', 'Password must be at least 8 characters.');
+    if (!name || !email) {
+      setError('error-msg', 'Please enter your name and email address.');
       return;
     }
     var btn = document.getElementById('signup-btn');
-    btn.disabled = true; btn.textContent = 'Creating account…';
+    btn.disabled = true; btn.textContent = 'Sending code...';
+    pendingEmail = email;
+    pendingEmailPurpose = 'signup';
+    pendingSignupName = name;
+    pendingSignupReferral = ref || referralCode || '';
 
-    var payload = { email: email, password: password, name: name };
-    if (ref || referralCode) payload.referral_code = ref || referralCode;
-
-    fetch('/api/learner-auth?action=signup', {
+    fetch('/api/magic-link?action=send-email-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ email: email, purpose: 'signup', role: 'learner' })
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
       .then(function (out) {
@@ -239,25 +237,58 @@
             return;
           }
           if (out.data && out.data.error === 'account_exists') {
-            setError('error-msg', out.data.message);
             switchAuthMode('signin');
             document.getElementById('signin-email').value = email;
-            return;
-          }
-          if (out.data && out.data.error === 'invalid_password') {
             setError('error-msg', out.data.message);
             return;
           }
-          setError('error-msg', (out.data && out.data.error) || 'Could not create account. Please try again.');
+          setError('error-msg', (out.data && (out.data.message || out.data.error)) || 'Could not create account. Please try again.');
           return;
         }
-        finishLogin(out.data);
+        document.getElementById('migration-title').textContent = 'Verify your email';
+        document.getElementById('migration-sub').innerHTML =
+          'We sent a 6-digit verification code to <strong id="migration-email-display"></strong>.';
+        document.getElementById('migration-email-display').textContent = email;
+        document.getElementById('migration-verify-btn').textContent = 'Create account';
+        setMigrationAccountRecovery(false);
+        showScreen('migration-code');
+        focusFirstCodeInput('migration-code-inputs');
       })
       .catch(function () {
         setError('error-msg', 'Network error. Please check your connection and try again.');
       })
       .finally(function () {
-        btn.disabled = false; btn.textContent = 'Create account';
+        btn.disabled = false; btn.textContent = 'Email me a verification code';
+      });
+  }
+
+  function finishSignupWithCode(ticket, verifyBtn) {
+    var payload = { ticket: ticket, name: pendingSignupName };
+    if (pendingSignupReferral) payload.referral_code = pendingSignupReferral;
+    verifyBtn.textContent = 'Creating account...';
+
+    return fetch('/api/learner-auth?action=signup-with-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (out) {
+        if (!out.ok) {
+          if (out.data && out.data.error === 'instructor_account') {
+            setError('migration-code-error', out.data.message);
+            setTimeout(function () { window.location.href = out.data.redirect || '/instructor/login.html'; }, 1500);
+          } else {
+            setError('migration-code-error', (out.data && (out.data.message || out.data.error)) || 'Could not create account. Please try again.');
+          }
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = 'Create account';
+          return;
+        }
+        pendingTicket = null;
+        pendingSignupName = null;
+        pendingSignupReferral = null;
+        finishLogin(out.data);
       });
   }
 
@@ -280,11 +311,21 @@
           setError('migration-code-error', (out.data && out.data.message) || 'Invalid code. Please try again.');
           clearCodeInputs('migration-code-inputs');
           focusFirstCodeInput('migration-code-inputs');
-          btn.disabled = false; btn.textContent = pendingEmailPurpose === 'login' ? 'Sign in' : 'Continue';
+          btn.disabled = false;
+          btn.textContent = pendingEmailPurpose === 'login' ? 'Sign in' : pendingEmailPurpose === 'signup' ? 'Create account' : 'Continue';
           return;
         }
         if (pendingEmailPurpose === 'login') {
           finishLogin(out.data);
+          return;
+        }
+        if (pendingEmailPurpose === 'signup') {
+          pendingTicket = out.data.ticket;
+          finishSignupWithCode(pendingTicket, btn).catch(function () {
+            setError('migration-code-error', 'Network error. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Create account';
+          });
           return;
         }
         pendingTicket = out.data.ticket;
@@ -295,7 +336,8 @@
       })
       .catch(function () {
         setError('migration-code-error', 'Network error. Please try again.');
-        btn.disabled = false; btn.textContent = pendingEmailPurpose === 'login' ? 'Sign in' : 'Continue';
+        btn.disabled = false;
+        btn.textContent = pendingEmailPurpose === 'login' ? 'Sign in' : pendingEmailPurpose === 'signup' ? 'Create account' : 'Continue';
       });
   }
 

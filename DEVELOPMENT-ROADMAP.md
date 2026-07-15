@@ -1,5 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.121 - Passwordless Offline Learner Account Creation (15 July 2026)
+
+Completes the learner email-code transition for people whose lesson or trial was arranged outside the booking system. The recovery form now asks only for name and email, sends a rate-limited `purpose: 'signup'` 6-digit code, and creates the learner only after a short-lived purpose-bound verification ticket is redeemed. The new account is email-verified, audit-logged, receives the normal httpOnly session + CSRF cookies, and deliberately starts with zero credit and no free-trial ledger row so an offline trial is not awarded twice. Existing-account and instructor-email conflicts route the person back to the correct sign-in path. Legacy password endpoints remain compatibility-only and are no longer used by this user-facing signup journey.
+
+**Files:** `api/magic-link.js`, `api/learner-auth.js`, `public/learner/login.html`, `public/learner/login.js`, `tests/learner-email-code-login.spec.js`, `tests/learner-login-recovery.spec.js`, `tests/learner-passwordless-signup.spec.js`, `CLAUDE.md`, `PROJECT.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.120 - Slot Feed Load-Time Optimization (11 July 2026)
 
 Performance-only pass on the learner slot feed — no UI, API-shape, or policy changes (responses verified byte-identical to the previous code). Four layers of serialization removed:

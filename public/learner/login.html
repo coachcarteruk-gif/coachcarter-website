@@ -154,7 +154,7 @@
     <!-- Sign-up form -->
     <form id="signup-form" data-mode-form="signup" style="display:none;">
       <div class="card-title">Create your learner account</div>
-      <div class="card-sub" style="margin-bottom:18px;">Use this if your lesson or trial was arranged outside the CoachCarter booking system.</div>
+      <div class="card-sub" style="margin-bottom:18px;">Use this if your lesson or trial was arranged outside the CoachCarter booking system. We'll email you a 6-digit verification code.</div>
       <div class="form-group">
         <label for="signup-name">Your name</label>
         <input type="text" id="signup-name" placeholder="e.g. Alex Smith" autocomplete="name" required>
@@ -163,16 +163,11 @@
         <label for="signup-email">Email address</label>
         <input type="email" id="signup-email" placeholder="your@email.com" autocomplete="email" required>
       </div>
-      <div class="form-group">
-        <label for="signup-password">Choose a password</label>
-        <input type="password" id="signup-password" placeholder="" autocomplete="new-password" required minlength="8">
-        <div class="password-hint">At least 8 characters.</div>
-      </div>
       <div class="form-group" id="referral-group" style="display:none;">
         <label for="signup-referral">Referral code <span style="color:#888;font-weight:400">(optional)</span></label>
         <input type="text" id="signup-referral" placeholder="e.g. FRASER-A1B2" autocomplete="off" style="text-transform:uppercase;">
       </div>
-      <button type="submit" class="btn-primary" id="signup-btn">Create learner account</button>
+      <button type="submit" class="btn-primary" id="signup-btn">Email me a verification code</button>
       <div class="auth-help-links">
         <button type="button" class="auth-help-link" id="btn-back-from-signup">Back to sign in</button>
       </div>
