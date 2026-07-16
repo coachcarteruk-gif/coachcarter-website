@@ -29,11 +29,6 @@
       "permanent": false
     },
     {
-      "source": "/",
-      "destination": "/free-lesson.html",
-      "permanent": false
-    },
-    {
       "source": "/classroom",
       "destination": "/",
       "permanent": false
@@ -43,6 +38,7 @@
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/r/:code", "destination": "/api/r?code=:code" },
     { "source": "/book/:slug", "destination": "/learner/book.html" },
+    { "source": "/freetrial", "destination": "/free-lesson.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
   ],
   "headers": [
