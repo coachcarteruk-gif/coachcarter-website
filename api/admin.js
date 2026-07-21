@@ -89,6 +89,7 @@ const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_tra
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
+const { normaliseReferralCode, updateReferralCodeForLearner } = require('./_referral-code');
 
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 const BROADCAST_MAX_RECIPIENTS = 200;
@@ -387,6 +388,7 @@ module.exports = async (req, res) => {
   if (action === 'instructor-blackouts')     return handleInstructorBlackouts(req, res);
   if (action === 'set-instructor-blackouts') return handleSetInstructorBlackouts(req, res);
   if (action === 'referral-activity')        return handleReferralActivity(req, res);
+  if (action === 'update-referral-code')     return handleUpdateReferralCode(req, res);
   if (action === 'referral-relationships')   return handleReferralRelationships(req, res);
   if (action === 'link-referral-relationship') return handleLinkReferralRelationship(req, res);
   if (action === 'referral-config')          return handleReferralConfig(req, res);
@@ -4561,6 +4563,73 @@ async function handleReferralActivity(req, res) {
     console.error('referral-activity error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load referral activity' });
+  }
+}
+
+// POST /api/admin?action=update-referral-code
+// Body: { learner_id, code }
+async function handleUpdateReferralCode(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+
+  const learnerId = parseInt(req.body?.learner_id, 10);
+  if (!Number.isInteger(learnerId) || learnerId <= 0) {
+    return res.status(400).json({ error: 'A valid learner_id is required.' });
+  }
+
+  const normalised = normaliseReferralCode(req.body?.code);
+  if (!normalised.ok) {
+    return res.status(400).json({ error: normalised.error });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const result = await updateReferralCodeForLearner(sql, {
+      learnerId,
+      schoolId,
+      code: normalised.code,
+    });
+
+    if (result.status === 'not_found') {
+      return res.status(404).json({ error: 'This learner does not have a referral code yet.' });
+    }
+    if (result.status === 'unchanged') {
+      return res.json({
+        ok: true,
+        changed: false,
+        referral: { learner_id: learnerId, code: result.referral.code },
+      });
+    }
+    if (result.status === 'conflict') {
+      return res.status(409).json({ error: 'That referral code is already used by another learner.' });
+    }
+
+    await logAudit(sql, {
+      adminId: admin.id,
+      adminEmail: admin.email,
+      action: 'admin.update_referral_code',
+      targetType: 'learner',
+      targetId: learnerId,
+      details: {
+        previous_code: result.previous.code,
+        new_code: normalised.code,
+        learner_name: result.previous.learner_name || null,
+        learner_email: result.previous.learner_email || null,
+      },
+      schoolId,
+      req,
+    });
+
+    return res.json({ ok: true, changed: true, referral: result.referral });
+  } catch (err) {
+    if (err?.code === '23505') {
+      return res.status(409).json({ error: 'That referral code is already used by another learner.' });
+    }
+    console.error('admin update-referral-code error:', err);
+    reportError('/api/admin', err);
+    return res.status(500).json({ error: 'Failed to update referral code.' });
   }
 }
 
