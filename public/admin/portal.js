@@ -4350,6 +4350,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'filter-feedback-type') filterFeedbackType(t, t.dataset.type);
   else if (a === 'update-feedback-status') updateFeedbackStatus(parseInt(t.dataset.id, 10), t.dataset.status);
   else if (a === 'complete-test-swap') completeTestSwap(parseInt(t.dataset.id, 10), t);
+  else if (a === 'edit-referral-code') openEditReferralCode(t);
   else if (a === 'close-modal') closeModal(t.dataset.modal);
   else if (a === 'bulk-action') bulkAction(t.dataset.op);
 });
@@ -4472,11 +4473,91 @@ async function loadReferralActivity() {
         '<td><code style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:0.85rem;">' + esc(r.code) + '</code></td>' +
         '<td>' + r.total_referred + '</td>' +
         '<td>' + hrs + ' hrs (' + r.total_rewards_minutes + ' min)</td>' +
+        '<td><button class="btn btn-sm" type="button" data-action="edit-referral-code" data-learner-id="' + esc(r.referrer_id) + '" data-learner-name="' + esc(r.referrer_name || 'Unknown learner') + '" data-code="' + esc(r.code) + '" style="min-height:44px;">Edit code</button></td>' +
         '</tr>';
     }).join('');
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="4" style="color:#ef4444;">Failed to load activity</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;">Failed to load activity</td></tr>';
     console.error('loadReferralActivity:', e);
+  }
+}
+
+function setReferralCodeError(message) {
+  var error = document.getElementById('referral-code-error');
+  var input = document.getElementById('referral-code-input');
+  if (!error || !input) return;
+  error.textContent = message || '';
+  error.style.display = message ? 'block' : 'none';
+  input.setAttribute('aria-invalid', message ? 'true' : 'false');
+}
+
+function validateReferralCodeInput() {
+  var input = document.getElementById('referral-code-input');
+  if (!input) return false;
+  var code = input.value.trim().toUpperCase();
+  input.value = code;
+  if (!code) {
+    setReferralCodeError('Enter a referral code.');
+    return false;
+  }
+  if (code.length < 3 || code.length > 32) {
+    setReferralCodeError('Referral codes must be 3-32 characters.');
+    return false;
+  }
+  if (!/^[A-Z0-9](?:[A-Z0-9_-]{1,30}[A-Z0-9])$/.test(code)) {
+    setReferralCodeError('Use letters, numbers, hyphens or underscores, starting and ending with a letter or number.');
+    return false;
+  }
+  setReferralCodeError('');
+  return true;
+}
+
+function openEditReferralCode(button) {
+  var learnerId = document.getElementById('referral-code-learner-id');
+  var learner = document.getElementById('referral-code-learner');
+  var input = document.getElementById('referral-code-input');
+  if (!learnerId || !learner || !input) return;
+
+  learnerId.value = button.dataset.learnerId || '';
+  learner.textContent = button.dataset.learnerName || 'Learner';
+  input.value = (button.dataset.code || '').toUpperCase();
+  setReferralCodeError('');
+  openModal('modal-edit-referral-code');
+  setTimeout(function () { input.focus(); input.select(); }, 0);
+}
+
+async function saveReferralCode() {
+  var btn = document.getElementById('btn-save-referral-code');
+  var learnerId = document.getElementById('referral-code-learner-id');
+  var input = document.getElementById('referral-code-input');
+  if (!btn || !learnerId || !input || !validateReferralCodeInput()) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    var res = await fetchAdmin('/api/admin?action=update-referral-code', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        learner_id: parseInt(learnerId.value, 10),
+        code: input.value
+      })
+    });
+    var data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to update referral code.');
+
+    closeModal('modal-edit-referral-code');
+    toast(data.changed === false ? 'Referral code unchanged.' : 'Referral code updated.', 'success');
+    await loadReferralActivity();
+    loadReferralRelationships();
+  } catch (e) {
+    setReferralCodeError(e.message || 'Failed to update referral code. Please try again.');
+    input.focus();
+    console.error('saveReferralCode:', e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save code';
   }
 }
 
@@ -4684,7 +4765,19 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
     updateRefundSourceFields();
   }
   bind('btn-save-referral-config', saveReferralConfig);
+  bind('btn-save-referral-code', saveReferralCode);
   bind('btn-link-referral', linkReferralRelationship);
+  var referralCodeInput = document.getElementById('referral-code-input');
+  if (referralCodeInput) {
+    referralCodeInput.addEventListener('input', function () {
+      this.value = this.value.toUpperCase();
+      if (this.getAttribute('aria-invalid') === 'true') setReferralCodeError('');
+    });
+    referralCodeInput.addEventListener('blur', validateReferralCodeInput);
+    referralCodeInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') saveReferralCode();
+    });
+  }
   var refEnabled = document.getElementById('ref-enabled');
   if (refEnabled) refEnabled.addEventListener('change', function () { updateRefFieldsVisibility(this.checked); });
   bind('btn-close-lt-modal', closeLTModal);

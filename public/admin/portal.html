@@ -275,6 +275,11 @@ body {
 .modal input:focus, .modal textarea:focus, .modal select:focus {
   border-color: var(--accent); background: var(--white);
 }
+.referral-code-control:focus-visible,
+[data-action="edit-referral-code"]:focus-visible {
+  outline: 3px solid rgba(245,131,33,0.35);
+  outline-offset: 2px;
+}
 .modal textarea { resize: vertical; min-height: 80px; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 
@@ -1022,12 +1027,17 @@ body {
     <!-- Activity card -->
     <div class="card">
       <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px;">Referral Activity</h3>
-      <table class="data-table">
-        <thead><tr>
-          <th>Referrer</th><th>Code</th><th>Friends Referred</th><th>Rewards Earned</th>
-        </tr></thead>
-        <tbody id="referral-activity-body"><tr><td colspan="4" style="color:#888;">Loading...</td></tr></tbody>
-      </table>
+      <p style="color:#888;font-size:0.85rem;line-height:1.45;margin:0 0 16px;">
+        Personalise a learner's code from the Actions column. Codes are converted to uppercase automatically.
+      </p>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr>
+            <th>Referrer</th><th>Code</th><th>Friends Referred</th><th>Rewards Earned</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="referral-activity-body"><tr><td colspan="5" style="color:#888;">Loading...</td></tr></tbody>
+        </table>
+      </div>
       <div id="referral-empty" style="display:none;text-align:center;padding:24px;color:#888;font-size:0.9rem;">
         No referral activity yet. Once referrals are enabled and learners start sharing codes, activity will appear here.
       </div>
@@ -1080,6 +1090,26 @@ body {
 </div><!-- /main -->
 
 <!-- ═══════════ ADD/EDIT LESSON TYPE MODAL ═══════════ -->
+<div class="modal-overlay" id="modal-edit-referral-code" role="dialog" aria-modal="true" aria-labelledby="referral-code-modal-title" aria-describedby="referral-code-help">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title" id="referral-code-modal-title">Edit referral code</div>
+    <input type="hidden" id="referral-code-learner-id">
+    <p id="referral-code-learner" style="font-weight:700;margin:0 0 16px;"></p>
+    <div class="form-group">
+      <label for="referral-code-input">Referral code</label>
+      <input class="referral-code-control" type="text" id="referral-code-input" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,30}[A-Za-z0-9]" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="referral-code-help referral-code-error" style="min-height:44px;">
+      <div id="referral-code-help" style="color:#666;font-size:0.8rem;line-height:1.45;margin-top:6px;">
+        Use 3-32 letters, numbers, hyphens or underscores. Changing it will immediately stop the learner's old shared link from working.
+      </div>
+      <div id="referral-code-error" role="alert" aria-live="polite" style="display:none;color:#b91c1c;font-size:0.82rem;margin-top:8px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn referral-code-control" type="button" data-action="close-modal" data-modal="modal-edit-referral-code" style="min-height:44px;">Cancel</button>
+      <button class="btn btn-primary referral-code-control" type="button" id="btn-save-referral-code" style="min-height:44px;">Save code</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-lesson-type">
   <div class="modal">
     <div class="modal-title" id="lt-modal-title">Add Lesson Type</div>
