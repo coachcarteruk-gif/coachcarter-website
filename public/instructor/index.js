@@ -75,11 +75,12 @@ function socialVideoBadge(booking) {
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let instructor = null;
-let currentView = 'agenda'; // 'monthly' | 'weekly' | 'agenda'
+let currentView = 'day';
 let cursor     = new Date(); // current date driving the view
 cursor.setHours(0,0,0,0);
 let bookingCache = {}; // dateStr -> [booking, ...]
 let pendingOfferCache = {}; // dateStr -> [pending offer, ...]
+let pendingRequestCache = {}; // dateStr -> [pending learner request, ...]
 let availabilityOverrideCache = {}; // dateStr -> [date-specific availability, ...]
 let busyBlockCache = {}; // dateStr -> [busy block, ...]
 let availCache   = []; // availability windows [{day_of_week, start_time, end_time}]
@@ -87,6 +88,7 @@ let calendarStartHour = 7; // from instructor profile
 let instructorSlug = null; // from profile, used for shareable booking links
 let instructorTransmissionType = 'manual'; // from profile, used for one-off slot defaults
 let loadedRanges = []; // [{from, to}] already fetched
+let requestsLoaded = false;
 let selectedBooking = null;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
@@ -98,13 +100,18 @@ async function init() {
     BookingActions.init({ showToast: showToast, onRefresh: function () { refreshSchedule(true); } });
   }
 
-  // Default to today
+  // Default to today, or honour a date supplied by the dashboard.
   cursor = new Date(); cursor.setHours(0,0,0,0);
+  const initialDate = new URLSearchParams(window.location.search).get('date');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(initialDate || '')) {
+    const parsedDate = new Date(initialDate + 'T00:00:00');
+    if (!Number.isNaN(parsedDate.getTime())) cursor = parsedDate;
+  }
 
   // Load calendar start hour before first render to prevent layout jump
   await loadCalendarPrefs();
 
-  setView('agenda'); // start in agenda view on today
+  renderCurrentView();
   loadAvailability();
 }
 
@@ -122,35 +129,39 @@ async function loadCalendarPrefs() {
 
 // ─── View switching ──────────────────────────────────────────────────────────
 function setView(view) {
-  currentView = view;
-  document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
-  document.getElementById('btnWeekly').classList.toggle('active',  view === 'weekly');
-  document.getElementById('btnAgenda').classList.toggle('active',  view === 'agenda');
+  currentView = 'day';
   renderCurrentView();
 }
 
 function toggleToolbarOverflow() {
   const menu = document.getElementById('toolbarOverflow');
+  if (!menu) return;
   menu.classList.toggle('open');
+  document.getElementById('btn-toolbar-overflow')?.setAttribute(
+    'aria-expanded',
+    menu.classList.contains('open') ? 'true' : 'false'
+  );
 }
 // Close overflow menu when clicking outside
 document.addEventListener('click', function(e) {
-  const wrap = document.querySelector('.toolbar-overflow-wrap');
+  const wrap = document.getElementById('btn-toolbar-overflow')?.closest('.planner-actions');
   if (wrap && !wrap.contains(e.target)) {
     document.getElementById('toolbarOverflow')?.classList.remove('open');
+    document.getElementById('btn-toolbar-overflow')?.setAttribute('aria-expanded', 'false');
   }
 });
 
+function closePlannerAddMenu() {
+  document.getElementById('toolbarOverflow')?.classList.remove('open');
+  document.getElementById('btn-toolbar-overflow')?.setAttribute('aria-expanded', 'false');
+}
+
 function navPrev() {
-  if (currentView === 'monthly') { cursor.setMonth(cursor.getMonth() - 1); }
-  else if (currentView === 'weekly') { cursor.setDate(cursor.getDate() - 7); }
-  else { cursor.setDate(cursor.getDate() - 14); } // agenda
+  cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
   renderCurrentView();
 }
 function navNext() {
-  if (currentView === 'monthly') { cursor.setMonth(cursor.getMonth() + 1); }
-  else if (currentView === 'weekly') { cursor.setDate(cursor.getDate() + 7); }
-  else { cursor.setDate(cursor.getDate() + 14); } // agenda
+  cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
   renderCurrentView();
 }
 // ─── Swipe navigation for daily/weekly views ─────────────────────────────────
@@ -183,15 +194,16 @@ function goToday() {
 async function renderCurrentView() {
   updateToolbarLabel();
   await fetchNeededData();
-  if (currentView === 'monthly') renderMonthly();
-  else if (currentView === 'weekly') renderWeekly();
-  else renderAgenda();
+  renderDateGrid();
+  renderSelectedDay();
   // Async - populate travel time indicators between consecutive bookings
   injectTravelIndicators();
 }
 
 function updateToolbarLabel() {
   const label = document.getElementById('calNavLabel');
+  label.textContent = `${MON_FULL[cursor.getMonth()]} ${cursor.getFullYear()}`;
+  return;
   const today = new Date(); today.setHours(0,0,0,0);
 
   if (currentView === 'monthly') {
@@ -210,6 +222,8 @@ function updateToolbarLabel() {
 
 // ─── Data fetching ───────────────────────────────────────────────────────────
 async function fetchNeededData() {
+  await fetchUnifiedData();
+  return;
   let from, to;
   if (currentView === 'monthly') {
     const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -269,6 +283,83 @@ async function fetchNeededData() {
       busyBlockCache[ds].push(b);
     }
     loadedRanges.push({ from, to });
+  } catch (err) {
+    showError(err.message || 'Failed to load schedule');
+  }
+}
+
+async function fetchUnifiedData() {
+  const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const lastOfMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+  const gridStart = getWeekStart(firstOfMonth);
+  const gridEnd = addDays(getWeekStart(lastOfMonth), 6);
+  const from = dateStr(gridStart);
+  const to = dateStr(gridEnd);
+  const needsSchedule = !isRangeLoaded(from, to);
+  const needsRequests = !requestsLoaded;
+
+  if (!needsSchedule && !needsRequests) return;
+  if (needsSchedule) showLoading();
+
+  try {
+    const [scheduleRes, requestRes] = await Promise.all([
+      needsSchedule
+        ? ccAuth.fetchAuthed(`/api/instructor?action=schedule-range&from=${from}&to=${to}`)
+        : Promise.resolve(null),
+      needsRequests
+        ? ccAuth.fetchAuthed('/api/instructor?action=list-requests')
+        : Promise.resolve(null)
+    ]);
+
+    if (scheduleRes && scheduleRes.status === 401) { signOut(); return; }
+    if (requestRes && requestRes.status === 401) { signOut(); return; }
+
+    if (scheduleRes) {
+      const data = await scheduleRes.json();
+      if (!scheduleRes.ok) throw new Error(data.error || 'Failed to load schedule');
+
+      const rangeStart = new Date(from + 'T00:00:00');
+      const rangeEnd = new Date(to + 'T00:00:00');
+      for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+        const ds = dateStr(d);
+        delete bookingCache[ds];
+        delete pendingOfferCache[ds];
+        delete availabilityOverrideCache[ds];
+        delete busyBlockCache[ds];
+      }
+
+      for (const booking of (data.bookings || [])) {
+        if (!bookingCache[booking.scheduled_date]) bookingCache[booking.scheduled_date] = [];
+        bookingCache[booking.scheduled_date].push(booking);
+      }
+      for (const offer of (data.pending_offers || [])) {
+        if (!pendingOfferCache[offer.scheduled_date]) pendingOfferCache[offer.scheduled_date] = [];
+        pendingOfferCache[offer.scheduled_date].push(offer);
+      }
+      for (const available of (data.availability_overrides || [])) {
+        const ds = available.override_date;
+        if (!availabilityOverrideCache[ds]) availabilityOverrideCache[ds] = [];
+        availabilityOverrideCache[ds].push(available);
+      }
+      for (const busy of (data.busy_blocks || [])) {
+        const ds = busy.block_date;
+        if (!busyBlockCache[ds]) busyBlockCache[ds] = [];
+        busyBlockCache[ds].push(busy);
+      }
+      loadedRanges.push({ from, to });
+    }
+
+    if (requestRes) {
+      const data = await requestRes.json();
+      if (!requestRes.ok) throw new Error(data.error || 'Failed to load lesson requests');
+      pendingRequestCache = {};
+      for (const request of (data.requests || []).filter(item => item.status === 'pending')) {
+        const ds = String(request.scheduled_date || '').slice(0, 10);
+        if (!pendingRequestCache[ds]) pendingRequestCache[ds] = [];
+        pendingRequestCache[ds].push(request);
+      }
+      requestsLoaded = true;
+    }
   } catch (err) {
     showError(err.message || 'Failed to load schedule');
   }
@@ -337,6 +428,300 @@ async function loadAvailability() {
 }
 
 // ─── MONTHLY RENDER ──────────────────────────────────────────────────────────
+function recurringAvailabilityForDate(day) {
+  const jsDow = day.getDay();
+  const dayOfWeek = jsDow === 0 ? 7 : jsDow;
+  return (availCache || [])
+    .filter(window => Number(window.day_of_week) === dayOfWeek)
+    .map(window => ({
+      ...window,
+      scheduled_date: dateStr(day),
+      _kind: 'recurring-availability'
+    }));
+}
+
+function collectDayItems(ds) {
+  const day = new Date(ds + 'T00:00:00');
+  const items = [];
+
+  for (const booking of (bookingCache[ds] || [])) {
+    if (booking.status !== 'refunded') items.push({ ...booking, _kind: 'booking' });
+  }
+  for (const request of (pendingRequestCache[ds] || [])) {
+    items.push({ ...request, _kind: 'request' });
+  }
+  for (const offer of (pendingOfferCache[ds] || [])) {
+    items.push({ ...offer, _kind: 'offer' });
+  }
+  for (const available of recurringAvailabilityForDate(day)) {
+    items.push(available);
+  }
+  for (const available of (availabilityOverrideCache[ds] || [])) {
+    items.push({ ...available, scheduled_date: ds, _kind: 'availability' });
+  }
+  for (const busy of (busyBlockCache[ds] || [])) {
+    items.push({ ...busy, scheduled_date: ds, _kind: 'busy' });
+  }
+
+  const kindOrder = {
+    request: 0,
+    booking: 1,
+    offer: 2,
+    busy: 3,
+    availability: 4,
+    'recurring-availability': 5
+  };
+  return items.sort((a, b) =>
+    String(a.start_time || '').localeCompare(String(b.start_time || '')) ||
+    (kindOrder[a._kind] ?? 9) - (kindOrder[b._kind] ?? 9)
+  );
+}
+
+function daySummaryParts(items) {
+  const labels = [
+    ['booking', 'lesson', 'lessons'],
+    ['request', 'request', 'requests'],
+    ['offer', 'offer', 'offers'],
+    ['availability', 'available block', 'available blocks'],
+    ['recurring-availability', 'regular availability', 'regular availability'],
+    ['busy', 'blocked period', 'blocked periods']
+  ];
+  const parts = [];
+  for (const [kind, singular, plural] of labels) {
+    const count = items.filter(item => item._kind === kind).length;
+    if (count) parts.push(`${count} ${count === 1 ? singular : plural}`);
+  }
+  return parts;
+}
+
+function renderDateGrid() {
+  const grid = document.getElementById('plannerDateGrid');
+  if (!grid) return;
+
+  const selected = dateStr(cursor);
+  const today = dateStr(new Date());
+  const firstOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const gridStart = getWeekStart(firstOfMonth);
+  let html = '';
+
+  for (let index = 0; index < 42; index += 1) {
+    const day = addDays(gridStart, index);
+    const ds = dateStr(day);
+    const items = collectDayItems(ds);
+    const countedItems = items.filter(item => item._kind !== 'recurring-availability');
+    const requestCount = items.filter(item => item._kind === 'request').length;
+    const parts = daySummaryParts(items);
+    const inMonth = day.getMonth() === cursor.getMonth();
+    const classes = [
+      'planner-date',
+      inMonth ? '' : 'other-month',
+      ds === today ? 'today' : '',
+      ds === selected ? 'selected' : '',
+      requestCount ? 'has-request' : ''
+    ].filter(Boolean).join(' ');
+    const readableDate = `${DAY_FULL[day.getDay()]} ${day.getDate()} ${MON_FULL[day.getMonth()]} ${day.getFullYear()}`;
+    const aria = parts.length ? `${readableDate}, ${parts.join(', ')}` : `${readableDate}, nothing scheduled`;
+
+    html += `<button class="${classes}" type="button" role="gridcell" data-action="select-planner-date" data-day="${ds}" aria-label="${esc(aria)}" aria-pressed="${ds === selected ? 'true' : 'false'}">
+      <span class="planner-date-number">${day.getDate()}</span>
+      ${requestCount ? '<span class="planner-date-request-mark" aria-hidden="true"></span>' : ''}
+      ${countedItems.length ? `<span class="planner-date-count" aria-hidden="true">${countedItems.length}</span>` : ''}
+    </button>`;
+  }
+  grid.innerHTML = html;
+}
+
+function requestExpiryLabel(expiresAt) {
+  const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
+  if (remaining < 3600000) return `${Math.max(1, Math.round(remaining / 60000))} min left`;
+  if (remaining < 86400000) return `${Math.max(1, Math.round(remaining / 3600000))}h left`;
+  return `${Math.max(1, Math.round(remaining / 86400000))}d left`;
+}
+
+function plannerTime(item) {
+  const start = String(item.start_time || '').slice(0, 5);
+  const end = String(item.end_time || '').slice(0, 5);
+  return end ? `${start}–${end}` : start;
+}
+
+function renderPlannerCard(item) {
+  const time = plannerTime(item);
+
+  if (item._kind === 'request') {
+    const requestMeta = [
+      item.lesson_type_name || 'Lesson',
+      item.payment_method === 'credit_hold' || item.payment_method === 'credit' ? 'Credit held' :
+        item.payment_method === 'card_hold' || item.payment_method === 'card' ? 'Card held' : '',
+      item.expires_at ? requestExpiryLabel(item.expires_at) : ''
+    ].filter(Boolean).join(' · ');
+    return `<article class="day-card request" data-request-id="${item.id}">
+      <div>
+        <div class="day-card-time">${esc(time)}</div>
+        <div class="day-card-type">Request</div>
+      </div>
+      <div class="day-card-main">
+        <div class="day-card-title">${esc(item.learner_name || 'Learner')}</div>
+        <div class="day-card-meta">${esc(requestMeta)}</div>
+        ${item.pickup_address ? `<div class="day-card-meta">${esc(item.pickup_address)}</div>` : ''}
+      </div>
+      <div class="day-card-side">
+        <button class="day-card-action" type="button" data-action="decline-planner-request" data-id="${item.id}">Decline</button>
+        <button class="day-card-action primary" type="button" data-action="accept-planner-request" data-id="${item.id}">Accept</button>
+      </div>
+    </article>`;
+  }
+
+  if (item._kind === 'offer') {
+    const offerMeta = [
+      item.lesson_type_name || 'Lesson offer',
+      item.expires_at ? requestExpiryLabel(item.expires_at) : 'Waiting for learner'
+    ].filter(Boolean).join(' · ');
+    return `<article class="day-card offer">
+      <div>
+        <div class="day-card-time">${esc(time)}</div>
+        <div class="day-card-type">Offer</div>
+      </div>
+      <div class="day-card-main">
+        <div class="day-card-title">${esc(item.learner_name || item.recipient_name || 'Pending learner')}</div>
+        <div class="day-card-meta">${esc(offerMeta)}</div>
+      </div>
+      <div class="day-card-side">
+        <button class="day-card-action" type="button" data-action="cancel-pending-offer" data-id="${item.id}">Cancel</button>
+      </div>
+    </article>`;
+  }
+
+  if (item._kind === 'availability' || item._kind === 'recurring-availability') {
+    const recurring = item._kind === 'recurring-availability';
+    return `<article class="day-card availability">
+      <div>
+        <div class="day-card-time">${esc(time)}</div>
+        <div class="day-card-type">Available</div>
+      </div>
+      <div class="day-card-main">
+        <div class="day-card-title">${recurring ? 'Regular availability' : 'Extra availability'}</div>
+        <div class="day-card-meta">${recurring ? 'Repeats weekly' : 'Available for learner bookings'}</div>
+      </div>
+      <div class="day-card-side">
+        ${recurring ? '' : `<button class="day-card-action" type="button" data-action="delete-availability-override" data-id="${item.id}">Remove</button>`}
+      </div>
+    </article>`;
+  }
+
+  if (item._kind === 'busy') {
+    return `<article class="day-card busy">
+      <div>
+        <div class="day-card-time">${esc(time)}</div>
+        <div class="day-card-type">Busy</div>
+      </div>
+      <div class="day-card-main">
+        <div class="day-card-title">${esc(item.note || 'Time blocked')}</div>
+        <div class="day-card-meta">Not available for bookings</div>
+      </div>
+      <div class="day-card-side">
+        <button class="day-card-action" type="button" data-action="delete-busy-block" data-id="${item.id}">Remove</button>
+      </div>
+    </article>`;
+  }
+
+  const isComplete = item.status === 'chargeable';
+  const lessonMeta = [
+    item.lesson_type_name || 'Driving lesson',
+    item.pickup_address || ''
+  ].filter(Boolean).join(' · ');
+  return `<button class="day-card${isComplete ? ' completed' : ''}" type="button" data-action="open-booking-detail" data-id="${item.id}">
+    <div>
+      <div class="day-card-time">${esc(time)}</div>
+      <div class="day-card-type">${isComplete ? 'Completed' : 'Lesson'}</div>
+    </div>
+    <div class="day-card-main">
+      <div class="day-card-title">${esc(item.learner_name || 'Learner')}</div>
+      <div class="day-card-meta">${esc(lessonMeta)}</div>
+    </div>
+    <div class="day-card-side" aria-hidden="true">›</div>
+  </button>`;
+}
+
+function renderSelectedDay() {
+  const content = document.getElementById('calContent');
+  const title = document.getElementById('plannerDayTitle');
+  const summary = document.getElementById('plannerDaySummary');
+  if (!content || !title || !summary) return;
+
+  const selected = dateStr(cursor);
+  const today = dateStr(new Date());
+  const items = collectDayItems(selected);
+  const dateLabel = `${DAY_FULL[cursor.getDay()]} ${cursor.getDate()} ${MON_FULL[cursor.getMonth()]}`;
+  title.textContent = selected === today ? `Today · ${dateLabel}` : dateLabel;
+
+  const parts = daySummaryParts(items);
+  summary.textContent = parts.length ? parts.join(' · ') : 'Nothing scheduled';
+
+  if (!items.length) {
+    content.innerHTML = `<div class="day-empty">
+      <div class="day-empty-mark" aria-hidden="true"></div>
+      <h3>Your day is clear</h3>
+      <p>Add availability, busy time, an offer, or a lesson from the Add menu.</p>
+    </div>`;
+    return;
+  }
+
+  let html = '<div class="day-timeline">';
+  for (const item of items) html += renderPlannerCard(item);
+  html += '</div>';
+  content.innerHTML = html;
+}
+
+function selectPlannerDate(ds) {
+  const next = new Date(ds + 'T00:00:00');
+  if (Number.isNaN(next.getTime())) return;
+  const monthChanged = next.getMonth() !== cursor.getMonth() || next.getFullYear() !== cursor.getFullYear();
+  cursor = next;
+  if (monthChanged) renderCurrentView();
+  else {
+    updateToolbarLabel();
+    renderDateGrid();
+    renderSelectedDay();
+    injectTravelIndicators();
+  }
+}
+
+async function decidePlannerRequest(requestId, action, btnEl) {
+  const card = btnEl?.closest('.day-card');
+  const buttons = card ? card.querySelectorAll('button') : [];
+  let declineReason = '';
+
+  if (action === 'accept' && !window.confirm('Accept this lesson request?')) return;
+  if (action === 'decline') {
+    const answer = window.prompt('Optional reason for declining:');
+    if (answer === null) return;
+    declineReason = answer.trim();
+    if (!window.confirm('Decline this lesson request?')) return;
+  }
+
+  buttons.forEach(button => { button.disabled = true; });
+  try {
+    const res = await ccAuth.fetchAuthed(`/api/instructor?action=${action}-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request_id: requestId,
+        ...(action === 'decline' && declineReason ? { reason: declineReason } : {})
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Failed to ${action} request`);
+
+    requestsLoaded = false;
+    loadedRanges = [];
+    await renderCurrentView();
+    showToast(action === 'accept' ? 'Request accepted and lesson added' : 'Request declined', 'success');
+  } catch (err) {
+    buttons.forEach(button => { button.disabled = false; });
+    showToast(err.message || `Failed to ${action} request`, 'error');
+  }
+}
+
 function renderMonthly() {
   const today      = new Date(); today.setHours(0,0,0,0);
   const firstOfMon = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -1160,7 +1545,11 @@ async function refreshSchedule(silent) {
   // so the calendar shows fresh data directly without flashing empty.
   bookingCache = {};
   pendingOfferCache = {};
+  pendingRequestCache = {};
+  availabilityOverrideCache = {};
+  busyBlockCache = {};
   loadedRanges = [];
+  requestsLoaded = false;
   await renderCurrentView();
   if (btn) btn.textContent = '↻';
   if (!silent) showToast('Schedule refreshed', 'success');
@@ -2530,11 +2919,30 @@ init();
   }
 })();
 
+// The dashboard's consolidated Add menu links here for calendar-owned actions.
+(function() {
+  const p = new URLSearchParams(location.search);
+  const addAction = p.get('add');
+  const openers = {
+    lesson: openAddLessonModal,
+    availability: openAvailModal,
+    busy: openBusyModal,
+    offer: openOfferModal
+  };
+  if (openers[addAction]) {
+    setTimeout(openers[addAction], 500);
+    history.replaceState(null, '', location.pathname);
+  }
+})();
+
 document.addEventListener('click', function (e) {
   var t = e.target.closest('[data-action]');
   if (!t) return;
   var a = t.dataset.action;
-  if (a === 'drill-to-day') drillToDay(t.dataset.day);
+  if (a === 'select-planner-date') selectPlannerDate(t.dataset.day);
+  else if (a === 'accept-planner-request') decidePlannerRequest(parseInt(t.dataset.id, 10), 'accept', t);
+  else if (a === 'decline-planner-request') decidePlannerRequest(parseInt(t.dataset.id, 10), 'decline', t);
+  else if (a === 'drill-to-day') drillToDay(t.dataset.day);
   else if (a === 'cursor-to-agenda') { cursor = new Date(t.dataset.day + 'T00:00:00'); setView('agenda'); }
   else if (a === 'open-booking-detail') openBookingDetail(parseInt(t.dataset.id, 10));
   else if (a === 'open-avail-modal') openAvailModal(t.dataset.day);
@@ -2595,10 +3003,10 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   document.querySelectorAll('.view-btn[data-view]').forEach(function (btn) {
     btn.addEventListener('click', function () { setView(btn.dataset.view); });
   });
-  bind('btn-open-add-lesson', openAddLessonModal);
-  bind('btn-open-avail', function () { openAvailModal(); });
-  bind('btn-open-busy', function () { openBusyModal(); });
-  bind('btn-open-offer', function () { openOfferModal(); });
+  bind('btn-open-add-lesson', function () { closePlannerAddMenu(); openAddLessonModal(); });
+  bind('btn-open-avail', function () { closePlannerAddMenu(); openAvailModal(); });
+  bind('btn-open-busy', function () { closePlannerAddMenu(); openBusyModal(); });
+  bind('btn-open-offer', function () { closePlannerAddMenu(); openOfferModal(); });
   bind('btn-toolbar-overflow', toggleToolbarOverflow);
   var availModal = document.getElementById('availModal');
   if (availModal) availModal.addEventListener('click', handleModalOverlayClick);

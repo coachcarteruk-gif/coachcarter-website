@@ -654,45 +654,63 @@
     .btn-notes-save:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-notes-cancel { background: var(--bg); color: var(--muted); border: 1px solid var(--border) !important; }
   </style>
+<link rel="stylesheet" href="/instructor/day-planner.css">
 <script src="/sidebar.js"></script>
 <script src="/shared/instructor-auth.js"></script>
 <script src="/shared/instructor-booking-actions.js"></script>
 </head>
 <body>
 
-<div class="page">
-  <!-- Toolbar (sticky) -->
-  <div class="cal-toolbar">
-    <div class="cal-nav">
-      <button class="cal-nav-btn" id="btn-nav-prev" title="Previous">&#8249;</button>
-      <span class="cal-nav-label" id="calNavLabel"> - </span>
-      <button class="cal-nav-btn" id="btn-nav-next" title="Next">&#8250;</button>
+<div class="page planner-page">
+  <header class="planner-header">
+    <div>
+      <p class="planner-kicker">Plan your time</p>
+      <h1 class="planner-title">Calendar</h1>
     </div>
-    <button class="btn-today" id="btn-today">Today</button>
-    <div class="view-toggle">
-      <button class="view-btn" id="btnMonthly" data-view="monthly">Monthly</button>
-      <button class="view-btn" id="btnWeekly" data-view="weekly">Weekly</button>
-      <button class="view-btn active" id="btnAgenda" data-view="agenda">Agenda</button>
-    </div>
-    <button class="btn-add-lesson" id="btn-open-add-lesson">+ Add Lesson</button>
-    <button class="btn-today" id="btn-open-avail">+ Slot</button>
-    <button class="btn-today" id="btn-open-busy">Block time</button>
-    <span class="toolbar-secondary">
-      <button class="btn-today" id="btn-open-offer" title="Send a lesson offer to one learner - or broadcast it to everyone free at this time">Offer</button>
-    </span>
-    <div class="toolbar-overflow-wrap">
-      <button class="btn-today toolbar-overflow-btn" id="btn-toolbar-overflow" title="More options">&#x22EF;</button>
-      <div class="toolbar-overflow-menu" id="toolbarOverflow">
-        <button class="toolbar-overflow-item" data-action="open-busy-modal">Block time</button>
-        <button class="toolbar-overflow-item" data-toolbar-of="offer">Offer Lesson / Broadcast</button>
+    <div class="planner-actions">
+      <button class="planner-btn" id="btn-today" type="button">Today</button>
+      <button class="planner-btn planner-btn-primary" id="btn-toolbar-overflow" type="button" aria-expanded="false" aria-controls="toolbarOverflow">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add
+      </button>
+      <div class="planner-add-menu" id="toolbarOverflow">
+        <button type="button" id="btn-open-add-lesson">Book lesson</button>
+        <button type="button" id="btn-open-avail">Add available time</button>
+        <button type="button" id="btn-open-busy">Block time</button>
+        <button type="button" id="btn-open-offer">Send offer or broadcast</button>
       </div>
     </div>
-  </div>
+  </header>
 
-  <!-- Calendar content -->
+  <section class="planner-calendar" aria-labelledby="calNavLabel">
+    <div class="planner-month-bar">
+      <div class="planner-month-legacy">
+      <button class="planner-nav-btn" id="btn-nav-prev" type="button" aria-label="Previous month">&#8249;</button>
+      <span class="planner-month-label" id="calNavLabel">Calendar</span>
+      <button class="planner-nav-btn" id="btn-nav-next" type="button" aria-label="Next month">&#8250;</button>
+      </div>
+    </div>
+    <div class="planner-weekdays" aria-hidden="true">
+      <span class="planner-weekday">Mon</span>
+      <span class="planner-weekday">Tue</span>
+      <span class="planner-weekday">Wed</span>
+      <span class="planner-weekday">Thu</span>
+      <span class="planner-weekday">Fri</span>
+      <span class="planner-weekday">Sat</span>
+      <span class="planner-weekday">Sun</span>
+    </div>
+    <div class="planner-date-grid" id="plannerDateGrid" role="grid" aria-label="Choose a date"></div>
+  </section>
+
+  <section class="planner-day" aria-labelledby="plannerDayTitle">
+    <div class="planner-day-heading">
+      <h2 class="planner-day-title" id="plannerDayTitle">Today</h2>
+      <div class="planner-day-summary" id="plannerDaySummary"></div>
+    </div>
   <div id="calContent">
     <div class="loading"><div class="spinner"></div><p>Loading your schedule…</p></div>
   </div>
+  </section>
 </div>
 
 <div class="toast" id="toast"></div>

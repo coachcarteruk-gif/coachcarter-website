@@ -19,6 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
   <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="/shared/instructor.css">
+  <link rel="stylesheet" href="/instructor/day-planner.css">
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
@@ -57,7 +58,8 @@
     /* ── Stats strip ── */
     .dash-stats {
       font-size: 0.82rem; color: var(--muted); font-weight: 600;
-      margin-bottom: 16px;
+      margin-top: 5px;
+      margin-bottom: 0;
     }
 
     /* ── Connect health alert ── */
@@ -148,7 +150,7 @@
 
     /* ── Lesson list ── */
     .dash-lessons {
-      flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+      flex: 1;
     }
     .dash-lesson {
       display: flex; align-items: center; gap: 12px;
@@ -207,6 +209,10 @@
 
     /* ── Loading ── */
     .dash-loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+
+    .dash .planner-header { margin-bottom: 14px; }
+    .dash .planner-day { margin-top: 0; }
+    .dash .day-card-side .running-late-action { white-space: nowrap; }
     .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
       border-top-color: var(--accent); border-radius: 50%;
@@ -440,39 +446,47 @@
 </head>
 <body>
 
-<div class="dash">
+<div class="dash planner-page">
   <!-- Header -->
-  <div class="dash-header">
-    <div class="dash-greeting" id="greeting">Hi there</div>
-    <div class="dash-header-btns">
-      <button class="btn-running-late" id="btnLate" disabled title="No upcoming lessons">Running Late</button>
-      <button class="btn-book-lesson" id="btn-book-lesson">+ Book Lesson</button>
+  <div class="planner-header">
+    <div>
+      <p class="planner-kicker">Instructor dashboard</p>
+      <h1 class="planner-title" id="greeting">Hi there</h1>
+      <div class="dash-stats" id="dashStats"></div>
+    </div>
+    <div class="planner-actions">
+      <button class="planner-btn planner-btn-primary" id="dashAddBtn" type="button" aria-haspopup="menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Add
+      </button>
+      <div class="planner-add-menu" id="dashAddMenu" role="menu">
+        <button type="button" data-action="open-book-modal" role="menuitem">Book a lesson</button>
+        <a href="/instructor/?add=availability" role="menuitem">Add availability</a>
+        <a href="/instructor/?add=busy" role="menuitem">Block busy time</a>
+        <a href="/instructor/?add=offer" role="menuitem">Send an offer</a>
+      </div>
     </div>
   </div>
-  <div class="dash-stats" id="dashStats"></div>
 
   <!-- Connect health alert (fire-and-forget; hidden when account is healthy) -->
   <a href="/instructor/earnings.html" class="dash-connect-alert" id="dashConnectAlert" style="display:none"></a>
 
-  <!-- Booking link -->
-  <div class="dash-booking-link" id="dashBookingLink" style="display:none">
-    <div class="dash-booking-link-url" id="dashBookingUrl"></div>
-    <button class="dash-booking-link-btn" id="dashCopyBtn">Copy link</button>
-  </div>
+  <!-- Future requests stay visible without becoming a separate dashboard section. -->
+  <a class="request-attention" id="dashRequestAttention" href="/instructor/" style="display:none">
+    <span id="dashRequestAttentionText"></span>
+    <span>View in calendar ›</span>
+  </a>
 
-  <!-- Pending lesson requests (loaded async, hidden when none) -->
-  <div id="dashRequests" style="display:none"></div>
-
-  <!-- Pending broadcast offers (loaded async, hidden when none) -->
-  <div id="dashBroadcasts" style="display:none"></div>
-
-  <!-- Date header -->
-  <div class="dash-date" id="dashDate"></div>
-
-  <!-- Today's lessons -->
-  <div class="dash-lessons" id="dashLessons">
+  <!-- Today's complete schedule -->
+  <section class="planner-day">
+    <div class="planner-day-heading">
+      <h2 class="planner-day-title" id="dashDate"></h2>
+      <div class="planner-day-summary" id="dashDaySummary"></div>
+    </div>
+    <div class="dash-lessons" id="dashLessons">
     <div class="dash-loading"><div class="spinner"></div><p>Loading schedule...</p></div>
-  </div>
+    </div>
+  </section>
 </div>
 
 <!-- ── Book Lesson Modal ── -->
