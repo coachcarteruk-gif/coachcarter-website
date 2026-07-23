@@ -33,8 +33,8 @@ Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that
 
 **Dashboard | Calendar | Learners | Earnings | Profile**
 
-- Dashboard (`/instructor/dashboard.html`) — compact no-scroll view of today's lessons + "Book Lesson" action
-- Calendar (`/instructor/`) — full calendar with monthly/weekly/agenda views. Agenda is the default view on load. Do NOT re-add daily view, hour-slot grids, "Weekdays" filter, or "Cancelled" filter
+- Dashboard (`/instructor/dashboard.html`) — one chronological view of today: lessons, pending lesson requests, pending offers, recurring/date-specific availability, and busy blocks. Future requests collapse into one slim link to their first calendar date. The single Add menu owns booking and time-management actions.
+- Calendar (`/instructor/`) — learner-style month date selector followed by one chronological selected-day list. Desktop and mobile deliberately use the same structure. Pending requests live on their requested date with Accept/Decline controls; lessons, offers, recurring/date-specific availability, and busy blocks share the same timeline. Do NOT re-add multi-view toggles, hour-slot grids, "Weekdays" filter, or "Cancelled" filter.
 
 ## Instructor — sidebar items
 

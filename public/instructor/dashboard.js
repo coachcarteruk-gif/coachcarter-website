@@ -6,6 +6,12 @@ const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','
 
 let instructor = null;
 let todayBookings = [];
+let todayOffers = [];
+let todayAvailability = [];
+let todayBusyBlocks = [];
+let todayRequests = [];
+let weeklyAvailability = [];
+let pendingRequests = [];
 let allLearners = [];
 let selectedLearnerId = null;
 let selectedLearnerBalanceMinutes = 0;
@@ -30,7 +36,7 @@ function init() {
   const dayName = DAY_SHORT[now.getDay()];
   const date = now.getDate();
   const month = MON_SHORT[now.getMonth()];
-  document.getElementById('dashDate').textContent = 'TODAY \u2014 ' + dayName + ' ' + date + ' ' + month;
+  document.getElementById('dashDate').textContent = 'Today \u00B7 ' + dayName + ' ' + date + ' ' + month;
 
   // Init shared booking actions (cancel with reason, reschedule, add lesson)
   BookingActions.init({ showToast, onRefresh: loadDashboard });
@@ -40,18 +46,20 @@ function init() {
 
 async function loadDashboard() {
   try {
-    // Fetch today's schedule and stats in parallel
     const today = new Date();
     const ds = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
 
-    const [schedRes, statsRes, profileRes] = await Promise.all([
+    const [schedRes, statsRes, availRes, requestRes] = await Promise.all([
       ccAuth.fetchAuthed('/api/instructor?action=schedule-range&from=' + ds + '&to=' + ds),
       ccAuth.fetchAuthed('/api/instructor?action=stats'),
-      ccAuth.fetchAuthed('/api/instructor?action=profile')
+      ccAuth.fetchAuthed('/api/instructor?action=availability'),
+      ccAuth.fetchAuthed('/api/instructor?action=list-requests')
     ]);
 
     const schedData = await schedRes.json();
     const statsData = await statsRes.json();
+    const availData = await availRes.json();
+    const requestData = await requestRes.json();
 
     // Stats strip
     if (statsRes.ok) {
@@ -60,30 +68,23 @@ async function loadDashboard() {
       document.getElementById('dashStats').textContent = t + ' today \u00B7 ' + w + ' this week';
     }
 
-    // Booking link
-    if (profileRes.ok) {
-      const profileData = await profileRes.json();
-      const slug = profileData.instructor?.slug || profileData.instructor?.id;
-      if (slug) {
-        const url = window.location.origin + '/book/' + slug;
-        document.getElementById('dashBookingUrl').textContent = url;
-        document.getElementById('dashBookingLink').style.display = 'flex';
-        document.getElementById('dashBookingLink').dataset.url = url;
-      }
-    }
-
-    // Today's bookings
     if (schedRes.ok) {
       todayBookings = schedData.bookings || [];
-      // Sort by start_time
-      todayBookings.sort(function(a, b) { return a.start_time < b.start_time ? -1 : 1; });
-      renderLessons();
+      todayOffers = schedData.pending_offers || [];
+      todayAvailability = schedData.availability_overrides || [];
+      todayBusyBlocks = schedData.busy_blocks || [];
     }
 
-    // Pending broadcast offers (fire-and-forget - failure to load this card
-    // shouldn't block the rest of the dashboard).
-    loadBroadcasts().catch(function(e) { console.warn('broadcasts load failed:', e.message); });
-    loadRequests().catch(function(e) { console.warn('requests load failed:', e.message); });
+    weeklyAvailability = availRes.ok ? (availData.windows || []) : [];
+    pendingRequests = requestRes.ok
+      ? (requestData.requests || []).filter(function (request) { return request.status === 'pending'; })
+      : [];
+    todayRequests = pendingRequests.filter(function (request) {
+      return String(request.scheduled_date || '').slice(0, 10) === ds;
+    });
+
+    renderLessons();
+    renderRequestAttention(ds);
 
     // Connect health alert (fire-and-forget - same rationale).
     loadConnectAlert().catch(function(e) { console.warn('connect-alert load failed:', e.message); });
@@ -93,68 +94,187 @@ async function loadDashboard() {
   }
 }
 
-function renderLessons() {
-  var container = document.getElementById('dashLessons');
-  var confirmed = todayBookings.filter(function(b) { return b.status !== 'refunded'; });
+function dashboardTime(item) {
+  var start = String(item.start_time || '').slice(0, 5);
+  var end = String(item.end_time || '').slice(0, 5);
+  return end ? start + '\u2013' + end : start;
+}
 
-  if (confirmed.length === 0) {
-    container.innerHTML =
-      '<div class="dash-empty">' +
-        '<div class="dash-empty-icon">&#x2600;&#xFE0F;</div>' +
-        '<h3>No lessons today</h3>' +
-        '<p>Enjoy your day off, or book a lesson.</p>' +
-        '<button class="btn-empty-book" data-action="open-book-modal">+ Book Lesson</button>' +
-      '</div>';
+function requestExpiryLabel(expiresAt) {
+  var remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
+  if (remaining < 3600000) return Math.max(1, Math.round(remaining / 60000)) + ' min left';
+  if (remaining < 86400000) return Math.max(1, Math.round(remaining / 3600000)) + 'h left';
+  return Math.max(1, Math.round(remaining / 86400000)) + 'd left';
+}
+
+function dashboardDayItems() {
+  var now = new Date();
+  var dayOfWeek = now.getDay() === 0 ? 7 : now.getDay();
+  var items = [];
+
+  todayBookings.forEach(function (booking, bookingIndex) {
+    if (booking.status !== 'refunded') items.push(Object.assign({}, booking, { _kind: 'booking', _bookingIndex: bookingIndex }));
+  });
+  todayRequests.forEach(function (request) {
+    items.push(Object.assign({}, request, { _kind: 'request' }));
+  });
+  todayOffers.forEach(function (offer) {
+    items.push(Object.assign({}, offer, { _kind: 'offer' }));
+  });
+  weeklyAvailability
+    .filter(function (window) { return Number(window.day_of_week) === dayOfWeek; })
+    .forEach(function (window) { items.push(Object.assign({}, window, { _kind: 'recurring-availability' })); });
+  todayAvailability.forEach(function (window) {
+    items.push(Object.assign({}, window, { _kind: 'availability' }));
+  });
+  todayBusyBlocks.forEach(function (block) {
+    items.push(Object.assign({}, block, { _kind: 'busy' }));
+  });
+
+  var order = { request: 0, booking: 1, offer: 2, busy: 3, availability: 4, 'recurring-availability': 5 };
+  items.sort(function (a, b) {
+    return String(a.start_time || '').localeCompare(String(b.start_time || '')) ||
+      ((order[a._kind] ?? 9) - (order[b._kind] ?? 9));
+  });
+  return items;
+}
+
+function dashboardDaySummary(items) {
+  var labels = [
+    ['booking', 'lesson', 'lessons'],
+    ['request', 'request', 'requests'],
+    ['offer', 'offer', 'offers'],
+    ['availability', 'available block', 'available blocks'],
+    ['recurring-availability', 'regular availability', 'regular availability'],
+    ['busy', 'blocked period', 'blocked periods']
+  ];
+  return labels.map(function (entry) {
+    var count = items.filter(function (item) { return item._kind === entry[0]; }).length;
+    return count ? count + ' ' + (count === 1 ? entry[1] : entry[2]) : '';
+  }).filter(Boolean).join(' \u00B7 ');
+}
+
+function renderDashboardCard(item, nextBookingId) {
+  var time = dashboardTime(item);
+
+  if (item._kind === 'request') {
+    var requestMeta = [
+      item.lesson_type_name || 'Lesson',
+      item.payment_method === 'card_hold' ? 'Card held' : 'Credit held',
+      item.expires_at ? requestExpiryLabel(item.expires_at) : ''
+    ].filter(Boolean).join(' \u00B7 ');
+    return '<article class="day-card request">' +
+      '<div><div class="day-card-time">' + esc(time) + '</div><div class="day-card-type">Request</div></div>' +
+      '<div class="day-card-main"><div class="day-card-title">' + esc(item.learner_name || 'Learner') + '</div>' +
+        '<div class="day-card-meta">' + esc(requestMeta) + '</div>' +
+        (item.pickup_address ? '<div class="day-card-meta">' + esc(item.pickup_address) + '</div>' : '') +
+      '</div>' +
+      '<div class="day-card-side">' +
+        '<button class="day-card-action" data-action="decline-request" data-request-id="' + item.id + '">Decline</button>' +
+        '<button class="day-card-action primary" data-action="accept-request" data-request-id="' + item.id + '">Accept</button>' +
+      '</div>' +
+    '</article>';
+  }
+
+  if (item._kind === 'offer') {
+    var offerMeta = [
+      item.lesson_type_name || 'Lesson offer',
+      item.expires_at ? requestExpiryLabel(item.expires_at) : 'Waiting for learner'
+    ].filter(Boolean).join(' \u00B7 ');
+    return '<article class="day-card offer">' +
+      '<div><div class="day-card-time">' + esc(time) + '</div><div class="day-card-type">Offer</div></div>' +
+      '<div class="day-card-main"><div class="day-card-title">' + esc(item.learner_name || item.recipient_name || 'Pending learner') + '</div>' +
+        '<div class="day-card-meta">' + esc(offerMeta) + '</div></div>' +
+      '<div class="day-card-side"><a class="day-card-action" href="/instructor/?date=' + encodeURIComponent(String(item.scheduled_date || '').slice(0, 10)) + '">Manage</a></div>' +
+    '</article>';
+  }
+
+  if (item._kind === 'availability' || item._kind === 'recurring-availability') {
+    var recurring = item._kind === 'recurring-availability';
+    return '<article class="day-card availability">' +
+      '<div><div class="day-card-time">' + esc(time) + '</div><div class="day-card-type">Available</div></div>' +
+      '<div class="day-card-main"><div class="day-card-title">' + (recurring ? 'Regular availability' : 'Extra availability') + '</div>' +
+        '<div class="day-card-meta">' + (recurring ? 'Repeats weekly' : 'Available for learner bookings') + '</div></div>' +
+      '<div class="day-card-side"><a class="day-card-action" href="/instructor/?date=' + dashboardTodayString() + '">Manage</a></div>' +
+    '</article>';
+  }
+
+  if (item._kind === 'busy') {
+    return '<article class="day-card busy">' +
+      '<div><div class="day-card-time">' + esc(time) + '</div><div class="day-card-type">Busy</div></div>' +
+      '<div class="day-card-main"><div class="day-card-title">' + esc(item.note || 'Time blocked') + '</div>' +
+        '<div class="day-card-meta">Not available for bookings</div></div>' +
+      '<div class="day-card-side"><a class="day-card-action" href="/instructor/?date=' + dashboardTodayString() + '">Manage</a></div>' +
+    '</article>';
+  }
+
+  var isNext = item.id === nextBookingId;
+  var isCompleted = item.status === 'chargeable';
+  var addr = item.learner_pickup_address || item.booking_pickup_address || item.pickup_address || '';
+  var detail = [item.lesson_type_name || 'Driving lesson', addr].filter(Boolean).join(' \u00B7 ');
+  return '<article class="day-card' + (isNext ? ' next' : '') + (isCompleted ? ' completed' : '') + '">' +
+    '<div><div class="day-card-time">' + esc(time) + '</div><div class="day-card-type">' + (isCompleted ? 'Completed' : 'Lesson') + '</div></div>' +
+    '<button class="day-card-main" data-action="open-detail" data-detail-idx="' + item._bookingIndex + '" style="border:0;background:none;padding:0;text-align:left;font-family:inherit;cursor:pointer">' +
+      '<div class="day-card-title">' + esc(item.learner_name || 'Learner') + '</div>' +
+      '<div class="day-card-meta">' + esc(detail) + '</div>' +
+    '</button>' +
+    '<div class="day-card-side">' +
+      (isNext ? '<button class="day-card-action running-late-action" data-action="open-late-modal">Running late</button>' : '') +
+      '<button class="day-card-action" data-action="open-detail" data-detail-idx="' + item._bookingIndex + '">Details</button>' +
+    '</div>' +
+  '</article>';
+}
+
+function dashboardTodayString() {
+  var now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+}
+
+function renderRequestAttention(todayString) {
+  var alert = document.getElementById('dashRequestAttention');
+  var future = pendingRequests
+    .filter(function (request) { return String(request.scheduled_date || '').slice(0, 10) > todayString; })
+    .sort(function (a, b) {
+      return String(a.scheduled_date).localeCompare(String(b.scheduled_date)) ||
+        String(a.start_time || '').localeCompare(String(b.start_time || ''));
+    });
+  if (!future.length) {
+    alert.style.display = 'none';
     return;
   }
 
-  // Find next upcoming lesson
+  var firstDate = String(future[0].scheduled_date).slice(0, 10);
+  document.getElementById('dashRequestAttentionText').textContent =
+    future.length === 1 ? '1 future lesson request needs your response' : future.length + ' future lesson requests need your response';
+  alert.href = '/instructor/?date=' + encodeURIComponent(firstDate);
+  alert.style.display = '';
+}
+
+function renderLessons() {
+  var container = document.getElementById('dashLessons');
+  var items = dashboardDayItems();
+  document.getElementById('dashDaySummary').textContent = dashboardDaySummary(items) || 'Nothing scheduled';
+
+  if (!items.length) {
+    container.innerHTML =
+      '<div class="day-empty">' +
+        '<div class="day-empty-mark" aria-hidden="true"></div>' +
+        '<h3>Your day is clear</h3>' +
+        '<p>Add availability, busy time, an offer, or a lesson from the Add menu.</p>' +
+      '</div>';
+    updateLateButton();
+    return;
+  }
+
   var now = new Date();
-  var nextId = null;
-  for (var i = 0; i < confirmed.length; i++) {
-    var b = confirmed[i];
-    if (b.status !== 'scheduled') continue;
-    var parts = b.start_time.split(':');
-    var lessonTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0]), parseInt(parts[1]));
-    if (lessonTime > now) { nextId = b.id; break; }
-  }
-
-  var html = '';
-  for (var i = 0; i < todayBookings.length; i++) {
-    var b = todayBookings[i];
-    var isNext = b.id === nextId;
-    var isCompleted = b.status === 'chargeable';
-    var isCancelled = b.status === 'refunded';
-
-    var cls = 'dash-lesson';
-    if (isNext) cls += ' is-next';
-    if (isCompleted) cls += ' is-completed';
-    if (isCancelled) cls += ' is-completed';
-
-    var time = b.start_time.slice(0, 5);
-    var name = esc(b.learner_name || 'Unknown');
-    var addr = b.learner_pickup_address || b.booking_pickup_address || '';
-    // Extract just the postcode from address
-    var pcMatch = addr.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i);
-    var detail = pcMatch ? pcMatch[1].toUpperCase() : (addr ? addr.split(',')[0].trim() : '');
-    if (b.lesson_type_name) detail = b.lesson_type_name + (detail ? ' \u00B7 ' + detail : '');
-    if (b.social_video_consent) detail = (detail ? detail + ' \u00B7 ' : '') + 'Filmed lesson';
-
-    var badgeCls = 'badge-confirmed';
-    var badgeText = '';
-    if (isCancelled) { badgeCls = 'badge-cancelled'; badgeText = 'Cancelled'; }
-    else if (isCompleted) { badgeCls = 'badge-completed'; badgeText = 'Done'; }
-
-    html += '<div class="' + cls + '" data-action="open-detail" data-detail-idx="' + i + '">' +
-      '<div class="dash-lesson-time">' + time + '</div>' +
-      '<div class="dash-lesson-info">' +
-        '<div class="dash-lesson-name">' + name + '</div>' +
-        (detail ? '<div class="dash-lesson-detail">' + esc(detail) + '</div>' : '') +
-      '</div>' +
-      (badgeText ? '<span class="dash-lesson-badge ' + badgeCls + '">' + badgeText + '</span>' : '') +
-    '</div>';
-  }
-  container.innerHTML = html;
+  var nextBooking = todayBookings.find(function (booking) {
+    if (booking.status !== 'scheduled') return false;
+    var parts = booking.start_time.split(':');
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(parts[0]), parseInt(parts[1])) > now;
+  });
+  container.innerHTML = '<div class="day-timeline">' + items.map(function (item) {
+    return renderDashboardCard(item, nextBooking ? nextBooking.id : null);
+  }).join('') + '</div>';
   updateLateButton();
 }
 
@@ -550,6 +670,7 @@ function getUpcomingCount() {
 function updateLateButton() {
   var count = getUpcomingCount();
   var btn = document.getElementById('btnLate');
+  if (!btn) return;
   if (count > 0) {
     btn.disabled = false;
     btn.title = 'Notify ' + count + ' upcoming learner' + (count > 1 ? 's' : '');
@@ -624,27 +745,13 @@ async function sendRunningLate() {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
+  var addWrap = document.getElementById('dashAddBtn')?.closest('.planner-actions');
+  if (addWrap && !addWrap.contains(e.target)) closeDashAddMenu();
   if (!e.target.closest('.learner-search-wrap')) {
     var dd = document.getElementById('bookDropdown');
     if (dd) dd.classList.remove('open');
   }
 });
-
-function copyDashBookingLink() {
-  const url = document.getElementById('dashBookingLink').dataset.url;
-  const btn = document.getElementById('dashCopyBtn');
-  navigator.clipboard.writeText(url).then(() => {
-    btn.textContent = 'Copied!';
-    btn.style.background = 'var(--green, #22c55e)';
-    setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = ''; }, 2000);
-  }).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-    btn.textContent = 'Copied!';
-    btn.style.background = 'var(--green, #22c55e)';
-    setTimeout(() => { btn.textContent = 'Copy link'; btn.style.background = ''; }, 2000);
-  });
-}
 
 init();
 
@@ -653,12 +760,12 @@ document.addEventListener('click', function (e) {
   if (!t) return;
   var a = t.dataset.action;
   if (a === 'retry-load') loadDashboard();
-  else if (a === 'open-book-modal') openBookModal();
+  else if (a === 'open-book-modal') { closeDashAddMenu(); openBookModal(); }
+  else if (a === 'open-late-modal') openLateModal();
   else if (a === 'open-detail') openDetail(parseInt(t.dataset.detailIdx, 10));
   else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balanceMinutes, 10));
   else if (a === 'cancel-from-detail') cancelFromDetail();
   else if (a === 'not-delivered-from-detail') notDeliveredFromDetail();
-  else if (a === 'close-broadcast-batch') closeBroadcastBatch(t.dataset.batchId, t);
   else if (a === 'accept-request' || a === 'decline-request') decideRequest(t.dataset.requestId, a, t);
 });
 
@@ -717,7 +824,7 @@ async function decideRequest(requestId, action, btn) {
     if (!confirm('Accept this request? The learner\'s held payment will be taken and the lesson booked.')) return;
   }
 
-  var card = btn.closest('.broadcast-batch-card');
+  var card = btn.closest('.day-card, .broadcast-batch-card');
   var buttons = card ? card.querySelectorAll('button') : [btn];
   buttons.forEach(function (b) { b.disabled = true; });
   btn.textContent = action === 'accept-request' ? 'Accepting…' : 'Declining…';
@@ -738,7 +845,6 @@ async function decideRequest(requestId, action, btn) {
   } catch (err) {
     showToast('Network error — please try again');
   }
-  loadRequests().catch(function () {});
   loadDashboard();
 }
 
@@ -843,9 +949,14 @@ async function closeBroadcastBatch(batchId, btn) {
 }
 (function wire() {
   var bind = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  bind('dashAddBtn', function () {
+    var menu = document.getElementById('dashAddMenu');
+    var button = document.getElementById('dashAddBtn');
+    menu.classList.toggle('open');
+    button.setAttribute('aria-expanded', menu.classList.contains('open') ? 'true' : 'false');
+  });
   bind('btnLate', openLateModal);
   bind('btn-book-lesson', openBookModal);
-  bind('dashCopyBtn', copyDashBookingLink);
   var bookModal = document.getElementById('bookModal');
   if (bookModal) bookModal.addEventListener('click', function (e) { if (e.target === bookModal) closeBookModal(); });
   var bookSearch = document.getElementById('bookSearch');
@@ -883,4 +994,9 @@ async function closeBroadcastBatch(batchId, btn) {
   bind('btn-cancel-confirm-no', function () { closeCancelConfirm(false); });
   bind('btn-cancel-confirm-yes', function () { closeCancelConfirm(true); });
 })();
+
+function closeDashAddMenu() {
+  document.getElementById('dashAddMenu')?.classList.remove('open');
+  document.getElementById('dashAddBtn')?.setAttribute('aria-expanded', 'false');
+}
 })();

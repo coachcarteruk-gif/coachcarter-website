@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.123 - Unified Instructor Day Planner (23 July 2026)
+
+Reduces instructor dashboard overload, especially on mobile, by giving desktop and mobile the same progressive-disclosure structure. The Calendar is now a learner-style month date selector followed by one chronological selected-day schedule; the old monthly/weekly/agenda choice is gone. Lessons, pending lesson requests, pending offers, recurring and one-off availability, and busy blocks all appear on their relevant date. Pending requests can be accepted or declined inline, while the existing lesson, offer, availability, and busy-time management flows remain intact. This is a compact date selector and list, not a return to the removed hour-slot grid or Daily view tab.
+
+The Dashboard now answers only “what is happening today?” using the same chronological cards and a single consolidated Add menu. Today’s relevant time blocks are merged into the timeline, Running Late sits on the next lesson rather than in the header, and future requests reduce to one slim attention link that opens the first request’s calendar date. The isolated request, broadcast-offer, booking-link, and duplicate action panels no longer load on the dashboard. API and booking/payment behaviour are unchanged; the existing `schedule-range`, `availability`, and `list-requests` read models are composed in the browser.
+
+**Files:** `public/instructor/day-planner.css`, `public/instructor/index.html`, `public/instructor/index.js`, `public/instructor/dashboard.html`, `public/instructor/dashboard.js`, `tests/instructor-day-planner.spec.js`, `docs/navigation.md`, `CLAUDE.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.122 - Free-Trial Passwordless Journey Copy and Form UX (15 July 2026)
 
 Aligns the public free-trial journey with learner email-code authentication without adding verification friction to the booking itself. The details card now explains that the booking confirmation is emailed immediately and a 6-digit code is requested only when the learner later signs in; existing learners are told to use the same email so the booking appears in their account. Mobile and pickup-address helper text now explains how those details are used. The initial CTA is a neutral, actionable "Choose a time above" control that returns keyboard focus to step 1 and shows a slot-level message, then becomes the orange "Book my free trial" action after selection. Required-field failures render beside their inputs with `aria-invalid`, live announcements, validation on blur, and focus on the first invalid field; async submission still uses a true disabled loading state. Smooth scrolling respects reduced-motion preferences. The success page and learner WhatsApp confirmation now describe 6-digit-code sign-in consistently. Booking creation, eligibility, trial accounting, and instructor notification behaviour are unchanged.

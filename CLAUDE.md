@@ -127,8 +127,8 @@ Learner and instructor user-facing sign-in uses a 6-digit email code. Admins ret
 - Calendar sync banner on booking/dashboard pages (accessible via profile or success modal)
 - Menu/hamburger as a bottom tab (sidebar opened via top header hamburger instead)
 - Videos in Learn section navigation (page still exists at `/learner/videos.html`, just not in nav — April 2026)
-- Hour-slot time grid on instructor daily calendar (replaced with compact lesson list — April 2026)
-- Daily view tab on instructor calendar (removed April 2026 — agenda absorbs its function)
+- Hour-slot time grid on instructor calendar (the current selected-date schedule is a chronological list, never an empty-hour grid)
+- Daily view tab and monthly/weekly/agenda toggles on instructor calendar (replaced July 2026 by one learner-style month date selector + selected-day chronological list)
 - "Weekdays" and "Cancelled" filter buttons on instructor calendar (removed April 2026 — weekends always shown, cancelled always hidden)
 - Waitlist feature entirely (removed May 2026 — `waitlist` table, `api/waitlist.js`, learner profile "My Waitlist" card, and waitlist join form on `book.html` all deleted. Replaced by `learner_availability` driving cancellation notifications via `api/_notify-availability.js`. Weekly availability is now the single primitive for "ping me when something opens up". Do not re-add.)
 
