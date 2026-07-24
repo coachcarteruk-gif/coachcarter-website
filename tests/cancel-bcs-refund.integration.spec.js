@@ -111,16 +111,20 @@ function instructorToken() {
   );
 }
 
-async function seedCreditSource(minutes = 90) {
+async function seedCreditSource(minutes = 90, {
+  type = 'purchase',
+  amountPence = minutes * 100,
+  ratePencePerMinute = 100,
+} = {}) {
   const [row] = await sql`
     INSERT INTO credit_transactions
       (learner_id, instructor_id, school_id, type, credits, minutes,
        amount_pence, payment_method, stripe_session_id, stripe_fee_pence,
        effective_rate_pence_per_minute, source)
     VALUES
-      (${learnerId}, ${instructorId}, ${SCHOOL_ID}, 'purchase', ${Math.ceil(minutes / 60)}, ${minutes},
-       ${minutes * 100}, 'test', ${unique('cancel_bcs')}, 0,
-       100, 'stripe')
+      (${learnerId}, ${instructorId}, ${SCHOOL_ID}, ${type}, ${Math.ceil(minutes / 60)}, ${minutes},
+       ${amountPence}, 'test', ${unique('cancel_bcs')}, 0,
+       ${ratePencePerMinute}, 'stripe')
     RETURNING id
   `;
   createdCreditTxIds.add(row.id);
@@ -138,11 +142,17 @@ async function seedLcb(minutes) {
   `;
 }
 
-async function makeBooking({ daysAhead, seriesId = null, startTime = null }) {
+async function makeBooking({
+  daysAhead,
+  seriesId = null,
+  startTime = null,
+  durationMinutes = 90,
+}) {
   const date = futureDate(daysAhead);
   const start = startTime || `${String(8 + (crypto.randomBytes(1)[0] % 9)).padStart(2, '0')}:00`;
-  const endHour = String(Number(start.slice(0, 2)) + 1).padStart(2, '0');
-  const end = `${endHour}:30`;
+  const startMinutes = Number(start.slice(0, 2)) * 60 + Number(start.slice(3, 5));
+  const endMinutes = startMinutes + durationMinutes;
+  const end = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
   const [booking] = await sql`
     INSERT INTO lesson_bookings
       (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
@@ -150,7 +160,7 @@ async function makeBooking({ daysAhead, seriesId = null, startTime = null }) {
        created_by, payment_method, series_id)
     VALUES
       (${learnerId}, ${instructorId}, ${date}, ${start}, ${end}, ${SCHEDULED},
-       90, FALSE, FALSE, ${SCHOOL_ID},
+       ${durationMinutes}, FALSE, FALSE, ${SCHOOL_ID},
        'learner', 'credit', ${seriesId})
     RETURNING id
   `;
@@ -158,14 +168,20 @@ async function makeBooking({ daysAhead, seriesId = null, startTime = null }) {
   return booking;
 }
 
-async function attachBcs({ bookingId, creditTransactionId }) {
+async function attachBcs({
+  bookingId,
+  creditTransactionId,
+  minutes = 90,
+  ratePencePerMinute = 100,
+  contributionPence = minutes * ratePencePerMinute,
+}) {
   const [row] = await sql`
     INSERT INTO booking_credit_sources
       (school_id, booking_id, credit_transaction_id, minutes_drawn,
        rate_pence_per_minute, contribution_pence, stripe_fee_pence)
     VALUES
-      (${SCHOOL_ID}, ${bookingId}, ${creditTransactionId}, 90,
-       100, 9000, 0)
+      (${SCHOOL_ID}, ${bookingId}, ${creditTransactionId}, ${minutes},
+       ${ratePencePerMinute}, ${contributionPence}, 0)
     RETURNING id
   `;
   return row.id;
@@ -422,6 +438,41 @@ test.describe('cancellation BCS refund marking', () => {
     expect(res.body.success).toBe(true);
     expect((await getBcs(booking.id)).refunded_at).toBeTruthy();
     expect(await getLcb()).toBe(90);
+  });
+
+  test('instructor cancel returns the full 60 minutes for a 5%-discounted filmed hour', async () => {
+    await seedLcb(0);
+    const creditTxId = await seedCreditSource(60, {
+      type: 'slot_purchase',
+      amountPence: 5225,
+      ratePencePerMinute: 87,
+    });
+    const booking = await makeBooking({
+      daysAhead: 14,
+      durationMinutes: 60,
+    });
+    await attachBcs({
+      bookingId: booking.id,
+      creditTransactionId: creditTxId,
+      minutes: 60,
+      ratePencePerMinute: 87,
+      contributionPence: 5225,
+    });
+
+    const req = fakeReq({
+      query: { action: 'cancel-booking' },
+      body: { booking_id: booking.id, notify: false },
+      cookieName: 'cc_instructor',
+      token: instructorToken(),
+    });
+    const res = fakeRes();
+    await instructorHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect((await getBcs(booking.id)).refunded_at).toBeTruthy();
+    expect(await getLcb()).toBe(60);
+    expect(await recomputePairDrift()).toBe(0);
   });
 
   test('eligible cancellation leaves pair recompute drift at zero', async () => {

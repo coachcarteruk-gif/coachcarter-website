@@ -6,7 +6,7 @@ const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
 function functionBody(source, name) {
-  const start = source.indexOf(`async function ${name}`);
+  const start = source.indexOf(`async function ${name}(`);
   expect(start, `${name} should exist`).toBeGreaterThanOrEqual(0);
   const next = source.indexOf('\nasync function ', start + 1);
   return source.slice(start, next === -1 ? source.length : next);
@@ -26,7 +26,7 @@ test('social video discount is instructor opt-in and booking-snapshotted', () =>
 
   expect(pricing).toContain('const SOCIAL_VIDEO_DISCOUNT_PCT = 5;');
   expect(pricing).toContain('function applySocialVideoDiscount(pricePence, enabled)');
-  expect(pricing).toContain('function calcSocialVideoChargeMinutes(durationMinutes, enabled)');
+  expect(pricing).not.toContain('function calcSocialVideoChargeMinutes');
 
   const book = functionBody(slots, 'handleBook');
   expect(book).toContain('social_video_consent');
@@ -34,16 +34,20 @@ test('social video discount is instructor opt-in and booking-snapshotted', () =>
   expect(book).toContain('ageConfirmed: social_video_age_confirmed');
   expect(book).toContain("return res.status(400).json({ error: 'This instructor is not offering social media filming discounts.' });");
   expect(book).toContain("return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });");
-  expect(book).toContain('const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);');
+  expect(book).toContain('const chargeMins = durationMins;');
   expect(book).toContain('socialVideoAgeConfirmed: socialVideo.ageConfirmed');
 
   const checkout = functionBody(slots, 'handleCheckoutSlot');
   expect(checkout).toContain('const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);');
+  expect(checkout).toContain('const chargeMins = durationMins;');
+  expect(checkout).toContain('charge_minutes:   String(chargeMins)');
   expect(checkout).toContain("social_video_consent: socialVideo.selected ? 'true' : 'false'");
   expect(checkout).toContain("social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false'");
 
   const guestCheckout = functionBody(slots, 'handleCheckoutSlotGuest');
   expect(guestCheckout).toContain('ageConfirmed: social_video_age_confirmed');
+  expect(guestCheckout).toContain('const chargeMins = durationMins;');
+  expect(guestCheckout).toContain('charge_minutes:   String(chargeMins)');
   expect(guestCheckout).toContain("social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false'");
 
   const durations = functionBody(slots, 'handleDurationsForSlot');
@@ -90,7 +94,8 @@ test('learner modal exposes social video consent without sending prices', () => 
   expect(js).toContain('function validateSocialVideoEligibility()');
   expect(js).toContain('updateDeductDisplay();');
   expect(js).toContain('updateBookButtonState();');
-  expect(js).toContain('socialVideoChargeMinutes');
+  expect(js).toContain('function lessonCreditMinutes(durationMinutes)');
+  expect(js).not.toContain('socialVideoChargeMinutes');
   expect(js).toContain('socialVideoPrice');
   expect(creditBody).toContain('bookBody.social_video_consent = socialVideoConsentChecked();');
   expect(creditBody).toContain('bookBody.social_video_age_confirmed = socialVideoAgeConfirmed();');

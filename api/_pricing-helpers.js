@@ -187,12 +187,6 @@ function applySocialVideoDiscount(pricePence, enabled) {
   };
 }
 
-function calcSocialVideoChargeMinutes(durationMinutes, enabled) {
-  const minutes = Math.max(0, parseInt(durationMinutes, 10) || 0);
-  if (!enabled) return minutes;
-  return Math.max(1, Math.round(minutes * (100 - SOCIAL_VIDEO_DISCOUNT_PCT) / 100));
-}
-
 /**
  * Instructor-created offer pricing. Offers snapshot their final per-lesson
  * price at creation time, so later rate changes do not alter pending offers.
@@ -347,7 +341,6 @@ module.exports = {
   calcDirectLessonPrice,
   calcOfferLessonPrice,
   applySocialVideoDiscount,
-  calcSocialVideoChargeMinutes,
   getEffectiveHourlyPence,
   getEffectiveHourlyPricing,
   getEffectiveRatePencePerMinute,

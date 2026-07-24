@@ -8,7 +8,7 @@ function read(rel) {
 }
 
 function functionBody(source, name) {
-  const start = source.indexOf(`async function ${name}`);
+  const start = source.indexOf(`async function ${name}(`);
   expect(start).toBeGreaterThanOrEqual(0);
   const next = source.indexOf('\nasync function ', start + 1);
   return source.slice(start, next === -1 ? source.length : next);
@@ -50,7 +50,7 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
     expect(body).toContain('learnerId: user.id,');
     expect(body).toContain('const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);');
     expect(body).toContain('const pricePence = priced.pricePence;');
-    expect(body).toContain('const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);');
+    expect(body).toContain('const chargeMins = durationMins;');
     expect(body).toContain('unit_amount: pricePence');
     expect(body).toContain('amount_pence:    String(pricePence)');
     expect(body).toContain('charge_minutes:   String(chargeMins)');
@@ -69,7 +69,7 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
     expect(body).toContain('learnerId,');
     expect(body).toContain('const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);');
     expect(body).toContain('const pricePence = priced.pricePence;');
-    expect(body).toContain('const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);');
+    expect(body).toContain('const chargeMins = durationMins;');
     expect(body).toContain('unit_amount: pricePence');
     expect(body).toContain('amount_pence:    String(pricePence)');
     expect(body).toContain('charge_minutes:   String(chargeMins)');

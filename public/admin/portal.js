@@ -2183,7 +2183,9 @@ async function openGoodwillCredit(learnerId) {
   try {
     const options = await ensureGoodwillInstructorOptions();
     const select = document.getElementById('goodwill-instructor');
-    select.innerHTML = options || '<option value="">No active instructors</option>';
+    select.innerHTML = options
+      ? '<option value="">Choose instructor...</option>' + options
+      : '<option value="">No active instructors</option>';
   } catch (err) {
     setGoodwillStatus(err.message || 'Failed to load instructors', 'error');
   }

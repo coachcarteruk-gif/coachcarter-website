@@ -25,6 +25,11 @@ test.describe('admin goodwill credit UI', () => {
     expect(portalJs).not.toContain("fetchAdmin('/api/admin?action=credit-goodwill-inspection'");
   });
 
+  test('requires an explicit instructor choice instead of silently selecting the first instructor', () => {
+    expect(portalJs).toContain("'<option value=\"\">Choose instructor...</option>' + options");
+    expect(portalJs).toContain("if (!instructorId) return setGoodwillStatus('Choose an instructor.', 'error');");
+  });
+
   test('pins operator copy for payout consequences and visible states', () => {
     expect(portalJs).toContain('Learner gets free credit; instructor is still paid when the lesson is delivered.');
     expect(portalJs).toContain('Learner gets free credit; the matching lesson is excluded from instructor payout.');
