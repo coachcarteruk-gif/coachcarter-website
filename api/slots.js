@@ -57,7 +57,6 @@ const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const {
   calcDirectLessonPrice,
   applySocialVideoDiscount,
-  calcSocialVideoChargeMinutes,
   normaliseSocialVideoConsent,
   SOCIAL_VIDEO_DISCOUNT_PCT,
 } = require('./_pricing-helpers');
@@ -3972,7 +3971,10 @@ async function handleBook(req, res) {
       }
     }
 
-    const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);
+    // Filming consent discounts the cash price, not the lesson-credit
+    // entitlement. A one-hour lesson always consumes and, when eligible,
+    // returns 60 minutes.
+    const chargeMins = durationMins;
     const totalMins = chargeMins * weeks;
 
     // 3. For recurring bookings, check all slots are available before booking any
@@ -5199,7 +5201,10 @@ async function handleCheckoutSlot(req, res) {
     }
     const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);
     const pricePence = priced.pricePence;
-    const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);
+    // The 5% filming discount applies to the Stripe amount only. Preserve the
+    // full lesson duration in charge_minutes so a later cancellation returns
+    // the complete lesson entitlement.
+    const chargeMins = durationMins;
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
     }
@@ -5583,7 +5588,10 @@ async function handleCheckoutSlotGuest(req, res) {
     });
     const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);
     const pricePence = priced.pricePence;
-    const chargeMins = calcSocialVideoChargeMinutes(durationMins, socialVideo.selected);
+    // The 5% filming discount applies to the Stripe amount only. Preserve the
+    // full lesson duration in charge_minutes so a later cancellation returns
+    // the complete lesson entitlement.
+    const chargeMins = durationMins;
 
     // ── Create Stripe Checkout session ──
     const origin = req.headers.origin || 'https://coachcarter.uk';

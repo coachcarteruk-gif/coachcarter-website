@@ -1658,7 +1658,7 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
   const ltHrsStr = ltHrs % 1 === 0 ? `${ltHrs} hour${ltHrs !== 1 ? 's' : ''}` : `${ltHrs.toFixed(1)} hours`;
   document.getElementById('mdDuration').textContent = ltHrsStr;
   refreshSocialVideoOption();
-  const chargeMins = socialVideoChargeMinutes(ltDuration);
+  const chargeMins = lessonCreditMinutes(ltDuration);
   document.getElementById('mdDeductHours').textContent = formatHours(chargeMins);
   const ltPrice = lt.price_pence != null ? lt.price_pence : DEFAULT_PRICE_PENCE;
   const ltPriceStr = formatMoney(socialVideoPrice(ltPrice));
@@ -2104,11 +2104,8 @@ function socialVideoPrice(pricePence) {
   return Math.max(0, Math.round(price * (100 - pct) / 100));
 }
 
-function socialVideoChargeMinutes(durationMinutes) {
-  const minutes = Number(durationMinutes) || 0;
-  if (!socialVideoSelected()) return minutes;
-  const pct = Number(socialVideoOption.discountPct || 5);
-  return Math.max(1, Math.round(minutes * (100 - pct) / 100));
+function lessonCreditMinutes(durationMinutes) {
+  return Math.max(0, Number(durationMinutes) || 0);
 }
 
 function refreshSocialVideoOption() {
@@ -2326,7 +2323,7 @@ async function updateRepeatDates() {
 function updateDeductDisplay() {
   const weeks = getRepeatWeeks();
   const ltDuration = selectedLessonType ? selectedLessonType.duration_minutes : 90;
-  const chargeMins = socialVideoChargeMinutes(ltDuration);
+  const chargeMins = lessonCreditMinutes(ltDuration);
   const totalMins = chargeMins * weeks;
   const totalHrs = totalMins / 60;
   const totalStr = totalHrs % 1 === 0 ? `${totalHrs} hours` : `${totalHrs.toFixed(1)} hours`;
