@@ -1459,11 +1459,18 @@
         </div>
         <div class="modal-detail-row"><span>Duration</span><span id="mdDuration"> - </span></div>
       </div>
-      <div id="socialVideoOption" style="display:none;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+      <div id="socialVideoOption" role="group" aria-labelledby="mdSocialVideoTitle" aria-describedby="mdSocialVideoOptionalHint mdSocialVideoPrice" style="display:none;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+        <div id="mdSocialVideoTitle" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;font-size:0.86rem;color:var(--primary);font-weight:800">
+          <span>Filmed lesson discount</span>
+          <span style="flex:none;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:var(--white);color:var(--muted);font-size:0.72rem;font-weight:700">Optional</span>
+        </div>
+        <p id="mdSocialVideoOptionalHint" style="margin:0 0 10px;font-size:0.8rem;line-height:1.45;color:var(--muted)">
+          Leave this unticked to book the lesson normally without social media filming.
+        </p>
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.86rem;color:var(--primary);font-weight:700;line-height:1.35">
-          <input type="checkbox" id="mdSocialVideoConsent" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
+          <input type="checkbox" id="mdSocialVideoConsent" aria-describedby="mdSocialVideoOptionalHint mdSocialVideoPrice" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:1px">
           <span>
-            I confirm I am 18 or over and allow this lesson to be filmed for social media to save 5%
+            I am 18 or over and agree to social media filming to save 5%
             <button type="button" id="mdSocialVideoMore" style="border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;padding:0;margin-left:4px;cursor:pointer;text-decoration:underline">More info</button>
             <span id="mdSocialVideoPrice" style="display:block;margin-top:4px;color:var(--muted);font-size:0.78rem;font-weight:400"></span>
           </span>
