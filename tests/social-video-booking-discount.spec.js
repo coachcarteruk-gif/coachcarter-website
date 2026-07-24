@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const { normaliseSocialVideoConsent } = require('../api/_pricing-helpers');
 
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
@@ -11,6 +12,12 @@ function functionBody(source, name) {
   const next = source.indexOf('\nasync function ', start + 1);
   return source.slice(start, next === -1 ? source.length : next);
 }
+
+test('unticked filming consent is treated as a normal non-filmed booking', () => {
+  expect(normaliseSocialVideoConsent(false)).toBe(false);
+  expect(normaliseSocialVideoConsent(undefined)).toBe(false);
+  expect(normaliseSocialVideoConsent('false')).toBe(false);
+});
 
 test('social video discount is instructor opt-in and booking-snapshotted', () => {
   const migration = read('db/migration.sql');
@@ -80,7 +87,12 @@ test('learner modal exposes social video consent without sending prices', () => 
 
   expect(html).toContain('id="socialVideoOption"');
   expect(html).toContain('id="mdSocialVideoConsent"');
-  expect(html).toContain('I confirm I am 18 or over and allow this lesson to be filmed for social media to save 5%');
+  expect(html).toContain('Filmed lesson discount');
+  expect(html).toContain('Optional');
+  expect(html).toContain('Leave this unticked to book the lesson normally without social media filming.');
+  expect(html).toContain('I am 18 or over and agree to social media filming to save 5%');
+  const consentInput = html.match(/<input[^>]+id="mdSocialVideoConsent"[^>]*>/)?.[0] || '';
+  expect(consentInput).not.toMatch(/\srequired(?:\s|=|>)/);
   expect(html).not.toContain('id="mdSocialVideoAgeConfirmed"');
   expect(html).toContain('id="socialVideoInfoModal"');
   expect(html).toContain('used by your driving school for social media');
@@ -91,7 +103,7 @@ test('learner modal exposes social video consent without sending prices', () => 
   expect(js).toContain('function socialVideoAgeConfirmed()');
   expect(js).toContain('return socialVideoConsentChecked();');
   expect(js).toContain('Tick this box to make');
-  expect(js).toContain('function validateSocialVideoEligibility()');
+  expect(js).not.toContain('validateSocialVideoEligibility');
   expect(js).toContain('updateDeductDisplay();');
   expect(js).toContain('updateBookButtonState();');
   expect(js).toContain('function lessonCreditMinutes(durationMinutes)');

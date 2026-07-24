@@ -2125,10 +2125,6 @@ function refreshSocialVideoOption() {
     : '';
 }
 
-function validateSocialVideoEligibility() {
-  return true;
-}
-
 function firstName(value) {
   const text = String(value || '').trim();
   return text.split(/\s+/)[0] || text;
@@ -2431,8 +2427,6 @@ async function confirmBookWithCredit() {
   if (!(await saveProfileFieldsFromModal())) return;
   const locations = validateBookingLocations(false);
   if (!locations) return;
-  if (!validateSocialVideoEligibility()) return;
-
   if (slotRequestMode) return confirmRequestWithCredit(locations);
 
   const btn = document.getElementById('btnConfirmBook');
@@ -2536,8 +2530,6 @@ async function confirmPayAndBook() {
   }
   const locations = validateBookingLocations(isGuest);
   if (!locations) return;
-  if (!validateSocialVideoEligibility()) return;
-
   btn.disabled = true; label.textContent = 'Redirecting to payment…'; spinner.style.display = 'block';
   setLastLessonType(selectedLessonType);
   window.posthog && posthog.capture('booking_pay_initiated', { method: 'stripe', is_guest: isGuest, lesson_type_slug: selectedLessonType?.slug });
