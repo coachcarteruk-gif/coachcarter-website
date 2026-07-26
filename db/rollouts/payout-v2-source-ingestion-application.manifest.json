@@ -1,0 +1,136 @@
+{
+  "rolloutId": "payout-v2-source-ingestion-application",
+  "status": "prepared_not_approved_not_deployed",
+  "preparedAt": "2026-07-26",
+  "approved": false,
+  "deployed": false,
+  "schemaPrerequisite": {
+    "rolloutId": "035-payout-v2-schema-only",
+    "status": "schema_applied_inactive",
+    "migrationSha256": "7ac172db071fdbc86ff43e98f2e31eb2c03eb5295ba704a52fafec2865a92749",
+    "requiredEngineVersion": "v1"
+  },
+  "applicationArtifacts": [
+    {
+      "path": "api/_payout-v2-contracts.js",
+      "role": "versioned deterministic source fingerprint dependency",
+      "bytes": 4650,
+      "sha256": "298c5693a87745b38d85de1139f7be0ccae7f308cdf4c8fed4fc3da62d124cca"
+    },
+    {
+      "path": "api/_payout-v2-source-writer.js",
+      "role": "single immutable school-scoped funding-source writer",
+      "bytes": 16009,
+      "sha256": "4e9aa13ef7a4b72ccdf811404d56924d8c373309780246199b55951fcbaa798f"
+    },
+    {
+      "path": "api/_stripe-event-receipts.js",
+      "role": "durable webhook receipt claim, retry lease, and deduplication",
+      "bytes": 4836,
+      "sha256": "dd217ed09d836c6cd66e74798d0548d2425445ee2741f8947465c42d7542d463"
+    },
+    {
+      "path": "api/_stripe-fee.js",
+      "role": "read-only PaymentIntent, Charge, balance-transaction, and fee evidence",
+      "bytes": 5478,
+      "sha256": "7f1079cd8a732e609f161cdd8952832b1ff35e31d357757d4f76ffd4e22e9be5"
+    },
+    {
+      "path": "api/webhook.js",
+      "role": "signed success-event dispatch and additive source dual-write",
+      "bytes": 113505,
+      "sha256": "0a7a034d7200c6ad78ca6be9ab7eb61182c140dae1f3f9146e2e1a570de0af60"
+    },
+    {
+      "path": "api/offers.js",
+      "role": "paid-offer tenant-safe Checkout producer",
+      "bytes": 42196,
+      "sha256": "5ea6e7a67bece0de61687ec65a502d40920e4f3f9a43ab296155efe55f598835"
+    },
+    {
+      "path": "api/slots.js",
+      "role": "direct-slot and request-to-book tenant/payment metadata producer",
+      "bytes": 342411,
+      "sha256": "547b8cffab8ea151b8f3c1150ed0983f85a3bd74787dd4d9024dcb480aedd765"
+    }
+  ],
+  "productionRoutes": [
+    {
+      "method": "POST",
+      "route": "/api/webhook",
+      "effect": "after verified payment success and existing v1 writes, insert or replay one immutable payout_funding_sources row and complete one stripe_event_receipts row"
+    },
+    {
+      "method": "POST",
+      "route": "/api/slots?action=checkout-slot",
+      "effect": "existing direct-slot Checkout metadata producer; no payout-v2 row is written before payment success"
+    },
+    {
+      "method": "POST",
+      "route": "/api/slots?action=checkout-slot-guest",
+      "effect": "existing guest direct-slot Checkout metadata producer; no payout-v2 row is written before payment success"
+    },
+    {
+      "method": "POST",
+      "route": "/api/slots?action=checkout-test-date",
+      "effect": "existing test-date direct-slot Checkout metadata producer; no payout-v2 row is written before payment success"
+    },
+    {
+      "method": "POST",
+      "route": "/api/offers?action=accept-offer",
+      "effect": "existing paid-offer Checkout metadata producer; no payout-v2 row is written before payment success"
+    },
+    {
+      "method": "POST",
+      "route": "/api/slots?action=checkout-request",
+      "effect": "copies explicit school/payment identities to the manual-capture PaymentIntent; no payout source is written at authorization time"
+    },
+    {
+      "method": "POST",
+      "route": "/api/instructor?action=accept-request",
+      "effect": "existing capture and booking path; the signed payment_intent.succeeded delivery writes source evidence only after accepted same-school local state exists"
+    }
+  ],
+  "creditPurchaseCompatibility": {
+    "newCheckoutRoutesRemainRetired": true,
+    "webhookPaymentTypes": [
+      "credit_purchase"
+    ],
+    "effect": "in-flight successful Checkout Session or PaymentIntent deliveries can dual-write evidence; no retired purchase route is reopened"
+  },
+  "signedEvents": [
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "payment_intent.succeeded"
+  ],
+  "paymentTypes": [
+    "credit_purchase",
+    "slot_booking",
+    "lesson_offer",
+    "lesson_request_hold"
+  ],
+  "failClosedContracts": {
+    "explicitSchoolIdRequiredForV2Receipt": true,
+    "sameSchoolLearnerInstructorPaymentRelationshipsRequired": true,
+    "positiveStripeBackedRequiresPaymentIntentChargeBalanceTransactionAndFee": true,
+    "missingOrContradictoryEvidence": "manual_review_zero_value",
+    "localCapturedRequestNotReady": "retryable_webhook_failure",
+    "immutableReplayContradiction": "retryable_webhook_failure",
+    "legacyGrandfatherPayablePence": 0,
+    "livePriceFallback": false
+  },
+  "authority": {
+    "payoutEngineVersionChange": false,
+    "payoutTransferExecution": false,
+    "payoutCronConnection": false,
+    "adminPayoutV2MutationRoute": false,
+    "historicalImport": false,
+    "openingRecoveryAdjustment": false,
+    "stripeMutationAdded": false
+  },
+  "review": {
+    "packet": "docs/payout-v2-source-ingestion-rollout-review.md",
+    "verifier": "scripts/payout-v2-source-ingestion-rollout-review.js",
+    "test": "tests/payout-v2-source-ingestion-rollout-review.spec.js"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "rolloutId": "035-payout-v2-schema-only",
+  "evidenceType": "production_read_only_preflight",
+  "executedAt": "2026-07-26T16:50:20.686Z",
+  "targetFingerprint": "0a92fef666834a1af2cb924e8831119277a7a8d82ea8448baf9cc9997b1ef809",
+  "transactionReadOnly": true,
+  "migrationSha256": "7ac172db071fdbc86ff43e98f2e31eb2c03eb5295ba704a52fafec2865a92749",
+  "diagnosticsSha256": "97bca9b48f00c378821d4d47eebae765564c2802348d3e6a7f37eee3381daa96",
+  "expectedV2ObjectCount": 25,
+  "existingV2Objects": [],
+  "blockerCounts": {
+    "existingV2Objects": 0,
+    "positiveLegacyViolations": 0,
+    "crossRouteDuplicateClaims": 0,
+    "tenantScopeViolations": 0,
+    "unresolvedLocalTransfers": 0,
+    "duplicateStripeTransferIds": 0
+  },
+  "blockers": [],
+  "informationalCounts": {
+    "historicalJune19PayoutRows": 1,
+    "ambiguousCashExternalCohorts": 6,
+    "dualRouteConfigurationSchools": 0,
+    "completedOrProcessingLocalTransferRows": 6
+  },
+  "status": "READY_TO_REQUEST_SCHEMA_APPLY",
+  "approvedToApply": false,
+  "applied": false,
+  "evidenceFingerprint": "f00d91e1abd8c58fc28648563b2f0fbd18fbcd549ff2dec165af18d49f0f9494"
+}

@@ -44,6 +44,78 @@ Two fee models per instructor (set via admin portal):
 - **Commission** (default): instructor gets `commission_rate` (e.g. 85%) of each lesson price
 - **Franchise fee**: platform takes a fixed `weekly_franchise_fee_pence` per week, instructor keeps the rest. Capped at gross (never goes negative). Set `weekly_franchise_fee_pence = NULL` to revert to commission.
 
+## Inactive Payout v2 protected balance
+
+Slice 6 adds an inactive server authority for platform liquidity. It does not
+change the Friday payout path or expose a platform withdrawal endpoint.
+
+Protected free cash is Stripe available cash minus exact unused/refundable
+source exposure, earned but untransferred instructor obligations,
+submitted/reconciling obligations not proven removed from available cash,
+latest approved/unexecuted refunds, and the configured dispute/refund reserve.
+Pending Stripe cash is displayed separately and is never withdrawable cash.
+Transfer readiness subtracts only transfers ready now and is not a statement
+that a platform bank withdrawal is safe.
+
+No reserve value is hardcoded or defaulted. Missing configuration blocks.
+Global calculations aggregate explicit school-scoped obligations; a school
+view cannot combine its liabilities with the undivided global platform balance
+and call the result school free cash.
+
+Manual Dashboard withdrawals follow
+[`payout-v2-manual-withdrawal-runbook.md`](payout-v2-manual-withdrawal-runbook.md).
+Application code cannot technically stop a sufficiently privileged Dashboard
+user, so least privilege, strong 2FA, preflight, second-person review,
+fingerprint recheck, immutable evidence, reconciliation, and alerts are all
+required.
+
+## Inactive Payout v2 controlled-cutover preparation
+
+Migration 035 was applied schema-only on 26 July 2026 and remains inactive.
+Every school remains `payout_engine_version='v1'`, and no live admin, cron,
+webhook, public, or native route imports `_payout-v2-cutover.js`. The
+source-ingestion application rollout is prepared for review but is not approved
+or deployed.
+
+Cutover readiness is explicit per school and fingerprint-bound: owner-approved
+route, first-live instructor and hard cap, named superadmin/scoped operator,
+risk-reserve and explicitly global protected-calculation evidence, completed external/cash and
+Setmore classification, rollback criteria, two distinct accepted shadow Friday
+comparisons, clean diagnostics, no v1 payout in flight, no unresolved transfer,
+and no active incident. Missing decisions block; there are no reserve, cap,
+route, operator, or classification defaults.
+The readiness record is school-specific, but the cash calculation is global
+because the platform Stripe balance is undivided; it is never relabelled as
+school-owned free cash.
+
+Owner decisions recorded 26 July 2026 set the long-term route to direct
+Stripe Connect payouts for each instructor, Fraser as the first-live
+instructor and sole mutation operator, a £10 hard first-batch cap,
+block-unless-proven treatment for cash/Setmore/external sources, and two
+successful cycles before cap widening. All residual platform cash stays in
+Stripe with no discretionary withdrawal during those two cycles. The exact
+versioned reserve pence is calculated from fresh global protected-cash evidence;
+missing reserve evidence blocks and does not default to zero.
+
+The first-live cap blocks an over-cap plan; it never truncates a transfer,
+splits claims, or changes the reviewed plan fingerprint. The Slice 7 dry-run
+cannot call Stripe. A future authorised engine transition writes the immutable
+event and changes exactly one school from v1 to v2 in one transaction. Only
+after that transition does the live v1 helper refuse that school's instructor
+and school payout mutation before eligibility reads, claims, writes, or Stripe
+calls. Ordinary school admins cannot cut over.
+
+Immediate post-batch evidence must reconcile exact local/Stripe identities,
+amount, idempotency, plan fingerprint, v1 overlap, ambiguity, and protected
+cash. `transferred` continues to mean platform-to-Connect only; `bank_paid`
+requires exact connected-bank payout evidence. Rollback freezes new batches,
+retains claims/ledger evidence, and keeps webhooks/reconciliation running; it
+never blindly re-enables v1.
+
+Future operator procedures:
+[`payout-v2-cutover-runbook.md`](payout-v2-cutover-runbook.md) and
+[`payout-v2-rollback-incident-runbook.md`](payout-v2-rollback-incident-runbook.md).
+
 ## Connect-status surfacing (instructor + admin views)
 
 `?action=connect-status` returns six fields when `has_account=true`:

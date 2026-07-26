@@ -118,13 +118,14 @@ test.describe('webhook slot booking regressions', () => {
     const existingBookingIndex = body.indexOf('const existingBooking = await findExistingSlotBooking');
     const liveGuardIndex = body.indexOf('existingBooking && blocksSlot(existingBooking.status)');
     const repairIndex = body.indexOf('creditTransaction: existingCreditTx');
-    const fetchFeeIndex = body.indexOf('fetchSessionFeePence(session)');
+    const fetchEvidenceIndex = body.indexOf('fetchSessionFundingEvidence(session)');
 
     expect(existingCtIndex).toBeGreaterThanOrEqual(0);
     expect(existingBookingIndex).toBeGreaterThan(existingCtIndex);
     expect(liveGuardIndex).toBeGreaterThan(existingBookingIndex);
     expect(repairIndex).toBeGreaterThan(liveGuardIndex);
-    expect(fetchFeeIndex).toBeGreaterThan(repairIndex);
+    expect(fetchEvidenceIndex).toBeGreaterThanOrEqual(0);
+    expect(fetchEvidenceIndex).toBeLessThan(existingCtIndex);
     expect(body).toContain('bookingId: existingBooking.id');
     expect(body).toContain('return;');
   });

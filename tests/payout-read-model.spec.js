@@ -35,6 +35,9 @@ function makeSqlMock({ eligibleRows = [] } = {}) {
     const text = strings.join('?');
     calls.push({ text, values });
 
+    if (text.includes('payout_engine_version') && text.includes('FROM schools')) {
+      return Promise.resolve([{ payout_engine_version: 'v1' }]);
+    }
     if (text.includes('SELECT lb.id AS booking_id')) {
       return Promise.resolve(eligibleRows);
     }
@@ -106,6 +109,7 @@ function exactSource(overrides = {}) {
 
 const instructor = {
   id: 44,
+  school_id: 1,
   name: 'Payout Read Model Instructor',
   email: 'payout-read-model@example.test',
   commission_rate: '1.0',
@@ -560,7 +564,13 @@ test.describe('payout Step 5 read model', () => {
     const processed = await processPayoutForInstructor(processSql.sql, stripe, instructor);
     const simulated = await simulatePayoutForInstructor(simulateSql.sql, instructor);
 
-    expect(normalized(processSql.calls[0].text)).toBe(normalized(simulateSql.calls[0].text));
+    const processedEligibility = processSql.calls.find(
+      call => call.text.includes('SELECT lb.id AS booking_id')
+    );
+    const simulatedEligibility = simulateSql.calls.find(
+      call => call.text.includes('SELECT lb.id AS booking_id')
+    );
+    expect(normalized(processedEligibility.text)).toBe(normalized(simulatedEligibility.text));
     expect(processed).toMatchObject({
       instructor_id: simulated.instructor_id,
       instructor_name: simulated.instructor_name,

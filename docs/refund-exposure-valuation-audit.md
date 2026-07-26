@@ -159,6 +159,20 @@ from the legacy advisory aggregate:
 - `refund_exposure_pence`: preserved as the legacy advisory value for snapshot
   compatibility.
 
+Payout v2 Slice 6 consumes only this source-attributed exact exposure through
+the same authority. It does not promote the legacy advisory field to protected
+cash. Any source-reconciliation warning, unattributed LCB minute, unknown
+absorber, legacy-unpriced value, manual-review source, or contradictory evidence
+blocks withdrawal preflight instead of receiving a fallback rate.
+
+The protected learner component is platform cash exposure:
+Stripe-cash-backed unused value capped by Stripe-originated net cash-in plus
+platform-absorbed goodwill. Instructor-absorbed and unknown legacy buckets stay
+separately visible; the latter blocks. Approved but unexecuted refund
+obligations are a separate protected component derived from append-only latest
+obligation events, so they are not folded into unused-source exposure or
+counted twice.
+
 ## Remaining Implementation Plan
 
 1. Add integration tests against an isolated Neon branch for reconciliation

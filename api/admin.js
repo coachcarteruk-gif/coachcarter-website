@@ -88,6 +88,7 @@ const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booki
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
+const { buildPayoutV2ShadowStatement } = require('./_payout-v2-shadow');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { normaliseReferralCode, updateReferralCodeForLearner } = require('./_referral-code');
 
@@ -381,6 +382,7 @@ module.exports = async (req, res) => {
   if (action === 'confirmation-details') return handleConfirmationDetails(req, res);
   if (action === 'toggle-payout-pause')  return handleTogglePayoutPause(req, res);
   if (action === 'payout-overview')      return handlePayoutOverview(req, res);
+  if (action === 'payout-v2-shadow-statement') return handlePayoutV2ShadowStatement(req, res);
   if (action === 'platform-balance')     return handlePlatformBalance(req, res);
   if (action === 'process-payouts')      return handleProcessPayouts(req, res);
   if (action === 'instructor-payout-history') return handleInstructorPayoutHistory(req, res);
@@ -4225,6 +4227,74 @@ async function handlePayoutOverview(req, res) {
     console.error('payout-overview error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to load payout overview' });
+  }
+}
+
+// ── GET /api/admin?action=payout-v2-shadow-statement ──
+// Read-only Slice 3 comparison. It does not claim earnings, take row locks,
+// write a v2 row, inspect Stripe, or move money.
+async function handlePayoutV2ShadowStatement(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({
+      error: true,
+      code: 'METHOD_NOT_ALLOWED',
+      message: 'GET required',
+    });
+  }
+  const admin = verifyAdminJWT(req);
+  if (!admin) {
+    return res.status(401).json({
+      error: true,
+      code: 'AUTH_REQUIRED',
+      message: 'Admin auth required',
+    });
+  }
+  const schoolId = admin.school_id != null
+    ? Number(admin.school_id)
+    : Number.parseInt(req.query.school_id, 10);
+  const payoutRoute = req.query.payout_route;
+  const instructorId = payoutRoute === 'instructor_direct'
+    ? Number.parseInt(req.query.instructor_id, 10)
+    : null;
+  const periodStart = req.query.period_start;
+  const periodEnd = req.query.period_end;
+  if (
+    !['instructor_direct', 'school'].includes(payoutRoute) ||
+    !Number.isSafeInteger(schoolId) ||
+    schoolId <= 0 ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(periodStart || '') ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd || '') ||
+    (payoutRoute === 'instructor_direct' &&
+      (!Number.isSafeInteger(instructorId) || instructorId <= 0))
+  ) {
+    return res.status(400).json({
+      error: true,
+      code: 'INVALID_PAYOUT_V2_SHADOW_REQUEST',
+      message: 'An explicit school, payout_route, period_start, period_end, and direct-route instructor_id are required',
+    });
+  }
+
+  try {
+    const statement = await buildPayoutV2ShadowStatement({
+      sql: req.sql || neon(process.env.POSTGRES_URL),
+      schoolId,
+      payoutRoute,
+      instructorId,
+      periodStart,
+      periodEnd,
+    });
+    return res.json({ ok: true, ...statement });
+  } catch (err) {
+    console.error('payout-v2-shadow-statement error:', err);
+    reportError('/api/admin (payout-v2-shadow-statement)', err);
+    const status = err.code === 'PAYOUT_V2_SHADOW_SCOPE_MISMATCH' ? 404 : 500;
+    return res.status(status).json({
+      error: true,
+      code: err.code || 'PAYOUT_V2_SHADOW_FAILED',
+      message: status === 404
+        ? err.message
+        : 'Failed to build Payout v2 shadow statement',
+    });
   }
 }
 
