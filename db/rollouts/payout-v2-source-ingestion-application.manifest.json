@@ -38,20 +38,20 @@
     {
       "path": "api/webhook.js",
       "role": "signed success-event dispatch and additive source dual-write",
-      "bytes": 113505,
-      "sha256": "0a7a034d7200c6ad78ca6be9ab7eb61182c140dae1f3f9146e2e1a570de0af60"
+      "bytes": 111349,
+      "sha256": "0fea25b6a75fbae4c302ca78ca0bd037369f514badaa198685e15551494c60d2"
     },
     {
       "path": "api/offers.js",
       "role": "paid-offer tenant-safe Checkout producer",
-      "bytes": 42196,
-      "sha256": "5ea6e7a67bece0de61687ec65a502d40920e4f3f9a43ab296155efe55f598835"
+      "bytes": 41323,
+      "sha256": "a8533765dab523b8b49c22993c404d1a6511c4e4ca918626549efbad999e460f"
     },
     {
       "path": "api/slots.js",
       "role": "direct-slot and request-to-book tenant/payment metadata producer",
-      "bytes": 342411,
-      "sha256": "547b8cffab8ea151b8f3c1150ed0983f85a3bd74787dd4d9024dcb480aedd765"
+      "bytes": 334520,
+      "sha256": "bc4dee7a3ac46718f153444eb11c5abd75791a1e65f4457b462593d0c115e5c0"
     }
   ],
   "productionRoutes": [

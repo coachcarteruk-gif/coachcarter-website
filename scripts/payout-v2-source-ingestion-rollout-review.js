@@ -24,7 +24,8 @@ function read(relativePath) {
 }
 
 function fileEvidence(relativePath) {
-  const buffer = fs.readFileSync(path.join(root, relativePath));
+  const source = fs.readFileSync(path.join(root, relativePath), 'utf8');
+  const buffer = Buffer.from(source.replace(/\r\n/g, '\n'), 'utf8');
   return {
     bytes: buffer.length,
     sha256: crypto.createHash('sha256').update(buffer).digest('hex'),
