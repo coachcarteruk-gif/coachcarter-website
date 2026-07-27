@@ -61,6 +61,7 @@ const {
   SOCIAL_VIDEO_DISCOUNT_PCT,
 } = require('./_pricing-helpers');
 const { isOptInOnlyLessonTypeSlug, isLessonTypeOffered } = require('./_lesson-type-helpers');
+const { normaliseSlotStartInterval, firstSlotStartForWindow } = require('./_slot-starts');
 const {
   CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
   getReservedBlockBankCheckoutPaymentOptions,
@@ -74,7 +75,6 @@ const {
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
-const SLOT_START_INCREMENT_MINUTES = 30;
 const MAX_DAYS_AHEAD      = 84;   // platform ceiling — instructors.max_booking_days_ahead (1–84) is the learner-facing window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
@@ -999,7 +999,6 @@ async function handleAvailable(req, res) {
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId, lesson_type_slug);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
-    const slotStartIncrementMinutes = SLOT_START_INCREMENT_MINUTES;
 
     // 1. Load availability windows (optionally filtered to one instructor).
     // When minDurationOnly is set, we don't filter by offered_lesson_types —
@@ -1013,6 +1012,23 @@ async function handleAvailable(req, res) {
     // sequentially dominated this endpoint's response time.
     const offeredFilterJson = JSON.stringify([lessonType.slug]);
     const implicitOfferAllowed = !isOptInOnlyLessonTypeSlug(lessonType.slug);
+    const slotStartIntervalsPromise = instructor_id
+      ? sql`
+          SELECT i.id AS instructor_id,
+                 COALESCE((to_jsonb(i)->>'slot_start_interval_minutes')::integer, 30) AS slot_start_interval_minutes
+          FROM instructors i
+          WHERE i.id = ${instructor_id}
+            AND i.active = true
+            AND i.school_id = ${schoolId}
+        `
+      : sql`
+          SELECT i.id AS instructor_id,
+                 COALESCE((to_jsonb(i)->>'slot_start_interval_minutes')::integer, 30) AS slot_start_interval_minutes
+          FROM instructors i
+          WHERE i.active = true
+            AND i.email != 'demo@coachcarter.uk'
+            AND i.school_id = ${schoolId}
+        `;
     const windowsPromise = (async () => instructor_id
       ? (minDurationOnly
         ? await sql`
@@ -1486,9 +1502,9 @@ async function handleAvailable(req, res) {
     })();
 
     // Await everything in one round-trip wave.
-    const [windows, overrideWindows, bookings, reservationRows, pendingOffers,
+    const [windows, overrideWindows, slotStartIntervalRows, bookings, reservationRows, pendingOffers,
            pendingRequests, recurringHolds, blackouts, externalEvents, busyBlocks] =
-      await Promise.all([windowsPromise, overrideWindowsPromise, bookingsPromise,
+      await Promise.all([windowsPromise, overrideWindowsPromise, slotStartIntervalsPromise, bookingsPromise,
                          reservationsPromise, pendingOffersPromise, pendingRequestsPromise,
                          recurringHoldsPromise, blackoutsPromise, externalEventsPromise,
                          busyBlocksPromise]);
@@ -1496,6 +1512,12 @@ async function handleAvailable(req, res) {
     // Merge pending offers, pending requests and recurring holds into
     // reservations so they all block slots identically.
     const reservations = reservationRows.concat(pendingOffers, pendingRequests, recurringHolds);
+    const slotStartIntervalByInstructor = new Map(
+      slotStartIntervalRows.map(row => [
+        Number(row.instructor_id),
+        normaliseSlotStartInterval(row.slot_start_interval_minutes)
+      ])
+    );
 
     // Expand blackout ranges into individual "instructorId|date" entries for fast lookup
     const blackoutIndex = new Set();
@@ -1555,6 +1577,9 @@ async function handleAvailable(req, res) {
           buffer_minutes: w.buffer_minutes != null ? Math.max(0, parseInt(w.buffer_minutes, 10) || 0) : 30,
           min_booking_notice_hours: parseInt(w.min_booking_notice_hours) || 24,
           max_booking_days_ahead: normaliseMaxBookingDaysAhead(w.max_booking_days_ahead),
+          slot_start_interval_minutes: normaliseSlotStartInterval(
+            slotStartIntervalByInstructor.get(Number(w.instructor_id))
+          ),
           max_travel_minutes: w.max_travel_minutes != null ? parseInt(w.max_travel_minutes) : DEFAULT_MAX_TRAVEL_MINUTES,
           request_to_book: !!w.request_to_book,
           windows:        []
@@ -1618,7 +1643,8 @@ async function handleAvailable(req, res) {
 
         for (const window of matchingWindows) {
           if (!slotSupportsTransmission(window.transmission_type, requestedTransmissionType)) continue;
-          let slotStart = window.start;
+          const slotStartIncrementMinutes = instructor.slot_start_interval_minutes;
+          let slotStart = firstSlotStartForWindow(window.start, slotStartIncrementMinutes);
 
           while (slotStart + slotMinutes <= window.end) {
             const slotEnd = slotStart + slotMinutes;

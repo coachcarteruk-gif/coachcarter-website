@@ -1320,6 +1320,7 @@ async function handleProfile(req, res) {
       SELECT id, name, email, phone, bio, photo_url, active, slug, created_at,
              COALESCE(buffer_minutes, 30) AS buffer_minutes,
              COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead,
+             COALESCE(slot_start_interval_minutes, 30) AS slot_start_interval_minutes,
              COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
              adi_grade, pass_rate, years_experience,
              COALESCE(specialisms, '[]'::jsonb) AS specialisms,
@@ -1366,6 +1367,7 @@ async function handleUpdateProfile(req, res) {
 
   const {
     name, phone, bio, photo_url, buffer_minutes, max_booking_days_ahead, calendar_start_hour, reminder_hours, daily_schedule_email,
+    slot_start_interval_minutes,
     adi_grade, pass_rate, years_experience, specialisms,
     vehicle_make, vehicle_model, transmission_type, dual_controls,
     service_areas, languages, ical_feed_url, offered_lesson_types,
@@ -1400,6 +1402,13 @@ async function handleUpdateProfile(req, res) {
     const maxDays = parseInt(max_booking_days_ahead, 10);
     if (isNaN(maxDays) || maxDays < 1 || maxDays > 84)
       return res.status(400).json({ error: 'Advance booking window must be between 1 and 84 days' });
+  }
+
+  if (slot_start_interval_minutes !== undefined && slot_start_interval_minutes !== null) {
+    const interval = Number(slot_start_interval_minutes);
+    if (![30, 60].includes(interval)) {
+      return res.status(400).json({ error: 'Slot start interval must be 30 or 60 minutes' });
+    }
   }
 
   // Validate calendar_start_hour if provided
@@ -1501,6 +1510,8 @@ async function handleUpdateProfile(req, res) {
       ? parseInt(buffer_minutes) : null;
     const maxBookingDaysVal = (max_booking_days_ahead !== undefined && max_booking_days_ahead !== null)
       ? parseInt(max_booking_days_ahead, 10) : null;
+    const slotStartIntervalVal = (slot_start_interval_minutes !== undefined && slot_start_interval_minutes !== null)
+      ? Number(slot_start_interval_minutes) : null;
     const cshVal = (calendar_start_hour !== undefined && calendar_start_hour !== null)
       ? parseInt(calendar_start_hour) : null;
     const rhVal = (reminder_hours !== undefined && reminder_hours !== null)
@@ -1545,6 +1556,7 @@ async function handleUpdateProfile(req, res) {
         photo_url            = COALESCE(${photo_url ?? null}, photo_url),
         buffer_minutes       = COALESCE(${bufVal}, buffer_minutes),
         max_booking_days_ahead = COALESCE(${maxBookingDaysVal}, max_booking_days_ahead),
+        slot_start_interval_minutes = COALESCE(${slotStartIntervalVal}, slot_start_interval_minutes),
         calendar_start_hour  = COALESCE(${cshVal}, calendar_start_hour),
         reminder_hours       = COALESCE(${rhVal}, reminder_hours),
         daily_schedule_email = COALESCE(${dseVal}, daily_schedule_email),
@@ -1571,6 +1583,7 @@ async function handleUpdateProfile(req, res) {
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
                 COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead,
+                COALESCE(slot_start_interval_minutes, 30) AS slot_start_interval_minutes,
                 COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
                 COALESCE(reminder_hours, 24) AS reminder_hours,
                 COALESCE(daily_schedule_email, true) AS daily_schedule_email,

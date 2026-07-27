@@ -7,12 +7,13 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-test.describe('half-hour slot starts', () => {
-  test('slot availability advances candidate starts every 30 minutes', () => {
+test.describe('slot start intervals', () => {
+  test('slot availability advances candidates using each instructor preference', () => {
     const slots = read('api/slots.js');
 
-    expect(slots).toContain('const SLOT_START_INCREMENT_MINUTES = 30;');
-    expect(slots).toContain('const slotStartIncrementMinutes = SLOT_START_INCREMENT_MINUTES;');
+    expect(slots).toContain("const { normaliseSlotStartInterval, firstSlotStartForWindow } = require('./_slot-starts');");
+    expect(slots).toContain('const slotStartIncrementMinutes = instructor.slot_start_interval_minutes;');
+    expect(slots).toContain('let slotStart = firstSlotStartForWindow(window.start, slotStartIncrementMinutes);');
     expect(slots).not.toContain('slotStart += slotMinutes;');
     expect(slots.match(/slotStart \+= slotStartIncrementMinutes/g)?.length || 0).toBeGreaterThanOrEqual(6);
   });

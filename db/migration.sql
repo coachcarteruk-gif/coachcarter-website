@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS instructors (
   photo_url      TEXT,
   active         BOOLEAN NOT NULL DEFAULT TRUE,
   buffer_minutes INTEGER DEFAULT 30,
+  slot_start_interval_minutes INTEGER NOT NULL DEFAULT 30,
   calendar_token TEXT UNIQUE,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -398,6 +399,13 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS max_booking_days_ahead INTEGER 
 ALTER TABLE instructors DROP CONSTRAINT IF EXISTS chk_instructors_max_booking_days_ahead;
 ALTER TABLE instructors ADD CONSTRAINT chk_instructors_max_booking_days_ahead
   CHECK (max_booking_days_ahead BETWEEN 1 AND 84);
+ALTER TABLE instructors
+  ADD COLUMN IF NOT EXISTS slot_start_interval_minutes INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE instructors
+  DROP CONSTRAINT IF EXISTS chk_instructors_slot_start_interval_minutes;
+ALTER TABLE instructors
+  ADD CONSTRAINT chk_instructors_slot_start_interval_minutes
+  CHECK (slot_start_interval_minutes IN (30, 60));
 
 -- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 -- FEATURE 5: INSTRUCTOR-INITIATED BOOKING
