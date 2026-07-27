@@ -181,7 +181,9 @@ test.describe('driving ability check booking page', () => {
     const page = read('public/check-my-driving.html');
     const script = read('public/check-my-driving.js');
 
-    expect(config).toContain('"source": "/check-my-driving"');
+    expect(config).toContain(
+      '{ "source": "/check-my-driving", "destination": "/check-my-driving.html" }'
+    );
     expect(page).toContain('https://coachcarter.uk/check-my-driving');
     expect(page).toContain('/cookie-consent.js');
     expect(page).toContain('/posthog-loader.js');
