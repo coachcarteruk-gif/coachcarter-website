@@ -130,6 +130,141 @@ a:hover { color: var(--accent-dk); }
 
 .fact span { color: var(--muted); font-size: 13px; }
 
+.simon-profile {
+  display: grid;
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr);
+  margin-bottom: 30px;
+  overflow: hidden;
+  border: 1px solid #2f2f2f;
+  border-radius: 20px;
+  background: var(--primary);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .12);
+  color: #fff;
+}
+
+.simon-photo-wrap {
+  min-height: 500px;
+  overflow: hidden;
+  background: #2b2b2b;
+}
+
+.simon-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 43%;
+}
+
+.simon-profile-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: 28px 26px;
+}
+
+.simon-kicker {
+  margin-bottom: 8px;
+  color: #ff9b45;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.simon-profile h2 {
+  margin-bottom: 10px;
+  font-family: var(--font-head);
+  font-size: clamp(27px, 4vw, 34px);
+  font-weight: 900;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+}
+
+.simon-intro {
+  color: #cfcfcf;
+  font-size: 14.5px;
+}
+
+.simon-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 22px 0;
+  padding: 18px 0;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  border-bottom: 1px solid rgba(255, 255, 255, .14);
+}
+
+.simon-stat {
+  min-width: 0;
+  padding-right: 14px;
+}
+
+.simon-stat + .simon-stat {
+  padding-right: 0;
+  padding-left: 18px;
+  border-left: 1px solid rgba(255, 255, 255, .14);
+}
+
+.simon-stat strong {
+  display: block;
+  color: #fff;
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+
+.simon-stat span {
+  display: block;
+  margin-top: 6px;
+  color: #bdbdbd;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.simon-credentials-heading {
+  margin-bottom: 10px;
+  color: #e7e7e7;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.simon-credentials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  list-style: none;
+}
+
+.simon-credentials li {
+  position: relative;
+  min-width: 0;
+  padding: 8px 9px 8px 24px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .06);
+  color: #f2f2f2;
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.simon-credentials li::before {
+  position: absolute;
+  top: 13px;
+  left: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: '';
+}
+
 .card {
   margin-bottom: 20px;
   padding: 26px 24px;
@@ -378,6 +513,14 @@ a:hover { color: var(--accent-dk); }
   .assessment-facts { grid-template-columns: 1fr; gap: 6px; }
   .fact { min-height: 0; padding: 11px 13px; text-align: left; }
   .fact strong { display: inline; margin-right: 6px; font-size: 15px; }
+  .simon-profile { grid-template-columns: 1fr; margin-bottom: 26px; text-align: left; }
+  .simon-photo-wrap { min-height: 0; aspect-ratio: 4 / 3; }
+  .simon-photo { object-position: center 42%; }
+  .simon-profile-content { padding: 24px 20px; }
+  .simon-profile h2 { font-size: 29px; }
+  .simon-intro { font-size: 14px; }
+  .simon-stat strong { font-size: 26px; }
+  .simon-credentials li { font-size: 11px; }
   .card { margin-bottom: 16px; padding: 20px 16px; }
   .card h2 { gap: 9px; font-size: 17px; }
   .step-num { width: 24px; height: 24px; font-size: 13px; line-height: 24px; }
@@ -416,6 +559,46 @@ a:hover { color: var(--accent-dk); }
         <div class="fact"><strong>Clear feedback</strong><span>Practical next steps, without pressure</span></div>
       </div>
     </div>
+
+    <section class="simon-profile" aria-labelledby="simon-profile-heading">
+      <div class="simon-photo-wrap">
+        <img
+          class="simon-photo"
+          src="/images/simon-edwards.webp"
+          width="720"
+          height="1186"
+          alt="Simon Edwards, advanced driving instructor"
+          decoding="async"
+        >
+      </div>
+      <div class="simon-profile-content">
+        <p class="simon-kicker">Experience behind the assessment</p>
+        <h2 id="simon-profile-heading">Meet Simon Edwards</h2>
+        <p class="simon-intro">Simon combines advanced driving and motorcycle expertise with a decade as an ADI and a proven record of developing learners and instructors.</p>
+
+        <div class="simon-stats" aria-label="Simon Edwards' training results">
+          <div class="simon-stat">
+            <strong>1,007</strong>
+            <span>Learners passed</span>
+          </div>
+          <div class="simon-stat">
+            <strong>143</strong>
+            <span>Instructors qualified</span>
+          </div>
+        </div>
+
+        <h3 class="simon-credentials-heading">Qualifications and experience</h3>
+        <ul class="simon-credentials">
+          <li>Advanced Police Driver</li>
+          <li>Advanced Motorcycle Instructor</li>
+          <li>RoSPA Gold Holder</li>
+          <li>IAM Fleet Trainer</li>
+          <li>10 Years as an ADI</li>
+          <li>DVSA Fleet Trainer</li>
+          <li>ADI Instructor Trainer</li>
+        </ul>
+      </div>
+    </section>
 
     <section class="card" aria-labelledby="step-1-heading">
       <h2 id="step-1-heading"><span class="step-num">1</span>Pick a time</h2>
