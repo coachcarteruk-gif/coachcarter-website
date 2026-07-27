@@ -65,15 +65,13 @@ test.describe('learner feedback', () => {
     expect(update).toContain("targetType: 'learner_feedback'");
   });
 
-  test('sidebar and admin portal expose feedback controls', () => {
+  test('learner navigation keeps feedback hidden while admin exposes the queue', () => {
     const sidebar = read('public/sidebar.js');
     const html = read('public/admin/portal.html');
     const js = read('public/admin/portal.js');
 
-    expect(sidebar).toContain("label: 'Feedback'");
-    expect(sidebar).toContain('id="cc-feedback-overlay"');
-    expect(sidebar).toContain('/api/learner?action=submit-feedback');
-    expect(sidebar).toContain('window.ccAuth.fetchAuthed');
+    expect(sidebar).not.toContain("label: 'Feedback'");
+    expect(sidebar).not.toContain("action: 'feedback'");
     expect(html).toContain('data-section="feedback"');
     expect(html).toContain('id="section-feedback"');
     expect(html).toContain('id="feedback-body"');

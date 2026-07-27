@@ -214,7 +214,7 @@ test.describe('learner test date reminders', () => {
 
     expect(js).toContain('id="cc-sb-test-weeks"');
     expect(js).toContain('formatTestWeeksCopy');
-    expect(js).toContain("window.ccAuth.fetchAuthed('/api/learner?action=progress')");
+    expect(js).toContain("window.ccAuth.fetchAuthed('/api/learner?action=progress', { suppressSessionExpired: true })");
     expect(js).toContain('updateLearnerTestWeeks(data.test_date)');
     expect(js).toContain('>Weeks</span>');
   });

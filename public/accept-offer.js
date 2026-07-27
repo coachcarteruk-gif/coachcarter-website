@@ -155,7 +155,7 @@
           totalEl.textContent = n + (n === 1 ? ' free lesson' : ' free lessons');
         } else {
           totalEl.textContent = 'Total: £' + ((o.price_pence * n) / 100).toFixed(2)
-            + (n > 1 ? ' (' + n + ' �- £' + (o.price_pence / 100).toFixed(2) + ')' : '');
+            + (n > 1 ? ' (' + n + ' × £' + (o.price_pence / 100).toFixed(2) + ')' : '');
         }
       };
       repeatSel.addEventListener('change', updateRepeatTotal);

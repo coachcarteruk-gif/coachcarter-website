@@ -57,8 +57,8 @@ test.describe('recurring weekly block foundation contract', () => {
 
     expect(source).toContain('FROM recurring_slot_block_items');
     expect(source).toContain("AND status = 'held'");
-    expect(source).toContain('reservations = reservations.concat(recurringHolds)');
-    expect(source).toContain('for (const h of recurringHolds)');
+    expect(source).toContain('const reservations = reservationRows.concat(pendingOffers, pendingRequests, recurringHolds);');
+    expect(source).toContain('for (const b of [...bookings, ...reservations])');
     expect(source).not.toContain("status, 'pending_payment'");
   });
 });
