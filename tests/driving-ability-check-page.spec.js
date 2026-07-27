@@ -65,6 +65,17 @@ test.describe('driving ability check booking page', () => {
     await expect(page.getByText('90 minutes', { exact: true })).toBeVisible();
     await expect(page.getByText('£82.50', { exact: true })).toBeVisible();
 
+    await expect(page.getByRole('heading', { name: 'Meet Simon Edwards' })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Simon Edwards, advanced driving instructor' })).toBeVisible();
+    await expect(page.getByText('1,007', { exact: true })).toBeVisible();
+    await expect(page.getByText('Learners passed', { exact: true })).toBeVisible();
+    await expect(page.getByText('143', { exact: true })).toBeVisible();
+    await expect(page.getByText('Instructors qualified', { exact: true })).toBeVisible();
+    await expect(page.getByText('RoSPA Gold Holder', { exact: true })).toBeVisible();
+    await expect(page.getByText('DVSA Fleet Trainer', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 700 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+
     const submit = page.getByRole('button', { name: 'Choose a time above' });
     await expect(submit).toBeEnabled();
     await submit.click();
@@ -189,6 +200,21 @@ test.describe('driving ability check booking page', () => {
     expect(page).toContain('/posthog-loader.js');
     expect(page).toContain('/sidebar.js');
     expect(page).toContain('/shared/branding.js');
+    expect(page).toContain('/images/simon-edwards.webp');
+    for (const credential of [
+      'Advanced Police Driver',
+      'Advanced Motorcycle Instructor',
+      'RoSPA Gold Holder',
+      'IAM Fleet Trainer',
+      '10 Years as an ADI',
+      'DVSA Fleet Trainer',
+      'ADI Instructor Trainer',
+    ]) {
+      expect(page).toContain(credential);
+    }
+    const simonPortrait = path.join(root, 'public/images/simon-edwards.webp');
+    expect(fs.existsSync(simonPortrait)).toBe(true);
+    expect(fs.statSync(simonPortrait).size).toBeLessThan(100_000);
     expect(script).toContain("var LESSON_TYPE_SLUG = 'check';");
     expect(script).toContain('lesson_type_slug=');
     expect(script).not.toContain('lesson_type_id=528');
