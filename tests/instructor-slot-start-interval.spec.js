@@ -39,10 +39,17 @@ test.describe('instructor slot start interval', () => {
   test('instructor profile API returns, validates, and persists the preference', () => {
     const api = read('api/instructor.js');
 
-    expect(api).toContain('COALESCE(slot_start_interval_minutes, 30) AS slot_start_interval_minutes');
-    expect(api).toContain('Slot start interval must be 30 or 60 minutes');
     expect(api).toContain(
-      'slot_start_interval_minutes = COALESCE(${slotStartIntervalVal}, slot_start_interval_minutes)'
+      "COALESCE((to_jsonb(instructors)->>'slot_start_interval_minutes')::integer, 30) AS slot_start_interval_minutes"
+    );
+    expect(api).toContain(
+      "(to_jsonb(instructors) ? 'slot_start_interval_minutes') AS slot_start_interval_available"
+    );
+    expect(api).toContain('Slot start interval must be 30 or 60 minutes');
+    expect(api).toContain("AND column_name = 'slot_start_interval_minutes'");
+    expect(api).toContain('if (slotStartIntervalAvailable && slotStartIntervalVal !== null) {');
+    expect(api).toContain(
+      'SET slot_start_interval_minutes = ${slotStartIntervalVal}'
     );
   });
 
@@ -54,9 +61,12 @@ test.describe('instructor slot start interval', () => {
     expect(profile).toContain('Every hour, on the hour');
     expect(profile).toContain('Hourly slots are aligned to :00.');
     expect(profile).toContain(
-      "const slot_start_interval_minutes = parseInt(document.getElementById('inputSlotStartInterval').value);"
+      "const slotStartIntervalInput = document.getElementById('inputSlotStartInterval');"
     );
-    expect(profile).toContain('slot_start_interval_minutes,');
+    expect(profile).toContain("p.slot_start_interval_available === false ? 'disabled' : ''");
+    expect(profile).toContain(
+      '...(slot_start_interval_minutes !== undefined ? { slot_start_interval_minutes } : {}),'
+    );
   });
 
   test('slot generation loads the tenant-scoped preference and applies it per instructor', () => {

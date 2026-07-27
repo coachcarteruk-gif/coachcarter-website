@@ -192,11 +192,13 @@
 
         <div class="form-group">
           <label for="inputSlotStartInterval">Slot start times shown to learners</label>
-          <select id="inputSlotStartInterval" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.9rem;padding:10px 13px;outline:none;">
+          <select id="inputSlotStartInterval" ${p.slot_start_interval_available === false ? 'disabled' : ''} style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--primary);font-family:var(--font-body);font-size:0.9rem;padding:10px 13px;outline:none;">
             <option value="30" ${p.slot_start_interval_minutes !== 60 ? 'selected' : ''}>Every 30 minutes</option>
             <option value="60" ${p.slot_start_interval_minutes === 60 ? 'selected' : ''}>Every hour, on the hour</option>
           </select>
-          <p class="field-hint">Controls the start times learners see. Hourly slots are aligned to :00. This does not change lesson length or your buffer.</p>
+          <p class="field-hint">${p.slot_start_interval_available === false
+            ? 'This setting will be available after scheduled database maintenance. Current slots remain every 30 minutes.'
+            : 'Controls the start times learners see. Hourly slots are aligned to :00. This does not change lesson length or your buffer.'}</p>
         </div>
 
         <div class="form-group">
@@ -570,7 +572,10 @@
     const max_booking_days_ahead = parseInt(document.getElementById('inputMaxBookingDays').value);
     const reminder_hours = parseInt(document.getElementById('inputReminderHours').value);
     const daily_schedule_email = document.getElementById('inputDailySchedule').checked;
-    const slot_start_interval_minutes = parseInt(document.getElementById('inputSlotStartInterval').value);
+    const slotStartIntervalInput = document.getElementById('inputSlotStartInterval');
+    const slot_start_interval_minutes = slotStartIntervalInput.disabled
+      ? undefined
+      : parseInt(slotStartIntervalInput.value);
     const broadcast_offers_enabled = document.getElementById('inputBroadcastEnabled').checked;
     const bulk_tiers_enabled = document.getElementById('inputBulkTiersEnabled').checked;
     const social_video_opt_in = document.getElementById('inputSocialVideoOptIn').checked;
@@ -607,7 +612,7 @@
         body:    JSON.stringify({
           name, phone: phone || null, bio: bio || null, photo_url: photo_url || null,
           buffer_minutes, max_booking_days_ahead, reminder_hours, daily_schedule_email,
-          slot_start_interval_minutes,
+          ...(slot_start_interval_minutes !== undefined ? { slot_start_interval_minutes } : {}),
           broadcast_offers_enabled, bulk_tiers_enabled, social_video_opt_in, request_to_book,
           adi_grade, pass_rate, years_experience, specialisms,
           vehicle_make, vehicle_model, transmission_type, dual_controls,

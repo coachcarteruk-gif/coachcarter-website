@@ -1320,7 +1320,8 @@ async function handleProfile(req, res) {
       SELECT id, name, email, phone, bio, photo_url, active, slug, created_at,
              COALESCE(buffer_minutes, 30) AS buffer_minutes,
              COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead,
-             COALESCE(slot_start_interval_minutes, 30) AS slot_start_interval_minutes,
+             COALESCE((to_jsonb(instructors)->>'slot_start_interval_minutes')::integer, 30) AS slot_start_interval_minutes,
+             (to_jsonb(instructors) ? 'slot_start_interval_minutes') AS slot_start_interval_available,
              COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
              adi_grade, pass_rate, years_experience,
              COALESCE(specialisms, '[]'::jsonb) AS specialisms,
@@ -1493,6 +1494,16 @@ async function handleUpdateProfile(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const [slotStartSchema] = await sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'instructors'
+          AND column_name = 'slot_start_interval_minutes'
+      ) AS slot_start_interval_available
+    `;
+    const slotStartIntervalAvailable = !!slotStartSchema?.slot_start_interval_available;
 
     if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
       const lessonTypeRows = await sql`
@@ -1548,6 +1559,17 @@ async function handleUpdateProfile(req, res) {
     const offeredVal = (offered_lesson_types !== undefined && offered_lesson_types !== null)
       ? JSON.stringify(offered_lesson_types) : null;
 
+    // Keep profile edits working while a newly deployed optional preference is
+    // waiting for its schema migration. The UI omits this field until available.
+    if (slotStartIntervalAvailable && slotStartIntervalVal !== null) {
+      await sql`
+        UPDATE instructors
+        SET slot_start_interval_minutes = ${slotStartIntervalVal}
+        WHERE id = ${instructor.id}
+          AND school_id = ${schoolId}
+      `;
+    }
+
     const [updated] = await sql`
       UPDATE instructors SET
         name                 = COALESCE(NULLIF(${name      || ''}, ''), name),
@@ -1556,7 +1578,6 @@ async function handleUpdateProfile(req, res) {
         photo_url            = COALESCE(${photo_url ?? null}, photo_url),
         buffer_minutes       = COALESCE(${bufVal}, buffer_minutes),
         max_booking_days_ahead = COALESCE(${maxBookingDaysVal}, max_booking_days_ahead),
-        slot_start_interval_minutes = COALESCE(${slotStartIntervalVal}, slot_start_interval_minutes),
         calendar_start_hour  = COALESCE(${cshVal}, calendar_start_hour),
         reminder_hours       = COALESCE(${rhVal}, reminder_hours),
         daily_schedule_email = COALESCE(${dseVal}, daily_schedule_email),
@@ -1583,7 +1604,8 @@ async function handleUpdateProfile(req, res) {
       RETURNING id, name, email, phone, bio, photo_url,
                 COALESCE(buffer_minutes, 30) AS buffer_minutes,
                 COALESCE(max_booking_days_ahead, 84) AS max_booking_days_ahead,
-                COALESCE(slot_start_interval_minutes, 30) AS slot_start_interval_minutes,
+                COALESCE((to_jsonb(instructors)->>'slot_start_interval_minutes')::integer, 30) AS slot_start_interval_minutes,
+                (to_jsonb(instructors) ? 'slot_start_interval_minutes') AS slot_start_interval_available,
                 COALESCE(calendar_start_hour, 7) AS calendar_start_hour,
                 COALESCE(reminder_hours, 24) AS reminder_hours,
                 COALESCE(daily_schedule_email, true) AS daily_schedule_email,
