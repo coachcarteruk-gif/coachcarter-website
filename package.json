@@ -11,7 +11,17 @@
     "test:verify-seed": "node scripts/verify-codex-test-data.js",
     "test:smoke:codex": "playwright test tests/codex-test-accounts.smoke.spec.js",
     "check:syntax": "node scripts/check-syntax.js",
-    "check:c1": "node scripts/check-c1-controls.js"
+    "check:c1": "node scripts/check-c1-controls.js",
+    "audit:payout-v2": "node scripts/payout-v2-audit.js",
+    "preview:payout-v2-sources": "node scripts/payout-v2-source-preview.js",
+    "shadow:payout-v2": "node scripts/payout-v2-shadow-statement.js",
+    "import:payout-v2-sources": "node scripts/payout-v2-historical-source-import.js",
+    "diagnose:payout-v2-protected-balance": "node scripts/payout-v2-protected-balance-diagnostic.js",
+    "review:payout-v2-schema": "node scripts/payout-v2-schema-rollout-review.js",
+    "review:payout-v2-source-ingestion": "node scripts/payout-v2-source-ingestion-rollout-review.js",
+    "preflight:payout-v2-schema": "node scripts/payout-v2-schema-preflight.js --production-read-only",
+    "apply:payout-v2-schema": "node scripts/payout-v2-schema-apply.js",
+    "postflight:payout-v2-schema": "node scripts/payout-v2-schema-postflight.js --production-read-only"
   },
   "engines": {
     "node": "22.x"

@@ -797,6 +797,135 @@ Two alarm triggers:
 
 **`payout_line_items`** — id, payout_id, booking_id (UNIQUE — prevents double-payment), price_pence, instructor_amount_pence, commission_rate
 
+**Prepared Payout v2 source ingestion (not approved or deployed)** —
+`_payout-v2-source-writer.js`, `_stripe-event-receipts.js`, `_stripe-fee.js`,
+and the signed `api/webhook.js` success paths are prepared to dual-write
+immutable source evidence for in-flight credit purchases, direct slot
+bookings, paid offers, and captured request-to-book payments. Positive
+`stripe_backed` value requires exact succeeded PaymentIntent, paid/captured
+Charge, linked balance transaction, matching GBP amount, and fee evidence.
+Missing or contradictory evidence is zero-value `manual_review`; legacy
+grandfather credit stays zero-payable. The reviewed packet and hashes are in
+`docs/payout-v2-source-ingestion-rollout-review.md` and
+`db/rollouts/payout-v2-source-ingestion-application.manifest.json`. This
+application rollout is not deployed, v1 remains authoritative, and no v2
+planner, transfer, cutover, cron, or admin mutation route is exposed.
+
+**Inactive Payout v2 Slice 3/4 modules** — `_payout-v2-earning-planner.js`
+is the pure versioned source-backed authority; `_payout-v2-shadow.js` loads
+explicit school/route/period snapshots and keeps the current v1 fallback query
+comparison-only; `_payout-v2-materializer.js` revalidates the reviewed
+fingerprints inside one transaction before writing only `booking_earnings`,
+`booking_earning_sources`, planned `payout_batches`,
+`payout_batch_earnings`, and recovery-application adjustments. Materialized
+batches retain the exact immutable reviewed `plan_json`.
+
+`_payout-v2-transfer-executor.js` is the inactive Slice 4 executor/reconciler.
+It accepts only an explicit school-scoped materialized batch and expected plan
+fingerprint; revalidates the batch, claims, calculation snapshots, source
+allocations, recovery total, route, destination, source caps, and v1 overlap;
+then persists deterministic source-linked transfer intents before using an
+injected Stripe client. Stripe-backed transfers group by immutable charge and
+use `source_transaction`; explicitly funded non-Stripe sources require an
+immutable documented source group. The logical fingerprint and Stripe
+idempotency key are stable for the school, batch, destination, source group,
+amount, currency, and plan. Append-only `payout_transfer_attempts` retain
+non-PII submission/reconciliation evidence.
+An optional injected alert callback receives structured, non-PII confirmed
+failure, ambiguity, identity-mismatch, and local-write-failure events; no live
+alert transport is wired while Slice 4 remains inactive.
+
+Batch state advances through `planned` → `claimed` → `submitting`, then
+`transferred`, `failed_confirmed`, or `reconciling`. Timeouts and ambiguous
+responses never release claims; same-day reconciliation matches immutable
+metadata and identities, attaches a lost successful transfer, and distinguishes
+authoritative same-day not-found/safe-retry from operator review. A Connect
+transfer is not a connected-bank payout; `bank_paid` and
+`bank_payout_failed` remain later webhook/read-model states. A zero final amount
+creates no transfer and makes no Stripe call.
+
+`_payout-v2-webhook.js` is the inactive Slice 5 signed-event ingestor. It
+requires raw request bytes, a Stripe signature and endpoint secret, an injected
+signature constructor, and injected read-only Stripe correlation methods;
+signature verification happens before any database or Stripe I/O and there is
+no real-client fallback. The closed event set covers connected-account
+transfer, payout, refund, and dispute visibility. Globally unique connected
+account scope derives the school before all business joins become explicitly
+school-scoped. Durable event receipts make completed replay a no-op and failed
+partial processing retryable.
+
+Append-only minimised evidence records exact transfer identity and
+reversal/refund/dispute facts without changing historical accounting rows.
+Connected bank payouts link to local transfer intents only through exact payout
+balance-transaction source identities; amount/date approximation is forbidden.
+Out-of-order or contradictory terminal states are retained for operator review.
+A failed connected-bank payout does not undo or relabel the earlier successful
+platform-to-Connect transfer. `_payout-v2-bank-visibility.js` and the matching
+read-only SQL diagnostic expose distinct Connect-transferred, bank-paid,
+bank-payout-failed, and operator-review copy and blockers.
+
+`_payout-v2-protected-balance.js`, `_payout-v2-authority.js`, and
+`_payout-v2-platform-balance-contract.js` are the inactive Slice 6 liquidity
+and operator-control authority. Protected free cash subtracts exact
+source-attributed unused learner exposure, disjoint earned/untransferred and
+in-flight instructor obligations, latest approved/unexecuted refunds, and the
+configured reserve from Stripe available cash. Pending cash is display-only;
+transfer readiness is separate. Missing reserve configuration, exposure
+warnings, manual-review/legacy-positive evidence, reconciling transfers, stale
+Stripe evidence, and scope contradictions block withdrawal use. Global scope
+aggregates explicit school-scoped components; a school view cannot label the
+undivided global Stripe balance as school free cash.
+
+The inactive widget composer and snapshot writer consume the same calculation
+object and exact fingerprint. Migration 035 is now installed schema-only, but
+they remain unimported by the live admin widget and daily snapshot cron. The withdrawal
+preflight has no route and no Stripe mutation. Mutation authority is limited to
+verified cron, superadmin, or an explicitly configured scoped operator and
+requires reason, confirmation, deterministic idempotency, and an unchanged
+fingerprint. Append-only Slice 6 tables retain reserve versions, refund
+obligations, protected snapshots, operator evidence, and deduplicated alerts.
+The read-only diagnostic is `npm run diagnose:payout-v2-protected-balance`; the
+manual procedure is in `docs/payout-v2-manual-withdrawal-runbook.md`.
+
+`_payout-v2-cutover.js` and `_payout-engine-version.js` are the inactive Slice 7
+controlled-cutover preparation. The first defines immutable owner-approved
+config, two-distinct-shadow-cycle readiness, protected-fingerprint, capped
+first-batch dry-run, immediate reconciliation, rollback, and future atomic
+engine-transition contracts. The hard cap blocks the entire reviewed plan when
+exceeded; it never truncates a transfer or partially releases claims.
+Ordinary school admins cannot cut over or perform global payout operations.
+Per-school readiness points to an explicitly global protected-balance/reserve
+snapshot because platform Stripe cash is undivided; it does not call that cash
+school-owned free cash.
+
+The future engine transition locks one explicit school, rechecks current engine
+`v1`, its immutable ready snapshot/config/two shadow records/named operator,
+writes the transition event, and changes that school to `v2` in one
+transaction. No route calls it. The small live v1 guard has no effect while a
+school remains `v1`; after a future successful cutover it makes both
+instructor-direct and school-route v1 mutation hard-refuse for that school
+before eligibility reads, claims, writes, or Stripe calls.
+
+The applied but inactive migration 035 also defines append-only
+`payout_v2_cutover_config_versions`, `payout_v2_shadow_cycle_evidence`,
+`payout_v2_cutover_readiness_snapshots`, and `payout_v2_cutover_events`.
+Readiness remains blocked until route, external/cash/Setmore classification,
+risk reserve, first-live instructor/cap, named operator, rollback criteria, two
+real shadow Fridays, diagnostics, and owner sign-off are explicit. A Connect
+transfer is still not connected-bank settlement. See
+`docs/payout-v2-cutover-runbook.md` and
+`docs/payout-v2-rollback-incident-runbook.md`.
+
+There is no production materialisation/execution/webhook API, admin action, cron
+connection, feature activation, real Stripe fallback, or native/client
+authority. By owner decision,
+vehicle deposits are handled entirely off-system: Payout v2 always records and
+deducts zero, while the comparison-only v1 preview reports the current
+£195/£250 heuristic as a deliberate difference. Every current school remains
+v1 and its current payout behaviour is unchanged; the future v2-school refusal
+is dormant. See
+[`docs/payout-v2-implementation-plan.md`](docs/payout-v2-implementation-plan.md).
+
 **`platform_balance_snapshots`** — id, captured_at, status ('green'/'red'), available_pence, pending_pence, total_payout_pence, balance_after_payout_pence, refund_exposure_pence, payout_preview_json (per-instructor breakdown of the dry-run), trailing_30d_stripe_inflow_pence, trailing_30d_payout_outflow_pence. Written daily by `cron-balance-snapshot.js`. Index on `captured_at DESC` for the Trigger A 24h lookup. Read by `_payout-helpers.js` (Trigger A) and the cron itself (Trigger B). The widget compute lives in `api/_platform-balance.js` and is the single source of truth for both the dashboard and the snapshot. The API exposes exact source-attributed unused-credit exposure separately as `exact_refund_exposure_pence` / `exact_refund_exposure`; the historical `refund_exposure_pence` snapshot column remains the legacy aggregate advisory value, also returned as `legacy_advisory_refund_exposure_pence`. Exact valuation policy and open questions are documented in [`docs/refund-exposure-valuation-audit.md`](docs/refund-exposure-valuation-audit.md).
 
 ---
@@ -826,6 +955,7 @@ Admin support access can open an instructor portal session without password know
 | `payout-overview` | GET | JWT | All instructors' connect status, upcoming estimates, recent payouts |
 | `process-payouts` | POST | JWT | Manual trigger for payout processing (same logic as cron) |
 | `instructor-payout-history` | GET | JWT | Payout history with line items for a specific instructor |
+| `payout-v2-shadow-statement` | GET | JWT | Read-only inactive v2 statement for one explicit school-scoped route/period (`payout_route`, `period_start`, `period_end`, plus `instructor_id` for direct). Returns versioned/fingerprinted source-backed booking lines, blockers, totals, and a comparison-only v1 preview. It takes no locks, writes no claims/financial rows, calls no Stripe API, and cannot activate or materialise v2. |
 | `credit-reconciliation` | POST | JWT | Admin reconciliation for a missed Stripe credit-purchase webhook. Dry-run/inspection requests (`dry_run: true` or `mode: 'inspect'`) are non-mutating and return `inspection_only: true`, `credit_granted: false`. Mutating mode requires a non-empty `reason`, runs Stripe/DB inspection plus `buildReconciliationGrantInput()` before any mutation, writes through the shared serialized LCB credit mutation path, and audit-logs `admin.credit_reconciliation`. The admin UI currently exposes inspection only; no apply/grant button has shipped. |
 | `credit-goodwill` | POST | JWT | Grant goodwill credits to a learner/instructor pair through the shared serialized LCB credit mutation path. Requires learner/instructor scope, minutes, reason, and `absorbed_by` (`platform` or `instructor`). Audit-logged as `admin.credit_goodwill_grant` |
 | `refund-preview` | POST | JWT | Read-only admin refund planner for net-of-processing-fee refunds. Supports credit purchase/source previews, partial repeat-offer unused value previews, and direct slot/offer booking previews. It itemises gross lesson credit value, withheld original processing fee, and net amount returned; blocks missing-fee cases and already-paid-out direct bookings for manual review. It does not write `refund_events`, mutate credit balances/CSA, or call `stripe.refunds.create`. |

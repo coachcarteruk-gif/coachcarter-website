@@ -116,7 +116,24 @@ function withMockedModules({ sql, stripe, pricing, grantCredits, fetchSessionFee
   }
   if (fetchSessionFeePence) {
     require.cache[require.resolve(path.join(repoRoot, 'api', '_stripe-fee.js'))] = {
-      exports: { fetchSessionFeePence },
+      exports: {
+        fetchSessionFeePence,
+        fetchSessionFundingEvidence: async (session) => {
+          const fee = await fetchSessionFeePence(session);
+          return {
+            checkoutSessionId: session?.object === 'payment_intent' ? null : session?.id || null,
+            paymentIntentId: typeof session?.payment_intent === 'string'
+              ? session.payment_intent
+              : session?.payment_intent?.id || null,
+            chargeId: null,
+            balanceTransactionId: null,
+            amountPence: null,
+            currency: null,
+            feePence: fee.feePence,
+            source: fee.source || null,
+          };
+        },
+      },
     };
   }
   if (createTransporter) {

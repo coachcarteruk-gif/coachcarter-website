@@ -6,7 +6,7 @@ const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { SCHEDULED, BLOCKING_STATUSES, blocksSlot, isTerminal } = require('./_booking-status');
-const { fetchSessionFeePence } = require('./_stripe-fee');
+const { fetchSessionFeePence, fetchSessionFundingEvidence } = require('./_stripe-fee');
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { withNeonTransaction } = require('./_db-transaction');
@@ -15,6 +15,16 @@ const {
   computeRequestExpiresAt,
   notifyInstructorNewRequest,
 } = require('./_lesson-requests');
+const {
+  SOURCE_KINDS: PAYOUT_V2_SOURCE_KINDS,
+  writeStripeFundingSource,
+  isPayoutV2SchemaUnavailable,
+} = require('./_payout-v2-source-writer');
+const {
+  claimStripeEventReceipt,
+  markStripeEventProcessed,
+  markStripeEventFailed,
+} = require('./_stripe-event-receipts');
 
 
 function concreteLessonTransmissionType(value) {
@@ -60,6 +70,251 @@ async function resolveSchoolId(sql, metadata, sessionId) {
     `school_id missing in webhook metadata for session ${sessionId}; defaulting to 1`
   ));
   return 1;
+}
+
+function payoutV2ReceiptSchoolId(event) {
+  const eventObject = event?.data?.object;
+  const schoolId = Number.parseInt(eventObject?.metadata?.school_id, 10);
+  return Number.isSafeInteger(schoolId) && schoolId > 0 ? schoolId : null;
+}
+
+function isPayoutV2ReceiptEvent(event) {
+  const paymentType = event?.data?.object?.metadata?.payment_type;
+  const checkoutPayment = (
+    paymentType === 'credit_purchase' ||
+    paymentType === 'slot_booking' ||
+    paymentType === 'lesson_offer'
+  ) && (
+    event?.type === 'checkout.session.completed' ||
+    event?.type === 'checkout.session.async_payment_succeeded'
+  );
+  const paymentIntentPayment = event?.type === 'payment_intent.succeeded' && (
+    paymentType === 'credit_purchase' ||
+    paymentType === 'lesson_request_hold'
+  );
+  return checkoutPayment || paymentIntentPayment;
+}
+
+function payoutV2ScopeError(message) {
+  const err = new Error(message);
+  err.code = 'PAYOUT_V2_EVENT_SCOPE_MISMATCH';
+  return err;
+}
+
+function metadataPositiveInteger(metadata, field) {
+  const value = Number.parseInt(metadata?.[field], 10);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+async function validatePayoutV2ReceiptScope(event, sql, schoolId) {
+  const object = event?.data?.object || {};
+  const metadata = object.metadata || {};
+  const paymentType = metadata.payment_type;
+  const metadataSchoolId = metadataPositiveInteger(metadata, 'school_id');
+  if (metadataSchoolId !== schoolId) {
+    throw payoutV2ScopeError(
+      'Payout v2 event has no valid, matching explicit school_id'
+    );
+  }
+
+  const learnerId = metadataPositiveInteger(metadata, 'learner_id');
+  const instructorId = metadataPositiveInteger(metadata, 'instructor_id');
+
+  if (paymentType === 'credit_purchase' || paymentType === 'slot_booking') {
+    if (!learnerId || !instructorId) {
+      throw payoutV2ScopeError(
+        `Payout v2 ${paymentType} event requires learner_id and instructor_id`
+      );
+    }
+    const rows = await sql`
+      SELECT 1
+      FROM learner_users lu
+      JOIN instructors i
+        ON i.id = ${instructorId}
+       AND i.school_id = lu.school_id
+      WHERE lu.id = ${learnerId}
+        AND lu.school_id = ${schoolId}
+      LIMIT 1
+    `;
+    if (!rows[0]) {
+      throw payoutV2ScopeError(
+        `Payout v2 ${paymentType} learner/instructor relationship is not in the explicit school`
+      );
+    }
+    return;
+  }
+
+  if (paymentType === 'lesson_offer') {
+    const offerId = metadataPositiveInteger(metadata, 'offer_id');
+    const offerToken = typeof metadata.offer_token === 'string'
+      ? metadata.offer_token.trim()
+      : '';
+    if (!offerId || !offerToken || !instructorId) {
+      throw payoutV2ScopeError(
+        'Payout v2 lesson_offer event requires offer, instructor, and school identities'
+      );
+    }
+    const rows = await sql`
+      SELECT o.id
+      FROM lesson_offers o
+      JOIN instructors i
+        ON i.id = o.instructor_id
+       AND i.school_id = o.school_id
+      LEFT JOIN learner_users lu
+        ON lu.id = o.learner_id
+       AND lu.school_id = o.school_id
+      WHERE o.id = ${offerId}
+        AND o.token = ${offerToken}
+        AND o.school_id = ${schoolId}
+        AND o.instructor_id = ${instructorId}
+        AND (
+          ${learnerId}::integer IS NULL
+          OR (o.learner_id = ${learnerId} AND lu.id IS NOT NULL)
+        )
+      LIMIT 1
+    `;
+    if (!rows[0]) {
+      throw payoutV2ScopeError(
+        'Payout v2 lesson_offer payment relationship contradicts the school-scoped offer'
+      );
+    }
+    return;
+  }
+
+  if (paymentType === 'lesson_request_hold') {
+    if (!learnerId || !instructorId || !object.id?.startsWith('pi_')) {
+      throw payoutV2ScopeError(
+        'Payout v2 captured request event requires PaymentIntent, learner, instructor, and school identities'
+      );
+    }
+    const rows = await sql`
+      SELECT lr.id
+      FROM lesson_requests lr
+      JOIN instructors i
+        ON i.id = lr.instructor_id
+       AND i.school_id = lr.school_id
+      JOIN learner_users lu
+        ON lu.id = lr.learner_id
+       AND lu.school_id = lr.school_id
+      WHERE lr.school_id = ${schoolId}
+        AND lr.instructor_id = ${instructorId}
+        AND lr.learner_id = ${learnerId}
+        AND lr.payment_intent_id = ${object.id}
+        AND lr.payment_method = 'card_hold'
+      LIMIT 1
+    `;
+    if (!rows[0]) {
+      throw payoutV2ScopeError(
+        'Payout v2 captured request relationship is not in the explicit school'
+      );
+    }
+    return;
+  }
+
+  throw payoutV2ScopeError(
+    `Payout v2 event payment type ${paymentType || '(missing)'} is not supported`
+  );
+}
+
+async function claimPayoutV2Receipt(event) {
+  if (!isPayoutV2ReceiptEvent(event)) return null;
+  const schoolId = payoutV2ReceiptSchoolId(event);
+  if (!schoolId) return null;
+
+  const sql = neon(process.env.POSTGRES_URL);
+  await validatePayoutV2ReceiptScope(event, sql, schoolId);
+  try {
+    const result = await claimStripeEventReceipt({
+      sql,
+      schoolId,
+      stripeEventId: event.id,
+      eventType: event.type,
+      livemode: event.livemode === true,
+      objectId: event.data?.object?.id || null,
+      connectedAccountId: event.account || null,
+    });
+    return {
+      ...result,
+      sql,
+      schoolId,
+      stripeEventId: event.id,
+      stripeEventType: event.type,
+    };
+  } catch (err) {
+    if (isPayoutV2SchemaUnavailable(err)) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+async function ensurePayoutV2StripeSource({
+  sql,
+  schoolId,
+  creditTransactionId,
+  sourceKind,
+  fundingEvidence,
+  eventContext,
+}) {
+  try {
+    return await writeStripeFundingSource({
+      sql,
+      schoolId,
+      creditTransactionId,
+      sourceKind,
+      stripeEvidence: fundingEvidence,
+      eventContext,
+    });
+  } catch (err) {
+    if (isPayoutV2SchemaUnavailable(err)) {
+      return { unavailable: true };
+    }
+    throw err;
+  }
+}
+
+async function handleCapturedRequestSource(paymentIntent, payoutV2Receipt) {
+  if (!payoutV2Receipt?.claimed) return;
+  const sql = payoutV2Receipt.sql;
+  const schoolId = payoutV2Receipt.schoolId;
+  const [source] = await sql`
+    SELECT ct.id AS credit_transaction_id
+    FROM lesson_requests lr
+    JOIN credit_transactions ct
+      ON ct.stripe_session_id = lr.stripe_session_id
+     AND ct.school_id = lr.school_id
+     AND ct.learner_id = lr.learner_id
+     AND ct.instructor_id = lr.instructor_id
+     AND ct.type = 'slot_purchase'
+    WHERE lr.school_id = ${schoolId}
+      AND lr.payment_intent_id = ${paymentIntent.id}
+      AND lr.status = 'accepted'
+      AND lr.booking_id IS NOT NULL
+    LIMIT 1
+  `;
+  if (!source) {
+    const err = new Error(
+      `Captured lesson request ${paymentIntent.id} is not yet backed by a same-school slot_purchase`
+    );
+    err.code = 'PAYOUT_V2_REQUEST_SOURCE_NOT_READY';
+    throw err;
+  }
+  const fundingEvidence = await fetchSessionFundingEvidence({
+    id: paymentIntent.id,
+    object: 'payment_intent',
+    payment_intent: paymentIntent.id,
+  });
+  await ensurePayoutV2StripeSource({
+    sql,
+    schoolId,
+    creditTransactionId: Number(source.credit_transaction_id),
+    sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+    fundingEvidence,
+    eventContext: {
+      stripeEventId: payoutV2Receipt.stripeEventId,
+      stripeEventType: payoutV2Receipt.stripeEventType,
+    },
+  });
 }
 
 async function lockTestDateSlotMutation(client, { schoolId, instructorId, date }) {
@@ -191,7 +446,13 @@ module.exports = async (req, res) => {
   // no-ops. Pre-PR-I these handlers swallowed every error and returned 200,
   // which meant a transient Neon outage or bug silently dropped a paid
   // checkout off the floor and Stripe never retried.
+  let payoutV2Receipt = null;
   try {
+    payoutV2Receipt = await claimPayoutV2Receipt(event);
+    if (payoutV2Receipt && !payoutV2Receipt.claimed) {
+      return res.json({ received: true, duplicate: true });
+    }
+
     // Some async payment methods deliver `completed` early with
     // payment_status='unpaid', then fire `async_payment_succeeded` once the
     // payment actually clears. Immediate methods usually fire `completed`
@@ -203,21 +464,20 @@ module.exports = async (req, res) => {
 
       if (paymentType === 'credit_purchase') {
         // Historical Lesson Credit purchase compatibility.
-        await handleCreditPurchase(session);
+        await handleCreditPurchase(session, payoutV2Receipt);
       } else if (paymentType === 'slot_booking') {
         // ── Pay-per-slot: single lesson purchase + instant booking ─────
-        await handleSlotBooking(session);
+        await handleSlotBooking(session, payoutV2Receipt);
       } else if (paymentType === 'lesson_offer') {
         // ── Instructor-initiated offer: learner accepted + paid ────────
-        await handleOfferBooking(session);
+        await handleOfferBooking(session, payoutV2Receipt);
+      } else if (paymentType === 'lesson_request_hold') {
+        // Manual-capture Checkout completion creates the pending request;
+        // payment_intent.succeeded later records the captured funding source.
+        await handleRequestHold(session);
       } else if (paymentType === 'recurring_block_bank_checkout') {
         // Reserved Weekly Slot Pay by Bank: convert held block on success.
         await handleRecurringBlockBankPaymentSuccess(session);
-      } else if (paymentType === 'lesson_request_hold') {
-        // ── Request-to-book: card authorized (NOT captured) — create the
-        // pending lesson request. Manual-capture sessions complete with
-        // payment_status 'unpaid', so this branch must not gate on isPaid.
-        await handleRequestHold(session);
       } else {
         // Unknown payment_type. Pre-PR-J this fell into the legacy
         // handleCheckoutComplete + in-memory Map flow, which silently
@@ -245,7 +505,12 @@ module.exports = async (req, res) => {
       const paymentType = paymentIntent.metadata?.payment_type;
 
       if (paymentType === 'credit_purchase') {
-        await handleCreditPurchase(paymentIntentToCreditSession(paymentIntent));
+        await handleCreditPurchase(
+          paymentIntentToCreditSession(paymentIntent),
+          payoutV2Receipt
+        );
+      } else if (paymentType === 'lesson_request_hold') {
+        await handleCapturedRequestSource(paymentIntent, payoutV2Receipt);
       } else if (paymentType === 'recurring_block_bank_checkout') {
         await handleRecurringBlockBankPaymentSuccess(paymentIntentToRecurringBlockSession(paymentIntent));
       }
@@ -310,8 +575,25 @@ module.exports = async (req, res) => {
       }
     }
 
+    if (payoutV2Receipt?.claimed) {
+      await markStripeEventProcessed({
+        sql: payoutV2Receipt.sql,
+        schoolId: payoutV2Receipt.schoolId,
+        stripeEventId: payoutV2Receipt.stripeEventId,
+      });
+    }
     return res.json({ received: true });
   } catch (err) {
+    if (payoutV2Receipt?.claimed) {
+      await markStripeEventFailed({
+        sql: payoutV2Receipt.sql,
+        schoolId: payoutV2Receipt.schoolId,
+        stripeEventId: payoutV2Receipt.stripeEventId,
+        error: err,
+      }).catch(receiptErr => {
+        console.error('Stripe event receipt failure update failed:', receiptErr.message);
+      });
+    }
     console.error(`Stripe webhook handler error (${event.type}):`, err);
     reportError(`/api/webhook (${event.type})`, err);
     // 500 → Stripe retries. Idempotency keys in handlers (uq_credit_tx_session
@@ -397,7 +679,7 @@ function recurringBlockMetadataPatch(session, extra = {}) {
   };
 }
 
-async function handleCreditPurchase(session) {
+async function handleCreditPurchase(session, eventContext = null) {
   if (!isPaid(session)) return;
 
   const metadata      = session.metadata || {};
@@ -414,6 +696,16 @@ async function handleCreditPurchase(session) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = await resolveSchoolId(sql, metadata, session.id);
+    const explicitPayoutV2SchoolId = Number.parseInt(metadata.school_id, 10);
+    if (
+      Number.isSafeInteger(explicitPayoutV2SchoolId) &&
+      explicitPayoutV2SchoolId > 0 &&
+      explicitPayoutV2SchoolId !== Number(schoolId)
+    ) {
+      const scopeErr = new Error('Payout v2 webhook school scope contradicts resolved payment scope');
+      scopeErr.code = 'PAYOUT_V2_EVENT_SCOPE_MISMATCH';
+      throw scopeErr;
+    }
 
     // Determine the Stripe-reported payment method for historical credit rows.
     const paymentMethod = session.payment_method_types?.[0] || 'card';
@@ -426,7 +718,8 @@ async function handleCreditPurchase(session) {
     // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
     // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
     // as zero in the meantime.
-    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+    const fundingEvidence = await fetchSessionFundingEvidence(session);
+    const stripeFeePence = fundingEvidence.feePence;
 
     // Step 4 / Phase 2A: source instructor scope + effective rate from the
     // Stripe Session metadata so credits are written against the correct
@@ -482,6 +775,24 @@ async function handleCreditPurchase(session) {
       // and we want it loud.
       throw new Error(`credit_purchase ${session.id}: ${grant.code || 'GRANT_FAILED'}`);
     }
+    if (
+      grant.transactionId &&
+      Number.isSafeInteger(explicitPayoutV2SchoolId) &&
+      explicitPayoutV2SchoolId > 0
+    ) {
+      await ensurePayoutV2StripeSource({
+        sql,
+        schoolId: explicitPayoutV2SchoolId,
+        creditTransactionId: Number(grant.transactionId),
+        sourceKind: PAYOUT_V2_SOURCE_KINDS.CREDIT_PURCHASE,
+        fundingEvidence,
+        eventContext: {
+          stripeEventId: eventContext?.stripeEventId || null,
+          stripeEventType: eventContext?.stripeEventType || null,
+        },
+      });
+    }
+
     if (grant.alreadyProcessed) {
       console.log(`⏭  credit_purchase ${session.id} — already processed`);
       return;
@@ -751,7 +1062,7 @@ async function handleRequestHold(session) {
   }
 }
 
-async function handleSlotBooking(session) {
+async function handleSlotBooking(session, eventContext = null) {
   if (!isPaid(session)) return;
 
   const metadata      = session.metadata || {};
@@ -785,6 +1096,16 @@ async function handleSlotBooking(session) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = await resolveSchoolId(sql, metadata, session.id);
+    const explicitPayoutV2SchoolId = Number.parseInt(metadata.school_id, 10);
+    if (
+      Number.isSafeInteger(explicitPayoutV2SchoolId) &&
+      explicitPayoutV2SchoolId > 0 &&
+      explicitPayoutV2SchoolId !== Number(schoolId)
+    ) {
+      const scopeErr = new Error('Payout v2 webhook school scope contradicts resolved payment scope');
+      scopeErr.code = 'PAYOUT_V2_EVENT_SCOPE_MISMATCH';
+      throw scopeErr;
+    }
 
     // Step 4 / Phase 2A: effective rate is derivable from the Stripe-session
     // amount and minutes — no live pricing recall. instructor_id comes from
@@ -796,6 +1117,7 @@ async function handleSlotBooking(session) {
     const paymentIntentId = typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent?.id || null;
+    const fundingEvidence = await fetchSessionFundingEvidence(session);
 
     const [existingCreditTx] = await sql`
       SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute
@@ -808,6 +1130,22 @@ async function handleSlotBooking(session) {
        LIMIT 1
     `;
     if (existingCreditTx) {
+      if (
+        Number.isSafeInteger(explicitPayoutV2SchoolId) &&
+        explicitPayoutV2SchoolId > 0
+      ) {
+        await ensurePayoutV2StripeSource({
+          sql,
+          schoolId: explicitPayoutV2SchoolId,
+          creditTransactionId: Number(existingCreditTx.id),
+          sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+          fundingEvidence,
+          eventContext: {
+            stripeEventId: eventContext?.stripeEventId || null,
+            stripeEventType: eventContext?.stripeEventType || null,
+          },
+        });
+      }
       const existingBooking = await findExistingSlotBooking(sql, {
         learnerId, instructorId, scheduledDate, startTime, endTime, schoolId,
       });
@@ -836,7 +1174,7 @@ async function handleSlotBooking(session) {
     // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
     // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
     // as zero in the meantime.
-    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+    const stripeFeePence = fundingEvidence.feePence;
 
     // 1. Record the transaction. uq_credit_tx_session backstops the
     // SELECT idempotency check above against concurrent retries.
@@ -878,6 +1216,23 @@ async function handleSlotBooking(session) {
           console.warn(`slot_booking ${session.id} hit uq_credit_tx_session with refunded booking ${racedBooking.id}; not repairing active BCS`);
         } else {
           console.warn(`slot_booking ${session.id} hit uq_credit_tx_session before a matching booking was visible; leaving retry/operator flow unchanged`);
+        }
+        if (
+          racedCreditTx &&
+          Number.isSafeInteger(explicitPayoutV2SchoolId) &&
+          explicitPayoutV2SchoolId > 0
+        ) {
+          await ensurePayoutV2StripeSource({
+            sql,
+            schoolId: explicitPayoutV2SchoolId,
+            creditTransactionId: Number(racedCreditTx.id),
+            sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+            fundingEvidence,
+            eventContext: {
+              stripeEventId: eventContext?.stripeEventId || null,
+              stripeEventType: eventContext?.stripeEventType || null,
+            },
+          });
         }
         return;
       }
@@ -1035,6 +1390,22 @@ async function handleSlotBooking(session) {
       creditTransaction: slotCreditTx,
       durationMins: chargeMins,
     });
+    if (
+      Number.isSafeInteger(explicitPayoutV2SchoolId) &&
+      explicitPayoutV2SchoolId > 0
+    ) {
+      await ensurePayoutV2StripeSource({
+        sql,
+        schoolId: explicitPayoutV2SchoolId,
+        creditTransactionId: Number(slotCreditTx.id),
+        sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+        fundingEvidence,
+        eventContext: {
+          stripeEventId: eventContext?.stripeEventId || null,
+          stripeEventType: eventContext?.stripeEventType || null,
+        },
+      });
+    }
 
     if (bookingPurpose === 'test_date') {
       await sql`
@@ -1690,7 +2061,7 @@ function toICSDate(dateStr, timeStr) {
 
 // ── Lesson offer handler ─────────────────────────────────────────────────────
 // Instructor created an offer, learner accepted and paid via Stripe.
-async function handleOfferBooking(session) {
+async function handleOfferBooking(session, payoutV2Receipt = null) {
   if (!isPaid(session)) return;
 
   const metadata       = session.metadata || {};
@@ -1765,18 +2136,30 @@ async function handleOfferBooking(session) {
     }
 
     if (offer.status === 'accepted') {
-      if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
-        const [existingOfferCreditTx] = await sql`
-          SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute, minutes
-            FROM credit_transactions
-           WHERE stripe_session_id = ${session.id}
-             AND type = 'slot_purchase'
-             AND learner_id IS NOT NULL
-             AND instructor_id = ${instructorId}
-             AND school_id = ${schoolId}
-           LIMIT 1
-        `;
-        if (existingOfferCreditTx) {
+      const [existingOfferCreditTx] = await sql`
+        SELECT id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute, minutes
+          FROM credit_transactions
+         WHERE stripe_session_id = ${session.id}
+           AND type = 'slot_purchase'
+           AND learner_id IS NOT NULL
+           AND instructor_id = ${instructorId}
+           AND school_id = ${schoolId}
+         LIMIT 1
+      `;
+      if (existingOfferCreditTx) {
+        const fundingEvidence = await fetchSessionFundingEvidence(session);
+        await ensurePayoutV2StripeSource({
+          sql,
+          schoolId,
+          creditTransactionId: Number(existingOfferCreditTx.id),
+          sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+          fundingEvidence,
+          eventContext: payoutV2Receipt ? {
+            stripeEventId: payoutV2Receipt.stripeEventId,
+            stripeEventType: payoutV2Receipt.stripeEventType,
+          } : {},
+        });
+        if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
           await ensureSlotBookingBcs(sql, {
             schoolId,
             bookingId: offer.booking_id,
@@ -1868,7 +2251,8 @@ async function handleOfferBooking(session) {
     // as zero in the meantime. For repeat-weeks series this is the fee on
     // the FULL charge (totalAmountPence) — Step 4g splits it pro-rata across
     // the N bookings via booking_credit_sources.
-    const { feePence: stripeFeePence } = await fetchSessionFeePence(session);
+    const offerFundingEvidence = await fetchSessionFundingEvidence(session);
+    const stripeFeePence = offerFundingEvidence.feePence;
 
     // Step 4 / Phase 2A: effective rate is per-minute on the total charge
     // (totalAmountPence / totalMinutes). For repeat-weeks series this is the
@@ -1898,14 +2282,69 @@ async function handleOfferBooking(session) {
       offerCreditTx = creditTx;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        const duplicatePendingError = new Error(
-          `lesson_offer ${session.id} already has a credit_transaction but offer ${offer.id} is not accepted; previous webhook attempt likely failed mid-flight`
-        );
+        // Resume only the narrow failure boundary where the immutable credit
+        // transaction exists but its payout-v2 source does not. If the source
+        // already exists, later balance/booking work may have partially
+        // completed, so preserve the existing operator-review failure.
+        try {
+          const [retryCandidate] = await sql`
+            SELECT
+              ct.id,
+              ct.amount_pence,
+              ct.stripe_fee_pence,
+              ct.effective_rate_pence_per_minute,
+              ct.minutes,
+              EXISTS (
+                SELECT 1
+                  FROM payout_funding_sources pfs
+                 WHERE pfs.school_id = ct.school_id
+                   AND pfs.credit_transaction_id = ct.id
+              ) AS payout_source_exists
+              FROM credit_transactions ct
+             WHERE ct.stripe_session_id = ${session.id}
+               AND ct.type = 'slot_purchase'
+               AND ct.learner_id = ${learnerId}
+               AND ct.instructor_id = ${instructorId}
+               AND ct.school_id = ${schoolId}
+             LIMIT 1
+          `;
+          if (retryCandidate && !retryCandidate.payout_source_exists) {
+            offerCreditTx = retryCandidate;
+          }
+        } catch (retryLookupErr) {
+          if (!isPayoutV2SchemaUnavailable(retryLookupErr)) {
+            throw retryLookupErr;
+          }
+        }
+
+        if (offerCreditTx) {
+          console.warn(
+            `lesson_offer ${session.id}: resuming payout-v2 source ingestion after an earlier partial attempt`
+          );
+        } else {
+          const duplicatePendingError = new Error(
+            `lesson_offer ${session.id} already has a credit_transaction but offer ${offer.id} is not accepted; previous webhook attempt likely failed mid-flight`
+          );
         console.error('❌ lesson_offer: duplicate credit transaction on pending offer', duplicatePendingError.message);
-        throw duplicatePendingError;
+          throw duplicatePendingError;
+        }
       }
-      throw insertErr;
+      if (!offerCreditTx) {
+        throw insertErr;
+      }
     }
+
+    await ensurePayoutV2StripeSource({
+      sql,
+      schoolId,
+      creditTransactionId: Number(offerCreditTx.id),
+      sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+      fundingEvidence: offerFundingEvidence,
+      eventContext: payoutV2Receipt ? {
+        stripeEventId: payoutV2Receipt.stripeEventId,
+        stripeEventType: payoutV2Receipt.stripeEventType,
+      } : {},
+    });
 
     // Net-zero add (matched by deduct below for slot-pinned offers, left in
     // place for flexible offers so the learner has balance to spend).
@@ -2249,3 +2688,4 @@ async function getRawBody(req) {
 
 module.exports._handleCreditPurchase = handleCreditPurchase;
 module.exports._paymentIntentToCreditSession = paymentIntentToCreditSession;
+module.exports._validatePayoutV2ReceiptScope = validatePayoutV2ReceiptScope;

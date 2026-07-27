@@ -1,0 +1,25 @@
+{
+  "rolloutId": "035-payout-v2-schema-only",
+  "evidenceType": "production_schema_postflight",
+  "executedAt": "2026-07-26T16:51:20.708Z",
+  "targetFingerprint": "0a92fef666834a1af2cb924e8831119277a7a8d82ea8448baf9cc9997b1ef809",
+  "transactionReadOnly": true,
+  "migrationSha256": "7ac172db071fdbc86ff43e98f2e31eb2c03eb5295ba704a52fafec2865a92749",
+  "diagnosticsSha256": "3cb9989a88422ffbbff36228fb987290a779072a7a1eb517749980f88adef6a3",
+  "postflight": {
+    "tablesPresent": 25,
+    "emptyV2Tables": 25,
+    "strictTenantKeys": 21,
+    "globalScopeKeys": 4,
+    "criticalIndexes": 5,
+    "guardTriggers": 39,
+    "schoolsChecked": 1,
+    "schoolsOnV1": 1,
+    "engineTransitions": 0,
+    "stripeApiCalls": 0
+  },
+  "status": "SCHEMA_APPLIED_INACTIVE",
+  "payoutV2Activated": false,
+  "stripeApiCalls": 0,
+  "evidenceFingerprint": "170b26a895fb6f9b08af0f8421710af2d3dece7a0631e58d7c911123dcf70323"
+}

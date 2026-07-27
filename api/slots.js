@@ -4984,12 +4984,34 @@ async function handleCheckoutRequest(req, res) {
     const emailForStripe = learnerRecord.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(learnerRecord.email).trim())
       ? learnerRecord.email : (cleanGuestEmail || null);
 
+    const requestPaymentMetadata = {
+      payment_type: 'lesson_request_hold',
+      learner_id: String(learnerId),
+      learner_email: emailForStripe || '',
+      instructor_id: String(instructor_id),
+      instructor_name: instructor.name,
+      scheduled_date: date,
+      start_time,
+      end_time,
+      transmission_type: bookingTransmissionType,
+      pickup_address: requestPickupAddr || '',
+      lesson_type_id: String(lessonType.id),
+      duration_minutes: String(durationMins),
+      amount_pence: String(pricePence),
+      school_id: String(schoolId),
+      guest_name: cleanGuestName || '',
+      guest_email: cleanGuestEmail || '',
+      guest_phone: cleanGuestPhone || '',
+    };
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       // Manual capture: authorize now, charge only if the instructor accepts.
       // Cards only — most redirect payment methods don't support auth holds.
       payment_method_types: ['card'],
-      payment_intent_data: { capture_method: 'manual' },
+      payment_intent_data: {
+        capture_method: 'manual',
+        metadata: requestPaymentMetadata,
+      },
       line_items: [{
         price_data: {
           currency: 'gbp',
@@ -5001,25 +5023,7 @@ async function handleCheckoutRequest(req, res) {
         },
         quantity: 1
       }],
-      metadata: {
-        payment_type:    'lesson_request_hold',
-        learner_id:      String(learnerId),
-        learner_email:   emailForStripe || '',
-        instructor_id:   String(instructor_id),
-        instructor_name: instructor.name,
-        scheduled_date:  date,
-        start_time,
-        end_time,
-        transmission_type: bookingTransmissionType,
-        pickup_address:  requestPickupAddr || '',
-        lesson_type_id:  String(lessonType.id),
-        duration_minutes: String(durationMins),
-        amount_pence:    String(pricePence),
-        school_id:       String(schoolId),
-        guest_name:      cleanGuestName || '',
-        guest_email:     cleanGuestEmail || '',
-        guest_phone:     cleanGuestPhone || '',
-      },
+      metadata: requestPaymentMetadata,
       ...(emailForStripe ? { customer_email: emailForStripe } : {}),
       billing_address_collection: 'required',
       success_url: `${origin}/learner/book.html?requested=1`,

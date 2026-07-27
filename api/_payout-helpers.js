@@ -7,6 +7,10 @@
  * Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment.
  */
 const { CHARGEABLE } = require('./_booking-status');
+const {
+  V1_DISABLED_CODE,
+  assertV1PayoutEngine,
+} = require('./_payout-engine-version');
 const { sendAlertEmail } = require('./_error-alert');
 
 /**
@@ -141,6 +145,7 @@ async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
  * Process payout for a single instructor. Returns payout summary or null if nothing to pay.
  */
 async function processPayoutForInstructor(sql, stripe, instructor) {
+  await assertV1PayoutEngine(sql, instructor.school_id);
   const bookings = await getEligibleBookings(sql, instructor.id, instructor.payouts_start_date || null);
   if (!bookings.length) return null;
 
@@ -398,7 +403,7 @@ async function processAllPayouts(sql, stripe, opts = {}) {
   const { schoolId } = opts;
   const instructors = schoolId
     ? await sql`
-        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
+        SELECT id, school_id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
           FROM instructors
          WHERE active = TRUE
            AND stripe_onboarding_complete = TRUE
@@ -407,7 +412,7 @@ async function processAllPayouts(sql, stripe, opts = {}) {
            AND school_id = ${schoolId}
       `
     : await sql`
-        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
+        SELECT id, school_id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
           FROM instructors
          WHERE active = TRUE
            AND stripe_onboarding_complete = TRUE
@@ -432,6 +437,18 @@ async function processAllPayouts(sql, stripe, opts = {}) {
         results.failed++;
       }
     } catch (err) {
+      if (err.code === V1_DISABLED_CODE) {
+        results.skipped++;
+        results.details.push({
+          instructor_id: inst.id,
+          instructor_name: inst.name,
+          school_id: inst.school_id,
+          status: 'refused',
+          code: err.code,
+          error: err.message
+        });
+        continue;
+      }
       results.failed++;
       results.details.push({
         instructor_id: inst.id,
@@ -492,6 +509,7 @@ async function processSchoolPayouts(sql, stripe) {
 
   for (const school of schools) {
     try {
+      await assertV1PayoutEngine(sql, school.id);
       const bookings = await getEligibleSchoolBookings(sql, school.id);
       if (!bookings.length) {
         results.skipped++;
@@ -617,6 +635,17 @@ async function processSchoolPayouts(sql, stripe) {
         });
       }
     } catch (err) {
+      if (err.code === V1_DISABLED_CODE) {
+        results.skipped++;
+        results.details.push({
+          school_id: school.id,
+          school_name: school.name,
+          status: 'refused',
+          code: err.code,
+          error: err.message
+        });
+        continue;
+      }
       results.failed++;
       results.details.push({
         school_id: school.id,

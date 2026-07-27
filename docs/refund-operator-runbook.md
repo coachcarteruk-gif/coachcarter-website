@@ -260,6 +260,19 @@ Stop and ask Fraser before proceeding if:
 - GDPR deletion or anonymisation touches the learner/payment records involved.
 - The case involves a dispute, chargeback, partial external repayment, cash payment, or any money movement outside the automatic model.
 
+## Payout v2 liquidity visibility
+
+Inactive Payout v2 Slice 6 treats a latest approved but unexecuted refund as a
+separate protected-cash obligation. This does not broaden refund approval or
+execution. A future approved obligation event must use the same school,
+trusted amount, reason, operator, and immutable refund evidence; an executed or
+voided successor event removes that identity from the outstanding component.
+
+Missing, contradictory, or manual-review refund evidence blocks platform
+withdrawal preflight. Operators must not compensate by lowering unused-credit
+exposure, reserve, or instructor obligations. The withdrawal runbook is
+[`payout-v2-manual-withdrawal-runbook.md`](payout-v2-manual-withdrawal-runbook.md).
+
 ## Incident Notes
 
 If execute fails before Stripe succeeds:

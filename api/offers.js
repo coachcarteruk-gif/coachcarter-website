@@ -84,6 +84,7 @@ async function bookOfferSeries(sql, {
     SELECT start_time::text AS start_time, end_time::text AS end_time
     FROM instructor_availability
     WHERE instructor_id = ${instructorId}
+      AND school_id = ${schoolId}
       AND day_of_week = ${dow}
       AND active = true
   `;
@@ -109,6 +110,7 @@ async function bookOfferSeries(sql, {
     SELECT blackout_date::text AS start_date, end_date::text AS end_date
     FROM instructor_blackout_dates
     WHERE instructor_id = ${instructorId}
+      AND school_id = ${schoolId}
       AND blackout_date <= ${lookaheadEndStr}
       AND end_date >= ${firstDateText}
   `;
@@ -139,6 +141,7 @@ async function bookOfferSeries(sql, {
       const [existing] = await sql`
         SELECT id FROM lesson_bookings
         WHERE instructor_id = ${instructorId}
+          AND school_id = ${schoolId}
           AND scheduled_date = ${candidateStr}
           AND start_time = ${startTime}::time
           AND status = ANY(${BLOCKING_STATUSES}::text[])
@@ -151,6 +154,7 @@ async function bookOfferSeries(sql, {
         const [pendingRequest] = await sql`
           SELECT id FROM lesson_requests
           WHERE instructor_id = ${instructorId}
+            AND school_id = ${schoolId}
             AND scheduled_date = ${candidateStr}
             AND start_time = ${startTime}::time
             AND status = 'pending'
@@ -357,8 +361,12 @@ async function handleGetOffer(req, res) {
              lu.name AS learner_name, lu.phone AS learner_phone,
              lu.pickup_address AS learner_pickup_address
       FROM lesson_offers o
-      JOIN instructors i ON i.id = o.instructor_id
-      LEFT JOIN lesson_types lt ON lt.id = o.lesson_type_id
+      JOIN instructors i
+        ON i.id = o.instructor_id
+       AND i.school_id = o.school_id
+      LEFT JOIN lesson_types lt
+        ON lt.id = o.lesson_type_id
+       AND lt.school_id = o.school_id
       LEFT JOIN learner_users lu ON lu.id = o.learner_id
       WHERE o.token = ${token}
     `;
@@ -480,8 +488,12 @@ async function handleAcceptOffer(req, res) {
              lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name
       FROM lesson_offers o
-      JOIN instructors i ON i.id = o.instructor_id
-      LEFT JOIN lesson_types lt ON lt.id = o.lesson_type_id
+      JOIN instructors i
+        ON i.id = o.instructor_id
+       AND i.school_id = o.school_id
+      LEFT JOIN lesson_types lt
+        ON lt.id = o.lesson_type_id
+       AND lt.school_id = o.school_id
       WHERE o.token = ${token} AND o.status = 'pending' AND o.expires_at > NOW()
     `;
 
@@ -497,9 +509,10 @@ async function handleAcceptOffer(req, res) {
       return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Offer not found, expired, or already accepted' });
     }
 
-    // Derive school_id from instructor
-    const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
-    const schoolId = instrRow?.school_id || 1;
+    const schoolId = Number(offer.school_id);
+    if (!Number.isSafeInteger(schoolId) || schoolId <= 0) {
+      throw new Error(`Offer ${offer.id} has no valid school scope`);
+    }
 
     let boundLearner = null;
     if (offer.learner_id) {
@@ -736,9 +749,10 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   const durationMins = offer.duration_minutes || 90;
   const repeats = Math.max(1, parseInt(repeatWeeks, 10) || 1);
 
-  // Derive school_id from instructor
-  const [instrRow] = await sql`SELECT school_id FROM instructors WHERE id = ${offer.instructor_id}`;
-  const schoolId = instrRow?.school_id || 1;
+  const schoolId = Number(offer.school_id);
+  if (!Number.isSafeInteger(schoolId) || schoolId <= 0) {
+    throw new Error(`Free offer ${offer.id} has no valid school scope`);
+  }
 
   const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
 
@@ -793,7 +807,12 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   `;
 
   // 4. Send confirmation emails
-  const [instructor] = await sql`SELECT name, email FROM instructors WHERE id = ${offer.instructor_id}`;
+  const [instructor] = await sql`
+    SELECT name, email
+    FROM instructors
+    WHERE id = ${offer.instructor_id}
+      AND school_id = ${schoolId}
+  `;
   const durationStr = durationMins >= 60
     ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
     : `${durationMins} mins`;

@@ -186,6 +186,35 @@ Hard rules:
 6. **Year-one franchise relationships are human, not automated.** Negative-payout weeks are personally handled by Fraser, not auto-invoiced via Bacs DD. This is deliberate.
 7. **Configurability discipline**: don't add columns "for future flexibility" if no active code path reads them. Exception is justified only when the user has a specific commercial reason to set the value at onboarding.
 
+## Payout v2 controlled-cutover safety (inactive)
+
+Migration 035 was applied schema-only on 26 July 2026 and remains inactive.
+Its deployment evidence is under `db/rollouts/035-payout-v2-schema-only.*`;
+postflight confirmed all 25 v2 tables were empty, all 39 guard triggers were
+present, and every school remained payout engine `v1`. The source-ingestion
+application rollout is prepared for review but is not approved or deployed.
+Do not import
+`_payout-v2-cutover.js` into a live route, switch an engine, apply an import or
+opening recovery, or execute a batch without a future explicit production
+authorization and the evidence in `docs/payout-v2-cutover-runbook.md`.
+
+Cutover is per school, fingerprint-bound, and owner-approved. It requires two
+distinct accepted shadow Fridays, exact route/reserve/protected/external-cash/
+Setmore evidence, one named superadmin or scoped operator, and a hard first-live
+cap. An over-cap plan blocks; never truncate or split it. Ordinary school admins
+cannot cut over or perform global payout operations. After a future school
+transition to v2, all v1 mutation for that school must refuse before claims,
+writes, or Stripe calls.
+The cash authority must be an explicit current global protected-balance/reserve
+fingerprint; a per-school readiness record must not relabel undivided platform
+Stripe cash as school-owned free cash.
+
+After any possible Stripe movement, rollback means freeze new batches, preserve
+claims and append-only evidence, and continue webhooks/reconciliation. Never
+release ambiguous claims, invent a new idempotency key, delete financial rows,
+or blindly re-enable v1. A Connect transfer is not connected-bank settlement.
+See `docs/payout-v2-rollback-incident-runbook.md`.
+
 ## React Native migration principles
 
 > Full plan: [`MIGRATION-PLAN.md`](MIGRATION-PLAN.md)
