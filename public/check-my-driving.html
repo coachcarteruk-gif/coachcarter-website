@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#262626">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Check My Driving | CoachCarter</title>
+  <meta name="description" content="Book a 90-minute driving ability check with CoachCarter and get a clear, honest assessment of your driving.">
+  <meta property="og:title" content="Check My Driving - CoachCarter">
+  <meta property="og:description" content="A focused 90-minute driving ability check with clear next steps.">
+  <meta property="og:image" content="https://coachcarter.uk/Logo.png">
+  <meta property="og:url" content="https://coachcarter.uk/check-my-driving">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://coachcarter.uk/check-my-driving">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,900;1,900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <script src="/shared/dark-mode.js" defer></script>
+  <script src="/shared/branding.js" defer></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #1a1a1a;
+  --body-text: #444;
+  --accent: #f58220;
+  --accent-dk: #e07314;
+  --accent-under: #c4650a;
+  --accent-text: #c96512;
+  --accent-lt: #fff4ec;
+  --muted: #6b6b6b;
+  --faint: #8c8c8c;
+  --bg: #fff;
+  --surface: #f7f7f7;
+  --border: #e5e5e5;
+  --green: #168a51;
+  --red: #b83225;
+  --font-head: 'Archivo', sans-serif;
+  --font-body: 'Instrument Sans', Helvetica, Arial, sans-serif;
+  --radius: 16px;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--primary);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+a:hover { color: var(--accent-dk); }
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 80px;
+}
+
+.brand {
+  display: block;
+  width: fit-content;
+  margin-bottom: 28px;
+  text-decoration: none;
+}
+
+.brand img { display: block; height: 76px; }
+
+.hero { margin-bottom: 30px; }
+
+.hero-eyebrow {
+  display: inline-block;
+  margin-bottom: 14px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--accent-lt);
+  color: var(--accent-text);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 650px;
+  margin-bottom: 12px;
+  font-family: var(--font-head);
+  font-size: clamp(34px, 5.4vw, 46px);
+  font-weight: 900;
+  letter-spacing: -.035em;
+  line-height: 1.04;
+}
+
+.hero h1 .accent-italic { color: var(--accent); font-style: italic; }
+
+.hero > p {
+  max-width: 590px;
+  color: var(--muted);
+  font-size: 17.5px;
+}
+
+.assessment-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.fact {
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.fact strong {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.fact span { color: var(--muted); font-size: 13px; }
+
+.card {
+  margin-bottom: 20px;
+  padding: 26px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.card h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-family: var(--font-head);
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+}
+
+#step-1-heading:focus {
+  border-radius: 4px;
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.step-num {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 26px;
+  text-align: center;
+}
+
+.helper {
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 14.5px;
+}
+
+.slot-loading, .slot-empty, .slot-error {
+  padding: 32px 16px;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+.slot-error { color: var(--red); }
+.day-group { margin-bottom: 20px; }
+
+.day-group--preselected {
+  margin: -10px -12px 12px;
+  padding: 10px 12px;
+  border: 2px solid rgba(34, 197, 94, .55);
+  border-radius: 12px;
+  background: rgba(34, 197, 94, .1);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, .08);
+}
+
+.day-label {
+  margin-bottom: 10px;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.slot-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.slot-btn {
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  appearance: none;
+  background: #fff;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: center;
+  transition: background .12s ease, border-color .12s ease;
+}
+
+.slot-instructor {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.slot-btn:hover:not(.selected):not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+}
+
+.slot-btn.selected { border-color: var(--accent); background: var(--accent); color: #fff; }
+.slot-btn.selected .slot-instructor { color: rgba(255,255,255,.85); }
+.slot-btn:disabled { cursor: not-allowed; opacity: .5; }
+
+.slot-selection-error {
+  min-height: 20px;
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 13.5px;
+}
+
+.required-note {
+  margin: -10px 0 18px;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.form-group { margin-bottom: 16px; }
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="tel"] {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--primary);
+  font: inherit;
+  font-size: 16px;
+}
+
+.form-group input:focus { border-color: var(--accent); outline: 3px solid rgba(245,130,32,.15); }
+.form-group input[aria-invalid="true"] { border-color: var(--red); }
+
+.field-help { margin-top: 5px; color: var(--muted); font-size: 12.5px; }
+.field-error { min-height: 18px; margin-top: 4px; color: var(--red); font-size: 12.5px; }
+
+.terms-check {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 4px 0 18px;
+  color: var(--body-text);
+  font-size: 13.5px;
+}
+
+.terms-check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); }
+
+.summary-bar {
+  display: none;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-lt);
+  color: var(--primary);
+  font-size: 14.5px;
+}
+
+.summary-bar strong { color: var(--accent-text); }
+
+.form-error {
+  display: none;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--red);
+  border-radius: 10px;
+  background: #fde8e6;
+  color: var(--red);
+  font-size: 14.5px;
+}
+
+.form-error.visible { display: block; }
+
+.submit-btn {
+  width: 100%;
+  padding: 16px 24px;
+  border: 0;
+  border-radius: 12px;
+  appearance: none;
+  background: var(--accent);
+  box-shadow: 0 3px 0 var(--accent-under);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  transition: background .12s ease;
+}
+
+.submit-btn:hover:not(:disabled):not(.needs-slot) { background: var(--accent-dk); }
+.submit-btn.needs-slot { background: #e5e7eb; box-shadow: none; color: #374151; }
+.submit-btn.needs-slot:hover { background: #d1d5db; }
+.submit-btn:disabled { cursor: not-allowed; opacity: .6; }
+
+.sticky-summary {
+  display: none;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.payment-note {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.payment-note svg { width: 15px; height: 15px; flex: 0 0 auto; margin-top: 1px; }
+
+.fineprint {
+  margin-top: 22px;
+  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.fineprint a { color: var(--faint); }
+
+@media (max-width: 767px) {
+  .page { padding: 20px 16px 150px; }
+  .brand { margin: 0 auto 24px; }
+  .brand img { height: 64px; }
+  .hero { margin-bottom: 26px; text-align: center; }
+  .hero h1 { font-size: 32px; }
+  .hero > p { margin: 0 auto; font-size: 15.5px; }
+  .assessment-facts { grid-template-columns: 1fr; gap: 6px; }
+  .fact { min-height: 0; padding: 11px 13px; text-align: left; }
+  .fact strong { display: inline; margin-right: 6px; font-size: 15px; }
+  .card { margin-bottom: 16px; padding: 20px 16px; }
+  .card h2 { gap: 9px; font-size: 17px; }
+  .step-num { width: 24px; height: 24px; font-size: 13px; line-height: 24px; }
+  .helper { margin-bottom: 16px; font-size: 13.5px; }
+  .slot-row { grid-template-columns: repeat(3, 1fr); }
+  .submit-dock {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: rgba(255,255,255,.94);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  .sticky-summary:not(:empty) { display: block; }
+  .payment-note { display: none; }
+}
+</style>
+</head>
+<body>
+  <main class="page">
+    <a class="brand" href="/" aria-label="CoachCarter home">
+      <img src="/Logo.png" alt="CoachCarter" data-brand-logo>
+    </a>
+
+    <div class="hero">
+      <span class="hero-eyebrow">Driving ability check</span>
+      <h1>Find out where your driving <span class="accent-italic">really stands.</span></h1>
+      <p>A focused assessment of your current driving, followed by clear, honest advice on what to work on next.</p>
+      <div class="assessment-facts" aria-label="Assessment details">
+        <div class="fact"><strong>90 minutes</strong><span>Enough time for a meaningful assessment</span></div>
+        <div class="fact"><strong id="heroPrice">Loading price…</strong><span>Secure online payment</span></div>
+        <div class="fact"><strong>Clear feedback</strong><span>Practical next steps, without pressure</span></div>
+      </div>
+    </div>
+
+    <section class="card" aria-labelledby="step-1-heading">
+      <h2 id="step-1-heading"><span class="step-num">1</span>Pick a time</h2>
+      <p class="helper">Showing available 90-minute assessment slots for the next 14 days.</p>
+      <div id="slotPicker">
+        <div class="slot-loading">Loading available slots…</div>
+      </div>
+      <div id="slotSelectionError" class="slot-selection-error" role="alert" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="step-2-heading">
+      <h2 id="step-2-heading"><span class="step-num">2</span>Your details</h2>
+      <p class="helper">We’ll use these details for your booking and take you to Stripe for secure payment.</p>
+      <p class="required-note">All fields are required.</p>
+
+      <div id="summaryBar" class="summary-bar"></div>
+      <div id="formError" class="form-error" role="alert" aria-live="assertive"></div>
+
+      <form id="assessmentForm" novalidate>
+        <div class="form-group">
+          <label for="guest_name">Full name</label>
+          <input type="text" id="guest_name" name="guest_name" autocomplete="name" aria-describedby="guest_name_error" required>
+          <div class="field-error" id="guest_name_error" aria-live="polite"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="guest_email">Email</label>
+          <input type="email" id="guest_email" name="guest_email" autocomplete="email" aria-describedby="guest_email_help guest_email_error" required>
+          <div class="field-help" id="guest_email_help">Already have an account? Use the same email so the booking appears there.</div>
+          <div class="field-error" id="guest_email_error" aria-live="polite"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="guest_phone">UK mobile</label>
+          <input type="tel" id="guest_phone" name="guest_phone" autocomplete="tel" inputmode="tel" placeholder="07xxx xxx xxx" aria-describedby="guest_phone_help guest_phone_error" required>
+          <div class="field-help" id="guest_phone_help">We’ll use this for important booking updates.</div>
+          <div class="field-error" id="guest_phone_error" aria-live="polite"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="guest_pickup_address">Pickup address</label>
+          <input type="text" id="guest_pickup_address" name="guest_pickup_address" autocomplete="street-address" placeholder="e.g. 24 Station Road, RG1 1AA" aria-describedby="guest_pickup_address_help guest_pickup_address_error" required>
+          <div class="field-help" id="guest_pickup_address_help">Enter the exact address where you’d like your instructor to meet you.</div>
+          <div class="field-error" id="guest_pickup_address_error" aria-live="polite"></div>
+        </div>
+
+        <label class="terms-check" for="guest_terms">
+          <input type="checkbox" id="guest_terms" name="guest_terms" aria-describedby="guest_terms_error" required>
+          <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">privacy notice</a>.</span>
+        </label>
+        <div class="field-error" id="guest_terms_error" aria-live="polite"></div>
+
+        <div class="submit-dock">
+          <div id="stickySummary" class="sticky-summary" aria-hidden="true"></div>
+          <button type="submit" class="submit-btn needs-slot" id="submitBtn">Choose a time above</button>
+          <div class="payment-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+            Secure payment handled by Stripe
+          </div>
+        </div>
+      </form>
+
+      <div class="fineprint">
+        Your selected slot is held for 10 minutes while you pay.<br>
+        Need to cancel later? Please give at least 48 hours’ notice.
+      </div>
+    </section>
+  </main>
+
+  <script src="/sidebar.js"></script>
+  <script src="/check-my-driving.js"></script>
+  <script src="/free-trial-sticky.js"></script>
+</body>
+</html>

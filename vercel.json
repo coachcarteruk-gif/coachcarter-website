@@ -38,6 +38,7 @@
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/r/:code", "destination": "/api/r?code=:code" },
     { "source": "/book/:slug", "destination": "/learner/book.html" },
+    { "source": "/check-my-driving", "destination": "/public/check-my-driving.html" },
     { "source": "/freetrial", "destination": "/free-lesson.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
   ],
