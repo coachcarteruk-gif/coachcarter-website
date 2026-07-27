@@ -26,7 +26,7 @@ test.describe('learner booking availability filter', () => {
     expect(js).toContain("if (availabilityFilter) availabilityFilter.addEventListener('change', onAvailabilityFilterChange);");
   });
 
-  test('exposes availability as its own learner page and lessons nav item', () => {
+  test('exposes availability as its own learner page and top-level nav item', () => {
     const availabilityHtml = read('public/learner/availability.html');
     const availabilityJs = read('public/learner/availability.js');
     const profileHtml = read('public/learner/profile.html');
@@ -37,10 +37,10 @@ test.describe('learner booking availability filter', () => {
     expect(availabilityHtml).toContain('id="btnSaveAvail"');
     expect(availabilityJs).toContain('/api/learner?action=my-availability');
     expect(availabilityJs).toContain('/api/learner?action=set-availability');
-    expect(profileHtml).toContain('href="/learner/availability.html"');
+    expect(profileHtml).not.toContain('href="/learner/availability.html"');
     expect(profileHtml).not.toContain('id="availDays"');
     expect(sidebar).toContain("label: 'Availability', href: '/learner/availability.html', authOnly: true");
-    expect(sidebar).toContain("'/learner/availability'");
+    expect(sidebar).toContain("{ icon: 'clock', label: 'Availability', href: '/learner/availability.html'");
   });
 
   test('filters only the client-side slot cache and keeps the server request contract unchanged', () => {

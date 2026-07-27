@@ -37,17 +37,19 @@ test.describe('test swaps marketplace', () => {
 
   test('learner profile stores official test date, time and centre', () => {
     const learner = read('api/learner.js');
-    const profile = read('public/learner/profile.html');
-    const profileJs = read('public/learner/profile.js');
+    const drivingTest = read('public/learner/driving-test.html');
+    const drivingTestJs = read('public/learner/driving-test.js');
     const update = functionBody(learner, 'handleUpdateProfile');
 
     expect(learner).toContain('test_date::text AS test_date, test_time, test_centre');
     expect(update).toContain('const { phone, pickup_address, test_date, test_time, test_centre } = req.body || {};');
     expect(update).toContain('test_centre    = ${nextTestCentre}');
-    expect(profile).toContain('id="officialTestSummary"');
-    expect(profile).toContain('id="testCentre"');
-    expect(profileJs).toContain('renderOfficialTestSummary');
-    expect(profileJs).toContain('test_centre: testCentre');
+    expect(drivingTest).toContain('id="testDate"');
+    expect(drivingTest).toContain('id="testTime"');
+    expect(drivingTest).toContain('id="testCentre"');
+    expect(drivingTestJs).toContain("ccAuth.fetchAuthed('/api/learner?action=progress')");
+    expect(drivingTestJs).toContain("ccAuth.fetchAuthed('/api/learner?action=update-profile'");
+    expect(drivingTestJs).toContain("test_centre: document.getElementById('testCentre').value.trim()");
   });
 
   test('learner API hides other learner identity while admin queue exposes contacts', () => {
@@ -69,16 +71,15 @@ test.describe('test swaps marketplace', () => {
     expect(admin).toContain('requester.phone AS requester_phone');
   });
 
-  test('UI exposes learner page, sidebar badge, and admin accepted queue', () => {
+  test('UI keeps the learner page directly available and exposes the admin accepted queue', () => {
     const sidebar = read('public/sidebar.js');
     const learnerHtml = read('public/learner/test-swaps.html');
     const learnerJs = read('public/learner/test-swaps.js');
     const adminHtml = read('public/admin/portal.html');
     const adminJs = read('public/admin/portal.js');
 
-    expect(sidebar).toContain("label: 'Test Swaps'");
-    expect(sidebar).toContain('cc-test-swaps-badge');
-    expect(sidebar).toContain('/api/test-swaps?action=notification-count');
+    expect(sidebar).not.toContain("label: 'Test Swaps'");
+    expect(sidebar).not.toContain('id="cc-test-swaps-badge"');
     expect(learnerHtml).toContain('/learner/test-swaps.js');
     expect(learnerHtml).toContain('id="inlineTestDate"');
     expect(learnerHtml).toContain('id="inlineTestTime"');

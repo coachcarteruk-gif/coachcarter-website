@@ -18,12 +18,15 @@ test.describe('booking overflow routing UI', () => {
   test('does not render selected instructor slots as other-instructor overflow', () => {
     const bookJs = read('public/learner/book.js');
     const initFeed = section(bookJs, 'async function initFeed() {', 'async function fetchFeedSlots');
-    const filterHelper = section(bookJs, 'function filterSlotCacheByInstructor(cache, instructorId, opts) {', 'function sortSlots');
+    const fetchFeed = section(bookJs, 'async function fetchFeedSlots(fromDate, toDate) {', 'function getDateRangeStrings');
+    const renderFeed = section(bookJs, 'function renderFeed() {', 'function updateFeedFooter');
 
-    expect(filterHelper).toContain('opts.exclude ? !sameInstructor : sameInstructor');
-    expect(initFeed).toContain('const selectedInstructorCache = filterSlotCacheByInstructor(overflowCache, instructorId);');
-    expect(initFeed).toContain('slotCache = selectedInstructorCache;');
-    expect(initFeed).toContain('overflowCache = filterSlotCacheByInstructor(overflowCache, instructorId, { exclude: true });');
-    expect(initFeed).toContain('overflowMode = true;');
+    expect(initFeed).toContain("const instructorId = document.getElementById('instructorFilter').value;");
+    expect(initFeed).toContain('if (instructorId) {');
+    expect(fetchFeed).toContain('if (instructorId) url += `&instructor_id=${instructorId}`;');
+    expect(renderFeed).toContain("const showInstructor = !document.getElementById('instructorFilter').value;");
+    expect(bookJs).not.toContain('overflowCache');
+    expect(bookJs).not.toContain('overflowMode');
+    expect(bookJs).not.toContain('filterSlotCacheByInstructor');
   });
 });

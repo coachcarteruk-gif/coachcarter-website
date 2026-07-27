@@ -10,10 +10,10 @@ function read(rel) {
 }
 
 function functionBody(source, name) {
-  let marker = `async function ${name}`;
+  let marker = `async function ${name}(`;
   let start = source.indexOf(marker);
   if (start < 0) {
-    marker = `function ${name}`;
+    marker = `function ${name}(`;
     start = source.indexOf(marker);
   }
   expect(start).toBeGreaterThanOrEqual(0);

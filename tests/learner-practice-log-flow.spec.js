@@ -57,15 +57,16 @@ test.describe('learner practice and log-session flow copy', () => {
     expect(html).toContain('View my driving plan');
   });
 
-  test('sidebar Practice submenu exposes Start a drive as the unified drive route', () => {
+  test('sidebar keeps unfinished Practice routes out of learner navigation', () => {
     const source = read('public/sidebar.js');
-    const practiceSection = source.slice(source.indexOf("{ icon: 'clipboard', label: 'Practice'"), source.indexOf("{ icon: 'play', label: 'Mark Scheme'"));
+    const learnerNav = source.slice(source.indexOf('learner: ['), source.indexOf('instructor: ['));
 
-    expect(practiceSection).toContain("label: 'Start a drive', href: '/learner/focused-practice.html'");
-    expect(practiceSection).toContain("label: 'Mock Test'");
-    expect(practiceSection).toContain("label: 'My driving plan'");
-    expect(practiceSection).not.toContain("label: 'Log a drive'");
-    expect(practiceSection).not.toContain("label: 'Practice Drive'");
+    expect(learnerNav).not.toContain("label: 'Practice'");
+    expect(learnerNav).not.toContain("label: 'Start a drive'");
+    expect(learnerNav).not.toContain("label: 'Mock Test'");
+    expect(learnerNav).not.toContain("label: 'My driving plan'");
+    expect(learnerNav).not.toContain("label: 'Log a drive'");
+    expect(learnerNav).not.toContain("label: 'Practice Drive'");
   });
 
   test('focused-practice route offers a just-drive / guided-drive choice with auto-linked bookings', () => {
