@@ -26,7 +26,7 @@ const stripeSentinel = {
   },
 };
 
-Module._load = function patchedLoad(request, parent, isMain) {
+function patchedLoad(request, parent, isMain) {
   const parentFile = parent?.filename || '';
 
   if (request === '@neondatabase/serverless') {
@@ -63,12 +63,23 @@ Module._load = function patchedLoad(request, parent, isMain) {
   }
 
   return originalLoad.call(this, request, parent, isMain);
-};
+}
 
-const adminHandler = require('../api/admin');
+let adminHandler;
+test.beforeAll(() => {
+  const adminPath = require.resolve('../api/admin');
+  delete require.cache[adminPath];
+  Module._load = patchedLoad;
+  try {
+    adminHandler = require(adminPath);
+  } finally {
+    Module._load = originalLoad;
+  }
+});
 
 test.afterAll(() => {
   Module._load = originalLoad;
+  delete require.cache[require.resolve('../api/admin')];
 });
 
 function makeRes() {
