@@ -105,31 +105,6 @@ a:hover { color: var(--accent-dk); }
   font-size: 17.5px;
 }
 
-.assessment-facts {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 22px;
-}
-
-.fact {
-  min-height: 78px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-}
-
-.fact strong {
-  display: block;
-  margin-bottom: 2px;
-  font-family: var(--font-head);
-  font-size: 17px;
-  font-weight: 900;
-}
-
-.fact span { color: var(--muted); font-size: 13px; }
-
 .simon-profile {
   display: grid;
   grid-template-columns: minmax(210px, 240px) minmax(0, 1fr);
@@ -510,9 +485,6 @@ a:hover { color: var(--accent-dk); }
   .hero { margin-bottom: 26px; text-align: center; }
   .hero h1 { font-size: 32px; }
   .hero > p { margin: 0 auto; font-size: 15.5px; }
-  .assessment-facts { grid-template-columns: 1fr; gap: 6px; }
-  .fact { min-height: 0; padding: 11px 13px; text-align: left; }
-  .fact strong { display: inline; margin-right: 6px; font-size: 15px; }
   .simon-profile { grid-template-columns: 1fr; margin-bottom: 26px; text-align: left; }
   .simon-photo-wrap { min-height: 0; aspect-ratio: 4 / 3; }
   .simon-photo { object-position: center 42%; }
@@ -553,11 +525,6 @@ a:hover { color: var(--accent-dk); }
       <span class="hero-eyebrow">Driving ability check</span>
       <h1>Find out where your driving <span class="accent-italic">really stands.</span></h1>
       <p>A focused assessment of your current driving, followed by clear, honest advice on what to work on next.</p>
-      <div class="assessment-facts" aria-label="Assessment details">
-        <div class="fact"><strong>90 minutes</strong><span>Enough time for a meaningful assessment</span></div>
-        <div class="fact"><strong id="heroPrice">Loading price…</strong><span>Secure online payment</span></div>
-        <div class="fact"><strong>Clear feedback</strong><span>Practical next steps, without pressure</span></div>
-      </div>
     </div>
 
     <section class="simon-profile" aria-labelledby="simon-profile-heading">

@@ -62,8 +62,7 @@ test.describe('driving ability check booking page', () => {
     await page.goto('/check-my-driving');
 
     await expect(page.getByRole('heading', { name: /Find out where your driving really stands/ })).toBeVisible();
-    await expect(page.getByText('90 minutes', { exact: true })).toBeVisible();
-    await expect(page.getByText('£82.50', { exact: true })).toBeVisible();
+    await expect(page.locator('.assessment-facts')).toHaveCount(0);
 
     await expect(page.getByRole('heading', { name: 'Meet Simon Edwards' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Simon Edwards, advanced driving instructor' })).toBeVisible();

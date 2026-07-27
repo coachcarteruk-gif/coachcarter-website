@@ -57,7 +57,6 @@
 
         lessonType = found;
         selectedPricePence = Number(found.price_pence);
-        renderPrice();
         setSubmitState();
         return found;
       })
@@ -65,7 +64,6 @@
         if (requestId !== pricingRequestId) return null;
         lessonType = null;
         selectedPricePence = null;
-        document.getElementById('heroPrice').textContent = 'Unavailable';
         showError(err.message || 'Could not load the assessment.');
         setSubmitState();
         throw err;
@@ -190,15 +188,6 @@
 
     var formAnchor = document.getElementById('step-2-heading');
     if (formAnchor) scrollToElement(formAnchor, 'start');
-  }
-
-  function renderPrice() {
-    var heroPrice = document.getElementById('heroPrice');
-    if (heroPrice) {
-      heroPrice.textContent = Number.isFinite(selectedPricePence) && selectedPricePence > 0
-        ? formatMoney(selectedPricePence)
-        : 'Price at checkout';
-    }
   }
 
   function updateSummary() {
