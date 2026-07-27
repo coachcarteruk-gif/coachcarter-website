@@ -184,7 +184,9 @@ test.describe('instructor add lesson payment links', () => {
     const api = read('api/instructor.js');
     const body = functionBody(api, 'handleCreateOffer');
 
-    expect(api).toContain("const { isLessonTypeOffered } = require('./_lesson-type-helpers');");
+    expect(api).toMatch(
+      /const \{[^}]*\bisLessonTypeOffered\b[^}]*\} = require\('\.\/_lesson-type-helpers'\);/
+    );
     expect(body).toContain('SELECT id, name, email, phone, offered_lesson_types FROM instructors');
     expect(body).toContain('AND school_id = ${schoolId}');
     expect(body).toContain('if (!isLessonTypeOffered(instrDetails.offered_lesson_types, lessonType.slug))');

@@ -50,7 +50,7 @@ const { withNeonTransaction } = require('./_db-transaction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
-const { isLessonTypeOffered } = require('./_lesson-type-helpers');
+const { isLessonTypeOffered, areOfferedLessonTypeSlugsValid } = require('./_lesson-type-helpers');
 const { logAudit } = require('./_audit');
 const {
   dateOnly: requestDateOnly,
@@ -1454,10 +1454,9 @@ async function handleUpdateProfile(req, res) {
   }
 
   // Validate offered_lesson_types: null (default lesson set) or array of slug strings
-  // TODO: dynamicise from lesson_types table — this list drifts from DB.
-  const validSlugs = ['standard', '2hr', '3hr', 'trial', '1hr'];
+  // Slug membership is checked against this school's lesson_types rows below.
   if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
-    if (!Array.isArray(offered_lesson_types) || !offered_lesson_types.every(s => validSlugs.includes(s))) {
+    if (!Array.isArray(offered_lesson_types) || !offered_lesson_types.every(slug => typeof slug === 'string')) {
       return res.status(400).json({ error: 'offered_lesson_types must be null or an array of valid lesson type slugs' });
     }
   }
@@ -1485,6 +1484,18 @@ async function handleUpdateProfile(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    if (offered_lesson_types !== undefined && offered_lesson_types !== null) {
+      const lessonTypeRows = await sql`
+        SELECT slug
+        FROM lesson_types
+        WHERE school_id = ${schoolId}
+      `;
+      const availableSlugs = lessonTypeRows.map(row => row.slug);
+      if (!areOfferedLessonTypeSlugsValid(offered_lesson_types, availableSlugs)) {
+        return res.status(400).json({ error: 'offered_lesson_types must be null or an array of valid lesson type slugs' });
+      }
+    }
 
     const bufVal = (buffer_minutes !== undefined && buffer_minutes !== null)
       ? parseInt(buffer_minutes) : null;

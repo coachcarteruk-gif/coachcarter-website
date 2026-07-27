@@ -9,8 +9,19 @@ function isLessonTypeOffered(offeredLessonTypes, slug) {
   return !isOptInOnlyLessonTypeSlug(slug);
 }
 
+function areOfferedLessonTypeSlugsValid(offeredLessonTypes, availableSlugs) {
+  if (!Array.isArray(offeredLessonTypes)) return false;
+  const validSlugs = new Set(availableSlugs);
+  return offeredLessonTypes.every(slug => (
+    typeof slug === 'string'
+    && slug.length > 0
+    && validSlugs.has(slug)
+  ));
+}
+
 module.exports = {
   OPT_IN_ONLY_LESSON_TYPE_SLUGS,
   isOptInOnlyLessonTypeSlug,
   isLessonTypeOffered,
+  areOfferedLessonTypeSlugsValid,
 };
