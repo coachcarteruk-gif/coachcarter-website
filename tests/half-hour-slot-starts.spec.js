@@ -35,10 +35,10 @@ test.describe('half-hour slot starts', () => {
   });
 
   test('learner availability windows can be set on half-hours', () => {
-    const profile = read('public/learner/profile.js');
+    const availability = read('public/learner/availability.js');
 
-    expect(profile).toContain("for (const m of ['00', '30'])");
-    expect(profile).toContain("if (h === 21 && m === '30') continue;");
-    expect(profile).not.toContain("for (const m of ['00', '15', '30', '45'])");
+    expect(availability).toContain("for (const m of ['00', '30'])");
+    expect(availability).toContain("if (h === 21 && m === '30') continue;");
+    expect(availability).not.toContain("for (const m of ['00', '15', '30', '45'])");
   });
 });

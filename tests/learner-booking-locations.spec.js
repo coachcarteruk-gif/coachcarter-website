@@ -8,8 +8,8 @@ function read(rel) {
 }
 
 function functionBody(source, name) {
-  const asyncNeedle = `async function ${name}`;
-  const syncNeedle = `function ${name}`;
+  const asyncNeedle = `async function ${name}(`;
+  const syncNeedle = `function ${name}(`;
   let start = source.indexOf(asyncNeedle);
   if (start < 0) start = source.indexOf(syncNeedle);
   expect(start).toBeGreaterThanOrEqual(0);
