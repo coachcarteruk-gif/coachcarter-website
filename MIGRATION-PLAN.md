@@ -6,9 +6,9 @@
 
 ## Current Architecture (Verified May 2026)
 
-**Frontend:** 57 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
+**Frontend:** 58 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
 **Backend:** 40 Vercel serverless API route files (excluding `_*.js` shared modules), 100+ actions via `?action=X` routing
-**Database:** Neon PostgreSQL, ~40 tables (single idempotent migration file at `db/migration.sql`; `waitlist` and `qa_*` tables are explicitly dropped near the end)
+**Database:** Neon PostgreSQL, ~41 tables (single idempotent migration file at `db/migration.sql`; `waitlist` and `qa_*` tables are explicitly dropped near the end)
 **Multi-tenancy:** Every tenant-scoped table has `school_id INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1`. Every SQL query filters by `school_id`. Every JWT carries `school_id`. School #1 is CoachCarter; new schools onboard via the superadmin portal. See `docs/multi-tenancy.md`.
 **Branding:** Two front doors share the same backend — `coachcarter.uk` (driving school) and `instructorbook.co.uk` (national SaaS for instructors). See `INSTRUCTORBOOK-PLAN.md`.
 **Auth:** JWT in httpOnly cookies (display blob in localStorage). All three roles use **email + password** sign-in (May 2026). `api/learner-auth.js` for learners, `api/instructor-auth.js` for instructors, `api/admin.js` for admins. Magic-link login retired. Magic-link infrastructure (`api/magic-link.js`) survives only for SMS code login, learner password-reset codes, and the email-code migration path for legacy learner accounts. Instructors are invite-only — admin sets/resets their password via the admin portal; instructor is forced to change it on first sign-in. Password helpers live in `api/_password.js`. Audit log via `api/_audit.js`.
@@ -24,8 +24,8 @@
 **Learner portal (22 pages):**
 - index (dashboard), book, buy-credits, lessons, lessons-hub, log-session, progress, mock-test, examiner-quiz, ask-examiner, advisor (hidden), videos, profile, onboarding, login, learn, practice, focused-practice, refer, my-data, confirm-deletion
 
-**Instructor portal (8 pages):**
-- index (calendar/dashboard), dashboard, availability, learners, profile, earnings, onboarding, login
+**Instructor portal (9 pages):**
+- index (calendar/dashboard), dashboard, availability, learners, profile, earnings, notes, onboarding, login
 
 **Admin portal (7 pages):**
 - dashboard, editor, portal, learner-controls, login, franchise-calculator, franchise-comparison, plus the legacy `admin.html` redirect at `public/admin.html`
@@ -42,7 +42,7 @@
 |------|------|-------|
 | `learner.js` | learner | Sessions, progress, profile, mock-tests, quiz, competency, onboarding, weekly availability, feedback submission, GDPR export/deletion |
 | `learner-auth.js` | none → learner | Signup, login, forgot-password (code-based reset), email-code migration |
-| `instructor.js` | instructor | Schedule, weekly availability, one-off availability overrides, blackouts, learner history, notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
+| `instructor.js` | instructor | Schedule, weekly availability, one-off availability overrides, blackouts, learner history, learner notes, shared school-wide instructor notes, stats, cancel-booking, reschedule, create-booking, create-offer (with `max_repeat_weeks`), broadcast endpoints |
 | `instructor-auth.js` | none → instructor | Login, change-password (forced on first sign-in via `must_change_password`) |
 | `instructors.js` | public/instructor | Public instructor profile lookups (used by booking page) |
 | `admin.js` | admin | Dashboard, bookings, instructor CRUD, learner management, learner controls read/update, learner feedback queue, credit adjustment, set-instructor-password, forgot-password code flow |
@@ -123,7 +123,7 @@ Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`]
 **Learning:** `driving_sessions`, `skill_ratings`, `learner_onboarding`, `quiz_results`, `mock_tests`, `mock_test_faults`, `focused_practice_sessions`
 **Community:** `enquiries`, `availability_submissions`, `learner_feedback`
 **Config:** `site_config`, `google_reviews`, `google_reviews_meta`
-**Notes:** `instructor_learner_notes`
+**Notes:** `instructor_learner_notes`, `instructor_notes`
 **Referrals:** `referrals`, `referral_clicks`
 **GDPR / compliance:** `cookie_consents`, `audit_log`, `deletion_requests`, `rate_limits`
 **Dropped (do not re-add):** `qa_questions`, `qa_answers` (April 2026), `waitlist` (May 2026 — replaced by `learner_availability` + cancellation broadcasts)

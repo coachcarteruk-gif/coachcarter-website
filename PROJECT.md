@@ -1,6 +1,6 @@
 # CoachCarter Website — Project Reference
 
-> **Last updated:** 3 April 2026
+> **Last updated:** 29 July 2026
 
 A complete reference for the CoachCarter driving instructor website. Use this when continuing development with an AI assistant — paste it in at the start of a new session so the AI is fully up to speed.
 
@@ -12,7 +12,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 
 - **Public marketing site** — homepage, pricing, availability, about, contact, Google Reviews
 - **Learner portal** — dashboard, lesson booking, session logging, progress tracking, examiner quiz, AI examiner chat, AI lesson advisor, mock driving tests, onboarding, videos, profile
-- **Instructor portal** — schedule, availability, profile
+- **Instructor portal** — schedule, availability, shared team notes, profile
 - **Admin portal** — instructors, bookings, availability, videos, dashboard
 - **Classroom** — public video library with grid + reels UI
 - **Examiner Knowledge Base** — interactive quiz + AI chat based on DVSA DL25 marking sheet
@@ -742,6 +742,8 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `payout-history` | GET | JWT | Paginated payout records for the instructor |
 | `next-payout-preview` | GET | JWT | Estimated next Friday payout amount + eligible lesson count |
 | `running-late` | POST | JWT | Notify all remaining learners today that instructor is running late. Body: `{ delay_minutes }` (1-120). Sends WhatsApp + email to each learner with upcoming scheduled lessons. Returns `{ ok, notified }` |
+| `list-notes` | GET | JWT | List every shared instructor note for the signed-in instructor's school, newest first. Returns each note with its author and timestamp. |
+| `create-note` | POST | JWT | Post a note to the signed-in instructor's school-wide board. Body: `{ content }`; trimmed content must be 1–2,000 characters. |
 
 ### API — `api/connect.js` (Stripe Connect)
 
@@ -778,6 +780,8 @@ Two alarm triggers:
 `instructors.social_video_opt_in` lets instructors offer a learner-selected 5% discount in exchange for that lesson being filmed for CoachCarter social media/training/marketing. The learner's per-booking choice is snapshotted on `lesson_bookings`; clients may request only `social_video_consent`, while the server validates instructor opt-in and calculates the discount.
 
 **`instructor_learner_notes`** — per instructor-learner pair. Columns: instructor_id, learner_id (unique together), notes, test_date, learner_category (`regular`, `sporadic`, `inactive`, `passed`, or NULL), custom_hourly_rate_pence (NULL = use standard school rate, otherwise hourly rate in pence that scales to all lesson durations). `learner_users.learner_category` is the global admin/broadcast-facing category; `instructor_learner_notes.learner_category` is the instructor relationship category. Used by direct booking checkout, lesson-types/duration pricing APIs, historical credit pricing, earnings view, and payout calculations. Direct pay-and-book pricing uses custom learner rate → instructor hourly rate → school `bulk_hourly_pence`; bulk discounts remain historical credit-package only.
+
+**`instructor_notes`** — school-wide instructor ideas board. Columns: school_id, instructor_id, content (1–2,000 characters), created_at. The composite instructor/school foreign key enforces tenant ownership, and the feed is always read with the authenticated instructor's `school_id`. Notes are deleted if their instructor account is deleted.
 
 **`instructor_availability`** — recurring weekly windows per instructor (day_of_week 0-6, start_time, end_time, transmission_type). Dual-car instructors can mark normal weekly windows as `manual`, `automatic`, or `both`; learner slot generation, duration validation, booking checkout, and reserved weekly moves clamp those values against the instructor profile's `transmission_type`.
 

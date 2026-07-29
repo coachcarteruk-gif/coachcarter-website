@@ -254,6 +254,8 @@ module.exports = async (req, res) => {
   if (action === 'next-payout-preview')  return handleNextPayoutPreview(req, res);
   if (action === 'complete-onboarding')  return handleCompleteOnboarding(req, res);
   if (action === 'running-late')         return handleRunningLate(req, res);
+  if (action === 'list-notes')           return handleListNotes(req, res);
+  if (action === 'create-note')          return handleCreateNote(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
 };
@@ -5219,6 +5221,132 @@ async function handleRunningLate(req, res) {
     console.error('running-late error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to send notifications', details: 'Internal server error' });
+  }
+}
+
+// ── Shared instructor notes ─────────────────────────────────────────────────
+
+async function handleListNotes(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({
+      error: true,
+      code: 'METHOD_NOT_ALLOWED',
+      message: 'GET required'
+    });
+  }
+
+  const auth = verifyInstructorAuth(req);
+  if (!auth) {
+    return res.status(401).json({
+      error: true,
+      code: 'UNAUTHORISED',
+      message: 'Please sign in as an instructor'
+    });
+  }
+
+  const schoolId = auth.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const notes = await sql`
+      SELECT n.id,
+             n.content,
+             n.created_at,
+             i.id AS author_id,
+             i.name AS author_name,
+             (n.instructor_id = ${auth.id}) AS is_current_instructor
+        FROM instructor_notes n
+        JOIN instructors i
+          ON i.id = n.instructor_id
+         AND i.school_id = n.school_id
+       WHERE n.school_id = ${schoolId}
+       ORDER BY n.created_at DESC, n.id DESC
+    `;
+
+    return res.json({ ok: true, notes });
+  } catch (err) {
+    console.error('list-notes error:', err);
+    reportError('/api/instructor?action=list-notes', err);
+    return res.status(500).json({
+      error: true,
+      code: 'NOTES_LOAD_FAILED',
+      message: 'Failed to load instructor notes'
+    });
+  }
+}
+
+async function handleCreateNote(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      error: true,
+      code: 'METHOD_NOT_ALLOWED',
+      message: 'POST required'
+    });
+  }
+
+  const auth = verifyInstructorAuth(req);
+  if (!auth) {
+    return res.status(401).json({
+      error: true,
+      code: 'UNAUTHORISED',
+      message: 'Please sign in as an instructor'
+    });
+  }
+
+  const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+  const contentLength = Array.from(content).length;
+  if (!content || contentLength > 2000) {
+    return res.status(400).json({
+      error: true,
+      code: 'INVALID_NOTE',
+      message: contentLength > 2000
+        ? 'Notes must be 2,000 characters or fewer'
+        : 'Write a note before posting'
+    });
+  }
+
+  const schoolId = auth.school_id || 1;
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [note] = await sql`
+      WITH inserted AS (
+        INSERT INTO instructor_notes (school_id, instructor_id, content)
+        SELECT ${schoolId}, i.id, ${content}
+          FROM instructors i
+         WHERE i.id = ${auth.id}
+           AND i.school_id = ${schoolId}
+        RETURNING id, school_id, instructor_id, content, created_at
+      )
+      SELECT n.id,
+             n.content,
+             n.created_at,
+             i.id AS author_id,
+             i.name AS author_name,
+             TRUE AS is_current_instructor
+        FROM inserted n
+        JOIN instructors i
+          ON i.id = n.instructor_id
+         AND i.school_id = n.school_id
+    `;
+
+    if (!note) {
+      return res.status(404).json({
+        error: true,
+        code: 'INSTRUCTOR_NOT_FOUND',
+        message: 'Instructor account not found'
+      });
+    }
+
+    return res.status(201).json({ ok: true, note });
+  } catch (err) {
+    console.error('create-note error:', err);
+    reportError('/api/instructor?action=create-note', err);
+    return res.status(500).json({
+      error: true,
+      code: 'NOTE_CREATE_FAILED',
+      message: 'Failed to post your note'
+    });
   }
 }
 

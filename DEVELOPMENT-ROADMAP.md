@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.124 - Shared Instructor Notes Board (29 July 2026)
+
+Adds a Notes item to the instructor sidebar and a school-wide ideas board at `/instructor/notes.html`. A labelled composer sits above a newest-first feed so instructors can share suggestions, reminders, and useful ideas with their team. Notes show the author and exact timestamp, safely render user text without HTML injection, and include clear loading, empty, success, error, keyboard-focus, reduced-motion, dark-mode, and phone layouts. The existing five-tab mobile bottom bar stays unchanged; Notes remains available from the mobile hamburger sidebar.
+
+The new `instructor_notes` table uses a composite `(instructor_id, school_id)` foreign key and feed indexes. `GET /api/instructor?action=list-notes` and `POST /api/instructor?action=create-note` both derive `school_id` from the authenticated instructor session, so a note is never visible across school tenants. Content is trimmed and constrained to 1–2,000 characters on both the API and database boundary.
+
+**Files:** `db/migration.sql`, `db/migrations/037_instructor_notes.sql`, `api/instructor.js`, `public/sidebar.js`, `public/instructor/notes.html`, `public/instructor/notes.css`, `public/instructor/notes.js`, `tests/instructor-notes-board.spec.js`, `docs/navigation.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.123 - Unified Instructor Day Planner (23 July 2026)
 
 Reduces instructor dashboard overload, especially on mobile, by giving desktop and mobile the same progressive-disclosure structure. The Calendar is now a learner-style month date selector followed by one chronological selected-day schedule; the old monthly/weekly/agenda choice is gone. Lessons, pending lesson requests, pending offers, recurring and one-off availability, and busy blocks all appear on their relevant date. Pending requests can be accepted or declined inline, while the existing lesson, offer, availability, and busy-time management flows remain intact. This is a compact date selector and list, not a return to the removed hour-slot grid or Daily view tab.

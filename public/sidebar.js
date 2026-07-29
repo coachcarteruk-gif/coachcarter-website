@@ -240,6 +240,7 @@
       { icon: 'clock', label: 'Availability', href: '/instructor/availability.html' },
       { icon: 'list', label: 'My Learners', href: '/instructor/learners.html' },
       { icon: 'tag', label: 'Earnings', href: '/instructor/earnings.html' },
+      { icon: 'fileText', label: 'Notes', href: '/instructor/notes.html' },
       'divider',
       { icon: 'user', label: 'Profile', href: '/instructor/profile.html' }
     ]
