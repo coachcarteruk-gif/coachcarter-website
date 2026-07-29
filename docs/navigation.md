@@ -38,7 +38,7 @@ Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that
 
 ## Instructor — sidebar items
 
-- Dashboard, Calendar, Availability, My Learners, Earnings
+- Dashboard, Calendar, Availability, My Learners, Earnings, Notes
 - (divider)
 - Profile
 
