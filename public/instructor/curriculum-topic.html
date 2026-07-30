@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Curriculum topic - CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/instructor.css">
+  <link rel="stylesheet" href="/instructor/curriculum.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <script src="/shared/branding.js"></script>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/instructor-auth.js"></script>
+  <script src="/shared/admin-auth.js"></script>
+  <script src="/shared/curriculum-auth.js"></script>
+</head>
+<body>
+  <main class="curriculum-page curriculum-workspace">
+    <a class="curriculum-back-link" href="/instructor/curriculum.html">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      All topics
+    </a>
+
+    <div id="topicWorkspace" aria-busy="true">
+      <div class="curriculum-loading curriculum-loading--page" role="status">
+        <span class="curriculum-spinner" aria-hidden="true"></span>
+        Loading topic...
+      </div>
+    </div>
+
+    <div id="curriculumStatus" class="curriculum-toast" role="status" aria-live="polite"></div>
+
+    <button class="curriculum-mobile-input" id="mobileAddInput" type="button" data-action="add-input" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+      Add your input
+    </button>
+  </main>
+
+  <div class="curriculum-sheet-backdrop" id="workspaceSheetBackdrop" hidden>
+    <section class="curriculum-sheet curriculum-sheet--workspace" id="workspaceSheet" role="dialog" aria-modal="true" aria-labelledby="workspaceSheetTitle">
+      <div class="curriculum-sheet-handle" aria-hidden="true"></div>
+      <header class="curriculum-sheet-header">
+        <div>
+          <p id="workspaceSheetEyebrow" class="curriculum-eyebrow">Add your input</p>
+          <h2 id="workspaceSheetTitle">Share an idea</h2>
+        </div>
+        <button class="curriculum-icon-button" type="button" data-close-workspace-sheet aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <div id="workspaceSheetBody"></div>
+    </section>
+  </div>
+
+  <script src="/instructor/curriculum-topic.js"></script>
+</body>
+</html>

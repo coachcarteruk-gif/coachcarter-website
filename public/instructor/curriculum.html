@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#262626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script src="/pwa.js" defer></script>
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <title>Curriculum - CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet" media="print" data-swap-media>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=Lato:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="/shared/instructor.css">
+  <link rel="stylesheet" href="/instructor/curriculum.css">
+  <script src="/shared/dark-mode.js"></script>
+  <script src="/shared/font-swap.js"></script>
+  <script src="/shared/branding.js"></script>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/instructor-auth.js"></script>
+  <script src="/shared/admin-auth.js"></script>
+  <script src="/shared/curriculum-auth.js"></script>
+</head>
+<body>
+  <main class="curriculum-page curriculum-landing">
+    <header class="curriculum-hero">
+      <div>
+        <p class="curriculum-eyebrow">Built by your school</p>
+        <h1>Curriculum</h1>
+        <p class="curriculum-intro">An evolving space for instructors to share what works, explore teaching ideas, and connect related topics.</p>
+      </div>
+      <button class="curriculum-button curriculum-button--primary curriculum-desktop-action" type="button" data-open-sheet="topic">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add topic
+      </button>
+    </header>
+
+    <section class="curriculum-search-panel" aria-labelledby="topic-search-title">
+      <h2 id="topic-search-title" class="sr-only">Search curriculum topics</h2>
+      <label for="topicSearch">Find a topic</label>
+      <div class="curriculum-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="topicSearch" type="search" autocomplete="off" placeholder="Try roundabouts, clutch control...">
+        <button id="clearTopicSearch" type="button" aria-label="Clear topic search" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section id="continueSection" class="curriculum-section" aria-labelledby="continueTitle" hidden>
+      <div class="curriculum-section-heading">
+        <div>
+          <p class="curriculum-eyebrow">Pick up where you left off</p>
+          <h2 id="continueTitle">Continue exploring</h2>
+        </div>
+      </div>
+      <div id="continueTopic"></div>
+    </section>
+
+    <section id="recentSection" class="curriculum-section" aria-labelledby="recentTitle">
+      <div class="curriculum-section-heading">
+        <div>
+          <p class="curriculum-eyebrow">Latest conversations</p>
+          <h2 id="recentTitle">Recently active</h2>
+        </div>
+      </div>
+      <div id="recentTopics" class="curriculum-topic-strip" aria-busy="true"></div>
+    </section>
+
+    <section class="curriculum-section" aria-labelledby="browseTitle">
+      <div class="curriculum-section-heading">
+        <div>
+          <p class="curriculum-eyebrow">School knowledge</p>
+          <h2 id="browseTitle">Browse topics</h2>
+        </div>
+        <span id="topicCount" class="curriculum-count" aria-live="polite"></span>
+      </div>
+      <div id="topicResults" class="curriculum-topic-list" aria-busy="true">
+        <div class="curriculum-loading" role="status"><span class="curriculum-spinner" aria-hidden="true"></span>Loading topics...</div>
+      </div>
+    </section>
+
+    <section id="suggestionReviewSection" class="curriculum-section curriculum-admin-review" aria-labelledby="suggestionReviewTitle" hidden>
+      <div class="curriculum-section-heading">
+        <div>
+          <p class="curriculum-eyebrow">Admin review</p>
+          <h2 id="suggestionReviewTitle">Structural suggestions</h2>
+        </div>
+        <span id="suggestionCount" class="curriculum-count"></span>
+      </div>
+      <div id="suggestionReviewList" class="curriculum-suggestion-list"></div>
+    </section>
+
+    <div id="curriculumStatus" class="curriculum-toast" role="status" aria-live="polite"></div>
+
+    <button class="curriculum-mobile-add" type="button" data-open-sheet="topic">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add topic
+    </button>
+  </main>
+
+  <div class="curriculum-sheet-backdrop" id="topicSheetBackdrop" hidden>
+    <section class="curriculum-sheet" id="topicSheet" role="dialog" aria-modal="true" aria-labelledby="topicSheetTitle">
+      <div class="curriculum-sheet-handle" aria-hidden="true"></div>
+      <header class="curriculum-sheet-header">
+        <div>
+          <p class="curriculum-eyebrow">Start a workspace</p>
+          <h2 id="topicSheetTitle">Add a topic</h2>
+        </div>
+        <button class="curriculum-icon-button" type="button" data-close-sheet aria-label="Close add topic">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <form id="topicForm" novalidate>
+        <div class="curriculum-field">
+          <label for="newTopicName">Topic name</label>
+          <input id="newTopicName" name="name" type="text" maxlength="120" autocomplete="off" aria-describedby="topicMatches topicFormError" required>
+          <p class="curriculum-field-help">Matches appear as you type so you can avoid creating a duplicate.</p>
+        </div>
+        <div id="topicMatches" class="curriculum-matches" aria-live="polite"></div>
+        <div class="curriculum-field">
+          <label for="newTopicDescription">Short description <span>Optional</span></label>
+          <textarea id="newTopicDescription" name="description" rows="4" maxlength="1200" placeholder="What might instructors explore here?"></textarea>
+        </div>
+        <p id="topicFormError" class="curriculum-form-error" role="alert"></p>
+        <div class="curriculum-sheet-actions">
+          <button class="curriculum-button curriculum-button--quiet" type="button" data-close-sheet>Cancel</button>
+          <button class="curriculum-button curriculum-button--primary" id="createTopicButton" type="submit">Create topic</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script src="/instructor/curriculum.js"></script>
+</body>
+</html>
