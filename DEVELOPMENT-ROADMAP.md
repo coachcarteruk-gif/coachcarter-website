@@ -2456,6 +2456,22 @@ GPT-audit finding #13: `api/create-checkout-session.js` accepted caller-supplied
 
 ---
 
+## July 2026 — Curriculum discovery MVP
+
+- Added a school-scoped, graph-ready Curriculum area for active instructors
+  and school admins.
+- Added searchable topics and subtopics, many-to-many connections, seven fixed
+  conversational contribution areas, named threaded replies, author-owned
+  editing, and local draft protection.
+- Added instructor structural suggestions plus audited admin rename, move,
+  archive, safe merge, and suggestion-review actions.
+- Added Controls, Junctions, and Manoeuvres as idempotent per-school starting
+  topics without defining an official curriculum.
+- Kept mind maps, AI summaries, scoring, completion tracking, publishing,
+  notifications, and cross-school sharing out of scope.
+
+---
+
 ## Technical Notes
 
 - **Stack:** Vanilla HTML/JS frontend, Vercel serverless functions (Node.js), Neon (PostgreSQL), Stripe, JWT auth, Resend + Nodemailer for email

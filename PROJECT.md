@@ -1232,6 +1232,44 @@ When a learner is deleted, data is handled as follows:
 
 ---
 
+## Curriculum MVP (July 2026)
+
+`/instructor/curriculum.html` is a school-specific discovery workspace for
+active instructors and school admins. It is deliberately not an official
+published curriculum: topics, named contributions, replies, and structural
+suggestions remain readable as raw conversations.
+
+### API — `api/curriculum.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `bootstrap` | GET | Active instructor or school admin | Returns the school topic list, seven fixed prompt definitions, current actor, activity counts, and pending suggestions for admins |
+| `topic` | GET | Active instructor or school admin | Returns one school-scoped topic, subtopics, graph connections, and attributed threaded contributions |
+| `create-topic` | POST | Active instructor or school admin | Creates a top-level topic or subtopic after duplicate matching |
+| `create-connection` | POST | Active instructor or school admin | Adds an undirected connection between two same-school topics |
+| `create-contribution` | POST | Active instructor or school admin | Adds a prompt contribution or typed conversational reply; `connect_topic` can also create a topic connection |
+| `edit-contribution` | POST | Owner only | Edits only the authenticated actor's own words and records `edited_at` |
+| `suggest-structure` | POST | Active instructor or school admin | Adds a named structural suggestion for admin review |
+| `admin-topic` | POST | School admin only | Renames, moves, archives, or safely merges a topic without deleting history |
+| `review-suggestion` | POST | School admin only | Accepts or rejects a pending structural suggestion and audit-logs the review |
+
+### Curriculum tables
+
+- `curriculum_topics` — school-scoped topics with optional list parent,
+  archive state, and safe merge redirect.
+- `curriculum_topic_connections` — undirected many-to-many topic edges,
+  ready for future mind maps and dependency views.
+- `curriculum_contributions` — seven fixed prompt areas, named thread seeds,
+  replies, optional linked topics, ownership, and edit timestamps.
+- `curriculum_structural_suggestions` — instructor/admin suggestions with
+  pending/accepted/rejected admin review state.
+
+The idempotent migration seeds Controls, Junctions, and Manoeuvres for existing
+schools. `bootstrap` lazily ensures the same starting topics for schools created
+after migration.
+
+---
+
 ## What's still to build
 
 - **Refund flow polish** — backend preview, tightly gated execute, admin execute UI, manual bank-refund ledger recording, admin refund-event discovery/detail, admin refund notes timeline, and read-only incident readiness classification exist. Learner request UI, richer approval workflow, and actual incident repair mutation tooling are still to build.

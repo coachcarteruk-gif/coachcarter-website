@@ -732,6 +732,30 @@ Note: Phase 0 is pure value — it improves the web experience too. Start there 
 
 ---
 
+## Curriculum portability note (July 2026)
+
+The web platform now includes a Curriculum discovery workspace backed by
+`api/curriculum.js`. A future native screen can reuse the same action endpoints
+without parsing web markup:
+
+- topic hierarchy is a read model (`parent_topic_id`) over graph-ready
+  many-to-many connections;
+- the seven contribution prompts are returned by the API as stable
+  `key`/`label` values;
+- conversations return flat attributed records with
+  `parent_contribution_id`, allowing native clients to build their own thread
+  presentation;
+- mutations return standard `{ ok: true, ... }` success shapes and
+  machine-readable error codes;
+- no DOM-only package, rich-text format, canvas mind map, or browser-specific
+  persistence is part of the data contract.
+
+The current web client uses localStorage only for disposable drafts and the
+last-opened topic. Native clients should replace those two conveniences with
+device storage; they are not server authority.
+
+---
+
 ## How to Use This Plan with Claude Code
 
 Start each session with:

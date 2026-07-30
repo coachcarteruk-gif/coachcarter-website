@@ -38,9 +38,13 @@ Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that
 
 ## Instructor — sidebar items
 
-- Dashboard, Calendar, Availability, My Learners, Earnings, Notes
+- Dashboard, Calendar, Availability, My Learners, Earnings, Curriculum, Notes
 - (divider)
 - Profile
+
+`Curriculum` opens the school-scoped instructor knowledge workspace. It is a
+sidebar destination only and is deliberately not added to the fixed five-item
+mobile bottom bar. School admins can also enter it from the admin portal.
 
 ## Desktop
 
