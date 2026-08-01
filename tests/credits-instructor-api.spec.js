@@ -69,6 +69,7 @@ function withMockedModules({ sql, stripe, pricing, grantCredits, fetchSessionFee
     path.join(repoRoot, 'api', '_pricing-helpers.js'),
     path.join(repoRoot, 'api', '_credit-grant.js'),
     path.join(repoRoot, 'api', '_stripe-fee.js'),
+    path.join(repoRoot, 'api', '_stripe-clients.js'),
     path.join(repoRoot, 'api', '_auth-helpers.js'),
     path.join(repoRoot, 'api', 'credits.js'),
     path.join(repoRoot, 'api', 'webhook.js'),
@@ -86,7 +87,9 @@ function withMockedModules({ sql, stripe, pricing, grantCredits, fetchSessionFee
     exports: { neon: () => sql },
   };
   require.cache[require.resolve('stripe')] = {
-    exports: () => stripe || { checkout: { sessions: { create: async () => ({ url: 'https://stripe.test/session' }) } } },
+    exports: function StripeFixture() {
+      return stripe || { checkout: { sessions: { create: async () => ({ url: 'https://stripe.test/session' }) } } };
+    },
   };
   require.cache[require.resolve(path.join(repoRoot, 'api', '_pricing-helpers.js'))] = {
     exports: pricing || {

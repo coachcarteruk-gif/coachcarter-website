@@ -21,7 +21,8 @@
 //
 // Both triggers email ERROR_ALERT_EMAIL via _error-alert.js sendAlertEmail.
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
 const { sendAlertEmail } = require('./_error-alert');
 const { verifyCronAuth } = require('./_auth');
 const { computePlatformBalance } = require('./_platform-balance');

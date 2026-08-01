@@ -55,6 +55,8 @@ const diagnosticSql = fs.readFileSync(
   'utf8'
 );
 const signingSecret = 'whsec_payout_v2_slice5_fixture';
+// Test-only signing helper: it never makes a Stripe request and intentionally
+// exercises stripe-node's local webhook-signature implementation directly.
 const stripeVerifier = new Stripe('sk_test_payout_v2_slice5_fixture');
 
 function hash(character) {

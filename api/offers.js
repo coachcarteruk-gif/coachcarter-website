@@ -11,7 +11,8 @@
 //     → cron-triggered: bulk-expire stale pending offers
 
 const crypto = require('crypto');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.PAYMENTS });
 const jwt    = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');

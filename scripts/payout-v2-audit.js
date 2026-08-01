@@ -15,7 +15,11 @@
 const fs = require('fs');
 const path = require('path');
 const { neon } = require('@neondatabase/serverless');
-const Stripe = require('stripe');
+const {
+  createPlatformStripeClient,
+  STRIPE_CLIENT_PURPOSES,
+  STRIPE_NETWORK_PROFILES,
+} = require('../api/_stripe-clients');
 
 function loadEnvLocal() {
   const envPath = path.resolve(__dirname, '..', '.env.local');
@@ -370,9 +374,10 @@ async function listAll(listCall, params, options) {
 }
 
 async function readStripe(stripeSecretKey, database) {
-  const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: '2023-10-16',
-    maxNetworkRetries: 2,
+  const stripe = createPlatformStripeClient({
+    purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION,
+    networkProfile: STRIPE_NETWORK_PROFILES.READ_ONLY_AUDIT,
+    env: { STRIPE_SECRET_KEY: stripeSecretKey },
   });
   const stripeTransfers = await listAll(
     stripe.transfers.list.bind(stripe.transfers),

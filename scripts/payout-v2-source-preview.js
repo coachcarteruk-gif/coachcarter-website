@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { neon } = require('@neondatabase/serverless');
-const Stripe = require('stripe');
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('../api/_stripe-clients');
 const {
   SOURCE_KINDS,
   buildStripeSourceRecord,
@@ -116,7 +116,9 @@ async function main() {
         ORDER BY ct.id
       `;
 
-  const stripeClient = databaseOnly ? null : new Stripe(process.env.STRIPE_SECRET_KEY);
+  const stripeClient = databaseOnly
+    ? null
+    : createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
   const preview = [];
   for (const row of candidates) {
     const sourceKind = sourceKindForType(row.type);
