@@ -1,0 +1,25 @@
+{
+  "rolloutId": "039-stripe-launch-schema-foundation",
+  "evidenceType": "production_schema_postflight",
+  "executedAt": "2026-08-01T14:30:23.746Z",
+  "targetFingerprint": "0a92fef666834a1af2cb924e8831119277a7a8d82ea8448baf9cc9997b1ef809",
+  "transactionReadOnly": true,
+  "migrationSha256": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
+  "diagnosticsSha256": "fcdd28136b255a78b0136e0c949c59ffc2754685c34e00219a8056b85591ae8f",
+  "postflight": {
+    "tablesPresent": 26,
+    "launchRows": 0,
+    "criticalIndexes": 13,
+    "schoolScopedTables": 26,
+    "functions": 25,
+    "triggers": 68,
+    "nullableBridgeColumns": 10,
+    "schoolsChecked": 1,
+    "schoolsOnV1": 1,
+    "historicFingerprintsUnchanged": true
+  },
+  "status": "SCHEMA_APPLIED_INACTIVE",
+  "payoutEngineActivated": false,
+  "stripeResourcesCreatedOrModified": false,
+  "stripeApiCalls": 0
+}

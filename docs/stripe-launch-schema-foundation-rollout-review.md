@@ -1,11 +1,10 @@
 # Stripe launch Slice 1 schema foundation rollout review
 
-**Status: PREPARED — NOT APPROVED — NOT DEPLOYED**
+**Status: SCHEMA_APPLIED_INACTIVE**
 
-This packet reviews migration 039 as an additive, inactive schema foundation.
-It is not an approval or an execution instruction. No database is identified as
-an approved target and no evidence in this packet claims that the migration has
-been applied.
+Migration 039 was applied schema-only to the verified production database on
+1 August 2026. The schema remains inactive: there are no launch configuration
+rows, application writers, Stripe operations, or payout-engine transitions.
 
 ## Scope
 
@@ -32,6 +31,14 @@ engine switch, refund execution, transfer execution, or UI.
   `db/rollouts/039-stripe-launch-schema-foundation.manifest.json`
 - Static rehearsal record:
   `db/rollouts/039-stripe-launch-schema-foundation.rehearsal.json`
+- Production preflight evidence:
+  `db/rollouts/039-stripe-launch-schema-foundation.preflight.json`
+- Neon recovery evidence:
+  `db/rollouts/039-stripe-launch-schema-foundation.recovery.json`
+- Atomic production apply evidence:
+  `db/rollouts/039-stripe-launch-schema-foundation.apply.json`
+- Production postflight evidence:
+  `db/rollouts/039-stripe-launch-schema-foundation.postflight.json`
 - Local verifier: `scripts/stripe-launch-schema-foundation-review.js`
 
 ## Required review sequence
@@ -59,19 +66,21 @@ check fails, historic fingerprints change, any launch row exists, a school is
 not v1, expected tenant constraints/guards are absent, or the target cannot be
 positively identified as the separately approved environment.
 
-## Authority explicitly not granted
+## Operational authority explicitly not granted
 
-This packet does not grant authority to execute a production migration; seed or
-backfill data; activate a school, launch configuration, agreement, or payout
-engine; change `payout_engine_version`; create or modify any Stripe account or
-object; issue a refund; calculate or execute a payout or transfer; connect a
-cron; add an application mutation route; or implement any later launch slice.
+The completed schema apply does not grant authority to seed or backfill data;
+activate a school, launch configuration, agreement, or payout engine; change
+`payout_engine_version`; create or modify any Stripe account or object; issue a
+refund; calculate or execute a payout or transfer; connect a cron; add an
+application mutation route; or implement any later launch slice.
 
 ## Current evidence
 
-The repository artifact is statically prepared and has been rehearsed against
-an explicitly named isolated non-production database. The rehearsal JSON
-records 10 passing database tests, an outer transaction rollback, and no
-persisted launch schema or data. No schema was deployed. Until separate
-production approval and target-specific evidence exist, the only valid status
-is **PREPARED — NOT APPROVED — NOT DEPLOYED**.
+The reviewed migration checksum was applied to Neon project
+`neon-green-elephant`, branch `main`, in one transaction with a 10-second lock
+timeout and 10-minute statement timeout. Fresh preflight had zero blockers.
+Transactional and post-commit postflight both confirmed 26 tables, zero launch
+rows, 13 critical indexes, 25 functions, 68 triggers, 10 nullable bridge
+columns, unchanged historic fingerprints, and one school still on payout
+engine v1. No Stripe API call or operational activation occurred. The valid
+status is **SCHEMA_APPLIED_INACTIVE**.

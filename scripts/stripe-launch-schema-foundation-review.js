@@ -12,7 +12,7 @@ const manifestPath = path.join(
   'rollouts',
   '039-stripe-launch-schema-foundation.manifest.json'
 );
-const status = 'PREPARED — NOT APPROVED — NOT DEPLOYED';
+const status = 'SCHEMA_APPLIED_INACTIVE';
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -40,17 +40,25 @@ function isReadOnlyDiagnostic(sql) {
 function inspect() {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const migrationBuffer = fs.readFileSync(path.join(root, manifest.migration.path));
-  const migration = migrationBuffer.toString('utf8');
-  const aggregate = read('db/migration.sql');
-  const preflight = read(manifest.diagnostics.preflight);
-  const postflight = read(manifest.diagnostics.postflight);
+  const migration = migrationBuffer.toString('utf8').replace(/\r\n/g, '\n');
+  const canonicalMigrationBuffer = Buffer.from(migration, 'utf8');
+  const aggregate = read('db/migration.sql').replace(/\r\n/g, '\n');
+  const preflight = read(manifest.diagnostics.preflight).replace(/\r\n/g, '\n');
+  const postflight = read(manifest.diagnostics.postflight).replace(/\r\n/g, '\n');
+  const rehearsalEvidence = JSON.parse(read(manifest.rehearsalEvidence.path));
+  const preflightEvidence = JSON.parse(read(manifest.preflightEvidence.path));
+  const recoveryEvidence = JSON.parse(read(manifest.recoveryEvidence.path));
+  const applyEvidence = JSON.parse(read(manifest.applyEvidence.path));
+  const postflightEvidence = JSON.parse(read(manifest.postflightEvidence.path));
   const executableMigration = stripComments(migration);
   const marker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
   const markerIndex = aggregate.lastIndexOf(marker);
 
   const observed = {
-    sha256: crypto.createHash('sha256').update(migrationBuffer).digest('hex'),
-    bytes: migrationBuffer.length,
+    sha256: crypto.createHash('sha256').update(canonicalMigrationBuffer).digest('hex'),
+    preflightSha256: crypto.createHash('sha256').update(preflight).digest('hex'),
+    postflightSha256: crypto.createHash('sha256').update(postflight).digest('hex'),
+    bytes: canonicalMigrationBuffer.length,
     lines: migration.split(/\r?\n/).filter((line, index, lines) => (
       index < lines.length - 1 || line.length > 0
     )).length,
@@ -71,14 +79,41 @@ function inspect() {
 
   const expected = manifest.expectedSchemaEffects;
   const checks = {
-    statusIsPreparedOnly:
+    statusIsSchemaAppliedInactive:
       manifest.status === status
-      && manifest.rehearsalEvidence.status === status,
-    noApprovalOrDeployment:
-      manifest.reviewPacketApproved === false
-      && manifest.productionPreflightApproved === false
-      && manifest.schemaApplyApproved === false
-      && manifest.deployed === false,
+      && manifest.rehearsalEvidence.status === 'PASSED_AND_ROLLED_BACK'
+      && manifest.preflightEvidence.status === 'PASSED'
+      && manifest.postflightEvidence.status === status,
+    productionEvidenceRecorded:
+      manifest.reviewPacketApproved === true
+      && manifest.productionPreflightApproved === true
+      && manifest.schemaApplyApproved === true
+      && manifest.deployed === true
+      && preflightEvidence.status === 'PASSED'
+      && preflightEvidence.applied === true
+      && applyEvidence.committed === true
+      && applyEvidence.rolledBack === false
+      && postflightEvidence.status === status,
+    recoveryCoverageRecorded:
+      recoveryEvidence.projectName === 'neon-green-elephant'
+      && recoveryEvidence.branchName === 'main'
+      && recoveryEvidence.historyRetentionHours === 6
+      && recoveryEvidence.productionTargetFingerprint === applyEvidence.targetFingerprint,
+    evidenceChecksumsMatch:
+      preflightEvidence.migrationSha256 === observed.sha256
+      && applyEvidence.migrationSha256 === observed.sha256
+      && postflightEvidence.migrationSha256 === observed.sha256
+      && preflightEvidence.diagnosticsSha256 === observed.preflightSha256
+      && postflightEvidence.diagnosticsSha256 === observed.postflightSha256,
+    schemaRemainsOperationallyInactive:
+      rehearsalEvidence.payoutEngineActivated === false
+      && applyEvidence.payoutEngineActivated === false
+      && postflightEvidence.payoutEngineActivated === false
+      && applyEvidence.stripeApiCalls === 0
+      && postflightEvidence.stripeApiCalls === 0
+      && manifest.expectedDataEffects.launchRows === 0
+      && manifest.expectedDataEffects.engineTransitions === 0
+      && manifest.operationalAuthorityNotGranted.length === 6,
     checksumMatches: observed.sha256 === manifest.migration.sha256,
     byteCountMatches: observed.bytes === manifest.migration.bytes,
     lineCountMatches: observed.lines === manifest.migration.lines,
@@ -114,15 +149,15 @@ function inspect() {
   return {
     rolloutId: manifest.rolloutId,
     reviewStatus: failures.length === 0 ? status : 'BLOCKED',
-    approved: false,
-    deployed: false,
+    approved: manifest.schemaApplyApproved,
+    deployed: manifest.deployed,
     migration: manifest.migration.path,
     observed,
     checks,
     failures,
     nextAction: failures.length === 0
-      ? 'Review only. Separate target-specific authority is required before production database execution or operational activation.'
-      : 'Resolve every verifier failure; do not execute migration 039.',
+      ? 'Schema applied and inactive. Separate authority is required before seeding, application writers, Stripe operations, or engine activation.'
+      : 'Resolve every verifier failure; do not activate or write the Slice 1 schema.',
   };
 }
 

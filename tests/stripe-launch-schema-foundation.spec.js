@@ -27,11 +27,27 @@ const rehearsal = JSON.parse(fs.readFileSync(
   path.join(root, 'db', 'rollouts', '039-stripe-launch-schema-foundation.rehearsal.json'),
   'utf8'
 ));
+const preflightEvidence = JSON.parse(fs.readFileSync(
+  path.join(root, 'db', 'rollouts', '039-stripe-launch-schema-foundation.preflight.json'),
+  'utf8'
+));
+const recoveryEvidence = JSON.parse(fs.readFileSync(
+  path.join(root, 'db', 'rollouts', '039-stripe-launch-schema-foundation.recovery.json'),
+  'utf8'
+));
+const applyEvidence = JSON.parse(fs.readFileSync(
+  path.join(root, 'db', 'rollouts', '039-stripe-launch-schema-foundation.apply.json'),
+  'utf8'
+));
+const postflightEvidence = JSON.parse(fs.readFileSync(
+  path.join(root, 'db', 'rollouts', '039-stripe-launch-schema-foundation.postflight.json'),
+  'utf8'
+));
 const { inspect, isReadOnlyDiagnostic } = require(
   '../scripts/stripe-launch-schema-foundation-review'
 );
 
-const STATUS = 'PREPARED — NOT APPROVED — NOT DEPLOYED';
+const STATUS = 'SCHEMA_APPLIED_INACTIVE';
 const TABLES = [
   'stripe_connect_launch_configs',
   'stripe_connect_launch_events',
@@ -246,18 +262,27 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(postDiagnosticSql).toContain('slice_1_nullable_bridge_columns');
   });
 
-  test('rollout artifacts grant no approval or operational authority', () => {
+  test('rollout artifacts record schema apply without operational authority', () => {
     expect(manifest.status).toBe(STATUS);
-    expect(rehearsal.status).toBe(STATUS);
-    expect(manifest.reviewPacketApproved).toBe(false);
-    expect(manifest.productionPreflightApproved).toBe(false);
-    expect(manifest.schemaApplyApproved).toBe(false);
-    expect(manifest.deployed).toBe(false);
+    expect(rehearsal.status).toBe('PASSED_AND_ROLLED_BACK');
+    expect(manifest.reviewPacketApproved).toBe(true);
+    expect(manifest.productionPreflightApproved).toBe(true);
+    expect(manifest.schemaApplyApproved).toBe(true);
+    expect(manifest.deployed).toBe(true);
     expect(rehearsal.databaseRehearsalExecuted).toBe(true);
     expect(rehearsal.rolledBack).toBe(true);
     expect(rehearsal.committedToDatabase).toBe(false);
     expect(rehearsal.authorityGranted).toBe(false);
-    expect(manifest.authorityNotGranted).toHaveLength(7);
+    expect(preflightEvidence.status).toBe('PASSED');
+    expect(preflightEvidence.applied).toBe(true);
+    expect(recoveryEvidence.historyRetentionHours).toBe(6);
+    expect(applyEvidence.committed).toBe(true);
+    expect(applyEvidence.payoutEngineActivated).toBe(false);
+    expect(applyEvidence.stripeApiCalls).toBe(0);
+    expect(postflightEvidence.status).toBe(STATUS);
+    expect(postflightEvidence.postflight.launchRows).toBe(0);
+    expect(postflightEvidence.postflight.historicFingerprintsUnchanged).toBe(true);
+    expect(manifest.operationalAuthorityNotGranted).toHaveLength(6);
     const review = inspect();
     expect(review.failures).toEqual([]);
     expect(review.reviewStatus).toBe(STATUS);

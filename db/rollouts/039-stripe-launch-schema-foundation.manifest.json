@@ -1,10 +1,11 @@
 {
   "rolloutId": "039-stripe-launch-schema-foundation",
-  "status": "PREPARED — NOT APPROVED — NOT DEPLOYED",
-  "reviewPacketApproved": false,
-  "productionPreflightApproved": false,
-  "schemaApplyApproved": false,
-  "deployed": false,
+  "status": "SCHEMA_APPLIED_INACTIVE",
+  "reviewPacketApproved": true,
+  "productionPreflightApproved": true,
+  "schemaApplyApproved": true,
+  "deployed": true,
+  "schemaAppliedAt": "2026-08-01T14:30:23.746Z",
   "migration": {
     "path": "db/migrations/039_stripe_launch_schema_foundation.sql",
     "sha256": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
@@ -15,7 +16,7 @@
     "atomicTransactionRequired": true,
     "onErrorStopRequired": true,
     "lockTimeoutRequired": true,
-    "allowedArtifactAfterSeparateApproval": "db/migrations/039_stripe_launch_schema_foundation.sql",
+    "allowedArtifact": "db/migrations/039_stripe_launch_schema_foundation.sql",
     "prohibitedEntrypoints": [
       "api/migrate.js",
       "db/migration.sql"
@@ -45,14 +46,29 @@
   },
   "rehearsalEvidence": {
     "path": "db/rollouts/039-stripe-launch-schema-foundation.rehearsal.json",
-    "status": "PREPARED — NOT APPROVED — NOT DEPLOYED"
+    "status": "PASSED_AND_ROLLED_BACK"
+  },
+  "preflightEvidence": {
+    "path": "db/rollouts/039-stripe-launch-schema-foundation.preflight.json",
+    "status": "PASSED"
+  },
+  "recoveryEvidence": {
+    "path": "db/rollouts/039-stripe-launch-schema-foundation.recovery.json",
+    "historyRetentionHours": 6
+  },
+  "applyEvidence": {
+    "path": "db/rollouts/039-stripe-launch-schema-foundation.apply.json",
+    "committed": true
+  },
+  "postflightEvidence": {
+    "path": "db/rollouts/039-stripe-launch-schema-foundation.postflight.json",
+    "status": "SCHEMA_APPLIED_INACTIVE"
   },
   "review": {
     "runbook": "docs/stripe-launch-schema-foundation-rollout-review.md",
     "localVerifier": "scripts/stripe-launch-schema-foundation-review.js"
   },
-  "authorityNotGranted": [
-    "execute a production migration",
+  "operationalAuthorityNotGranted": [
     "seed or backfill data",
     "activate a school or agreement",
     "change payout_engine_version",
