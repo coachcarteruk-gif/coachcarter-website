@@ -288,7 +288,7 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(review.reviewStatus).toBe(STATUS);
   });
 
-  test('application routes and browser code do not write or import the new schema', () => {
+  test('only the explicitly reviewed Slice 2 modules import the Slice 1 schema', () => {
     const applicationFiles = [
       ...walkFiles(path.join(root, 'api')),
       ...walkFiles(path.join(root, 'js')),
@@ -298,6 +298,9 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     const violations = applicationFiles
       .filter((file) => launchNamePattern.test(fs.readFileSync(file, 'utf8')))
       .map((file) => path.relative(root, file));
-    expect(violations).toEqual([]);
+    expect(violations.sort()).toEqual([
+      path.join('api', '_stripe-launch-payment-contracts.js'),
+      path.join('api', '_stripe-launch-payment-reconciler.js'),
+    ].sort());
   });
 });

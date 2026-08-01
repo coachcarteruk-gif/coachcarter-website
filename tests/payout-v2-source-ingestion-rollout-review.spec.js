@@ -36,14 +36,20 @@ test.describe('Payout v2 source-ingestion application rollout review', () => {
     });
   });
 
-  test('machine verifier passes every fail-closed application check', () => {
+  test('historical packet detects the deliberate Slice 2 application drift', () => {
     const report = inspect();
-    expect(report.reviewStatus).toBe('PREPARED_NOT_APPROVED_NOT_DEPLOYED');
+    expect(report.reviewStatus).toBe('BLOCKED');
     expect(report.approved).toBe(false);
     expect(report.deployed).toBe(false);
-    expect(report.failures).toEqual([]);
-    expect(report.artifactChecks.every((item) => item.matches)).toBe(true);
-    expect(Object.values(report.checks).every(Boolean)).toBe(true);
+    expect(report.failures).toEqual(['allApplicationArtifactsMatch']);
+    expect(report.artifactChecks.some((item) => !item.matches)).toBe(true);
+    expect(report.checks).toMatchObject({
+      signatureBeforeAnyReceiptOrBusinessWork: true,
+      canonicalScopeBeforeReceiptClaim: true,
+      stripeEvidenceHelperIsReadOnly: true,
+      v2ExecutionRoutesRemainUnreachable: true,
+      noHistoricalOrMoneyAuthority: true,
+    });
   });
 
   test('packet preserves v1 authority and explicitly excludes money actions', () => {

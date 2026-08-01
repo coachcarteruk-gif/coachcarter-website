@@ -238,20 +238,17 @@ test.describe('webhook paid offer BCS attribution', () => {
     const body = getOfferBookingBody();
 
     const duplicateIndex = body.indexOf("insertErr.message?.includes('uq_credit_tx_session')");
-    const sourceRetryIndex = body.indexOf('AS payout_source_exists', duplicateIndex);
-    const resumeIndex = body.indexOf('if (retryCandidate && !retryCandidate.payout_source_exists)', duplicateIndex);
     const errorIndex = body.indexOf('const duplicatePendingError = new Error(', duplicateIndex);
     const throwIndex = body.indexOf('throw duplicatePendingError;', duplicateIndex);
     const offerAcceptedUpdateIndex = body.indexOf('UPDATE lesson_offers', duplicateIndex);
 
     expect(duplicateIndex).toBeGreaterThanOrEqual(0);
-    expect(sourceRetryIndex).toBeGreaterThan(duplicateIndex);
-    expect(resumeIndex).toBeGreaterThan(sourceRetryIndex);
     expect(errorIndex).toBeGreaterThan(duplicateIndex);
-    expect(errorIndex).toBeGreaterThan(resumeIndex);
     expect(throwIndex).toBeGreaterThan(errorIndex);
     expect(offerAcceptedUpdateIndex).toBeGreaterThan(throwIndex);
     expect(body).toContain('previous webhook attempt likely failed mid-flight');
+    expect(body).not.toContain('AS payout_source_exists');
+    expect(body).not.toContain('resuming payout-v2 source ingestion');
   });
 
   test('accepted retry can repair a missing BCS only for single non-flex paid offers', () => {

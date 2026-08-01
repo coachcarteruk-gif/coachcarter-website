@@ -251,6 +251,7 @@ async function loadPayoutV2ShadowInput({
     LEFT JOIN payout_funding_sources pfs
       ON pfs.credit_transaction_id = bcs.credit_transaction_id
      AND pfs.school_id = bcs.school_id
+     AND (pfs.metadata->>'launch_accounting_version') IS DISTINCT FROM 'simon_launch_v1'
     LEFT JOIN LATERAL (
       SELECT COALESCE(SUM(bes.payable_contribution_pence), 0)::int AS instructor_pence
       FROM booking_earning_sources bes

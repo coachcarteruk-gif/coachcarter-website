@@ -23,6 +23,10 @@ const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
 const { allocate } = require('./_pence-allocator');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
+const {
+  PAYMENT_ORIGINS: STRIPE_LAUNCH_PAYMENT_ORIGINS,
+  prepareLaunchPaymentCandidate,
+} = require('./_stripe-launch-payment-contracts');
 
 function dateOnly(value) {
   if (!value) return null;
@@ -678,6 +682,15 @@ async function handleAcceptOffer(req, res) {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
     }
 
+    const launchMetadata = !isFlexible && repeatWeeksClean === 1
+      ? await prepareLaunchPaymentCandidate({
+          sql,
+          schoolId,
+          instructorId: Number(offer.instructor_id),
+          origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.ONE_OFF_OFFER,
+        })
+      : {};
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -716,7 +729,8 @@ async function handleAcceptOffer(req, res) {
         // Step 4 / Phase 2A: per-minute rate is invariant across the weekly
         // series (Stripe charges quantity = repeatWeeksClean), so the rate
         // computed here is correct for each booked lesson.
-        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0),
+        ...launchMetadata,
       },
       customer_email: resolvedEmail,
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,

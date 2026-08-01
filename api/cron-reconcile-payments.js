@@ -23,6 +23,9 @@ const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECO
 const { verifyCronAuth } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { withCronLock } = require('./_cron-lock');
+const {
+  reconcilePendingLaunchPaymentContracts,
+} = require('./_stripe-launch-payment-reconciler');
 
 // payment_type values that the webhook persists to credit_transactions.
 // The legacy pass_guarantee/calculator flow uses an in-memory Map and is
@@ -42,6 +45,14 @@ module.exports = async (req, res) => {
   // Lease 540s — paging through Stripe sessions can be slow on busy days.
   // Hourly schedule means a 9-min lease is well below the next firing.
   return withCronLock(req, res, 'cron-reconcile-payments', 540, async (sql) => {
+    // Slice 2 is strictly shadow-gated. With no school in shadow mode this
+    // query returns no candidates and performs no additional Stripe reads or
+    // launch writes. It can only promote a fully linked pending contract after
+    // the same immutable Stripe evidence proves funds are available.
+    const launchContracts = await reconcilePendingLaunchPaymentContracts({
+      sql,
+      connectionString: process.env.POSTGRES_URL,
+    });
     const cutoff = Math.floor(Date.now() / 1000) - LOOKBACK_SECONDS;
 
     // Page through completed sessions in the lookback window.
@@ -66,7 +77,7 @@ module.exports = async (req, res) => {
 
     const checked = candidateSessions.length;
     if (checked === 0) {
-      return { ok: true, checked: 0, missing: 0 };
+      return { ok: true, checked: 0, missing: 0, launch_contracts: launchContracts };
     }
 
     // Bulk lookup — single round-trip rather than one query per session.
@@ -89,6 +100,7 @@ module.exports = async (req, res) => {
       checked,
       missing: missing.length,
       missing_session_ids: missing.map(s => s.id),
+      launch_contracts: launchContracts,
     };
   });
 };

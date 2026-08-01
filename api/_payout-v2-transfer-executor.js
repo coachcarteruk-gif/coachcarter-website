@@ -544,6 +544,7 @@ async function loadValidatedBatchSnapshot(client, {
        JOIN payout_funding_sources pfs
          ON pfs.id = bes.funding_source_id
         AND pfs.school_id = bes.school_id
+        AND (pfs.metadata->>'launch_accounting_version') IS DISTINCT FROM 'simon_launch_v1'
       WHERE bes.school_id = $1
         AND bes.booking_earning_id = ANY($2::bigint[])
       ORDER BY bes.booking_earning_id, bes.funding_source_id
@@ -642,6 +643,7 @@ async function verifySourceCapacity(client, schoolId, transfers) {
          FROM payout_funding_sources pfs
         WHERE pfs.school_id = $1
           AND pfs.id = $2
+          AND (pfs.metadata->>'launch_accounting_version') IS DISTINCT FROM 'simon_launch_v1'
         LIMIT 1`,
         [schoolId, source.fundingSourceId, transfer.body.payout_batch_id]
       );
