@@ -1,0 +1,37 @@
+{
+  "rolloutId": "039-stripe-launch-schema-foundation",
+  "evidenceType": "production_preflight_in_atomic_apply_transaction",
+  "executedAt": "2026-08-01T14:30:21.511Z",
+  "targetFingerprint": "0a92fef666834a1af2cb924e8831119277a7a8d82ea8448baf9cc9997b1ef809",
+  "migrationSha256": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
+  "diagnosticsSha256": "a1c7d23d28e36ae898c272cba11961a079b87b7939a8faf1d72aa4f7cf0ae85d",
+  "beforeMigrationInSameAtomicTransaction": true,
+  "blockerCounts": {
+    "existingSlice1Relations": 0,
+    "nonV1Schools": 0,
+    "tenantScopeViolations": 0,
+    "duplicateStripeIdentities": 0
+  },
+  "historicFacts": {
+    "booking_earnings": {
+      "rowCount": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "lesson_bookings": {
+      "rowCount": 312,
+      "fingerprint": "1004cab10b91ec82655e6ff4c978edf6"
+    },
+    "payout_funding_sources": {
+      "rowCount": 5,
+      "fingerprint": "f2532492ea522c20e7d7158a23a44497"
+    },
+    "refund_events": {
+      "rowCount": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "blockers": [],
+  "status": "PASSED",
+  "approvedToApply": true,
+  "applied": true
+}

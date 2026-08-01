@@ -1,7 +1,7 @@
 {
   "rolloutId": "039-stripe-launch-schema-foundation",
   "evidenceType": "rollback_isolated_database_rehearsal",
-  "status": "PREPARED — NOT APPROVED — NOT DEPLOYED",
+  "status": "PASSED_AND_ROLLED_BACK",
   "databaseRehearsalExecuted": true,
   "reason": "Executed against a newly created, explicitly named isolated database on the configured test-only Neon endpoint. The database was initialized from the repository schema through migration 038 with one synthetic tenant fixture; migration 039, all diagnostic queries, and all test mutations ran inside an outer transaction and were rolled back.",
   "rehearsalDatabase": "codex_stripe_rehearsal_20260801_a",

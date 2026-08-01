@@ -1,0 +1,14 @@
+{
+  "rolloutId": "039-stripe-launch-schema-foundation",
+  "evidenceType": "neon_recovery_coverage",
+  "verifiedOn": "2026-08-01",
+  "verifiedBeforeSchemaApply": true,
+  "source": "Neon Console project dashboard",
+  "projectName": "neon-green-elephant",
+  "projectId": "falling-firefly-48751671",
+  "branchName": "main",
+  "branchId": "br-summer-silence-abcpp6vw",
+  "productionEndpointId": "ep-wispy-river-abygunjy",
+  "historyRetentionHours": 6,
+  "productionTargetFingerprint": "0a92fef666834a1af2cb924e8831119277a7a8d82ea8448baf9cc9997b1ef809"
+}
