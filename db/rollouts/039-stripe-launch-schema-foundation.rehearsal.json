@@ -1,0 +1,51 @@
+{
+  "rolloutId": "039-stripe-launch-schema-foundation",
+  "evidenceType": "rollback_isolated_database_rehearsal",
+  "status": "PREPARED — NOT APPROVED — NOT DEPLOYED",
+  "databaseRehearsalExecuted": true,
+  "reason": "Executed against a newly created, explicitly named isolated database on the configured test-only Neon endpoint. The database was initialized from the repository schema through migration 038 with one synthetic tenant fixture; migration 039, all diagnostic queries, and all test mutations ran inside an outer transaction and were rolled back.",
+  "rehearsalDatabase": "codex_stripe_rehearsal_20260801_a",
+  "migrationSha256": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
+  "staticReview": {
+    "canonicalAggregateMirrored": true,
+    "dmlStatements": 0,
+    "seedRows": 0,
+    "backfillRows": 0,
+    "stripeApiCalls": 0,
+    "applicationWriters": 0,
+    "engineTransitions": 0,
+    "cronWiring": 0
+  },
+  "verificationEvidence": {
+    "databaseRehearsal": {
+      "passed": 10,
+      "skipped": 0,
+      "failed": 0,
+      "launchSchemaPersistedAfterRollback": false,
+      "launchFundingRowsPersistedAfterRollback": 0,
+      "nonV1SchoolsAfterRollback": 0
+    },
+    "slice1AndPayoutSchema": {
+      "passed": 30,
+      "databaseGatedSkipped": 10,
+      "failed": 0
+    },
+    "javascriptSyntaxFilesPassed": 192,
+    "payoutV2Suites": {
+      "passed": 142,
+      "databaseGatedSkipped": 65,
+      "failed": 0
+    },
+    "standardSuiteWithCcTestDbDisabled": {
+      "passed": 874,
+      "databaseGatedSkipped": 276,
+      "failed": 0
+    }
+  },
+  "committedToDatabase": false,
+  "rolledBack": true,
+  "schemaApplyApproved": false,
+  "payoutEngineActivated": false,
+  "stripeResourcesCreatedOrModified": false,
+  "authorityGranted": false
+}

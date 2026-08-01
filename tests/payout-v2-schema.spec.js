@@ -110,8 +110,14 @@ test.describe('Payout v2 schema contracts', () => {
 
   test('numbered migration is mirrored exactly in the aggregate migration', () => {
     const marker = '-- Instructor Payout v2: inactive, append-only ledger foundation.';
+    const nextMigrationMarker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
     expect(aggregateSql.includes(marker)).toBe(true);
-    expect(aggregateSql.slice(aggregateSql.indexOf(marker)).trim()).toBe(sql.trim());
+    const start = aggregateSql.indexOf(marker);
+    const end = aggregateSql.indexOf(nextMigrationMarker, start);
+    expect(end).toBeGreaterThan(start);
+    expect(aggregateSql.slice(start, end).replace(/\r\n/g, '\n').trim()).toBe(
+      sql.replace(/\r\n/g, '\n').trim()
+    );
   });
 
   test('all new tables require explicit school scope with no school default', () => {

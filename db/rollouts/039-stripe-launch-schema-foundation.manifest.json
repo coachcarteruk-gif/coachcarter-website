@@ -1,0 +1,63 @@
+{
+  "rolloutId": "039-stripe-launch-schema-foundation",
+  "status": "PREPARED — NOT APPROVED — NOT DEPLOYED",
+  "reviewPacketApproved": false,
+  "productionPreflightApproved": false,
+  "schemaApplyApproved": false,
+  "deployed": false,
+  "migration": {
+    "path": "db/migrations/039_stripe_launch_schema_foundation.sql",
+    "sha256": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
+    "bytes": 108816,
+    "lines": 2577
+  },
+  "execution": {
+    "atomicTransactionRequired": true,
+    "onErrorStopRequired": true,
+    "lockTimeoutRequired": true,
+    "allowedArtifactAfterSeparateApproval": "db/migrations/039_stripe_launch_schema_foundation.sql",
+    "prohibitedEntrypoints": [
+      "api/migrate.js",
+      "db/migration.sql"
+    ]
+  },
+  "expectedSchemaEffects": {
+    "tables": 26,
+    "indexes": 61,
+    "functions": 25,
+    "literalTriggers": 52,
+    "generatedAppendOnlyTriggers": 16,
+    "runtimeTriggers": 68,
+    "nullableExistingTableColumns": 10
+  },
+  "expectedDataEffects": {
+    "dmlStatements": 0,
+    "seedRows": 0,
+    "backfillRows": 0,
+    "launchRows": 0,
+    "stripeApiCalls": 0,
+    "engineTransitions": 0,
+    "moneyMovement": 0
+  },
+  "diagnostics": {
+    "preflight": "db/diagnostics/stripe-launch-schema-foundation-pre-migration.sql",
+    "postflight": "db/diagnostics/stripe-launch-schema-foundation-post-migration.sql"
+  },
+  "rehearsalEvidence": {
+    "path": "db/rollouts/039-stripe-launch-schema-foundation.rehearsal.json",
+    "status": "PREPARED — NOT APPROVED — NOT DEPLOYED"
+  },
+  "review": {
+    "runbook": "docs/stripe-launch-schema-foundation-rollout-review.md",
+    "localVerifier": "scripts/stripe-launch-schema-foundation-review.js"
+  },
+  "authorityNotGranted": [
+    "execute a production migration",
+    "seed or backfill data",
+    "activate a school or agreement",
+    "change payout_engine_version",
+    "create Stripe accounts or objects",
+    "execute refunds, payouts or transfers",
+    "connect a cron or mutation route"
+  ]
+}
