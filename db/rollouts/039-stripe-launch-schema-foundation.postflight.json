@@ -5,7 +5,7 @@
   "targetFingerprint": "0a92fef666834a1af2cb924e8831119277a7a8d82ea8448baf9cc9997b1ef809",
   "transactionReadOnly": true,
   "migrationSha256": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
-  "diagnosticsSha256": "48dadc332f1b7dc1f828f0ddde4a46c57d783afb5428c1bf43df2a0d94927a7c",
+  "diagnosticsSha256": "fcdd28136b255a78b0136e0c949c59ffc2754685c34e00219a8056b85591ae8f",
   "postflight": {
     "tablesPresent": 26,
     "launchRows": 0,

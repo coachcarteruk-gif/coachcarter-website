@@ -43,8 +43,8 @@ function inspect() {
   const migration = migrationBuffer.toString('utf8').replace(/\r\n/g, '\n');
   const canonicalMigrationBuffer = Buffer.from(migration, 'utf8');
   const aggregate = read('db/migration.sql').replace(/\r\n/g, '\n');
-  const preflight = read(manifest.diagnostics.preflight);
-  const postflight = read(manifest.diagnostics.postflight);
+  const preflight = read(manifest.diagnostics.preflight).replace(/\r\n/g, '\n');
+  const postflight = read(manifest.diagnostics.postflight).replace(/\r\n/g, '\n');
   const rehearsalEvidence = JSON.parse(read(manifest.rehearsalEvidence.path));
   const preflightEvidence = JSON.parse(read(manifest.preflightEvidence.path));
   const recoveryEvidence = JSON.parse(read(manifest.recoveryEvidence.path));
