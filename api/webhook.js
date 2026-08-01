@@ -18,7 +18,6 @@ const {
 } = require('./_lesson-requests');
 const {
   SOURCE_KINDS: PAYOUT_V2_SOURCE_KINDS,
-  writeStripeFundingSource,
   isPayoutV2SchemaUnavailable,
 } = require('./_payout-v2-source-writer');
 const {
@@ -26,6 +25,12 @@ const {
   markStripeEventProcessed,
   markStripeEventFailed,
 } = require('./_stripe-event-receipts');
+const {
+  PAYMENT_ORIGINS: STRIPE_LAUNCH_PAYMENT_ORIGINS,
+  loadShadowLaunchConfig,
+  materializeLaunchPaymentContract,
+  isStripeLaunchSchemaUnavailable,
+} = require('./_stripe-launch-payment-contracts');
 
 
 function concreteLessonTransmissionType(value) {
@@ -223,6 +228,8 @@ async function claimPayoutV2Receipt(event) {
   if (!schoolId) return null;
 
   const sql = neon(process.env.POSTGRES_URL);
+  const launchConfig = await loadShadowLaunchConfig(sql, schoolId);
+  if (!launchConfig) return null;
   await validatePayoutV2ReceiptScope(event, sql, schoolId);
   try {
     const result = await claimStripeEventReceipt({
@@ -240,6 +247,8 @@ async function claimPayoutV2Receipt(event) {
       schoolId,
       stripeEventId: event.id,
       stripeEventType: event.type,
+      launchEnabled: true,
+      launchConfig,
     };
   } catch (err) {
     if (isPayoutV2SchemaUnavailable(err)) {
@@ -256,18 +265,30 @@ async function ensurePayoutV2StripeSource({
   sourceKind,
   fundingEvidence,
   eventContext,
+  launchContract = null,
 }) {
+  if (eventContext?.launchEnabled !== true) {
+    return { disabled: true };
+  }
   try {
-    return await writeStripeFundingSource({
-      sql,
-      schoolId,
-      creditTransactionId,
-      sourceKind,
-      stripeEvidence: fundingEvidence,
-      eventContext,
-    });
+    if (launchContract) {
+      return await materializeLaunchPaymentContract({
+        connectionString: process.env.POSTGRES_URL,
+        schoolId,
+        creditTransactionId,
+        bookingId: launchContract.bookingId,
+        metadata: launchContract.metadata,
+        expectedOrigin: launchContract.expectedOrigin,
+        fundingEvidence,
+        eventContext,
+      });
+    }
+    // Slice 2 only admits the four explicit one-payment/one-lesson origins.
+    // Credits, flexible/repeating offers, and every other legacy shape remain
+    // outside the launch source/contract path until their dedicated slice.
+    return { disabled: true, reason: 'unsupported_launch_payment_shape' };
   } catch (err) {
-    if (isPayoutV2SchemaUnavailable(err)) {
+    if (isPayoutV2SchemaUnavailable(err) || isStripeLaunchSchemaUnavailable(err)) {
       return { unavailable: true };
     }
     throw err;
@@ -279,7 +300,7 @@ async function handleCapturedRequestSource(paymentIntent, payoutV2Receipt) {
   const sql = payoutV2Receipt.sql;
   const schoolId = payoutV2Receipt.schoolId;
   const [source] = await sql`
-    SELECT ct.id AS credit_transaction_id
+    SELECT ct.id AS credit_transaction_id, lr.booking_id
     FROM lesson_requests lr
     JOIN credit_transactions ct
       ON ct.stripe_session_id = lr.stripe_session_id
@@ -314,6 +335,12 @@ async function handleCapturedRequestSource(paymentIntent, payoutV2Receipt) {
     eventContext: {
       stripeEventId: payoutV2Receipt.stripeEventId,
       stripeEventType: payoutV2Receipt.stripeEventType,
+      launchEnabled: true,
+    },
+    launchContract: {
+      bookingId: Number(source.booking_id),
+      metadata: paymentIntent.metadata || {},
+      expectedOrigin: STRIPE_LAUNCH_PAYMENT_ORIGINS.CAPTURED_REQUEST,
     },
   });
 }
@@ -790,6 +817,7 @@ async function handleCreditPurchase(session, eventContext = null) {
         eventContext: {
           stripeEventId: eventContext?.stripeEventId || null,
           stripeEventType: eventContext?.stripeEventType || null,
+          launchEnabled: eventContext?.launchEnabled === true,
         },
       });
     }
@@ -1131,22 +1159,6 @@ async function handleSlotBooking(session, eventContext = null) {
        LIMIT 1
     `;
     if (existingCreditTx) {
-      if (
-        Number.isSafeInteger(explicitPayoutV2SchoolId) &&
-        explicitPayoutV2SchoolId > 0
-      ) {
-        await ensurePayoutV2StripeSource({
-          sql,
-          schoolId: explicitPayoutV2SchoolId,
-          creditTransactionId: Number(existingCreditTx.id),
-          sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
-          fundingEvidence,
-          eventContext: {
-            stripeEventId: eventContext?.stripeEventId || null,
-            stripeEventType: eventContext?.stripeEventType || null,
-          },
-        });
-      }
       const existingBooking = await findExistingSlotBooking(sql, {
         learnerId, instructorId, scheduledDate, startTime, endTime, schoolId,
       });
@@ -1157,10 +1169,32 @@ async function handleSlotBooking(session, eventContext = null) {
           creditTransaction: existingCreditTx,
           durationMins: chargeMins,
         });
+        await ensurePayoutV2StripeSource({
+          sql,
+          schoolId,
+          creditTransactionId: Number(existingCreditTx.id),
+          sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+          fundingEvidence,
+          eventContext: {
+            stripeEventId: eventContext?.stripeEventId || null,
+            stripeEventType: eventContext?.stripeEventType || null,
+            launchEnabled: eventContext?.launchEnabled === true,
+          },
+          launchContract: {
+            bookingId: Number(existingBooking.id),
+            metadata,
+            expectedOrigin: bookingPurpose === 'test_date'
+              ? STRIPE_LAUNCH_PAYMENT_ORIGINS.TEST_DATE_DIRECT
+              : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
+          },
+        });
         return;
       }
       if (existingBooking && isTerminal(existingBooking.status)) {
         console.warn(`slot_booking ${session.id} has slot_purchase CT and refunded booking ${existingBooking.id}; not repairing active BCS`);
+        if (eventContext?.launchEnabled === true) {
+          throw new Error(`STRIPE_LAUNCH_BOOKING_TERMINAL_BEFORE_CONTRACT: ${session.id}`);
+        }
         return;
       }
 
@@ -1169,6 +1203,9 @@ async function handleSlotBooking(session, eventContext = null) {
       // booking/balance/notification path from a retry. The existing failure
       // alert path is responsible for operator recovery.
       console.warn(`slot_booking ${session.id} has slot_purchase CT but no matching booking; leaving orphan recovery to operator flow`);
+      if (eventContext?.launchEnabled === true) {
+        throw new Error(`STRIPE_LAUNCH_BOOKING_NOT_READY: ${session.id}`);
+      }
       return;
     }
 
@@ -1220,6 +1257,8 @@ async function handleSlotBooking(session, eventContext = null) {
         }
         if (
           racedCreditTx &&
+          racedBooking &&
+          blocksSlot(racedBooking.status) &&
           Number.isSafeInteger(explicitPayoutV2SchoolId) &&
           explicitPayoutV2SchoolId > 0
         ) {
@@ -1232,8 +1271,18 @@ async function handleSlotBooking(session, eventContext = null) {
             eventContext: {
               stripeEventId: eventContext?.stripeEventId || null,
               stripeEventType: eventContext?.stripeEventType || null,
+              launchEnabled: eventContext?.launchEnabled === true,
+            },
+            launchContract: {
+              bookingId: Number(racedBooking.id),
+              metadata,
+              expectedOrigin: bookingPurpose === 'test_date'
+                ? STRIPE_LAUNCH_PAYMENT_ORIGINS.TEST_DATE_DIRECT
+                : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
             },
           });
+        } else if (eventContext?.launchEnabled === true) {
+          throw new Error(`STRIPE_LAUNCH_BOOKING_NOT_READY: ${session.id}`);
         }
         return;
       }
@@ -1404,6 +1453,14 @@ async function handleSlotBooking(session, eventContext = null) {
         eventContext: {
           stripeEventId: eventContext?.stripeEventId || null,
           stripeEventType: eventContext?.stripeEventType || null,
+          launchEnabled: eventContext?.launchEnabled === true,
+        },
+        launchContract: {
+          bookingId: Number(booking.id),
+          metadata,
+          expectedOrigin: bookingPurpose === 'test_date'
+            ? STRIPE_LAUNCH_PAYMENT_ORIGINS.TEST_DATE_DIRECT
+            : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
         },
       });
     }
@@ -2149,6 +2206,14 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       `;
       if (existingOfferCreditTx) {
         const fundingEvidence = await fetchSessionFundingEvidence(session);
+        if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
+          await ensureSlotBookingBcs(sql, {
+            schoolId,
+            bookingId: offer.booking_id,
+            creditTransaction: existingOfferCreditTx,
+            durationMins,
+          });
+        }
         await ensurePayoutV2StripeSource({
           sql,
           schoolId,
@@ -2158,16 +2223,16 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
           eventContext: payoutV2Receipt ? {
             stripeEventId: payoutV2Receipt.stripeEventId,
             stripeEventType: payoutV2Receipt.stripeEventType,
+            launchEnabled: true,
           } : {},
+          launchContract: !isFlexible && repeatWeeks === 1 && offer.booking_id
+            ? {
+                bookingId: Number(offer.booking_id),
+                metadata,
+                expectedOrigin: STRIPE_LAUNCH_PAYMENT_ORIGINS.ONE_OFF_OFFER,
+              }
+            : null,
         });
-        if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
-          await ensureSlotBookingBcs(sql, {
-            schoolId,
-            bookingId: offer.booking_id,
-            creditTransaction: existingOfferCreditTx,
-            durationMins,
-          });
-        }
       }
       return;
     }
@@ -2283,69 +2348,19 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       offerCreditTx = creditTx;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        // Resume only the narrow failure boundary where the immutable credit
-        // transaction exists but its payout-v2 source does not. If the source
-        // already exists, later balance/booking work may have partially
-        // completed, so preserve the existing operator-review failure.
-        try {
-          const [retryCandidate] = await sql`
-            SELECT
-              ct.id,
-              ct.amount_pence,
-              ct.stripe_fee_pence,
-              ct.effective_rate_pence_per_minute,
-              ct.minutes,
-              EXISTS (
-                SELECT 1
-                  FROM payout_funding_sources pfs
-                 WHERE pfs.school_id = ct.school_id
-                   AND pfs.credit_transaction_id = ct.id
-              ) AS payout_source_exists
-              FROM credit_transactions ct
-             WHERE ct.stripe_session_id = ${session.id}
-               AND ct.type = 'slot_purchase'
-               AND ct.learner_id = ${learnerId}
-               AND ct.instructor_id = ${instructorId}
-               AND ct.school_id = ${schoolId}
-             LIMIT 1
-          `;
-          if (retryCandidate && !retryCandidate.payout_source_exists) {
-            offerCreditTx = retryCandidate;
-          }
-        } catch (retryLookupErr) {
-          if (!isPayoutV2SchemaUnavailable(retryLookupErr)) {
-            throw retryLookupErr;
-          }
-        }
-
-        if (offerCreditTx) {
-          console.warn(
-            `lesson_offer ${session.id}: resuming payout-v2 source ingestion after an earlier partial attempt`
-          );
-        } else {
-          const duplicatePendingError = new Error(
-            `lesson_offer ${session.id} already has a credit_transaction but offer ${offer.id} is not accepted; previous webhook attempt likely failed mid-flight`
-          );
+        // A source row is no longer an early progress marker in Slice 2: the
+        // exact contract can only be written after the booking and BCS exist.
+        // A pending offer plus an existing CT is therefore ambiguous. Never
+        // replay balance or booking mutations; only the accepted path above
+        // can repair a missing contract automatically.
+        const duplicatePendingError = new Error(
+          `lesson_offer ${session.id} already has a credit_transaction but offer ${offer.id} is not accepted; previous webhook attempt likely failed mid-flight`
+        );
         console.error('❌ lesson_offer: duplicate credit transaction on pending offer', duplicatePendingError.message);
-          throw duplicatePendingError;
-        }
+        throw duplicatePendingError;
       }
-      if (!offerCreditTx) {
-        throw insertErr;
-      }
+      throw insertErr;
     }
-
-    await ensurePayoutV2StripeSource({
-      sql,
-      schoolId,
-      creditTransactionId: Number(offerCreditTx.id),
-      sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
-      fundingEvidence: offerFundingEvidence,
-      eventContext: payoutV2Receipt ? {
-        stripeEventId: payoutV2Receipt.stripeEventId,
-        stripeEventType: payoutV2Receipt.stripeEventType,
-      } : {},
-    });
 
     // Net-zero add (matched by deduct below for slot-pinned offers, left in
     // place for flexible offers so the learner has balance to spend).
@@ -2484,12 +2499,42 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
     // attribution once every requested repeat week has been booked. Partial
     // repeats need a later CSA-aware slice because Stripe partially refunds
     // unused weeks while the source CT remains immutable.
+    let acceptedOffer = null;
     if (!isFlexible && repeatWeeks === 1 && seriesResult.booked.length === 1) {
       await ensureSlotBookingBcs(sql, {
         schoolId,
         bookingId: seriesResult.booked[0].booking_id,
         creditTransaction: offerCreditTx,
         durationMins,
+      });
+      // Persist the existing offer idempotency marker before the launch
+      // evidence write. If exact Stripe evidence is temporarily unavailable,
+      // the webhook retry enters the accepted replay path and repairs only
+      // the missing contract instead of repeating balance mutations/bookings.
+      [acceptedOffer] = await sql`
+        UPDATE lesson_offers
+        SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId},
+            accepted_at = COALESCE(accepted_at, NOW())
+        WHERE id = ${offer.id}
+          AND school_id = ${schoolId}
+        RETURNING kind, batch_id
+      `;
+      await ensurePayoutV2StripeSource({
+        sql,
+        schoolId,
+        creditTransactionId: Number(offerCreditTx.id),
+        sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+        fundingEvidence: offerFundingEvidence,
+        eventContext: payoutV2Receipt ? {
+          stripeEventId: payoutV2Receipt.stripeEventId,
+          stripeEventType: payoutV2Receipt.stripeEventType,
+          launchEnabled: true,
+        } : {},
+        launchContract: {
+          bookingId: Number(seriesResult.booked[0].booking_id),
+          metadata,
+          expectedOrigin: STRIPE_LAUNCH_PAYMENT_ORIGINS.ONE_OFF_OFFER,
+        },
       });
     } else if (!isFlexible && repeatWeeks > 1 && seriesResult.booked.length === repeatWeeks) {
       await ensureOfferSeriesBcs(sql, {
@@ -2530,14 +2575,16 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
     }
 
     // 4. Update the offer
-    const [acceptedOffer] = await sql`
-      UPDATE lesson_offers
-      SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId},
-          accepted_at = NOW()
-      WHERE id = ${offer.id}
-        AND school_id = ${schoolId}
-      RETURNING kind, batch_id
-    `;
+    if (!acceptedOffer) {
+      [acceptedOffer] = await sql`
+        UPDATE lesson_offers
+        SET status = 'accepted', booking_id = ${booking.id}, learner_id = ${learnerId},
+            accepted_at = NOW()
+        WHERE id = ${offer.id}
+          AND school_id = ${schoolId}
+        RETURNING kind, batch_id
+      `;
+    }
 
     // 4b. If this was a broadcast offer, supersede sibling rows in the batch
     // and send "no longer available" follow-up to those losers (fire-and-forget).

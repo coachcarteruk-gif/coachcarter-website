@@ -69,6 +69,10 @@ const {
 } = require('./_stripe-payment-methods');
 const { resolveSchoolFromRequest } = require('./_tenant');
 const {
+  PAYMENT_ORIGINS: STRIPE_LAUNCH_PAYMENT_ORIGINS,
+  prepareLaunchPaymentCandidate,
+} = require('./_stripe-launch-payment-contracts');
+const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
   copyRefundedBookingCreditSources,
@@ -3723,6 +3727,12 @@ async function handleCheckoutTestDate(req, res) {
     const lessonDate = new Date(ctx.testDate + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
     const pricePence = directPrice.pricePence;
+    const launchMetadata = await prepareLaunchPaymentCandidate({
+      sql: ctx.sql,
+      schoolId: ctx.schoolId,
+      instructorId: Number(ctx.instructor.id),
+      origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.TEST_DATE_DIRECT,
+    });
 
     session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -3759,6 +3769,7 @@ async function handleCheckoutTestDate(req, res) {
         test_time: ctx.testTime,
         test_centre: ctx.testCentre || '',
         effective_rate_pence_per_minute: String(Math.round(pricePence / TEST_DATE_DURATION_MINUTES)),
+        ...launchMetadata,
       },
       ...(emailValid ? { customer_email: ctx.learner.email } : {}),
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
@@ -5011,6 +5022,12 @@ async function handleCheckoutRequest(req, res) {
     const emailForStripe = learnerRecord.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(learnerRecord.email).trim())
       ? learnerRecord.email : (cleanGuestEmail || null);
 
+    const launchMetadata = await prepareLaunchPaymentCandidate({
+      sql,
+      schoolId,
+      instructorId: Number(instructor_id),
+      origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.CAPTURED_REQUEST,
+    });
     const requestPaymentMetadata = {
       payment_type: 'lesson_request_hold',
       learner_id: String(learnerId),
@@ -5029,6 +5046,7 @@ async function handleCheckoutRequest(req, res) {
       guest_name: cleanGuestName || '',
       guest_email: cleanGuestEmail || '',
       guest_phone: cleanGuestPhone || '',
+      ...launchMetadata,
     };
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -5282,6 +5300,12 @@ async function handleCheckoutSlot(req, res) {
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    const launchMetadata = await prepareLaunchPaymentCandidate({
+      sql,
+      schoolId,
+      instructorId: Number(instructor_id),
+      origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -5319,7 +5343,8 @@ async function handleCheckoutSlot(req, res) {
         social_video_discount_pence: String(priced.discountPence),
         // Step 4 / Phase 2A: derivable from pricePence/durationMins per the
         // source-of-truth rule, snapshotted for audit clarity.
-        effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0)
+        effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0),
+        ...launchMetadata,
       },
       ...(emailValid ? { customer_email: learner.email } : {}),
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
@@ -5628,6 +5653,12 @@ async function handleCheckoutSlotGuest(req, res) {
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    const launchMetadata = await prepareLaunchPaymentCandidate({
+      sql,
+      schoolId,
+      instructorId: Number(instructor_id),
+      origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -5664,7 +5695,8 @@ async function handleCheckoutSlotGuest(req, res) {
         social_video_discount_pct: String(socialVideo.discountPct),
         social_video_discount_pence: String(priced.discountPence),
         // Step 4 / Phase 2A: snapshot for audit clarity.
-        effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0)
+        effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0),
+        ...launchMetadata,
       },
       customer_email: cleanEmail,
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,

@@ -240,11 +240,14 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(executable).not.toMatch(/\bINSERT\s+INTO\s+stripe_connect_launch_configs\b/i);
   });
 
-  test('numbered migration is the exact canonical aggregate suffix', () => {
+  test('numbered migration remains an exact canonical aggregate segment', () => {
     const marker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
-    const start = aggregateSql.lastIndexOf(marker);
+    const normalizedAggregate = aggregateSql.replace(/\r\n/g, '\n');
+    const normalizedMigration = sql.replace(/\r\n/g, '\n').trim();
+    const start = normalizedAggregate.lastIndexOf(marker);
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(aggregateSql.slice(start).trim()).toBe(sql.trim());
+    expect(normalizedAggregate.slice(start, start + normalizedMigration.length))
+      .toBe(normalizedMigration);
   });
 
   test('preflight and postflight diagnostics are read-only and fail closed', () => {
@@ -288,7 +291,7 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(review.reviewStatus).toBe(STATUS);
   });
 
-  test('application routes and browser code do not write or import the new schema', () => {
+  test('only the explicitly reviewed Slice 2 modules import the Slice 1 schema', () => {
     const applicationFiles = [
       ...walkFiles(path.join(root, 'api')),
       ...walkFiles(path.join(root, 'js')),
@@ -298,6 +301,9 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     const violations = applicationFiles
       .filter((file) => launchNamePattern.test(fs.readFileSync(file, 'utf8')))
       .map((file) => path.relative(root, file));
-    expect(violations).toEqual([]);
+    expect(violations.sort()).toEqual([
+      path.join('api', '_stripe-launch-payment-contracts.js'),
+      path.join('api', '_stripe-launch-payment-reconciler.js'),
+    ].sort());
   });
 });

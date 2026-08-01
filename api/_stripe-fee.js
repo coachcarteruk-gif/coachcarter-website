@@ -24,6 +24,9 @@ function emptyFundingEvidence({ checkoutSessionId = null, paymentIntentId = null
     balanceTransactionType: null,
     balanceTransactionAmountPence: null,
     balanceTransactionCurrency: null,
+    balanceTransactionStatus: null,
+    paymentCreatedAt: null,
+    fundsAvailableAt: null,
     amountPence: null,
     currency: null,
     feePence: null,
@@ -118,6 +121,16 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
         typeof balanceTransaction?.currency === 'string'
           ? balanceTransaction.currency
           : null,
+      balanceTransactionStatus:
+        typeof balanceTransaction?.status === 'string'
+          ? balanceTransaction.status
+          : null,
+      paymentCreatedAt: Number.isSafeInteger(paymentIntent?.created)
+        ? new Date(paymentIntent.created * 1000).toISOString()
+        : null,
+      fundsAvailableAt: Number.isSafeInteger(balanceTransaction?.available_on)
+        ? new Date(balanceTransaction.available_on * 1000).toISOString()
+        : null,
       amountPence: Number.isSafeInteger(paymentIntent?.amount_received)
         ? paymentIntent.amount_received
         : (Number.isSafeInteger(charge?.amount) ? charge.amount : null),
