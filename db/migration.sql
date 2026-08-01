@@ -7332,9 +7332,14 @@ CREATE CONSTRAINT TRIGGER launch_batch_run_totals_guard
   FOR EACH ROW EXECUTE FUNCTION stripe_launch_validate_run_totals();
 
 -- Stripe Connect Simon launch: forward-only correction for the Slice 1
--- payout-source fill-once guard. JSONB -> returns JSON null for SQL NULL;
--- ->> returns SQL NULL, allowing the intended first fill while preserving
--- immutability after a value is known.
+-- payout-source fill-once guard.
+--
+-- PostgreSQL JSONB extraction with -> returns a JSON null value for an SQL
+-- NULL column. JSON null is itself non-NULL to SQL, so migration 039's guard
+-- rejected the first legitimate NULL-to-value fill. Text extraction with ->>
+-- returns SQL NULL and preserves the intended append-only rule: a launch fact
+-- may be filled once, but can never be replaced afterward.
+
 CREATE OR REPLACE FUNCTION stripe_launch_guard_payout_source_update()
 RETURNS TRIGGER AS $$
 DECLARE

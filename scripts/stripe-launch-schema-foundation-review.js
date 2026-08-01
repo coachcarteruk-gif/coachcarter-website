@@ -53,6 +53,7 @@ function inspect() {
   const executableMigration = stripComments(migration);
   const marker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
   const markerIndex = aggregate.lastIndexOf(marker);
+  const canonicalMigration = migration.trim();
 
   const observed = {
     sha256: crypto.createHash('sha256').update(canonicalMigrationBuffer).digest('hex'),
@@ -134,7 +135,8 @@ function inspect() {
         .test(executableMigration),
     aggregateSuffixMatches:
       markerIndex >= 0
-      && aggregate.slice(markerIndex).trim() === migration.trim(),
+      && aggregate.slice(markerIndex, markerIndex + canonicalMigration.length)
+        === canonicalMigration,
     preflightIsReadOnly: isReadOnlyDiagnostic(preflight),
     postflightIsReadOnly: isReadOnlyDiagnostic(postflight),
     broadRunnerIsProhibited:

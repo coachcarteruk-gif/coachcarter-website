@@ -240,11 +240,14 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(executable).not.toMatch(/\bINSERT\s+INTO\s+stripe_connect_launch_configs\b/i);
   });
 
-  test('numbered migration is the exact canonical aggregate suffix', () => {
+  test('numbered migration remains an exact canonical aggregate segment', () => {
     const marker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
-    const start = aggregateSql.lastIndexOf(marker);
+    const normalizedAggregate = aggregateSql.replace(/\r\n/g, '\n');
+    const normalizedMigration = sql.replace(/\r\n/g, '\n').trim();
+    const start = normalizedAggregate.lastIndexOf(marker);
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(aggregateSql.slice(start).trim()).toBe(sql.trim());
+    expect(normalizedAggregate.slice(start, start + normalizedMigration.length))
+      .toBe(normalizedMigration);
   });
 
   test('preflight and postflight diagnostics are read-only and fail closed', () => {
