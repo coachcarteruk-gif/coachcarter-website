@@ -5,7 +5,7 @@
 // calls a Stripe mutation API.
 
 const { neon } = require('@neondatabase/serverless');
-const Stripe = require('stripe');
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('../api/_stripe-clients');
 const {
   computePayoutV2ProtectedBalance,
   calculateWithdrawalPreflight,
@@ -29,7 +29,7 @@ async function main() {
   if (!process.env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY is required for this explicit read-only diagnostic');
   const scope = parseScope();
   const sql = neon(process.env.POSTGRES_URL);
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
   const calculation = await computePayoutV2ProtectedBalance({
     sql,
     scope,

@@ -47,7 +47,8 @@ const POSTGRES_URL      = process.env.POSTGRES_URL;
 if (!STRIPE_SECRET_KEY) die(`STRIPE_SECRET_KEY missing (looked in ${ENVPATH})`);
 if (!POSTGRES_URL)      die(`POSTGRES_URL missing (looked in ${ENVPATH})`);
 
-const stripe = require('stripe')(STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('../api/_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
 const { neon } = require('@neondatabase/serverless');
 const sql = neon(POSTGRES_URL);
 

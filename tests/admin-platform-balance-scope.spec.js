@@ -34,7 +34,7 @@ function patchedLoad(request, parent, isMain) {
   }
 
   if (request === 'stripe') {
-    return () => stripeSentinel;
+    return function StripeFixture() { return stripeSentinel; };
   }
 
   if (request === './_platform-balance' && parentFile.endsWith(`${path.sep}api${path.sep}admin.js`)) {

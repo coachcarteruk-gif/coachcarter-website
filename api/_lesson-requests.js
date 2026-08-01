@@ -17,7 +17,8 @@
 // decided-but-unreleased rows so a crash between claim and release always
 // self-heals in the learner's favour.
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.PAYMENTS });
 const { sendWhatsApp } = require('./_whatsapp');
 const { createTransporter } = require('./_auth-helpers');
 const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant');

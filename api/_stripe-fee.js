@@ -2,7 +2,8 @@
 // inactive Payout v2 funding-source writer. A failed lookup remains non-fatal
 // to existing payment handling; Payout v2 classifies the source manual_review.
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
 
 function stripeObjectId(value) {
   if (typeof value === 'string') return value;

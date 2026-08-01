@@ -18,7 +18,8 @@
 // retries failed with TLS errors and the customer never received a
 // confirmation email. See DEVELOPMENT-ROADMAP.md entry 2.88.
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
 const { verifyCronAuth } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { withCronLock } = require('./_cron-lock');

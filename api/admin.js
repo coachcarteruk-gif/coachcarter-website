@@ -57,6 +57,7 @@ const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie, p
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { sendWhatsApp } = require('./_whatsapp');
 const { lockBalanceAndMutate } = require('./_credit-grant');
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
 const {
   validateGoodwillRequest,
   validateReconciliationRequest,
@@ -198,8 +199,8 @@ async function resolveLearnerBroadcastRecipients(sql, schoolId, categories) {
   };
 }
 
-function createStripeClient() {
-  return require('stripe')(process.env.STRIPE_SECRET_KEY);
+function createStripeClient(purpose = STRIPE_CLIENT_PURPOSES.PLATFORM_V1) {
+  return createPlatformStripeClient({ purpose });
 }
 
 // Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)
@@ -3592,7 +3593,7 @@ async function handleCreditReconciliationContract(req, res) {
   if (isCreditReconciliationDryRun(req.body || {})) {
     try {
       const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
-      const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+      const stripeClient = req.stripeClient || req._stripe || createStripeClient(STRIPE_CLIENT_PURPOSES.RECONCILIATION);
       const result = await inspectCreditReconciliation({
         sql,
         stripe: stripeClient,
@@ -3624,7 +3625,7 @@ async function handleCreditReconciliationContract(req, res) {
 
   try {
     const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
-    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient(STRIPE_CLIENT_PURPOSES.RECONCILIATION);
     const result = await grantReconciliationCredits({
       sql,
       stripe: stripeClient,
@@ -3667,7 +3668,7 @@ async function handleRefundPreview(req, res) {
 
   try {
     const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
-    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient(STRIPE_CLIENT_PURPOSES.REFUNDS);
     const result = await planAdminRefundPreview({
       sql,
       stripe: stripeClient,
@@ -3715,7 +3716,7 @@ async function handleExecuteRefund(req, res) {
 
   try {
     const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
-    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient(STRIPE_CLIENT_PURPOSES.REFUNDS);
     const result = await executeAdminRefund({
       sql,
       stripe: stripeClient,
@@ -3775,7 +3776,7 @@ async function handleRecordManualBankRefund(req, res) {
 
   try {
     const sql = req.sql || req._sql || neon(process.env.POSTGRES_URL);
-    const stripeClient = req.stripeClient || req._stripe || createStripeClient();
+    const stripeClient = req.stripeClient || req._stripe || createStripeClient(STRIPE_CLIENT_PURPOSES.REFUNDS);
     const result = await recordManualBankRefund({
       sql,
       stripe: stripeClient,
@@ -4331,7 +4332,11 @@ async function handlePlatformBalance(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const result = await computePlatformBalance(sql, createStripeClient(), { schoolId });
+    const result = await computePlatformBalance(
+      sql,
+      createStripeClient(STRIPE_CLIENT_PURPOSES.RECONCILIATION),
+      { schoolId }
+    );
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('platform-balance error:', err);
@@ -4359,7 +4364,11 @@ async function handleProcessPayouts(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const results = await processAllPayouts(sql, createStripeClient(), schoolId ? { schoolId } : {});
+    const results = await processAllPayouts(
+      sql,
+      createStripeClient(STRIPE_CLIENT_PURPOSES.PAYOUTS),
+      schoolId ? { schoolId } : {}
+    );
 
     // Send the same weekly summary email that the Friday cron sends so the
     // admin trigger and the cron produce identical artefacts. Fire-and-forget:

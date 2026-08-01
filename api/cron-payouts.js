@@ -8,7 +8,8 @@
 // Calculates earnings for each onboarded instructor, creates Stripe
 // transfers, and sends email notifications.
 
-const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe   = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.PAYOUTS });
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { processAllPayouts, processSchoolPayouts } = require('./_payout-helpers');

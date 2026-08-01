@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const Stripe = require('stripe');
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('../api/_stripe-clients');
 const { neon, Client, neonConfig } = require('@neondatabase/serverless');
 const {
   PAYOUT_V2_HISTORICAL_IMPORT_VERSION,
@@ -112,7 +112,7 @@ async function main() {
   }
 
   const readSql = neon(databaseUrl);
-  const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const stripeClient = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
   const plan = await buildHistoricalImportPlan({
     sql: readSql,
     schoolId,

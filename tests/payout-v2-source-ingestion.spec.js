@@ -1,6 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+
+process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY
+  || 'sk_test_payout_v2_source_ingestion';
+
 const {
   SOURCE_KINDS,
   buildStripeSourceRecord,

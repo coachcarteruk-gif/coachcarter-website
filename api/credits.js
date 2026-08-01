@@ -1,4 +1,5 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.PAYMENTS });
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { decodeToken, requireAuth, SESSION_COOKIE_NAMES } = require('./_auth');

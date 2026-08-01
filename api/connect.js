@@ -31,7 +31,8 @@
 //   GET  /api/connect?action=school-dashboard-link  (school admin JWT)
 //     → Stripe Express dashboard login link for school
 
-const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const stripe   = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.CONNECT_V1 });
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
 const { requireAuth }       = require('./_auth');

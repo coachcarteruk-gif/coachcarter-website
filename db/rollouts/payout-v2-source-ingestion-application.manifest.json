@@ -1,7 +1,7 @@
 {
   "rolloutId": "payout-v2-source-ingestion-application",
   "status": "prepared_not_approved_not_deployed",
-  "preparedAt": "2026-07-26",
+  "preparedAt": "2026-08-01",
   "approved": false,
   "deployed": false,
   "schemaPrerequisite": {
@@ -32,26 +32,26 @@
     {
       "path": "api/_stripe-fee.js",
       "role": "read-only PaymentIntent, Charge, balance-transaction, and fee evidence",
-      "bytes": 5478,
-      "sha256": "7f1079cd8a732e609f161cdd8952832b1ff35e31d357757d4f76ffd4e22e9be5"
+      "bytes": 5601,
+      "sha256": "6f573e7580660e31bc05bc066c5331ff7129efaa7a030f9f697e6c71bc042361"
     },
     {
       "path": "api/webhook.js",
       "role": "signed success-event dispatch and additive source dual-write",
-      "bytes": 111349,
-      "sha256": "0fea25b6a75fbae4c302ca78ca0bd037369f514badaa198685e15551494c60d2"
+      "bytes": 111472,
+      "sha256": "f4b174b84c5c9384e7da233f36aa1f6458fcbdc973a6e78ea780e647b1ac1711"
     },
     {
       "path": "api/offers.js",
       "role": "paid-offer tenant-safe Checkout producer",
-      "bytes": 41323,
-      "sha256": "a8533765dab523b8b49c22993c404d1a6511c4e4ca918626549efbad999e460f"
+      "bytes": 41440,
+      "sha256": "cac322fcf341809df55dd3e223fcd36f1998317d4807c804ac26d8db095d197b"
     },
     {
       "path": "api/slots.js",
       "role": "direct-slot and request-to-book tenant/payment metadata producer",
-      "bytes": 335758,
-      "sha256": "5e73ef7560ab8e57b1a313172ad78b9c56239ed97f6a767da06057d2f1bd0318"
+      "bytes": 335875,
+      "sha256": "7c9eb93ee2d0f56a6652039d1de914f9bc8fe6bb9781115d28d2b6293ebba546"
     }
   ],
   "productionRoutes": [
