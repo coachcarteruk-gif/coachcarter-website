@@ -302,7 +302,13 @@ test.describe('Payout engine route isolation', () => {
     );
     const aggregate = fs.readFileSync(path.join(root, 'db/migration.sql'), 'utf8');
     const marker = '-- Instructor Payout v2: inactive, append-only ledger foundation.';
-    expect(aggregate.slice(aggregate.indexOf(marker))).toBe(migration);
+    const nextMigrationMarker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
+    const start = aggregate.indexOf(marker);
+    const end = aggregate.indexOf(nextMigrationMarker, start);
+    expect(end).toBeGreaterThan(start);
+    expect(aggregate.slice(start, end).replace(/\r\n/g, '\n').trim()).toBe(
+      migration.replace(/\r\n/g, '\n').trim()
+    );
     for (const table of [
       'payout_v2_cutover_config_versions',
       'payout_v2_shadow_cycle_evidence',

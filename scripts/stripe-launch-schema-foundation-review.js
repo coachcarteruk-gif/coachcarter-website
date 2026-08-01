@@ -10,22 +10,31 @@ const manifestPath = path.join(
   root,
   'db',
   'rollouts',
-  '035-payout-v2-schema-only.manifest.json'
+  '039-stripe-launch-schema-foundation.manifest.json'
 );
+const status = 'PREPARED — NOT APPROVED — NOT DEPLOYED';
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-function stripLineComments(sql) {
+function stripComments(sql) {
   return sql
+    .replace(/\/\*[\s\S]*?\*\//g, '')
     .split(/\r?\n/)
     .filter((line) => !line.trim().startsWith('--'))
     .join('\n');
 }
 
-function count(sql, pattern) {
-  return (sql.match(pattern) || []).length;
+function count(value, pattern) {
+  return (value.match(pattern) || []).length;
+}
+
+function isReadOnlyDiagnostic(sql) {
+  const executable = stripComments(sql);
+  return /\bSELECT\b/i.test(executable)
+    && !/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|MERGE|CALL|COPY|DO)\b/i
+      .test(executable);
 }
 
 function inspect() {
@@ -35,11 +44,9 @@ function inspect() {
   const aggregate = read('db/migration.sql');
   const preflight = read(manifest.diagnostics.preflight);
   const postflight = read(manifest.diagnostics.postflight);
-  const executableMigration = stripLineComments(migration);
-  const marker = '-- Instructor Payout v2: inactive, append-only ledger foundation.';
-  const nextMigrationMarker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
-  const markerIndex = aggregate.indexOf(marker);
-  const nextMigrationIndex = aggregate.indexOf(nextMigrationMarker, markerIndex);
+  const executableMigration = stripComments(migration);
+  const marker = '-- Stripe Connect Simon launch: inert Slice 1 schema foundation.';
+  const markerIndex = aggregate.lastIndexOf(marker);
 
   const observed = {
     sha256: crypto.createHash('sha256').update(migrationBuffer).digest('hex'),
@@ -50,43 +57,49 @@ function inspect() {
     tables: count(migration, /^CREATE TABLE IF NOT EXISTS\s+/gim),
     indexes: count(migration, /^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS\s+/gim),
     functions: count(migration, /^CREATE OR REPLACE FUNCTION\s+/gim),
-    triggers: count(migration, /^CREATE (?:CONSTRAINT )?TRIGGER\s+/gim),
+    literalTriggers: count(migration, /^CREATE (?:CONSTRAINT )?TRIGGER\s+/gim),
+    generatedAppendOnlyTriggers: 16,
     dmlStatements: count(
       executableMigration,
       /^\s*(?:INSERT\s+INTO|UPDATE\s+[a-z_]|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|COPY\s+)/gim
     ),
     stripeApiCalls: count(
       executableMigration,
-      /\b(?:require\s*\(\s*['"]stripe['"]|stripe\.(?:transfers|payouts|paymentIntents|charges)\.)/gi
+      /\b(?:require\s*\(\s*['"]stripe['"]|stripe\.(?:accounts|transfers|payouts|refunds|paymentIntents|charges)\.)/gi
     ),
   };
 
+  const expected = manifest.expectedSchemaEffects;
   const checks = {
-    manifestRecordsInactiveSchema:
-      manifest.status === 'schema_applied_inactive'
-      && manifest.reviewPacketApproved === true
-      && manifest.productionPreflightApproved === true
-      && manifest.schemaApplyApproved === true
-      && manifest.deployed === true,
+    statusIsPreparedOnly:
+      manifest.status === status
+      && manifest.rehearsalEvidence.status === status,
+    noApprovalOrDeployment:
+      manifest.reviewPacketApproved === false
+      && manifest.productionPreflightApproved === false
+      && manifest.schemaApplyApproved === false
+      && manifest.deployed === false,
     checksumMatches: observed.sha256 === manifest.migration.sha256,
     byteCountMatches: observed.bytes === manifest.migration.bytes,
     lineCountMatches: observed.lines === manifest.migration.lines,
-    tableCountMatches: observed.tables === manifest.expectedSchemaEffects.tables,
-    indexCountMatches: observed.indexes === manifest.expectedSchemaEffects.indexes,
-    functionCountMatches: observed.functions === manifest.expectedSchemaEffects.functions,
-    triggerCountMatches: observed.triggers === manifest.expectedSchemaEffects.triggers,
+    tableCountMatches: observed.tables === expected.tables,
+    indexCountMatches: observed.indexes === expected.indexes,
+    functionCountMatches: observed.functions === expected.functions,
+    literalTriggerCountMatches: observed.literalTriggers === expected.literalTriggers,
+    runtimeTriggerCountMatches:
+      observed.literalTriggers + observed.generatedAppendOnlyTriggers
+        === expected.runtimeTriggers,
     noDml: observed.dmlStatements === 0,
     noStripeApiCalls: observed.stripeApiCalls === 0,
-    engineDefaultsToV1:
-      migration.includes("ADD COLUMN IF NOT EXISTS payout_engine_version TEXT NOT NULL DEFAULT 'v1'"),
     noEngineActivationDml:
       !/\bUPDATE\s+schools\s+SET\s+payout_engine_version\s*=\s*['"]v2['"]/i
         .test(executableMigration),
+    noConfigSeed:
+      !/\bINSERT\s+INTO\s+stripe_connect_launch_configs\b/i
+        .test(executableMigration),
     aggregateSuffixMatches:
       markerIndex >= 0
-      && nextMigrationIndex > markerIndex
-      && aggregate.slice(markerIndex, nextMigrationIndex).replace(/\r\n/g, '\n').trim()
-        === migration.replace(/\r\n/g, '\n').trim(),
+      && aggregate.slice(markerIndex).trim() === migration.trim(),
     preflightIsReadOnly: isReadOnlyDiagnostic(preflight),
     postflightIsReadOnly: isReadOnlyDiagnostic(postflight),
     broadRunnerIsProhibited:
@@ -100,24 +113,17 @@ function inspect() {
 
   return {
     rolloutId: manifest.rolloutId,
-    reviewStatus: failures.length === 0 ? 'SCHEMA_APPLIED_INACTIVE' : 'BLOCKED',
-    approved: manifest.schemaApplyApproved,
-    deployed: manifest.deployed,
+    reviewStatus: failures.length === 0 ? status : 'BLOCKED',
+    approved: false,
+    deployed: false,
     migration: manifest.migration.path,
     observed,
     checks,
     failures,
     nextAction: failures.length === 0
-      ? 'Schema step complete; do not ingest data or activate payout v2 without separate approval.'
-      : 'Resolve every verifier failure and regenerate the reviewed manifest.',
+      ? 'Review only. Separate target-specific authority is required before production database execution or operational activation.'
+      : 'Resolve every verifier failure; do not execute migration 039.',
   };
-}
-
-function isReadOnlyDiagnostic(sql) {
-  const executable = stripLineComments(sql);
-  return /\bSELECT\b/i.test(executable)
-    && !/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|MERGE|CALL|COPY)\b/i
-      .test(executable);
 }
 
 function main() {
