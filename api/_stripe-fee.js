@@ -40,9 +40,11 @@ function emptyFundingEvidence({ checkoutSessionId = null, paymentIntentId = null
  */
 async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
   const checkoutSessionId = session?.object === 'checkout.session' ? session.id : null;
-  const suppliedPaymentIntentId = typeof session?.payment_intent === 'string'
-    ? session.payment_intent
-    : session?.payment_intent?.id || null;
+  const suppliedPaymentIntentId = session?.object === 'payment_intent'
+    ? session.id
+    : (typeof session?.payment_intent === 'string'
+      ? session.payment_intent
+      : session?.payment_intent?.id || null);
 
   if (!suppliedPaymentIntentId) {
     return emptyFundingEvidence({
@@ -152,6 +154,30 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
 }
 
 /**
+ * Retrieve the immutable Stripe object that owns launch candidate metadata.
+ * Checkout origins retain metadata on the Session; captured requests retain it
+ * on the PaymentIntent. This is read-only and deliberately refuses an
+ * identity-less candidate instead of listing/searching Stripe heuristically.
+ */
+async function fetchLaunchPaymentObject(candidate, stripeClient = stripe) {
+  const checkoutSessionId = candidate?.stripe_checkout_session_id || null;
+  const paymentIntentId = candidate?.stripe_payment_intent_id || null;
+  if (checkoutSessionId) {
+    return stripeClient.checkout.sessions.retrieve(checkoutSessionId, {
+      expand: ['payment_intent'],
+    });
+  }
+  if (paymentIntentId) {
+    return stripeClient.paymentIntents.retrieve(paymentIntentId, {
+      expand: ['latest_charge.balance_transaction'],
+    });
+  }
+  const err = new Error('Launch reconciliation candidate has no Stripe payment identity');
+  err.code = 'STRIPE_LAUNCH_PAYMENT_IDENTITY_MISSING';
+  throw err;
+}
+
+/**
  * Backwards-compatible fee-only wrapper for existing callers.
  */
 async function fetchSessionFeePence(session) {
@@ -164,6 +190,7 @@ async function fetchSessionFeePence(session) {
 
 module.exports = {
   emptyFundingEvidence,
+  fetchLaunchPaymentObject,
   fetchSessionFeePence,
   fetchSessionFundingEvidence,
 };

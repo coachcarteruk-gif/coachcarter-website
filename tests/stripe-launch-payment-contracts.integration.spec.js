@@ -108,6 +108,7 @@ test.describe('Stripe launch Slice 2 database contracts', () => {
     rescheduled = false,
   } = {}) {
     fixtureNumber += 1;
+    const bcsFeePence = feePence === null ? 0 : feePence;
     const sessionId = `cs_launch_${suffix}`;
     const paymentIntentId = `pi_launch_${suffix}`;
     const tx = await client.query(`
@@ -136,7 +137,7 @@ test.describe('Stripe launch Slice 2 database contracts', () => {
         rate_pence_per_minute, contribution_pence, stripe_fee_pence, refunded_at
       ) VALUES ($1, $2, $3, 60, $4, $5, $6, $7)
     `, [original.rows[0].id, tx.rows[0].id, schoolId,
-      Math.floor(amountPence / 60), amountPence, feePence,
+      Math.floor(amountPence / 60), amountPence, bcsFeePence,
       rescheduled ? new Date('2026-08-02T00:00:00.000Z') : null]);
 
     let bookingId = original.rows[0].id;
@@ -158,7 +159,7 @@ test.describe('Stripe launch Slice 2 database contracts', () => {
           rate_pence_per_minute, contribution_pence, stripe_fee_pence
         ) VALUES ($1, $2, $3, 60, $4, $5, $6)
       `, [replacement.rows[0].id, tx.rows[0].id, schoolId,
-        Math.floor(amountPence / 60), amountPence, feePence]);
+        Math.floor(amountPence / 60), amountPence, bcsFeePence]);
       bookingId = replacement.rows[0].id;
     }
     return {
@@ -332,11 +333,12 @@ test.describe('Stripe launch Slice 2 database contracts', () => {
     });
   });
 
-  test('missing fee evidence writes neither source nor contract', async () => {
+  test('missing Stripe fee evidence preserves a retryable origin without guessing a contract', async () => {
     const fixture = await insertPaymentFixture({ suffix: 'missingfee' });
-    await expect(materialize(fixture, {
+    const pending = await materialize(fixture, {
       evidence: evidence('missingfee', { feePence: null, source: null }),
-    })).rejects.toMatchObject({ code: 'STRIPE_LAUNCH_EVIDENCE_INCOMPLETE' });
+    });
+    expect(pending).toMatchObject({ materialized: false, status: 'pending' });
     const counts = await client.query(`
       SELECT
         (SELECT COUNT(*)::int FROM payout_funding_sources
@@ -345,6 +347,35 @@ test.describe('Stripe launch Slice 2 database contracts', () => {
           WHERE school_id = $1 AND stripe_payment_intent_id = $3) AS contracts
     `, [schoolId, fixture.creditTransactionId, 'pi_launch_missingfee']);
     expect(counts.rows[0]).toEqual({ sources: 0, contracts: 0 });
+  });
+
+  test('provisional legacy zero fee is unknown, while a known fee mismatch stays contradictory', async () => {
+    const provisional = await insertPaymentFixture({ suffix: 'provisionalfee', feePence: null });
+    const recovered = await materialize(provisional, {
+      evidence: evidence('provisionalfee', { feePence: 199 }),
+    });
+    expect(recovered.contract.evidence_status).toBe('complete');
+    expect(Number(recovered.contract.stripe_fee_minor)).toBe(199);
+
+    const known = await insertPaymentFixture({ suffix: 'knownfeemismatch', feePence: 198 });
+    const mismatch = await materialize(known, {
+      evidence: evidence('knownfeemismatch', { feePence: 199 }),
+    });
+    expect(mismatch.contract.evidence_status).toBe('contradictory');
+    expect(mismatch.contract.contradiction_code).toContain('credit_transaction_stripe_fee_contradiction');
+  });
+
+  test('materializes all four approved payment origins', async () => {
+    for (const origin of Object.values(PAYMENT_ORIGINS)) {
+      const suffix = `origin_${origin}`;
+      const fixture = await insertPaymentFixture({
+        suffix,
+        bookingPurpose: origin === PAYMENT_ORIGINS.TEST_DATE_DIRECT ? 'test_date' : 'lesson',
+      });
+      const result = await materialize(fixture, { origin });
+      expect(result.contract.origin).toBe(origin);
+      expect(result.contract.evidence_status).toBe('complete');
+    }
   });
 
   test('amount/currency contradictions and one-to-many mappings never become complete', async () => {

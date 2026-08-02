@@ -14,6 +14,10 @@
 
   var lastPassword = null;
   var pendingEmail = null;
+  var requestedSchoolId = parseInt(new URLSearchParams(window.location.search).get('school_id'), 10);
+  var schoolId = Number.isSafeInteger(requestedSchoolId) && requestedSchoolId > 0
+    ? requestedSchoolId
+    : 1;
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(function (screen) {
@@ -52,7 +56,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: email, purpose: 'login', role: 'instructor' }),
+        body: JSON.stringify({ email: email, purpose: 'login', role: 'instructor', school_id: schoolId }),
       });
       var data = await res.json();
       if (!res.ok) {
@@ -135,7 +139,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: pendingEmail, code: code, purpose: 'login', role: 'instructor' }),
+        body: JSON.stringify({ email: pendingEmail, code: code, purpose: 'login', role: 'instructor', school_id: schoolId }),
       });
       var data = await res.json();
       if (!res.ok) {
@@ -165,7 +169,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: pendingEmail, purpose: 'login', role: 'instructor' }),
+        body: JSON.stringify({ email: pendingEmail, purpose: 'login', role: 'instructor', school_id: schoolId }),
       });
       btn.textContent = 'Sent! Check again';
     } finally {

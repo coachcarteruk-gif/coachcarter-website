@@ -36,6 +36,35 @@ function asIsoTimestamp(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function compareLocalStripeFeeEvidence({
+  creditTransactionFeePence,
+  bookingFeePence,
+  bookingFeeSource,
+  bookingContributionFeePence,
+  stripeFeePence,
+}) {
+  const contradictions = [];
+  const sourceFeeKnown = creditTransactionFeePence != null;
+  const bookingFeeKnown = bookingFeeSource === 'balance_transaction' && bookingFeePence != null;
+  if (sourceFeeKnown && Number(creditTransactionFeePence) !== Number(stripeFeePence)) {
+    contradictions.push('credit_transaction_stripe_fee_contradiction');
+  }
+  if (bookingFeeKnown && Number(bookingFeePence) !== Number(stripeFeePence)) {
+    contradictions.push('booking_stripe_fee_contradiction');
+  }
+  // Legacy BCS creation stores 0 when the source fee is still NULL. Treat
+  // that exact combination as unknown/provisional, not as evidence of a
+  // zero-fee charge. Once either local source or booking fee is known, a BCS
+  // mismatch remains a genuine terminal contradiction.
+  if (
+    (sourceFeeKnown || bookingFeeKnown)
+    && Number(bookingContributionFeePence) !== Number(stripeFeePence)
+  ) {
+    contradictions.push('booking_contribution_stripe_fee_contradiction');
+  }
+  return contradictions;
+}
+
 function contractFingerprint(input) {
   const canonical = JSON.stringify({
     version: PAYMENT_CONTRACT_SCHEMA_VERSION,
@@ -311,6 +340,8 @@ async function materializeLaunchPaymentContract({
     const bookingResult = await client.query(
       `SELECT b.id, b.school_id, b.learner_id, b.instructor_id, b.status,
               b.booking_purpose, b.lesson_payment_contract_id,
+              b.stripe_fee_pence AS booking_stripe_fee_pence,
+              b.stripe_fee_source,
               bcs.contribution_pence, bcs.stripe_fee_pence AS bcs_stripe_fee_pence,
               bcs.refunded_at
          FROM lesson_bookings b
@@ -358,10 +389,19 @@ async function materializeLaunchPaymentContract({
       now,
     });
     if (evidence.missing.length > 0) {
-      throw launchError(
-        'STRIPE_LAUNCH_EVIDENCE_INCOMPLETE',
-        `Payment evidence is incomplete: ${evidence.missing.join(',')}`
-      );
+      // The booking, slot-purchase ledger row, BCS attribution, and immutable
+      // Stripe candidate metadata are already durable by this point. Delayed
+      // balance-transaction evidence is therefore a reconciliation state, not
+      // a webhook failure. No source/contract is guessed until exact evidence
+      // becomes available.
+      return {
+        enabled: true,
+        candidate: true,
+        materialized: false,
+        status: 'pending',
+        payment_origin: candidate.origin,
+        reasons: evidence.missing,
+      };
     }
 
     const contradictions = [...evidence.contradictory];
@@ -371,12 +411,13 @@ async function materializeLaunchPaymentContract({
     if (Number(booking.contribution_pence) !== Number(sourceRow.amount_pence)) {
       contradictions.push('booking_contribution_amount_contradiction');
     }
-    if (Number(sourceRow.stripe_fee_pence) !== Number(fundingEvidence?.feePence)) {
-      contradictions.push('credit_transaction_stripe_fee_contradiction');
-    }
-    if (Number(booking.bcs_stripe_fee_pence) !== Number(fundingEvidence?.feePence)) {
-      contradictions.push('booking_contribution_stripe_fee_contradiction');
-    }
+    contradictions.push(...compareLocalStripeFeeEvidence({
+      creditTransactionFeePence: sourceRow.stripe_fee_pence,
+      bookingFeePence: booking.booking_stripe_fee_pence,
+      bookingFeeSource: booking.stripe_fee_source,
+      bookingContributionFeePence: booking.bcs_stripe_fee_pence,
+      stripeFeePence: fundingEvidence?.feePence,
+    }));
     if (candidate.origin === PAYMENT_ORIGINS.TEST_DATE_DIRECT && booking.booking_purpose !== 'test_date') {
       contradictions.push('test_date_origin_booking_purpose_contradiction');
     }
@@ -643,6 +684,7 @@ module.exports = {
   prepareLaunchPaymentCandidate,
   parseLaunchPaymentCandidate,
   buildLaunchEvidenceDecision,
+  compareLocalStripeFeeEvidence,
   materializeLaunchPaymentContract,
   isStripeLaunchSchemaUnavailable,
 };

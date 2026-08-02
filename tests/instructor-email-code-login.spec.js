@@ -48,15 +48,22 @@ async function call(handler, { action, body = {} }) {
   return res;
 }
 
-function makeSql({ instructor = null, tokenRows = [] } = {}) {
+function makeSql({ instructor = null, tokenRows = [], auditFails = false } = {}) {
   const calls = [];
   const sql = async (strings, ...values) => {
     const text = Array.isArray(strings) ? strings.join('?') : String(strings);
     calls.push({ text, values });
 
+    if (auditFails && /INSERT INTO audit_log/i.test(text)) throw new Error('audit unavailable');
     if (/SELECT request_count FROM rate_limits/i.test(text)) return [];
-    if (/FROM instructors/i.test(text) && /active = TRUE/i.test(text)) return instructor ? [instructor] : [];
-    if (/SELECT id, school_id FROM magic_link_tokens/i.test(text)) return tokenRows;
+    if (/FROM instructors/i.test(text) && /active = TRUE/i.test(text)) {
+      return instructor && (!instructor.school_id || values.includes(instructor.school_id)) ? [instructor] : [];
+    }
+    if (/SELECT id, school_id FROM magic_link_tokens/i.test(text)) {
+      return /school_id\s*=\s*\?/i.test(text)
+        ? tokenRows.filter((row) => values.includes(row.school_id))
+        : tokenRows;
+    }
     return [];
   };
   sql.calls = calls;
@@ -116,14 +123,14 @@ function withMockedMagicLink(sql, sendMail, run) {
 
 test.describe('instructor email-code login', () => {
   test('active instructor can request a login code', async () => {
-    const instructor = { id: 21, email: 'instructor@example.test', active: true };
+    const instructor = { id: 21, email: 'instructor@example.test', school_id: 4, active: true };
     const sql = makeSql({ instructor });
     const sent = [];
 
     await withMockedMagicLink(sql, async (mail) => sent.push(mail), async (handler) => {
       const res = await call(handler, {
         action: 'send-email-code',
-        body: { email: 'Instructor@Example.test', purpose: 'login', role: 'instructor' },
+        body: { email: 'Instructor@Example.test', purpose: 'login', role: 'instructor', school_id: 4 },
       });
 
       expect(res.statusCode).toBe(200);
@@ -132,7 +139,8 @@ test.describe('instructor email-code login', () => {
       expect(sql.calls.some((call) =>
         /INSERT INTO magic_link_tokens/i.test(call.text) &&
         call.values.includes('login') &&
-        call.values.includes('instructor')
+        call.values.includes('instructor') &&
+        call.values.includes(4)
       )).toBe(true);
     });
   });
@@ -170,7 +178,7 @@ test.describe('instructor email-code login', () => {
     await withMockedMagicLink(sql, async () => {}, async (handler) => {
       const res = await call(handler, {
         action: 'verify-email-code',
-        body: { email: 'fraser@example.test', code: '123456', purpose: 'login', role: 'instructor' },
+        body: { email: 'fraser@example.test', code: '123456', purpose: 'login', role: 'instructor', school_id: 4 },
       });
 
       expect(res.statusCode).toBe(200);
@@ -200,6 +208,66 @@ test.describe('instructor email-code login', () => {
         school_id: 4,
         isAdmin: true,
       });
+      expect(sql.calls.some((entry) =>
+        /INSERT INTO audit_log/i.test(entry.text) &&
+        entry.values.includes('instructor-email-code-login') &&
+        entry.values.includes(4)
+      )).toBe(true);
+    });
+  });
+
+  test('an instructor code cannot cross school boundaries', async () => {
+    const instructor = {
+      id: 22,
+      email: 'fraser@example.test',
+      school_id: 4,
+      active: true,
+    };
+    const sql = makeSql({ instructor, tokenRows: [{ id: 77, school_id: 4 }] });
+
+    await withMockedMagicLink(sql, async () => {}, async (handler) => {
+      const res = await call(handler, {
+        action: 'verify-email-code',
+        body: {
+          email: 'fraser@example.test',
+          code: '123456',
+          purpose: 'login',
+          role: 'instructor',
+          school_id: 5,
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('invalid_code');
+      expect(res.getHeader('Set-Cookie')).toBeUndefined();
+    });
+  });
+
+  test('successful instructor authentication fails closed if its audit row cannot be written', async () => {
+    const instructor = {
+      id: 22,
+      email: 'fraser@example.test',
+      school_id: 4,
+      active: true,
+    };
+    const sql = makeSql({
+      instructor,
+      tokenRows: [{ id: 77, school_id: 4 }],
+      auditFails: true,
+    });
+
+    await withMockedMagicLink(sql, async () => {}, async (handler) => {
+      const res = await call(handler, {
+        action: 'verify-email-code',
+        body: {
+          email: 'fraser@example.test',
+          code: '123456',
+          purpose: 'login',
+          role: 'instructor',
+          school_id: 4,
+        },
+      });
+      expect(res.statusCode).toBe(500);
+      expect(res.getHeader('Set-Cookie')).toBeUndefined();
     });
   });
 
@@ -207,8 +275,9 @@ test.describe('instructor email-code login', () => {
     const js = read('public/instructor/login.js');
     const html = read('public/instructor/login.html');
 
-    expect(js).toContain("body: JSON.stringify({ email: email, purpose: 'login', role: 'instructor' })");
-    expect(js).toContain("body: JSON.stringify({ email: pendingEmail, code: code, purpose: 'login', role: 'instructor' })");
+    expect(js).toContain("new URLSearchParams(window.location.search).get('school_id')");
+    expect(js).toContain("body: JSON.stringify({ email: email, purpose: 'login', role: 'instructor', school_id: schoolId })");
+    expect(js).toContain("body: JSON.stringify({ email: pendingEmail, code: code, purpose: 'login', role: 'instructor', school_id: schoolId })");
     expect(js).toContain("localStorage.setItem('cc_instructor', JSON.stringify({ instructor: data.instructor }))");
     expect(html).toContain('Send sign-in code');
     expect(html).toContain('id="screen-code"');
