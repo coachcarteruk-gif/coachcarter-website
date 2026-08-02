@@ -14,6 +14,9 @@ function inspect() {
   const slots = read('api/slots.js');
   const offers = read('api/offers.js');
   const cron = read('api/cron-reconcile-payments.js');
+  const requests = read('api/requests.js');
+  const shadowAuth = read('api/_stripe-launch-shadow-auth.js');
+  const magicLink = read('api/magic-link.js');
   const shadow = read('api/_payout-v2-shadow.js');
   const transfers = read('api/_payout-v2-transfer-executor.js');
   const packet = read('docs/stripe-connect-simon-slice-2-rollout-review.md');
@@ -71,8 +74,25 @@ function inspect() {
       contracts.includes('ON CONFLICT (id) DO NOTHING')
       && contracts.includes('ON CONFLICT (school_id, source_fingerprint) DO NOTHING')
       && reconciler.includes("c.evidence_status = 'pending'")
+      && reconciler.includes('SELECT DISTINCT ON (ct.school_id, ct.id)')
+      && reconciler.includes("THEN 'captured_request'")
+      && reconciler.includes("THEN 'one_off_offer'")
+      && reconciler.includes("THEN 'test_date_direct'")
+      && reconciler.includes("ELSE 'direct_slot'")
       && reconciler.includes('stripeEvidenceFetcher')
       && cron.includes('reconcilePendingLaunchPaymentContracts'),
+    shadowOperationsFailClosed:
+      shadowAuth.includes("env.STRIPE_MODE !== 'test'")
+      && shadowAuth.includes('STRIPE_LAUNCH_SHADOW_PROJECT_ID')
+      && shadowAuth.includes('STRIPE_LAUNCH_SHADOW_SCHOOL_ID')
+      && shadowAuth.includes('STRIPE_LAUNCH_SHADOW_CRON_SECRET')
+      && cron.includes('logAuditRequired')
+      && requests.includes('logAuditRequired')
+      && cron.includes('schoolId: shadowAuth.schoolId')
+      && requests.includes('runRequestExpiry(sql, { schoolId: shadowAuth?.schoolId || null })'),
+    instructorLoginIsScopedAndAudited:
+      magicLink.includes('AND school_id = ${linkRecord.school_id}')
+      && magicLink.includes("action: 'instructor-email-code-login'"),
     legacyEnginesExcludeLaunchSources:
       shadow.includes("metadata->>'launch_accounting_version') IS DISTINCT FROM 'simon_launch_v1'")
       && (transfers.match(/metadata->>'launch_accounting_version'\) IS DISTINCT FROM 'simon_launch_v1'/g) || []).length === 2,
@@ -101,7 +121,7 @@ function inspect() {
     checks,
     failures,
     nextAction: failures.length === 0
-      ? 'Request explicit approval for the corrective migration and application rollout; do not change production configuration or Stripe state.'
+      ? 'Request explicit approval before any deployment or fresh shadow-02 exercise; do not change production configuration or Stripe state.'
       : 'Resolve every failed review check before requesting rollout approval.',
   };
 }

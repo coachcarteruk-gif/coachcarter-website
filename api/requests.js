@@ -11,8 +11,14 @@
 // api/instructor.js (list-requests, accept-request, decline-request).
 
 const { reportError } = require('./_error-alert');
+const { logAuditRequired } = require('./_audit');
 const { withCronLock } = require('./_cron-lock');
 const { verifyCronAuth } = require('./_auth');
+const { loadShadowLaunchConfig } = require('./_stripe-launch-payment-contracts');
+const {
+  SHADOW_OPERATIONS,
+  authorizeStripeLaunchShadowOperation,
+} = require('./_stripe-launch-shadow-auth');
 const {
   expirePendingRequest,
   releaseRequestHold,
@@ -29,21 +35,77 @@ module.exports = async (req, res) => {
 
 async function handleExpireRequests(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!verifyCronAuth(req)) {
+  const cronAuthenticated = verifyCronAuth(req);
+  const shadowAuth = cronAuthenticated ? null : authorizeStripeLaunchShadowOperation(req, {
+    operation: SHADOW_OPERATIONS.EXPIRE_REQUESTS,
+  });
+  if (!cronAuthenticated && !shadowAuth) {
     return res.status(401).json({ error: 'Unauthorised' });
   }
 
   // 300s lease — unlike offers, expiry here does per-row work (hold release,
   // Stripe cancel, notifications), so give it headroom.
   return withCronLock(req, res, 'requests.expire', 300, async (sql) => {
+    if (shadowAuth) {
+      const config = await loadShadowLaunchConfig(sql, shadowAuth.schoolId);
+      if (!config) {
+        const err = new Error('Shadow launch is not configured for the authenticated school');
+        err.code = 'STRIPE_LAUNCH_SHADOW_NOT_CONFIGURED';
+        throw err;
+      }
+      await logAuditRequired(sql, {
+        adminId: null,
+        adminEmail: null,
+        action: 'stripe-launch-shadow-expire-requests-started',
+        targetType: 'school',
+        targetId: shadowAuth.schoolId,
+        details: {
+          operation: shadowAuth.operation,
+          project_id: shadowAuth.projectId,
+        },
+        schoolId: shadowAuth.schoolId,
+        req,
+      });
+    }
+    const result = await runRequestExpiry(sql, { schoolId: shadowAuth?.schoolId || null });
+    if (shadowAuth) {
+      await logAuditRequired(sql, {
+        adminId: null,
+        adminEmail: null,
+        action: 'stripe-launch-shadow-expire-requests',
+        targetType: 'school',
+        targetId: shadowAuth.schoolId,
+        details: {
+          operation: shadowAuth.operation,
+          project_id: shadowAuth.projectId,
+          expired: result.expired,
+          releases_retried: result.releases_retried,
+          crashed_accepts_closed: result.crashed_accepts_closed,
+          errors: result.errors,
+        },
+        schoolId: shadowAuth.schoolId,
+        req,
+      });
+    }
+    return result;
+  });
+}
+
+async function runRequestExpiry(sql, { schoolId = null } = {}) {
     const summary = { expired: 0, releases_retried: 0, crashed_accepts_closed: 0, errors: 0 };
 
     // 1. Expire stale pending requests.
     let stale = [];
     try {
-      stale = await sql`
+      stale = schoolId === null ? await sql`
         SELECT * FROM lesson_requests
         WHERE status = 'pending' AND expires_at <= NOW()
+        ORDER BY expires_at ASC
+        LIMIT 100
+      ` : await sql`
+        SELECT * FROM lesson_requests
+        WHERE school_id = ${schoolId}
+          AND status = 'pending' AND expires_at <= NOW()
         ORDER BY expires_at ASC
         LIMIT 100
       `;
@@ -64,9 +126,17 @@ async function handleExpireRequests(req, res) {
 
     // 2. Retry hold releases that crashed between decision and release.
     //    (Decline/expire/withdraw already notified the learner — no re-send.)
-    const unreleased = await sql`
+    const unreleased = schoolId === null ? await sql`
       SELECT * FROM lesson_requests
       WHERE status IN ('declined', 'expired', 'withdrawn')
+        AND released_at IS NULL
+        AND decided_at < NOW() - INTERVAL '10 minutes'
+      ORDER BY decided_at ASC
+      LIMIT 50
+    ` : await sql`
+      SELECT * FROM lesson_requests
+      WHERE school_id = ${schoolId}
+        AND status IN ('declined', 'expired', 'withdrawn')
         AND released_at IS NULL
         AND decided_at < NOW() - INTERVAL '10 minutes'
       ORDER BY decided_at ASC
@@ -87,9 +157,17 @@ async function handleExpireRequests(req, res) {
     // 3. Accepts that crashed between claim and booking creation. Close them
     //    out in the learner's favour and alert — an accepted request should
     //    always have a booking within seconds.
-    const crashedAccepts = await sql`
+    const crashedAccepts = schoolId === null ? await sql`
       SELECT * FROM lesson_requests
       WHERE status = 'accepted'
+        AND booking_id IS NULL
+        AND decided_at < NOW() - INTERVAL '15 minutes'
+      ORDER BY decided_at ASC
+      LIMIT 20
+    ` : await sql`
+      SELECT * FROM lesson_requests
+      WHERE school_id = ${schoolId}
+        AND status = 'accepted'
         AND booking_id IS NULL
         AND decided_at < NOW() - INTERVAL '15 minutes'
       ORDER BY decided_at ASC
@@ -127,5 +205,6 @@ async function handleExpireRequests(req, res) {
     }
 
     return { ok: true, ...summary };
-  });
 }
+
+module.exports.runRequestExpiry = runRequestExpiry;

@@ -22,10 +22,16 @@ const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_strip
 const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
 const { verifyCronAuth } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
+const { logAuditRequired } = require('./_audit');
 const { withCronLock } = require('./_cron-lock');
 const {
   reconcilePendingLaunchPaymentContracts,
 } = require('./_stripe-launch-payment-reconciler');
+const { loadShadowLaunchConfig } = require('./_stripe-launch-payment-contracts');
+const {
+  SHADOW_OPERATIONS,
+  authorizeStripeLaunchShadowOperation,
+} = require('./_stripe-launch-shadow-auth');
 
 // payment_type values that the webhook persists to credit_transactions.
 // The legacy pass_guarantee/calculator flow uses an in-memory Map and is
@@ -40,11 +46,66 @@ const LOOKBACK_SECONDS = 25 * 60 * 60; // 25h overlap with hourly schedule
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!verifyCronAuth(req)) return res.status(401).json({ error: 'Unauthorised' });
+  const cronAuthenticated = verifyCronAuth(req);
+  const shadowAuth = cronAuthenticated ? null : authorizeStripeLaunchShadowOperation(req, {
+    operation: SHADOW_OPERATIONS.RECONCILE_PAYMENTS,
+  });
+  if (!cronAuthenticated && !shadowAuth) return res.status(401).json({ error: 'Unauthorised' });
 
   // Lease 540s — paging through Stripe sessions can be slow on busy days.
   // Hourly schedule means a 9-min lease is well below the next firing.
   return withCronLock(req, res, 'cron-reconcile-payments', 540, async (sql) => {
+    if (shadowAuth) {
+      const config = await loadShadowLaunchConfig(sql, shadowAuth.schoolId);
+      if (!config) {
+        const err = new Error('Shadow launch is not configured for the authenticated school');
+        err.code = 'STRIPE_LAUNCH_SHADOW_NOT_CONFIGURED';
+        throw err;
+      }
+      await logAuditRequired(sql, {
+        adminId: null,
+        adminEmail: null,
+        action: 'stripe-launch-shadow-reconcile-payments-started',
+        targetType: 'school',
+        targetId: shadowAuth.schoolId,
+        details: {
+          operation: shadowAuth.operation,
+          project_id: shadowAuth.projectId,
+        },
+        schoolId: shadowAuth.schoolId,
+        req,
+      });
+      const launchContracts = await reconcilePendingLaunchPaymentContracts({
+        sql,
+        connectionString: process.env.POSTGRES_URL,
+        schoolId: shadowAuth.schoolId,
+      });
+      await logAuditRequired(sql, {
+        adminId: null,
+        adminEmail: null,
+        action: 'stripe-launch-shadow-reconcile-payments',
+        targetType: 'school',
+        targetId: shadowAuth.schoolId,
+        details: {
+          operation: shadowAuth.operation,
+          project_id: shadowAuth.projectId,
+          checked: launchContracts.checked,
+          completed: launchContracts.completed,
+          pending: launchContracts.pending,
+          contradictory: launchContracts.contradictory,
+          failed: launchContracts.failed,
+        },
+        schoolId: shadowAuth.schoolId,
+        req,
+      });
+      return {
+        ok: true,
+        shadow: true,
+        school_id: shadowAuth.schoolId,
+        launch_contracts: launchContracts,
+      };
+    }
+
     // Slice 2 is strictly shadow-gated. With no school in shadow mode this
     // query returns no candidates and performs no additional Stripe reads or
     // launch writes. It can only promote a fully linked pending contract after

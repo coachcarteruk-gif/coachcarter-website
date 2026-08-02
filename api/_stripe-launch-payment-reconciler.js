@@ -1,9 +1,13 @@
 const { withNeonTransaction } = require('./_db-transaction');
-const { fetchSessionFundingEvidence } = require('./_stripe-fee');
+const {
+  fetchLaunchPaymentObject,
+  fetchSessionFundingEvidence,
+} = require('./_stripe-fee');
 const {
   LAUNCH_ACCOUNTING_VERSION,
   SHADOW_WRITER_MODE,
   buildLaunchEvidenceDecision,
+  materializeLaunchPaymentContract,
 } = require('./_stripe-launch-payment-contracts');
 
 function asIsoTimestamp(value) {
@@ -134,7 +138,10 @@ async function finalizePendingContract({
 async function reconcilePendingLaunchPaymentContracts({
   sql,
   connectionString,
+  schoolId = null,
+  paymentObjectFetcher = fetchLaunchPaymentObject,
   stripeEvidenceFetcher = fetchSessionFundingEvidence,
+  contractMaterializer = materializeLaunchPaymentContract,
   now = new Date(),
   limit = 25,
   transactionRunner = withNeonTransaction,
@@ -145,7 +152,11 @@ async function reconcilePendingLaunchPaymentContracts({
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
     throw new TypeError('limit must be an integer from 1 to 100');
   }
-  const candidates = await sql`
+  if (schoolId !== null && (!Number.isSafeInteger(Number(schoolId)) || Number(schoolId) < 1)) {
+    throw new TypeError('schoolId must be a positive integer when provided');
+  }
+  const scopedSchoolId = schoolId === null ? null : Number(schoolId);
+  const pendingRows = scopedSchoolId === null ? await sql`
     SELECT c.id, c.school_id, c.stripe_payment_intent_id
     FROM lesson_payment_contracts c
     JOIN stripe_connect_launch_configs cfg
@@ -155,16 +166,93 @@ async function reconcilePendingLaunchPaymentContracts({
     WHERE c.evidence_status = 'pending'
     ORDER BY c.created_at, c.id
     LIMIT ${limit}
+  ` : await sql`
+    SELECT c.id, c.school_id, c.stripe_payment_intent_id
+    FROM lesson_payment_contracts c
+    JOIN stripe_connect_launch_configs cfg
+      ON cfg.school_id = c.school_id
+     AND cfg.accounting_version = ${LAUNCH_ACCOUNTING_VERSION}
+     AND cfg.mode = ${SHADOW_WRITER_MODE}
+    WHERE c.evidence_status = 'pending'
+      AND c.school_id = ${scopedSchoolId}
+    ORDER BY c.created_at, c.id
+    LIMIT ${limit}
   `;
+  const pendingCandidates = scopedSchoolId === null
+    ? pendingRows
+    : pendingRows.filter((row) => Number(row.school_id) === scopedSchoolId);
+
+  // Give the recovery queue its own limit so a large set of future-available
+  // pending contracts cannot starve origins that have no contract yet.
+  let originCandidates = [];
+  if (limit > 0) {
+    const originRows = await sql`
+      SELECT DISTINCT ON (ct.school_id, ct.id)
+             ct.school_id,
+             ct.id AS credit_transaction_id,
+             b.id AS booking_id,
+             ct.stripe_session_id AS stripe_checkout_session_id,
+             ct.stripe_payment_intent_id,
+             CASE
+               WHEN EXISTS (
+                 SELECT 1
+                   FROM lesson_requests lr
+                  WHERE lr.school_id = ct.school_id
+                    AND lr.booking_id = b.id
+                    AND lr.status = 'accepted'
+                    AND lr.payment_intent_id = ct.stripe_payment_intent_id
+               ) THEN 'captured_request'
+               WHEN EXISTS (
+                 SELECT 1
+                   FROM lesson_offers o
+                  WHERE o.school_id = ct.school_id
+                    AND o.booking_id = b.id
+                    AND o.status = 'accepted'
+               ) THEN 'one_off_offer'
+               WHEN b.booking_purpose = 'test_date' THEN 'test_date_direct'
+               ELSE 'direct_slot'
+             END AS payment_origin
+        FROM stripe_connect_launch_configs cfg
+        JOIN credit_transactions ct
+          ON ct.school_id = cfg.school_id
+         AND ct.type = 'slot_purchase'
+         AND ct.created_at >= cfg.cutover_at
+        JOIN booking_credit_sources bcs
+          ON bcs.school_id = ct.school_id
+         AND bcs.credit_transaction_id = ct.id
+         AND bcs.refunded_at IS NULL
+        JOIN lesson_bookings b
+          ON b.school_id = bcs.school_id
+         AND b.id = bcs.booking_id
+         AND b.status IN ('scheduled', 'chargeable')
+        LEFT JOIN payout_funding_sources s
+          ON s.school_id = ct.school_id
+         AND s.credit_transaction_id = ct.id
+       WHERE cfg.accounting_version = ${LAUNCH_ACCOUNTING_VERSION}
+         AND cfg.mode = ${SHADOW_WRITER_MODE}
+         AND (${scopedSchoolId}::bigint IS NULL OR cfg.school_id = ${scopedSchoolId})
+         AND s.id IS NULL
+         AND (ct.stripe_session_id IS NOT NULL OR ct.stripe_payment_intent_id IS NOT NULL)
+       ORDER BY ct.school_id, ct.id, b.id
+       LIMIT ${limit}
+    `;
+    originCandidates = scopedSchoolId === null
+      ? originRows
+      : originRows.filter((row) => Number(row.school_id) === scopedSchoolId);
+  }
+
   const summary = {
-    checked: candidates.length,
+    checked: pendingCandidates.length + originCandidates.length,
+    pending_contracts: pendingCandidates.length,
+    unmaterialized_origins: originCandidates.length,
     completed: 0,
     pending: 0,
     contradictory: 0,
+    ineligible: 0,
     failed: 0,
     results: [],
   };
-  for (const candidate of candidates) {
+  for (const candidate of pendingCandidates) {
     try {
       const evidence = await stripeEvidenceFetcher({
         id: candidate.stripe_payment_intent_id,
@@ -187,6 +275,62 @@ async function reconcilePendingLaunchPaymentContracts({
       summary.failed += 1;
       summary.results.push({
         contract_id: candidate.id,
+        status: 'failed',
+        code: err?.code || 'RECONCILE_FAILED',
+      });
+    }
+  }
+
+  for (const candidate of originCandidates) {
+    try {
+      const paymentObject = await paymentObjectFetcher(candidate);
+      const evidence = await stripeEvidenceFetcher(paymentObject);
+      const result = await contractMaterializer({
+        connectionString,
+        schoolId: Number(candidate.school_id),
+        creditTransactionId: Number(candidate.credit_transaction_id),
+        bookingId: Number(candidate.booking_id),
+        metadata: paymentObject?.metadata || {},
+        expectedOrigin: candidate.payment_origin,
+        fundingEvidence: evidence,
+        eventContext: {
+          stripeEventId: null,
+          stripeEventType: 'reconciliation',
+        },
+        now,
+        transactionRunner,
+      });
+      const status = result.materialized
+        ? (result.contract?.evidence_status || 'pending')
+        : (result.status || 'pending');
+      if (status === 'complete') summary.completed += 1;
+      else if (status === 'contradictory') summary.contradictory += 1;
+      else if (status === 'ineligible') summary.ineligible += 1;
+      else summary.pending += 1;
+      summary.results.push({
+        credit_transaction_id: candidate.credit_transaction_id,
+        booking_id: candidate.booking_id,
+        payment_origin: candidate.payment_origin,
+        status,
+        ...(Array.isArray(result.reasons) ? { reasons: result.reasons } : {}),
+      });
+    } catch (err) {
+      if (err?.code === 'STRIPE_LAUNCH_EVIDENCE_INCOMPLETE') {
+        summary.pending += 1;
+        summary.results.push({
+          credit_transaction_id: candidate.credit_transaction_id,
+          booking_id: candidate.booking_id,
+          payment_origin: candidate.payment_origin,
+          status: 'pending',
+          reasons: ['stripe_evidence_incomplete'],
+        });
+        continue;
+      }
+      summary.failed += 1;
+      summary.results.push({
+        credit_transaction_id: candidate.credit_transaction_id,
+        booking_id: candidate.booking_id,
+        payment_origin: candidate.payment_origin,
         status: 'failed',
         code: err?.code || 'RECONCILE_FAILED',
       });

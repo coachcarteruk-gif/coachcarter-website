@@ -7,6 +7,7 @@ const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
+const { logAuditRequired } = require('./_audit');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 
 const FREE_TRIAL_CREDITS = 0;
@@ -369,6 +370,7 @@ async function handleSendEmailCode(req, res) {
         SELECT id
           FROM instructors
          WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND school_id = ${schoolId}
            AND active = TRUE`;
       shouldSend = !!acct && purpose === 'login';
     }
@@ -390,6 +392,7 @@ async function handleSendEmailCode(req, res) {
                WHERE email = ${cleanEmail}
                  AND purpose = ${purpose}
                  AND role = ${role}
+                 AND school_id = ${schoolId}
                  AND used = false`;
 
     await sql`
@@ -438,7 +441,16 @@ async function handleVerifyEmailCode(req, res) {
 
     const sql = neon(process.env.POSTGRES_URL);
 
-    const rows = await sql`
+    const requestedSchoolId = parseInt(req.body?.school_id || req.query.school_id, 10) || 1;
+    const rows = role === 'instructor' ? await sql`
+      SELECT id, school_id FROM magic_link_tokens
+       WHERE email = ${cleanEmail}
+         AND email_code = ${String(code).trim()}
+         AND purpose = ${purpose}
+         AND role = ${role}
+         AND school_id = ${requestedSchoolId}
+         AND used = false
+         AND expires_at > NOW()` : await sql`
       SELECT id, school_id FROM magic_link_tokens
        WHERE email = ${cleanEmail}
          AND email_code = ${String(code).trim()}
@@ -504,8 +516,9 @@ async function handleVerifyEmailCode(req, res) {
       const [instructor] = await sql`
         SELECT id, name, email, photo_url, school_id, onboarding_complete,
                must_change_password, COALESCE(is_admin, FALSE) AS is_admin, active
-          FROM instructors
+         FROM instructors
          WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND school_id = ${linkRecord.school_id}
            AND active = TRUE`;
 
       if (!instructor) {
@@ -526,6 +539,16 @@ async function handleVerifyEmailCode(req, res) {
       const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
 
       await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+      await logAuditRequired(sql, {
+        adminId: null,
+        adminEmail: instructor.email,
+        action: 'instructor-email-code-login',
+        targetType: 'instructor',
+        targetId: instructor.id,
+        details: { method: 'email_code' },
+        schoolId: instructor.school_id,
+        req,
+      });
 
       appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
       appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));

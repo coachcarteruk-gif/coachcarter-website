@@ -11,6 +11,7 @@ const {
   prepareLaunchPaymentCandidate,
   parseLaunchPaymentCandidate,
   buildLaunchEvidenceDecision,
+  compareLocalStripeFeeEvidence,
   materializeLaunchPaymentContract,
 } = require('../api/_stripe-launch-payment-contracts');
 const {
@@ -135,6 +136,79 @@ test.describe('Stripe launch candidate boundary', () => {
       ...base,
       fundingEvidence: { paymentCreatedAt: '2026-08-01T00:00:00.000Z' },
     })).rejects.toMatchObject({ code: 'STRIPE_LAUNCH_CANDIDATE_MISSING' });
+  });
+
+  test('preserves delayed balance evidence as pending without writing a guessed contract', async () => {
+    let mutationQueries = 0;
+    const transactionRunner = async (_options, callback) => callback({
+      query: async (text) => {
+        if (/SELECT id, cutover_at/i.test(text)) {
+          return { rows: [{ cutover_at: '2026-08-01T00:00:00.000Z' }] };
+        }
+        if (/FROM credit_transactions ct/i.test(text)) {
+          return { rows: [{
+            id: 11,
+            school_id: 7,
+            learner_id: 8,
+            instructor_id: 9,
+            instructor_active: true,
+            type: 'slot_purchase',
+            amount_pence: 5500,
+            stripe_session_id: 'cs_launch_exact',
+            stripe_payment_intent_id: 'pi_launch_exact',
+            stripe_fee_pence: null,
+          }] };
+        }
+        if (/FROM lesson_bookings b/i.test(text) && /booking_credit_sources bcs/i.test(text)) {
+          return { rows: [{
+            id: 13,
+            school_id: 7,
+            learner_id: 8,
+            instructor_id: 9,
+            status: 'scheduled',
+            booking_purpose: 'lesson',
+            lesson_payment_contract_id: null,
+            booking_stripe_fee_pence: null,
+            stripe_fee_source: null,
+            contribution_pence: 5500,
+            bcs_stripe_fee_pence: 0,
+            refunded_at: null,
+          }] };
+        }
+        if (/SELECT b\.id, b\.status/i.test(text)) {
+          return { rows: [{ id: 13, status: 'scheduled', refunded_at: null }] };
+        }
+        if (/\b(?:INSERT|UPDATE|DELETE)\b/i.test(text)) mutationQueries += 1;
+        return { rows: [] };
+      },
+    });
+    const result = await materializeLaunchPaymentContract({
+      connectionString: 'not-used',
+      schoolId: 7,
+      creditTransactionId: 11,
+      bookingId: 13,
+      metadata: {
+        payment_contract_candidate_id: candidateId,
+        payment_contract_schema_version: PAYMENT_CONTRACT_SCHEMA_VERSION,
+        payment_origin: PAYMENT_ORIGINS.DIRECT_SLOT,
+      },
+      expectedOrigin: PAYMENT_ORIGINS.DIRECT_SLOT,
+      fundingEvidence: exactEvidence({
+        feePence: null,
+        source: null,
+        balanceTransactionId: null,
+        fundsAvailableAt: null,
+        balanceTransactionStatus: null,
+      }),
+      transactionRunner,
+    });
+    expect(result).toMatchObject({
+      candidate: true,
+      materialized: false,
+      status: 'pending',
+      payment_origin: PAYMENT_ORIGINS.DIRECT_SLOT,
+    });
+    expect(mutationQueries).toBe(0);
   });
 });
 
@@ -265,6 +339,147 @@ test.describe('Stripe launch immutable evidence', () => {
       },
     });
     expect(result).toMatchObject({ checked: 0, completed: 0, failed: 0 });
+    expect(stripeCalls).toBe(0);
+  });
+
+  test('treats legacy null/zero fee placeholders as unknown but preserves known mismatches', () => {
+    expect(compareLocalStripeFeeEvidence({
+      creditTransactionFeePence: null,
+      bookingFeePence: null,
+      bookingFeeSource: null,
+      bookingContributionFeePence: 0,
+      stripeFeePence: 199,
+    })).toEqual([]);
+
+    expect(compareLocalStripeFeeEvidence({
+      creditTransactionFeePence: 198,
+      bookingFeePence: 198,
+      bookingFeeSource: 'balance_transaction',
+      bookingContributionFeePence: 198,
+      stripeFeePence: 199,
+    })).toEqual([
+      'credit_transaction_stripe_fee_contradiction',
+      'booking_stripe_fee_contradiction',
+      'booking_contribution_stripe_fee_contradiction',
+    ]);
+  });
+
+  test('reconciler recovers every Slice 2 origin that has no initial contract', async () => {
+    const origins = Object.values(PAYMENT_ORIGINS);
+    const originRows = origins.map((payment_origin, index) => ({
+      school_id: 7,
+      credit_transaction_id: 100 + index,
+      booking_id: 200 + index,
+      stripe_checkout_session_id: payment_origin === PAYMENT_ORIGINS.CAPTURED_REQUEST
+        ? null
+        : `cs_${index}`,
+      stripe_payment_intent_id: `pi_${index}`,
+      payment_origin,
+    }));
+    const materialized = [];
+    const sql = async (strings) => {
+      const text = strings.join('');
+      if (/SELECT c\.id, c\.school_id/i.test(text)) return [];
+      if (/SELECT DISTINCT ON/i.test(text)) return originRows;
+      return [];
+    };
+    const result = await reconcilePendingLaunchPaymentContracts({
+      sql,
+      connectionString: 'not-used',
+      schoolId: 7,
+      paymentObjectFetcher: async (candidate) => ({
+        id: candidate.stripe_checkout_session_id || candidate.stripe_payment_intent_id,
+        object: candidate.stripe_checkout_session_id ? 'checkout.session' : 'payment_intent',
+        payment_intent: candidate.stripe_payment_intent_id,
+        metadata: { payment_origin: candidate.payment_origin },
+      }),
+      stripeEvidenceFetcher: async () => exactEvidence(),
+      contractMaterializer: async (input) => {
+        materialized.push(input);
+        return { materialized: true, contract: { evidence_status: 'complete' } };
+      },
+    });
+
+    expect(result).toMatchObject({
+      checked: 4,
+      unmaterialized_origins: 4,
+      completed: 4,
+      failed: 0,
+    });
+    expect(materialized.map((input) => input.expectedOrigin).sort()).toEqual(origins.sort());
+    expect(materialized.every((input) => input.schoolId === 7)).toBe(true);
+    expect(materialized.every((input) => input.eventContext.stripeEventType === 'reconciliation')).toBe(true);
+  });
+
+  test('delayed balance evidence remains retryable and duplicate reconciliation is idempotent', async () => {
+    const candidate = {
+      school_id: 7,
+      credit_transaction_id: 301,
+      booking_id: 401,
+      stripe_checkout_session_id: 'cs_delayed',
+      stripe_payment_intent_id: 'pi_delayed',
+      payment_origin: PAYMENT_ORIGINS.DIRECT_SLOT,
+    };
+    const sql = async (strings) => /SELECT DISTINCT ON/i.test(strings.join('')) ? [candidate] : [];
+    let evidenceAvailable = false;
+    let materializerCalls = 0;
+    const options = {
+      sql,
+      connectionString: 'not-used',
+      schoolId: 7,
+      paymentObjectFetcher: async () => ({
+        id: 'cs_delayed',
+        object: 'checkout.session',
+        payment_intent: 'pi_delayed',
+        metadata: {},
+      }),
+      stripeEvidenceFetcher: async () => evidenceAvailable
+        ? exactEvidence()
+        : exactEvidence({ feePence: null, reviewReasons: ['missing_stripe_fee_evidence'] }),
+      contractMaterializer: async ({ fundingEvidence }) => {
+        materializerCalls += 1;
+        if (fundingEvidence.feePence === null) {
+          return { materialized: false, status: 'pending', reasons: ['stripe_fee_minor'] };
+        }
+        return {
+          materialized: true,
+          created: materializerCalls === 2,
+          contract: { id: candidateId, evidence_status: 'complete' },
+        };
+      },
+    };
+
+    const delayed = await reconcilePendingLaunchPaymentContracts(options);
+    expect(delayed).toMatchObject({ checked: 1, pending: 1, completed: 0, failed: 0 });
+
+    evidenceAvailable = true;
+    const recovered = await reconcilePendingLaunchPaymentContracts(options);
+    const duplicate = await reconcilePendingLaunchPaymentContracts(options);
+    expect(recovered).toMatchObject({ checked: 1, completed: 1, failed: 0 });
+    expect(duplicate).toMatchObject({ checked: 1, completed: 1, failed: 0 });
+    expect(materializerCalls).toBe(3);
+  });
+
+  test('school-scoped reconciliation rejects cross-tenant rows even from an adversarial query adapter', async () => {
+    const foreign = {
+      school_id: 8,
+      credit_transaction_id: 500,
+      booking_id: 600,
+      stripe_checkout_session_id: 'cs_foreign',
+      stripe_payment_intent_id: 'pi_foreign',
+      payment_origin: PAYMENT_ORIGINS.DIRECT_SLOT,
+    };
+    let stripeCalls = 0;
+    const result = await reconcilePendingLaunchPaymentContracts({
+      sql: async (strings) => /SELECT DISTINCT ON/i.test(strings.join('')) ? [foreign] : [],
+      connectionString: 'not-used',
+      schoolId: 7,
+      paymentObjectFetcher: async () => {
+        stripeCalls += 1;
+        return {};
+      },
+    });
+    expect(result).toMatchObject({ checked: 0, failed: 0 });
     expect(stripeCalls).toBe(0);
   });
 });
