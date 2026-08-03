@@ -5,7 +5,7 @@ const VERCEL_PROJECT_ID_PATTERN = /^prj_[A-Za-z0-9]+$/;
 const VERCEL_DEPLOYMENT_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app$/;
 const NEON_PROJECT_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const NEON_BRANCH_ID_PATTERN = /^br-[a-z0-9](?:[a-z0-9-]{0,56}[a-z0-9])?$/;
-const NEON_ENDPOINT_HOST_PATTERN = /^ep-[a-z0-9-]+(?:-pooler)?\.[a-z0-9-]+\.(?:aws|azure)\.neon\.tech$/;
+const NEON_ENDPOINT_HOST_PATTERN = /^ep-[a-z0-9-]+(?:-pooler)?\.(?:c-[1-9][0-9]*\.)?[a-z0-9-]+\.(?:aws|azure)\.neon\.tech$/;
 const DATABASE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_$-]{0,62}$/;
 
 class StripeLaunchShadowIdentityError extends Error {

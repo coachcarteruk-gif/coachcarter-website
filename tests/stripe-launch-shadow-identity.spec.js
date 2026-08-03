@@ -92,6 +92,47 @@ test.describe('Stripe launch shadow deployment/database identity', () => {
     expect(result.identity_fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
+  for (const [name, endpointHost] of [
+    ['current direct AWS host', 'ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech'],
+    ['current pooled AWS host', 'ep-frosty-truth-zatfdzrb-pooler.c-2.eu-west-2.aws.neon.tech'],
+    ['existing direct AWS host', 'ep-shadow-05.eu-west-2.aws.neon.tech'],
+    ['existing pooled AWS host', 'ep-shadow-05-pooler.eu-west-2.aws.neon.tech'],
+    ['existing direct Azure host', 'ep-shadow-05.westeurope.azure.neon.tech'],
+  ]) {
+    test(`accepts the ${name} format`, async () => {
+      const env = {
+        ...baseEnv,
+        STRIPE_LAUNCH_SHADOW_NEON_ENDPOINT_HOST: endpointHost,
+        POSTGRES_URL: `postgresql://shadow_user:test-only@${endpointHost}/shadowdb?sslmode=require`,
+      };
+      const result = await collectStripeLaunchShadowIdentity({ env, sql, schoolId: 7 });
+      expect(result.identity.neon.endpoint_host).toBe(endpointHost);
+    });
+  }
+
+  for (const [name, endpointHost] of [
+    ['zero cell number', 'ep-frosty-truth-zatfdzrb.c-0.eu-west-2.aws.neon.tech'],
+    ['non-numeric cell', 'ep-frosty-truth-zatfdzrb.c-two.eu-west-2.aws.neon.tech'],
+    ['wrong cloud', 'ep-frosty-truth-zatfdzrb.c-2.eu-west-2.gcp.neon.tech'],
+    ['wrong domain', 'ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.com'],
+    ['suffix injection', 'ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech.evil.example'],
+    ['leading whitespace', ' ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech'],
+    ['credentials', 'shadow_user@ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech'],
+    ['port', 'ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech:5432'],
+    ['path', 'ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech/neondb'],
+    ['unrelated host', 'database.example.com'],
+  ]) {
+    test(`rejects a Neon endpoint host with ${name}`, () => {
+      expect(() => readBoundIdentity({
+        ...operatorEnv,
+        STRIPE_LAUNCH_SHADOW_NEON_ENDPOINT_HOST: endpointHost,
+      })).toThrow(expect.objectContaining({
+        code: 'STRIPE_LAUNCH_SHADOW_IDENTITY_MISSING',
+        fields: ['neon.endpoint_host'],
+      }));
+    });
+  }
+
   test('uses runtime VERCEL_URL only for the application bootstrap while the operator binding remains explicit', () => {
     expect(readApplicationBoundIdentity(baseEnv).vercel.deployment_host)
       .toBe('cc-simon-shadow-05-abc123.vercel.app');
