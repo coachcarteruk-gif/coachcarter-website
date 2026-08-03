@@ -1296,6 +1296,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
   school_id    INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+-- Older production schemas made admin_id NOT NULL even though audit entries
+-- can be written by non-admin actors (for example instructor code sign-in).
+ALTER TABLE audit_log ALTER COLUMN admin_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_log_school ON audit_log(school_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_id);
 

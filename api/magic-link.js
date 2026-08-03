@@ -538,7 +538,6 @@ async function handleVerifyEmailCode(req, res) {
       if (instructor.is_admin) jwtPayload.isAdmin = true;
       const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
 
-      await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
       await logAuditRequired(sql, {
         adminId: null,
         adminEmail: instructor.email,
@@ -549,6 +548,7 @@ async function handleVerifyEmailCode(req, res) {
         schoolId: instructor.school_id,
         req,
       });
+      await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
 
       appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
       appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
