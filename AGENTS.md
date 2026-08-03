@@ -66,5 +66,6 @@ CoachCarter is a multi-tenant driving school SaaS platform. The backend is Verce
 - `docs/multi-tenancy.md` - school scoping and onboarding.
 - `docs/booking-statuses.md` - booking lifecycle and payout implications.
 - `docs/stripe-connect.md` - payout and Stripe Connect behaviour.
+- `docs/stripe-connect-simon-launch-project-log.md` - required living handover; read before any Simon Stripe Connect launch, payout rollout, or shadow-exercise work.
 - `MIGRATION-PLAN.md` - React Native portability constraints.
 - `FRANCHISE-MODEL-PLAN.md` - franchise/pricing planning and deferred triggers.
