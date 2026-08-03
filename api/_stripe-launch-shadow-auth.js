@@ -1,6 +1,7 @@
 const { safeEqual } = require('./_auth');
 
 const SHADOW_OPERATIONS = Object.freeze({
+  IDENTITY_PREFLIGHT: 'identity_preflight',
   RECONCILE_PAYMENTS: 'reconcile_payments',
   EXPIRE_REQUESTS: 'expire_requests',
 });

@@ -72,6 +72,7 @@ const {
   PAYMENT_ORIGINS: STRIPE_LAUNCH_PAYMENT_ORIGINS,
   prepareLaunchPaymentCandidate,
 } = require('./_stripe-launch-payment-contracts');
+const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-return-urls');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -3733,6 +3734,14 @@ async function handleCheckoutTestDate(req, res) {
       instructorId: Number(ctx.instructor.id),
       origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.TEST_DATE_DIRECT,
     });
+    const checkoutReturnUrls = await resolveStripeCheckoutReturnUrls({
+      sql: ctx.sql,
+      schoolId: ctx.schoolId,
+      launchMetadata,
+      legacyBaseUrl: origin,
+      successPath: '/learner/book.html?paid=1&test_date_lesson=1',
+      cancelPath: '/learner/book.html?cancelled=1',
+    });
 
     session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -3775,8 +3784,8 @@ async function handleCheckoutTestDate(req, res) {
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: false,
-      success_url: `${origin}/learner/book.html?paid=1&test_date_lesson=1`,
-      cancel_url: `${origin}/learner/book.html?cancelled=1`,
+      success_url: checkoutReturnUrls.successUrl,
+      cancel_url: checkoutReturnUrls.cancelUrl,
     });
 
     const insertedRows = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
@@ -5028,6 +5037,14 @@ async function handleCheckoutRequest(req, res) {
       instructorId: Number(instructor_id),
       origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.CAPTURED_REQUEST,
     });
+    const checkoutReturnUrls = await resolveStripeCheckoutReturnUrls({
+      sql,
+      schoolId,
+      launchMetadata,
+      legacyBaseUrl: origin,
+      successPath: '/learner/book.html?requested=1',
+      cancelPath: '/learner/book.html?cancelled=1',
+    });
     const requestPaymentMetadata = {
       payment_type: 'lesson_request_hold',
       learner_id: String(learnerId),
@@ -5071,8 +5088,8 @@ async function handleCheckoutRequest(req, res) {
       metadata: requestPaymentMetadata,
       ...(emailForStripe ? { customer_email: emailForStripe } : {}),
       billing_address_collection: 'required',
-      success_url: `${origin}/learner/book.html?requested=1`,
-      cancel_url:  `${origin}/learner/book.html?cancelled=1`
+      success_url: checkoutReturnUrls.successUrl,
+      cancel_url:  checkoutReturnUrls.cancelUrl
     });
 
     // Hold the slot while they authorize the card (same reservation flow as
@@ -5306,6 +5323,14 @@ async function handleCheckoutSlot(req, res) {
       instructorId: Number(instructor_id),
       origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
     });
+    const checkoutReturnUrls = await resolveStripeCheckoutReturnUrls({
+      sql,
+      schoolId,
+      launchMetadata,
+      legacyBaseUrl: origin,
+      successPath: '/learner/book.html?paid=1',
+      cancelPath: '/learner/book.html?cancelled=1',
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -5350,8 +5375,8 @@ async function handleCheckoutSlot(req, res) {
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
-      success_url: `${origin}/learner/book.html?paid=1`,
-      cancel_url:  `${origin}/learner/book.html?cancelled=1`
+      success_url: checkoutReturnUrls.successUrl,
+      cancel_url:  checkoutReturnUrls.cancelUrl
     });
 
     // Reserve the slot. uq_slot_reservation_slot enforces one active
@@ -5659,6 +5684,14 @@ async function handleCheckoutSlotGuest(req, res) {
       instructorId: Number(instructor_id),
       origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
     });
+    const checkoutReturnUrls = await resolveStripeCheckoutReturnUrls({
+      sql,
+      schoolId,
+      launchMetadata,
+      legacyBaseUrl: origin,
+      successPath: '/learner/book.html?paid=1',
+      cancelPath: '/learner/book.html?cancelled=1',
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -5702,8 +5735,8 @@ async function handleCheckoutSlotGuest(req, res) {
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
-      success_url: `${origin}/learner/book.html?paid=1`,
-      cancel_url:  `${origin}/learner/book.html?cancelled=1`
+      success_url: checkoutReturnUrls.successUrl,
+      cancel_url:  checkoutReturnUrls.cancelUrl
     });
 
     // Reserve the slot — see uq_slot_reservation_slot rationale in the

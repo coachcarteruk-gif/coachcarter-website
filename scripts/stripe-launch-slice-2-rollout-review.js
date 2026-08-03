@@ -16,6 +16,10 @@ function inspect() {
   const cron = read('api/cron-reconcile-payments.js');
   const requests = read('api/requests.js');
   const shadowAuth = read('api/_stripe-launch-shadow-auth.js');
+  const shadowIdentity = read('api/_stripe-launch-shadow-identity.js');
+  const shadowIdentityRoute = read('api/stripe-launch-shadow-identity.js');
+  const shadowReturnUrls = read('api/_stripe-launch-shadow-return-urls.js');
+  const shadowIdentityVerifier = read('scripts/stripe-launch-shadow-identity-preflight.js');
   const magicLink = read('api/magic-link.js');
   const shadow = read('api/_payout-v2-shadow.js');
   const transfers = read('api/_payout-v2-transfer-executor.js');
@@ -53,7 +57,9 @@ function inspect() {
       && slots.includes('PAYMENT_ORIGINS.DIRECT_SLOT')
       && slots.includes('PAYMENT_ORIGINS.TEST_DATE_DIRECT')
       && slots.includes('PAYMENT_ORIGINS.CAPTURED_REQUEST')
-      && offers.includes('PAYMENT_ORIGINS.ONE_OFF_OFFER'),
+      && offers.includes('PAYMENT_ORIGINS.ONE_OFF_OFFER')
+      && (slots.match(/resolveStripeCheckoutReturnUrls\(\{/g) || []).length === 4
+      && (offers.match(/resolveStripeCheckoutReturnUrls\(\{/g) || []).length === 1,
     unsupportedShapesDoNotWrite:
       webhook.includes("reason: 'unsupported_launch_payment_shape'")
       && webhook.includes('if (launchContract)')
@@ -83,9 +89,16 @@ function inspect() {
       && cron.includes('reconcilePendingLaunchPaymentContracts'),
     shadowOperationsFailClosed:
       shadowAuth.includes("env.STRIPE_MODE !== 'test'")
+      && shadowAuth.includes("IDENTITY_PREFLIGHT: 'identity_preflight'")
       && shadowAuth.includes('STRIPE_LAUNCH_SHADOW_PROJECT_ID')
       && shadowAuth.includes('STRIPE_LAUNCH_SHADOW_SCHOOL_ID')
       && shadowAuth.includes('STRIPE_LAUNCH_SHADOW_CRON_SECRET')
+      && shadowIdentityRoute.includes('operation: SHADOW_OPERATIONS.IDENTITY_PREFLIGHT')
+      && shadowIdentity.includes('SELECT current_database() AS database_name')
+      && shadowIdentity.includes('STRIPE_LAUNCH_SHADOW_NEON_BRANCH_ID')
+      && shadowIdentity.includes('STRIPE_LAUNCH_SHADOW_NEON_ENDPOINT_HOST')
+      && shadowReturnUrls.includes('collectStripeLaunchShadowIdentity')
+      && shadowReturnUrls.includes('preflight.identity.vercel.deployment_host')
       && cron.includes('logAuditRequired')
       && requests.includes('logAuditRequired')
       && cron.includes('schoolId: shadowAuth.schoolId')
@@ -101,7 +114,11 @@ function inspect() {
       && !forbiddenSqlMutations.test(slice2Sources),
     diagnosticsReadOnly:
       diagnosticsAreReadOnly(preflight)
-      && diagnosticsAreReadOnly(postflight),
+      && diagnosticsAreReadOnly(postflight)
+      && shadowIdentityVerifier.includes("method: 'GET'")
+      && shadowIdentityVerifier.includes('readOnly: true')
+      && shadowIdentityVerifier.includes("approved_to_create_resources: false")
+      && !forbiddenStripeMutations.test(shadowIdentityVerifier),
     correctiveMigrationIsNarrowAndInert:
       payoutSourceGuardFix.includes('CREATE OR REPLACE FUNCTION stripe_launch_guard_payout_source_update()')
       && payoutSourceGuardFix.includes('to_jsonb(OLD)->>fill_column IS NOT NULL')
@@ -121,7 +138,7 @@ function inspect() {
     checks,
     failures,
     nextAction: failures.length === 0
-      ? 'Request explicit approval before any deployment or fresh shadow-02 exercise; do not change production configuration or Stripe state.'
+      ? 'Review and merge the focused identity/return-URL prerequisite repair before separately authorising any fresh shadow-05 resource creation; do not change production configuration or Stripe state.'
       : 'Resolve every failed review check before requesting rollout approval.',
   };
 }

@@ -3,19 +3,19 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — FRESH-SCHEMA
-REPAIR VERIFIED, READY FOR FOCUSED PR REVIEW**
+**Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — IDENTITY AND
+RETURN-URL PREREQUISITES IMPLEMENTED AND LOCALLY VERIFIED — REVIEW/MERGE NEXT**
 
 **Last updated:** 3 August 2026
 
 **Verified source baseline:** remote `main` at
-`5a462837cafa9a7c83f5594b553f341ac6e857ad`
+`dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a`
 
-**Current blocker:** no verification blocker remains for the focused repair on
-`codex/simon-fresh-schema-is-admin-repair`. Commit, push, and PR creation remain
-intentionally unperformed pending explicit review and approval. Slice 2 remains
-blocked until that repair is merged and the separate identity-preflight and
-fail-closed shadow return-URL work is implemented and merged.
+**Current blocker:** the focused identity/return-URL prerequisite changes are
+implemented and locally green but remain uncommitted and unreviewed. Slice 2
+remains blocked until they are reviewed and merged. Do not create
+`cc-simon-s2-shadow-05` before they land and separate resource-creation authority
+is given.
 
 ## 1. Title and purpose
 
@@ -107,14 +107,16 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | Remote and local `main` both resolved to `5a462837…` on 3 August 2026; the repair branch was created from that exact clean commit. |
+| Latest baseline | Verified | The branch began at PR #340 merge `26b6cdfd…`, then fast-forwarded cleanly to remote `main` at PR #341 merge `dc0e17a…`; PR #341 touched only instructor sign-in code/migration/test files outside this prerequisite scope. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
-| Fresh-schema bootstrap | Repair verified; ready for focused PR review | The focused branch mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests pass against a disposable, confirmed non-production loopback database with the three gates enabled. |
+| Fresh-schema bootstrap | Repair merged | PR #340 mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests passed against a disposable, confirmed non-production loopback database with the three gates enabled. |
+| Deployment/database identity | Implemented; locally verified | Protected GET diagnostic and read-only operator verifier require exact Vercel project/environment/deployment and Neon project/branch/endpoint/database agreement, use the existing shadow project/test/school/bearer boundary, return only sanitised fields/fingerprint, and fail closed. Sixteen focused tests pass, including the shadow-04 cross-binding shape. |
+| Shadow Checkout return URLs | Implemented; locally verified | All approved producers resolve success/cancel URLs from the identity-verified Vercel deployment before Stripe Checkout creation. Client `Origin`/forwarded-host values cannot select a shadow URL; missing, malformed, production, or mismatched trusted identity fails before Stripe. Twelve focused tests pass and non-shadow URL semantics remain unchanged. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Focused repair PR review | Review the three-file repair diff and, only with explicit approval, commit, push, and open the focused repair PR. Do not create or exercise shadow-05. |
+| Next implementation | Focused prerequisite review | Review the identity/return-URL diff and, only with explicit approval, commit, push, and open a focused PR. Do not create or exercise shadow-05. |
 
 ## 6. Chronological project journey
 
@@ -149,6 +151,10 @@ If either hash changes, stop and obtain an explicit product-document review.
   `instructor_busy_blocks` referenced `schools` before `schools` existed. It
   added a triple-gated rollback-only fresh-schema test. PR #338 explicitly left
   a separate full-second-apply idempotency failure out of scope.
+- **3 August — PR #340:** repaired the aggregate's missing
+  `instructors.is_admin` column and added rollback-only coverage for the exact
+  column contract plus real school-scoped, audited admin instructor access. CI
+  passed and the repair merged as `26b6cdfd…`.
 
 ## 7. Completed implementation slices and relevant PRs
 
@@ -160,6 +166,9 @@ If either hash changes, stop and obtain an explicit product-document review.
 | [#336](https://github.com/coachcarteruk-gif/coachcarter-website/pull/336) | `307864b0a7ed43242e5f720270f62f7baf060409` | Initial Slice 2 implementation and migration 040 correction. | Deployment, shadow activation, or a complete live exercise. |
 | [#337](https://github.com/coachcarteruk-gif/coachcarter-website/pull/337) | `8e71267ad3ff50c17285f32e1b5de619a2cb1b46` | Four-origin repair, retryable evidence, strict shadow/audit gates, protected-document hashes. | Fresh aggregate completeness or shadow acceptance. |
 | [#338](https://github.com/coachcarteruk-gif/coachcarter-website/pull/338) | `3710c9b0f5ac9b095297950c999393ae5577ffbe` | Empty-schema `schools` ordering repair and two rollback-only bootstrap tests. | `instructors.is_admin`, a real `access-instructor-account` call, or full aggregate reapply idempotency. |
+| [#339](https://github.com/coachcarteruk-gif/coachcarter-website/pull/339) | `5a462837cafa9a7c83f5594b553f341ac6e857ad` | Preserved this living log and the Simon-specific worker rule. | Any migration repair, shadow acceptance, or money operation. |
+| [#340](https://github.com/coachcarteruk-gif/coachcarter-website/pull/340) | `26b6cdfd7d96f86ffc6988c58c4a46633fc6df38` | Minimal aggregate repair for migration 013 plus three-test fresh-schema and real-route admin-access coverage. | Deployment/database identity binding, correct shadow return URLs, or Slice 2 acceptance. |
+| [#341](https://github.com/coachcarteruk-gif/coachcarter-website/pull/341) | `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a` | Fixed instructor sign-in code verification; current prerequisite-branch baseline. | Any Simon identity/return-URL prerequisite or Slice 2 acceptance. |
 
 ## 8. Shadow-exercise history
 
@@ -212,22 +221,26 @@ otherwise:
 
 ### Repository-verified on 3 August 2026
 
-- Remote and local `main` resolved to
-  `5a462837cafa9a7c83f5594b553f341ac6e857ad`; the exercise baseline remains
-  the earlier `3710c9b0…` commit recorded in the failed shadow-04 history.
+- Remote `main` and the current prerequisite branch resolve to PR #341 merge
+  `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a`. The local `main` ref remains at
+  PR #340 merge `26b6cdfd…` because the branch was fast-forwarded in place; the
+  exercise baseline remains the earlier `3710c9b0…` commit recorded in the
+  failed shadow-04 history.
 - The worktree was clean before
   `codex/simon-fresh-schema-is-admin-repair` was created from remote `main`.
 - PR #338 is merged and its GitHub merge metadata matches that commit.
 - PR #339 preserved this living log and the Simon-specific `AGENTS.md` rule on
   remote `main` before the repair branch was created.
+- PR #340 merged the focused three-file repair after its syntax and Playwright
+  CI checks completed successfully. Its merge commit is `26b6cdfd…`.
 - The two protected LF-normalised hashes match exactly and the documents were
   not changed by this task.
 - `api/admin.js` selects `COALESCE(is_admin, FALSE) AS is_admin` in
   `handleAccessInstructorAccount()`.
 - `db/migrations/013_instructor_is_admin.sql` adds
   `instructors.is_admin BOOLEAN DEFAULT FALSE`.
-- The repair branch adds exactly one aggregate DDL statement equivalent to
-  migration 013 and no unrelated migration cleanup.
+- PR #340 adds exactly one aggregate DDL statement equivalent to migration 013
+  and no unrelated migration cleanup.
 - `tests/migration-fresh-schema.integration.spec.js` now asserts the column's
   Boolean/default contract and invokes the real admin route against the same
   freshly bootstrapped transaction. It covers same-school success, cross-school
@@ -315,13 +328,15 @@ yield a usable new code, and admin impersonation is the approved fallback. The
 fresh schema cannot run that fallback. Strict stop-on-defect rules also prohibit
 continuing in a partially known environment.
 
-**Implemented repair:** the focused branch mirrors migration 013 in
-`db/migration.sql`, asserts the column contract on a genuinely empty aggregate
-schema, and adds focused database-backed same-school/cross-school admin-access
-coverage. The three-test fresh-schema suite and eight-test
-rollback/payment-contract suite both pass with all three database gates against
-a disposable confirmed non-production loopback database. The repair blocker is
-closed; Slice 2 acceptance remains separately blocked.
+**Merged repair:** PR #340 mirrors migration 013 in `db/migration.sql`, asserts
+the column contract on a genuinely empty aggregate schema, and adds focused
+database-backed same-school/cross-school admin-access coverage. The three-test
+fresh-schema suite and eight-test rollback/payment-contract suite both passed
+with all three database gates against a disposable confirmed non-production
+loopback database. The repair blocker is closed; Slice 2 acceptance remains
+separately blocked by review/merge of the now-implemented identity and
+return-URL prerequisites, separate shadow-05 resource authority, and the clean
+shadow-05 rerun.
 
 ### Unresolved observations, not yet diagnosed
 
@@ -331,8 +346,10 @@ closed; Slice 2 acceptance remains separately blocked.
 - Shadow-04's original deployment/database mismatch prevents a clean assertion
   about all non-financial side effects before rebinding.
 - The missing `Origin` header demonstrated a production-return-URL fallback in
-  the temporary harness. Shadow operations must fail closed or derive an
-  explicitly trusted shadow base URL.
+  the temporary harness. The local prerequisite repair now ignores client
+  origin/forwarded-host evidence for launch candidates and binds both return
+  URLs to the identity-verified Vercel deployment, but it is not merged or
+  deployed and shadow-04 remains failed evidence.
 - PR #338 records a separate pre-existing full-second-aggregate-apply failure at
   `learner_users_phone_unique`. Slice 2 requires exactly one apply to a fresh
   schema, so this is not the current blocker, but it remains known technical
@@ -381,6 +398,26 @@ Names and non-secret identifiers only:
 
 Do not add resource URLs containing credentials or any secret values to this
 inventory. Store secrets only in the relevant provider secret store.
+
+### Shadow-05 identity-preflight contract
+
+The deployed application must bind the expected provider identifiers in the
+`STRIPE_LAUNCH_SHADOW_*` environment variables and independently match them to
+Vercel's `VERCEL_PROJECT_ID`, `VERCEL_ENV`, and `VERCEL_URL`, the configured
+Neon project/branch identifiers, the active `POSTGRES_URL` endpoint host, and
+`SELECT current_database()`. The operator verifier must additionally match the
+same sanitised identity to the Vercel deployment API, Neon branch/endpoint/
+database APIs, and a separate read-only direct database connection.
+
+The operator-only `VERCEL_TOKEN`, `NEON_API_KEY`,
+`STRIPE_LAUNCH_SHADOW_DIRECT_DATABASE_URL`, shadow bearer credential, and any
+deployment-protection bypass credential are inputs only. They must never appear
+in diagnostic output, fingerprints, logs, or retained evidence. A pass reports
+only the school ID, provider IDs/names/hosts, a SHA-256 identity fingerprint,
+and explicit false values for resource and Checkout approval. Run with
+`npm run preflight:stripe-launch-shadow-identity` only after fresh shadow-05
+resources exist under separate authority; the command is read-only and never
+grants resource creation or payment authority.
 
 ## 13. Unfinished Slice 2 acceptance scenarios
 
@@ -525,7 +562,8 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 7. Open and merge a focused repair PR
 
-- **Status:** Not started.
+- **Status:** Completed. PR #340 merged to `main` as `26b6cdfd…` with green
+  syntax and Playwright CI checks.
 - **Preconditions:** Step 6; clean diff limited to aggregate/test repair.
 - **Evidence required:** PR explains root cause, test gap, safety, exact validation,
   and protected-document hashes; review/CI green.
@@ -539,7 +577,8 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 8. Add a deployment/database identity preflight
 
-- **Status:** Not started.
+- **Status:** Implemented and locally verified; not committed, deployed, or run
+  against any provider/database identity.
 - **Preconditions:** Repair merged; define a sanitised, non-secret identity
   format.
 - **Evidence required:** Before seeding/payment, both the deployed application
@@ -551,12 +590,16 @@ money-movement row is an immediate fail-and-stop condition.
 - **Expected output:** A documented/read-only preflight that cannot report pass
   for the shadow-04 binding failure.
 - **Relevant artifacts:** Shadow runbook/review, protected admin diagnostic or
-  deployment metadata helper, identity-focused tests.
+  deployment metadata helper, `api/_stripe-launch-shadow-identity.js`,
+  `api/stripe-launch-shadow-identity.js`,
+  `scripts/stripe-launch-shadow-identity-preflight.js`, and
+  `tests/stripe-launch-shadow-identity.spec.js`.
 - **Production/money risk:** Read-only; do not expose the diagnostic publicly.
 
 ### 9. Make shadow return URLs fail closed
 
-- **Status:** Not started.
+- **Status:** Implemented and locally verified for all four approved origins;
+  not committed, deployed, or exercised through Stripe.
 - **Preconditions:** Identify every Slice 2 Checkout producer and trusted shadow
   base-URL source.
 - **Evidence required:** Tests prove a shadow request cannot fall back to
@@ -566,7 +609,9 @@ money-movement row is an immediate fail-and-stop condition.
   in shadow, or broad change to live payment semantics without separate review.
 - **Expected output:** Correct direct-slot, test-date, offer, and request return
   URLs in shadow, including the temporary harness path.
-- **Relevant artifacts:** `api/slots.js`, `api/offers.js`, Checkout producer tests.
+- **Relevant artifacts:** `api/slots.js`, `api/offers.js`,
+  `api/_stripe-launch-shadow-return-urls.js`, and
+  `tests/stripe-launch-shadow-return-urls.spec.js`.
 - **Production/money risk:** Payment-flow code; potentially production-affecting
   and therefore requires focused regression/review, but no money operation is
   needed to implement it.
@@ -694,16 +739,20 @@ money-movement row is an immediate fail-and-stop condition.
 
 The exact next task is:
 
-> Review the three-file diff on
-> `codex/simon-fresh-schema-is-admin-repair`. If it is approved, explicitly
-> authorise commit, push, and creation of a focused repair PR. After that PR is
-> reviewed and merged, add and merge the deployment/database identity preflight
-> and fail-closed shadow return-URL repair. Only then, under separate explicit
-> resource-creation authority and after the identity plan is ready, create the
-> entirely fresh Vercel and Neon resources for `cc-simon-s2-shadow-05`.
+> Review the focused uncommitted diff on
+> `codex/simon-shadow05-identity-return-url` at baseline `dc0e17a…`. Confirm the
+> protected identity diagnostic/operator verifier and all approved Checkout
+> producers satisfy steps 8 and 9 without broadening live semantics. If the
+> diff is approved, explicitly authorise commit, push, and creation of a focused
+> PR. After review/CI and merge, request separate authority before creating any
+> fresh shadow-05 provider resource.
 
-Do not resume shadow-04. Do not create shadow-05 in the repair session unless a
-separate explicit task authorises resource creation after the repair PR merges.
+Do not resume or query shadow-04. Do not create shadow-05, deploy, mutate any
+database, perform a Stripe operation, access production data, or begin Slice 3.
+Creating `cc-simon-s2-shadow-05` remains a separate explicitly authorised task
+only after steps 8 and 9 merge. The current local preflight result is correctly
+`BLOCKED` because no shadow-05 identity is configured; it is not a provider
+identity pass and must not be represented as one.
 
 ## 16. Update protocol
 
@@ -786,3 +835,63 @@ For every future session:
   without weakening the aggregate's school-creation guard.
 - No commit, push, PR, deployment, production/shadow access, Stripe operation,
   shadow-05 resource, or Slice 3 work was performed.
+
+### 3 August 2026 — PR #340 merged; identity and return-URL handover prepared
+
+- Verified PR #340 merged to `main` as `26b6cdfd…` after the syntax and
+  Playwright CI checks completed successfully.
+- Confirmed the fresh-schema repair is no longer a blocker. Slice 2 remains not
+  accepted, and shadow-04 remains failed evidence that must not be reused.
+- Preserved an unrelated clean instructor-sign-in branch, switched to current
+  `main`, and created `codex/simon-shadow05-identity-return-url` from the exact
+  PR #340 merge commit.
+- Updated the mutable status, PR inventory, detailed path, and next-session
+  handover so steps 8 and 9 are the only authorised implementation scope.
+- No implementation code, commit, push, PR, deployment, production/shadow
+  access, database mutation, Stripe operation, shadow-05 resource, or Slice 3
+  work was performed.
+
+### 3 August 2026 — Identity and return-URL prerequisites implemented
+
+- Fast-forwarded the prerequisite branch from PR #340 merge `26b6cdfd…` to
+  remote `main` at PR #341 merge `dc0e17a…`. The intervening instructor sign-in
+  change touched only `api/magic-link.js`, `db/migration.sql`, and
+  `tests/instructor-email-code-login.spec.js`; it did not overlap this scope.
+- Added a protected, school-scoped GET identity diagnostic and a read-only
+  operator verifier. They require exact agreement across the configured
+  binding, Vercel runtime/control-plane evidence, Neon project/branch/endpoint/
+  database evidence, the active connection target, and `current_database()`.
+  Output contains sanitised identifiers and a fingerprint only.
+- Added fail-closed shadow Checkout return-URL resolution before Stripe session
+  creation for `direct_slot` (authenticated and guest), `test_date_direct`,
+  `one_off_offer`, and `captured_request`. Both success and cancel URLs use only
+  the identity-verified shadow deployment; client origin/forwarded-host input
+  cannot choose them. The non-shadow URL contract remains unchanged.
+- `npm run check:syntax` passed all 198 files.
+- `npm test -- tests/stripe-launch-shadow-identity.spec.js --workers=1` passed
+  16/16; `npm test -- tests/stripe-launch-shadow-return-urls.spec.js
+  --workers=1` passed 12/12; and `npm test --
+  tests/stripe-launch-shadow-operations.spec.js --workers=1` passed 12/12.
+- `npm test -- tests/stripe-launch-payment-contracts.spec.js
+  tests/stripe-launch-slice-2-rollout-review.spec.js --workers=1` passed 19/19.
+- `npm test -- tests/stripe-launch-shadow-operations.spec.js
+  tests/stripe-launch-payment-contracts.spec.js
+  tests/stripe-launch-slice-2-rollout-review.spec.js
+  tests/payout-v2-source-ingestion.spec.js
+  tests/stripe-dynamic-payment-methods.spec.js
+  tests/test-date-lesson-booking.spec.js tests/offer-effective-pricing.spec.js
+  tests/social-video-booking-discount.spec.js
+  tests/learner-booking-locations.spec.js --workers=1` passed 77/77.
+- `npm run review:stripe-launch-slice-2` passed all 14/14 machine checks and
+  remained `PREPARED_NOT_APPROVED_NOT_DEPLOYED`; `git diff --check` passed.
+- Reverified the protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Running `npm run preflight:stripe-launch-shadow-identity` without shadow-05
+  configuration correctly returned `BLOCKED`, reported only missing identity
+  field names, and set both resource and Checkout approval to false. It did not
+  contact a provider or database and is not a preflight pass.
+- No database/schema code changed, so no database-backed suite or database
+  connection was needed or run. No commit, push, PR, deployment, production/
+  shadow access, database mutation, Stripe operation, shadow-05 resource, or
+  Slice 3 work was performed.

@@ -27,6 +27,7 @@ const {
   PAYMENT_ORIGINS: STRIPE_LAUNCH_PAYMENT_ORIGINS,
   prepareLaunchPaymentCandidate,
 } = require('./_stripe-launch-payment-contracts');
+const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-return-urls');
 
 function dateOnly(value) {
   if (!value) return null;
@@ -690,6 +691,16 @@ async function handleAcceptOffer(req, res) {
           origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.ONE_OFF_OFFER,
         })
       : {};
+    const checkoutReturnUrls = await resolveStripeCheckoutReturnUrls({
+      sql,
+      schoolId,
+      launchMetadata,
+      legacyBaseUrl: baseUrl,
+      successPath: isFlexible
+        ? `/offer-success.html?token=${token}&flexible=1&iid=${offer.instructor_id}${offer.lesson_type_id ? '&ltid=' + offer.lesson_type_id : ''}&dur=${durationMins}&iname=${encodeURIComponent(offer.instructor_name)}`
+        : `/offer-success.html?token=${token}`,
+      cancelPath: `/accept-offer.html?token=${token}&cancelled=1`,
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -736,10 +747,8 @@ async function handleAcceptOffer(req, res) {
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
-      success_url: isFlexible
-        ? `${baseUrl}/offer-success.html?token=${token}&flexible=1&iid=${offer.instructor_id}${offer.lesson_type_id ? '&ltid=' + offer.lesson_type_id : ''}&dur=${durationMins}&iname=${encodeURIComponent(offer.instructor_name)}`
-        : `${baseUrl}/offer-success.html?token=${token}`,
-      cancel_url:  `${baseUrl}/accept-offer.html?token=${token}&cancelled=1`
+      success_url: checkoutReturnUrls.successUrl,
+      cancel_url:  checkoutReturnUrls.cancelUrl
     });
 
     // Store Stripe session ID on the offer
