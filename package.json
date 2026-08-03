@@ -20,6 +20,7 @@
     "review:payout-v2-schema": "node scripts/payout-v2-schema-rollout-review.js",
     "review:payout-v2-source-ingestion": "node scripts/payout-v2-source-ingestion-rollout-review.js",
     "review:stripe-launch-slice-2": "node scripts/stripe-launch-slice-2-rollout-review.js",
+    "preflight:stripe-launch-shadow-identity": "node scripts/stripe-launch-shadow-identity-preflight.js --read-only",
     "preflight:payout-v2-schema": "node scripts/payout-v2-schema-preflight.js --production-read-only",
     "apply:payout-v2-schema": "node scripts/payout-v2-schema-apply.js",
     "postflight:payout-v2-schema": "node scripts/payout-v2-schema-postflight.js --production-read-only"
