@@ -84,6 +84,25 @@ test.describe('fail-closed Stripe launch shadow Checkout return URLs', () => {
     expect(result.cancelUrl).toContain('cc-simon-shadow-05-abc123.vercel.app');
   });
 
+  test('bootstraps both return URLs from runtime VERCEL_URL when no custom deployment host exists', async () => {
+    const runtimeOnlyEnv = { ...baseEnv };
+    delete runtimeOnlyEnv.STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST;
+    const result = await resolveStripeCheckoutReturnUrls({
+      env: runtimeOnlyEnv,
+      sql,
+      schoolId: 7,
+      launchMetadata: metadata(PAYMENT_ORIGINS.DIRECT_SLOT),
+      legacyBaseUrl: 'https://coachcarter.uk',
+      successPath: '/learner/book.html?paid=1',
+      cancelPath: '/learner/book.html?cancelled=1',
+    });
+    expect(result).toMatchObject({
+      shadow: true,
+      successUrl: 'https://cc-simon-shadow-05-abc123.vercel.app/learner/book.html?paid=1',
+      cancelUrl: 'https://cc-simon-shadow-05-abc123.vercel.app/learner/book.html?cancelled=1',
+    });
+  });
+
   for (const [name, patch, field] of [
     ['missing trusted deployment host', { STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST: '' }, 'vercel.deployment_host'],
     ['malformed trusted deployment host', { STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST: 'https://shadow.example/path' }, 'vercel.deployment_host'],

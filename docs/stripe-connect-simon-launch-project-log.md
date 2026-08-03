@@ -3,19 +3,24 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — IDENTITY AND
-RETURN-URL PREREQUISITES IMPLEMENTED AND LOCALLY VERIFIED — REVIEW/MERGE NEXT**
+**Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — STEP 10 PAUSED
+FOR DEPLOYMENT-HOST BOOTSTRAP REPAIR REVIEW/MERGE**
 
 **Last updated:** 3 August 2026
 
 **Verified source baseline:** remote `main` at
-`dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a`
+`0c496b0baafc71afbda444afeefafd4eead59a29`
 
-**Current blocker:** the focused identity/return-URL prerequisite changes are
-implemented and locally green but remain uncommitted and unreviewed. Slice 2
-remains blocked until they are reviewed and merged. Do not create
-`cc-simon-s2-shadow-05` before they land and separate resource-creation authority
-is given.
+**Current blocker:** the narrow deployment-host bootstrap repair is implemented
+on `codex/simon-deployment-host-bootstrap` and its focused identity suite passes,
+but the change is not yet reviewed or merged. The deployed application now uses
+provider runtime `VERCEL_URL` only when no custom deployment host is configured;
+the independent operator verifier still requires the exact post-deployment host
+and matches it to both application evidence and the Vercel deployment API. A
+present but wrong custom host still fails closed. Do not configure or deploy
+shadow-05 until the repair is reviewed, merged, and Step 10 is separately
+resumed. Do not seed, apply the aggregate, create a Checkout Session, or perform
+any other Stripe operation meanwhile.
 
 ## 1. Title and purpose
 
@@ -107,16 +112,16 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | The branch began at PR #340 merge `26b6cdfd…`, then fast-forwarded cleanly to remote `main` at PR #341 merge `dc0e17a…`; PR #341 touched only instructor sign-in code/migration/test files outside this prerequisite scope. |
+| Latest baseline | Verified | Remote/local `main` resolve to PR #342 merge `0c496b0…` on 3 August 2026. The documentation-only handover branch `codex/simon-shadow05-resource-handover` was created from that exact clean commit. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
 | Fresh-schema bootstrap | Repair merged | PR #340 mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests passed against a disposable, confirmed non-production loopback database with the three gates enabled. |
-| Deployment/database identity | Implemented; locally verified | Protected GET diagnostic and read-only operator verifier require exact Vercel project/environment/deployment and Neon project/branch/endpoint/database agreement, use the existing shadow project/test/school/bearer boundary, return only sanitised fields/fingerprint, and fail closed. Sixteen focused tests pass, including the shadow-04 cross-binding shape. |
-| Shadow Checkout return URLs | Implemented; locally verified | All approved producers resolve success/cancel URLs from the identity-verified Vercel deployment before Stripe Checkout creation. Client `Origin`/forwarded-host values cannot select a shadow URL; missing, malformed, production, or mismatched trusted identity fails before Stripe. Twelve focused tests pass and non-shadow URL semantics remain unchanged. |
+| Deployment/database identity | Bootstrap repair pending review; provider pass pending | PR #342 merged the protected GET diagnostic and read-only operator verifier as `0c496b0…`. The focused follow-up on `codex/simon-deployment-host-bootstrap` removes the same-deployment host circularity while retaining independent operator/provider comparison. Local syntax and focused regressions pass; no shadow-05 provider/database identity has yet been checked, so this remains implementation evidence, not an identity pass. |
+| Shadow Checkout return URLs | Merged; shadow exercise pending | PR #342 merged fail-closed URL binding for all approved producers. Twelve focused tests and CI pass; non-shadow URL semantics remain unchanged. No Stripe Checkout or shadow-05 exercise has been performed. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Focused prerequisite review | Review the identity/return-URL diff and, only with explicit approval, commit, push, and open a focused PR. Do not create or exercise shadow-05. |
+| Next implementation | Review deployment-host bootstrap repair | Review the focused identity helper/test/log diff on `codex/simon-deployment-host-bootstrap`. Do not merge or resume Step 10 deployment without separate approval. |
 
 ## 6. Chronological project journey
 
@@ -155,6 +160,11 @@ If either hash changes, stop and obtain an explicit product-document review.
   `instructors.is_admin` column and added rollback-only coverage for the exact
   column contract plus real school-scoped, audited admin instructor access. CI
   passed and the repair merged as `26b6cdfd…`.
+- **3 August — PR #342:** added the independently verified Vercel/Neon identity
+  preflight and fail-closed shadow return URLs for all approved Slice 2 origins.
+  Syntax, Playwright, and connected Vercel checks passed; the PR merged as
+  `0c496b0…`. No shadow-05 resource or provider identity pass was created by the
+  PR.
 
 ## 7. Completed implementation slices and relevant PRs
 
@@ -168,7 +178,8 @@ If either hash changes, stop and obtain an explicit product-document review.
 | [#338](https://github.com/coachcarteruk-gif/coachcarter-website/pull/338) | `3710c9b0f5ac9b095297950c999393ae5577ffbe` | Empty-schema `schools` ordering repair and two rollback-only bootstrap tests. | `instructors.is_admin`, a real `access-instructor-account` call, or full aggregate reapply idempotency. |
 | [#339](https://github.com/coachcarteruk-gif/coachcarter-website/pull/339) | `5a462837cafa9a7c83f5594b553f341ac6e857ad` | Preserved this living log and the Simon-specific worker rule. | Any migration repair, shadow acceptance, or money operation. |
 | [#340](https://github.com/coachcarteruk-gif/coachcarter-website/pull/340) | `26b6cdfd7d96f86ffc6988c58c4a46633fc6df38` | Minimal aggregate repair for migration 013 plus three-test fresh-schema and real-route admin-access coverage. | Deployment/database identity binding, correct shadow return URLs, or Slice 2 acceptance. |
-| [#341](https://github.com/coachcarteruk-gif/coachcarter-website/pull/341) | `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a` | Fixed instructor sign-in code verification; current prerequisite-branch baseline. | Any Simon identity/return-URL prerequisite or Slice 2 acceptance. |
+| [#341](https://github.com/coachcarteruk-gif/coachcarter-website/pull/341) | `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a` | Fixed instructor sign-in code verification; intermediate prerequisite-branch baseline. | Any Simon identity/return-URL prerequisite or Slice 2 acceptance. |
+| [#342](https://github.com/coachcarteruk-gif/coachcarter-website/pull/342) | `0c496b0baafc71afbda444afeefafd4eead59a29` | Protected read-only Vercel/Neon identity preflight, independent control-plane verifier, and fail-closed return URLs for all approved Slice 2 Checkout producers; CI green. | A real shadow-05 identity pass, any resource configuration, schema apply, seed, Checkout, or Slice 2 acceptance. |
 
 ## 8. Shadow-exercise history
 
@@ -221,11 +232,11 @@ otherwise:
 
 ### Repository-verified on 3 August 2026
 
-- Remote `main` and the current prerequisite branch resolve to PR #341 merge
-  `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a`. The local `main` ref remains at
-  PR #340 merge `26b6cdfd…` because the branch was fast-forwarded in place; the
-  exercise baseline remains the earlier `3710c9b0…` commit recorded in the
-  failed shadow-04 history.
+- Remote/local `main` resolve to PR #342 merge
+  `0c496b0baafc71afbda444afeefafd4eead59a29`. The current documentation-only
+  handover branch was created from that exact clean commit; the exercise
+  baseline remains the earlier `3710c9b0…` commit recorded in the failed
+  shadow-04 history.
 - The worktree was clean before
   `codex/simon-fresh-schema-is-admin-repair` was created from remote `main`.
 - PR #338 is merged and its GitHub merge metadata matches that commit.
@@ -233,6 +244,10 @@ otherwise:
   remote `main` before the repair branch was created.
 - PR #340 merged the focused three-file repair after its syntax and Playwright
   CI checks completed successfully. Its merge commit is `26b6cdfd…`.
+- PR #342 merged the identity/return-URL prerequisite commit after syntax/
+  encoding, Playwright, and connected Vercel checks completed successfully.
+  Its merge commit is `0c496b0…`; the merge does not prove a shadow-05 provider
+  identity because those resources do not yet exist.
 - The two protected LF-normalised hashes match exactly and the documents were
   not changed by this task.
 - `api/admin.js` selects `COALESCE(is_admin, FALSE) AS is_admin` in
@@ -249,9 +264,9 @@ otherwise:
   never references password or login-code storage.
 - `tests/admin-instructor-access.spec.js` is a source-contract test; it does not
   run the route against a freshly bootstrapped database.
-- `npm run check:syntax` reports 195 files passing; the focused launch/auth
-  selection reports 43 tests passing; the Slice 2 rollout-review test reports
-  one passing test.
+- The PR #342 implementation record reports 198 syntax files, 16/16 identity
+  tests, 12/12 return-URL tests, 12/12 existing shadow-operation tests, 19/19
+  payment-contract/reviewer tests, and a broader 77/77 focused selection.
 - `npm run review:stripe-launch-slice-2` currently reports all 14 checks true,
   with terminal status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`.
 - The protected LF-normalised hashes still match exactly and neither protected
@@ -334,9 +349,9 @@ database-backed same-school/cross-school admin-access coverage. The three-test
 fresh-schema suite and eight-test rollback/payment-contract suite both passed
 with all three database gates against a disposable confirmed non-production
 loopback database. The repair blocker is closed; Slice 2 acceptance remains
-separately blocked by review/merge of the now-implemented identity and
-return-URL prerequisites, separate shadow-05 resource authority, and the clean
-shadow-05 rerun.
+separately blocked by fresh shadow-05 resource authority, a passing identity
+preflight, and the clean shadow-05 rerun. The prerequisite code itself merged
+in PR #342.
 
 ### Unresolved observations, not yet diagnosed
 
@@ -348,8 +363,9 @@ shadow-05 rerun.
 - The missing `Origin` header demonstrated a production-return-URL fallback in
   the temporary harness. The local prerequisite repair now ignores client
   origin/forwarded-host evidence for launch candidates and binds both return
-  URLs to the identity-verified Vercel deployment, but it is not merged or
-  deployed and shadow-04 remains failed evidence.
+  URLs to the identity-verified Vercel deployment. That repair merged in PR
+  #342, but it has not been exercised in shadow-05 and shadow-04 remains failed
+  evidence.
 - PR #338 records a separate pre-existing full-second-aggregate-apply failure at
   `learner_users_phone_unique`. Slice 2 requires exactly one apply to a fresh
   schema, so this is not the current blocker, but it remains known technical
@@ -392,7 +408,8 @@ Names and non-secret identifiers only:
 | Production Neon project | `neon-green-elephant` | Migration 039 applied schema-only; inactive. |
 | Production Neon branch | `main` | Recorded by the Slice 1 rollout evidence. |
 | Failed Slice 2 shadow | Approximately `cc-simon-s2-shadow-04` | Preserve; never reuse as clean acceptance. Exact Vercel project, Neon project, branch, host, and database names were not retained in repository evidence. |
-| Required fresh rerun | `cc-simon-s2-shadow-05` | Not created. Must use an entirely new Vercel project and Neon resource. |
+| Shadow-05 Neon organisation | `cc-simon-shadow-isolated` | Fresh independent Free organisation `org-fancy-forest-47074420`; zero pre-existing projects before creation. |
+| Required fresh rerun | `cc-simon-s2-shadow-05` | Fresh Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`; no deployment. Fresh Neon project `shiny-bonus-66942766` in `aws-eu-west-2`, default branch `br-empty-cell-za5kh6nr`, read-write endpoint `ep-frosty-truth-zatfdzrb`, provider-generated pooled host `ep-frosty-truth-zatfdzrb-pooler.c-2.eu-west-2.aws.neon.tech`, database `neondb`, Postgres 18, Neon Auth disabled. No application connection, schema, or seed configured. |
 | Shadow Stripe mode | `test` | Shadow-04 only; Connect permissions disabled. |
 | Shadow webhook events | `checkout.session.completed`, `payment_intent.succeeded` | Shadow-04 only. |
 
@@ -408,6 +425,16 @@ Neon project/branch identifiers, the active `POSTGRES_URL` endpoint host, and
 `SELECT current_database()`. The operator verifier must additionally match the
 same sanitised identity to the Vercel deployment API, Neon branch/endpoint/
 database APIs, and a separate read-only direct database connection.
+
+The deployed application does not require a pre-deployment
+`STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST`: when that variable is absent it binds
+the host from provider runtime `VERCEL_URL`. If the variable is present, it is
+still authoritative and a mismatch fails closed. After deployment, the
+independent operator verifier must set the exact provider-derived deployment
+host in `STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST`; it then compares that host with
+the application identity/fingerprint and Vercel deployment control-plane
+evidence. A project alias, operator label, or previous deployment URL is never
+accepted as a substitute.
 
 The operator-only `VERCEL_TOKEN`, `NEON_API_KEY`,
 `STRIPE_LAUNCH_SHADOW_DIRECT_DATABASE_URL`, shadow bearer credential, and any
@@ -577,8 +604,9 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 8. Add a deployment/database identity preflight
 
-- **Status:** Implemented and locally verified; not committed, deployed, or run
-  against any provider/database identity.
+- **Status:** Completed as an implementation prerequisite. PR #342 merged as
+  `0c496b0…` with green CI. The diagnostic has not yet run against shadow-05,
+  so no provider/database identity pass exists.
 - **Preconditions:** Repair merged; define a sanitised, non-secret identity
   format.
 - **Evidence required:** Before seeding/payment, both the deployed application
@@ -598,8 +626,9 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 9. Make shadow return URLs fail closed
 
-- **Status:** Implemented and locally verified for all four approved origins;
-  not committed, deployed, or exercised through Stripe.
+- **Status:** Completed as an implementation prerequisite. PR #342 merged as
+  `0c496b0…` with green CI for all four approved origins. It has not been
+  exercised through Stripe or shadow-05.
 - **Preconditions:** Identify every Slice 2 Checkout producer and trusted shadow
   base-URL source.
 - **Evidence required:** Tests prove a shadow request cannot fall back to
@@ -618,7 +647,12 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 10. Create `cc-simon-s2-shadow-05`
 
-- **Status:** Not started.
+- **Status:** Authorised but paused on 3 August 2026. Fresh Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` and fresh isolated Neon project
+  `shiny-bonus-66942766` exist with no deployment. A narrow host-bootstrap
+  repair is implemented and locally verified on
+  `codex/simon-deployment-host-bootstrap`, but it must be reviewed and merged
+  before Step 10 can be separately resumed. Do not deploy the unreviewed branch.
 - **Preconditions:** Steps 7–9 merged; explicit authority to create test
   resources; resource identity plan ready.
 - **Evidence required:** Entirely fresh Vercel project and Neon project/branch/
@@ -630,6 +664,14 @@ money-movement row is an immediate fail-and-stop condition.
 - **Relevant artifacts:** Provider inventories and shadow runbook.
 - **Production/money risk:** Creates non-production resources only; no real
   money movement.
+
+The step-10 session must stop immediately after retaining a sanitised exact
+resource inventory and a passing
+`npm run preflight:stripe-launch-shadow-identity` result. It must not apply
+`db/migration.sql`, seed a school/user/instructor, create a webhook-driven test
+payment, create a Checkout Session, or begin steps 11–18. Existing shadow-01,
+shadow-03, and failed shadow-04 resources must not be inspected, reused,
+rebound, or treated as acceptance evidence during this step.
 
 ### 11. Apply the aggregate once to a genuinely empty schema
 
@@ -739,20 +781,23 @@ money-movement row is an immediate fail-and-stop condition.
 
 The exact next task is:
 
-> Review the focused uncommitted diff on
-> `codex/simon-shadow05-identity-return-url` at baseline `dc0e17a…`. Confirm the
-> protected identity diagnostic/operator verifier and all approved Checkout
-> producers satisfy steps 8 and 9 without broadening live semantics. If the
-> diff is approved, explicitly authorise commit, push, and creation of a focused
-> PR. After review/CI and merge, request separate authority before creating any
-> fresh shadow-05 provider resource.
+> Review the focused deployment-host bootstrap repair on
+> `codex/simon-deployment-host-bootstrap`, based on PR #342 merge `0c496b0…`.
+> Confirm the deployed application may bootstrap its host from runtime
+> `VERCEL_URL` only when no custom host is configured, while the independent
+> operator verifier still requires the exact provider-derived post-deployment
+> host and matches the application, Vercel deployment API, Neon control plane,
+> active connection target, and read-only direct database result. A present but
+> mismatched custom host must still fail closed. Do not merge the repair or
+> resume Step 10 deployment without separate approval.
 
-Do not resume or query shadow-04. Do not create shadow-05, deploy, mutate any
-database, perform a Stripe operation, access production data, or begin Slice 3.
-Creating `cc-simon-s2-shadow-05` remains a separate explicitly authorised task
-only after steps 8 and 9 merge. The current local preflight result is correctly
-`BLOCKED` because no shadow-05 identity is configured; it is not a provider
-identity pass and must not be represented as one.
+Do not resume, query, repair, or reuse shadow-04. Do not access production data;
+apply a schema; seed data; create a Checkout Session, payment, refund, payout,
+transfer, Connect account, or webhook; begin Slice 3; or continue into steps
+11–18. A preflight pass grants identity evidence only and does not authorise any
+later operation. If a new Stripe resource is necessary rather than only safely
+configuring existing restricted test credentials, stop and request separate
+authority.
 
 ## 16. Update protocol
 
@@ -895,3 +940,141 @@ For every future session:
   connection was needed or run. No commit, push, PR, deployment, production/
   shadow access, database mutation, Stripe operation, shadow-05 resource, or
   Slice 3 work was performed.
+
+### 3 August 2026 — PR #342 merged; shadow-05 resource handover prepared
+
+- Verified PR #342 merged to `main` as
+  `0c496b0baafc71afbda444afeefafd4eead59a29` at 16:34:01 UTC.
+- Verified GitHub syntax/encoding and Playwright CI completed successfully. All
+  connected Vercel status checks reported success; these deployment statuses do
+  not constitute a shadow-05 identity pass or Slice 2 acceptance.
+- Fast-forwarded local `main` to the exact merge and created the documentation-
+  only `codex/simon-shadow05-resource-handover` branch from it.
+- Reverified both protected LF-normalised SHA-256 values exactly; neither
+  protected document changed.
+- Updated the mutable status, evidence, PR inventory, known blocker, detailed
+  path, and next-session handover. Steps 8 and 9 are now recorded as merged
+  implementation prerequisites; step 10 is the only next scope.
+- No shadow-05 resource was created, no provider/database preflight was run,
+  and no production data, schema, seed, Stripe operation/resource, payout,
+  refund, transfer, Connect action, Slice 3 work, commit, push, or PR was
+  performed in this documentation handover.
+
+### 3 August 2026 — Step 10 provider creation blocked before resources
+
+- Re-read `AGENTS.md`, `CLAUDE.md`, this complete log, both protected Simon
+  documents, and the relevant Stripe Connect, shadow-auth, identity-preflight,
+  return-URL, and focused test artifacts before provider work.
+- Independently verified remote `main`, local `main`, the handover branch, and
+  PR #342 merge at `0c496b0baafc71afbda444afeefafd4eead59a29`.
+- Reverified the protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Preserved this uncommitted log update on
+  `codex/simon-shadow05-resource-handover` and produced the required secret-safe
+  resource/configuration plan before any create attempt.
+- Installed and used the Vercel and Neon Postgres plugins. Exact-name checks
+  found no existing `cc-simon-s2-shadow-05` project in either provider.
+- The connected Neon organisation is managed by Vercel. Two provider-mediated
+  Neon project-create attempts were rejected before creation with the sanitised
+  restriction `action restricted; organization is managed by Vercel`; a fresh
+  exact-name inventory check still returned zero projects.
+- The installed Vercel plugin exposes deployment and read-only project tooling,
+  but not Marketplace/Storage provisioning or project environment-variable
+  mutation. No raw Vercel/Neon API, CLI, older-shadow lookup, or other unsafe
+  workaround was attempted. No Vercel project was created to avoid an orphan.
+- No identity preflight was run because the required provider identities do not
+  exist. Therefore no fingerprint exists, and both resource and Checkout
+  approvals remain false by contract.
+- No deployment, database connection/query/mutation, schema apply, seed,
+  production access/configuration, Stripe operation/resource, Slice 3 work,
+  commit, push, or PR was performed.
+
+### 3 August 2026 — Step 10 resumed through Vercel Marketplace
+
+- The owner explicitly authorised the Vercel CLI and Vercel Marketplace for
+  Step 10 only, including creation of the fresh Vercel-managed Neon resource
+  and project environment configuration.
+- Used ephemeral pinned Vercel CLI `58.4.4`; authentication resolved to the
+  expected CoachCarter Vercel account/team. Marketplace category and storage
+  discovery confirmed the explicitly requested Neon integration.
+- Reverified remote/local baseline
+  `0c496b0baafc71afbda444afeefafd4eead59a29`, both protected LF-normalised
+  hashes, the preserved uncommitted handover log, and zero pre-existing exact
+  Vercel project matches.
+- Created fresh isolated Vercel project `cc-simon-s2-shadow-05` with provider
+  ID `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`.
+- Created a detached temporary worktree at the exact reviewed merge. Vercel
+  linking generated a temporary local environment file and `.gitignore` edit;
+  the environment file was deleted without being read or printed, and the
+  worktree was restored clean at the exact commit before any deployment.
+- Requested a fresh Neon Free resource in London, production-scoped only to
+  the isolated project, with Neon Auth disabled and local environment pulling
+  disabled. On the owner browser page, the provider warned that proceeding
+  would upgrade the plan at installation level and then displayed a creation
+  error. No retry or plan change was attempted because that shared-installation
+  effect is outside Step 10 authority and could cross the production boundary.
+  An exact post-attempt integration inventory found zero
+  `cc-simon-s2-shadow-05` Neon resources.
+- No deployment, database connection/query/mutation, schema apply, seed,
+  production access/configuration, Stripe operation/resource, identity
+  fingerprint, Slice 3 work, commit, push, or PR was performed. Both resource
+  and Checkout approvals remain false.
+
+### 3 August 2026 — isolated Neon boundary created; deployment stopped
+
+- The owner explicitly authorised creation of the separate Neon organisation.
+  Created independent organisation `cc-simon-shadow-isolated` with provider ID
+  `org-fancy-forest-47074420` on the Free plan. It contained zero projects and
+  was separate from the Vercel-managed organisation.
+- Created exactly one fresh Neon project `cc-simon-s2-shadow-05`, provider ID
+  `shiny-bonus-66942766`, in provider region `aws-eu-west-2` (London), Postgres
+  18, with Neon Auth disabled. Provider control-plane evidence identified
+  default branch `br-empty-cell-za5kh6nr`, read-write endpoint
+  `ep-frosty-truth-zatfdzrb`, provider-generated pooled endpoint host
+  `ep-frosty-truth-zatfdzrb-pooler.c-2.eu-west-2.aws.neon.tech`, and database
+  `neondb`. No credential or raw provider payload was retained.
+- Stopped before Vercel configuration or deployment because the exact baseline
+  requires `STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST` to equal runtime `VERCEL_URL`
+  and the Vercel deployment API URL. Vercel's official system-variable
+  documentation defines `VERCEL_URL` as the generated deployment URL, while
+  its environment-variable documentation states that changes apply only to new
+  deployments. The repository contains no reviewed same-deployment bootstrap
+  for that circular dependency. A project alias, label, or prior deployment
+  host would violate the explicit identity stop condition.
+- No Vercel environment variable or secret was configured; no Vercel deployment,
+  database query/mutation, schema apply, seed, production access/configuration,
+  Stripe operation/resource, API key, identity fingerprint, Slice 3 work,
+  commit, push, or PR was performed. The identity preflight was not run because
+  the required exact deployment identity was not available.
+- `approved_to_create_resources:false` and
+  `approved_to_create_checkout:false` remain the only safe post-stop approval
+  state; the completed fresh-resource creation authority does not imply any
+  schema, seed, payment, or later-step authority.
+
+### 3 August 2026 — deployment-host bootstrap repair implemented
+
+- The owner separately authorised a narrowly scoped identity-bootstrap repair,
+  including code, tests, documentation, commit, push, and a PR. Merge and any
+  Step 10 deployment remain explicitly unauthorised pending further approval.
+- Preserved the uncommitted resource handover on
+  `codex/simon-shadow05-resource-handover` and created isolated repair worktree
+  `codex/simon-deployment-host-bootstrap` from latest remote `main` at PR #342
+  merge `0c496b0baafc71afbda444afeefafd4eead59a29`.
+- Removed the same-deployment circular dependency without weakening the
+  independent check: the application identity falls back to provider runtime
+  `VERCEL_URL` only when `STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST` is absent. If a
+  custom host is present, it remains authoritative and mismatch still fails.
+  The operator preflight continues to require the exact post-deployment host and
+  compare it with the application identity/fingerprint and Vercel deployment
+  control-plane URL.
+- Added focused coverage for runtime bootstrap versus explicit operator binding,
+  an explicitly configured wrong host, an application/provider host that
+  differs from the operator identity, and runtime-derived shadow return URLs.
+  Identity and return-URL suites passed 32/32; shadow-operation,
+  payment-contract, and Slice 2 rollout-review regressions passed 31/31; syntax
+  passed for all 198 checked files. The executable Slice 2 review kept all
+  14/14 checks true with terminal status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`.
+- No Vercel configuration/deployment, database connection/query/mutation,
+  schema apply, seed, production access/configuration, Stripe operation or
+  resource, API key, Slice 3 work, or Step 11–18 action was performed.
