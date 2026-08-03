@@ -213,6 +213,12 @@ test.describe('instructor email-code login', () => {
         entry.values.includes('instructor-email-code-login') &&
         entry.values.includes(4)
       )).toBe(true);
+      const auditIndex = sql.calls.findIndex((entry) => /INSERT INTO audit_log/i.test(entry.text));
+      const consumeIndex = sql.calls.findIndex((entry) =>
+        /UPDATE magic_link_tokens SET used = true WHERE id/i.test(entry.text)
+      );
+      expect(auditIndex).toBeGreaterThan(-1);
+      expect(consumeIndex).toBeGreaterThan(auditIndex);
     });
   });
 
@@ -268,7 +274,15 @@ test.describe('instructor email-code login', () => {
       });
       expect(res.statusCode).toBe(500);
       expect(res.getHeader('Set-Cookie')).toBeUndefined();
+      expect(sql.calls.some((entry) =>
+        /UPDATE magic_link_tokens SET used = true WHERE id/i.test(entry.text)
+      )).toBe(false);
     });
+  });
+
+  test('migration permits audit rows for non-admin authentication actors', () => {
+    const migration = read('db/migration.sql');
+    expect(migration).toContain('ALTER TABLE audit_log ALTER COLUMN admin_id DROP NOT NULL;');
   });
 
   test('instructor login UI defaults to email-code and still stores display data', () => {
