@@ -47,10 +47,12 @@ async function fetchJson(fetchImpl, url, { token, headers = {} } = {}) {
 
 function pooledHostFor(endpoint) {
   const host = typeof endpoint?.host === 'string' ? endpoint.host.toLowerCase() : '';
-  if (!host || !endpoint?.pooler_enabled) return null;
+  const endpointId = typeof endpoint?.id === 'string' ? endpoint.id : '';
+  if (!host || !/^ep-[a-z0-9-]+$/.test(endpointId)) return null;
   const dot = host.indexOf('.');
   if (dot <= 0) return null;
-  return `${host.slice(0, dot)}-pooler${host.slice(dot)}`;
+  if (host.slice(0, dot) !== endpointId) return null;
+  return `${endpointId}-pooler${host.slice(dot)}`;
 }
 
 function verifyProviderBoundIdentity({
