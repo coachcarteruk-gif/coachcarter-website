@@ -4,16 +4,18 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — FRESH-SCHEMA
-REPAIR REQUIRED**
+REPAIR VERIFIED, READY FOR FOCUSED PR REVIEW**
 
 **Last updated:** 3 August 2026
 
 **Verified source baseline:** remote `main` at
-`3710c9b0f5ac9b095297950c999393ae5577ffbe`
+`5a462837cafa9a7c83f5594b553f341ac6e857ad`
 
-**Current blocker:** a fresh aggregate schema lacks `instructors.is_admin`, so
-`POST /api/admin?action=access-instructor-account` fails before the remaining
-Slice 2 shadow scenarios can be exercised.
+**Current blocker:** no verification blocker remains for the focused repair on
+`codex/simon-fresh-schema-is-admin-repair`. Commit, push, and PR creation remain
+intentionally unperformed pending explicit review and approval. Slice 2 remains
+blocked until that repair is merged and the separate identity-preflight and
+fail-closed shadow return-URL work is implemented and merged.
 
 ## 1. Title and purpose
 
@@ -105,14 +107,14 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | Remote and local `main` both resolved to `3710c9b0…` on 3 August 2026; worktree was clean before this documentation branch. |
+| Latest baseline | Verified | Remote and local `main` both resolved to `5a462837…` on 3 August 2026; the repair branch was created from that exact clean commit. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
-| Fresh-schema bootstrap | Partially repaired | PR #338 fixed `schools` ordering and added two bootstrap tests, but did not mirror migration 013's `instructors.is_admin`. |
+| Fresh-schema bootstrap | Repair verified; ready for focused PR review | The focused branch mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests pass against a disposable, confirmed non-production loopback database with the three gates enabled. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Blocked pending repair branch | Mirror migration 013 into `db/migration.sql` and add fresh-schema plus real admin-access regression coverage. |
+| Next implementation | Focused repair PR review | Review the three-file repair diff and, only with explicit approval, commit, push, and open the focused repair PR. Do not create or exercise shadow-05. |
 
 ## 6. Chronological project journey
 
@@ -210,28 +212,56 @@ otherwise:
 
 ### Repository-verified on 3 August 2026
 
-- Remote `main`, local `main`, and the exercise baseline all resolve to
-  `3710c9b0f5ac9b095297950c999393ae5577ffbe`.
-- The worktree was clean before the documentation branch
-  `codex/simon-launch-project-log` was created.
+- Remote and local `main` resolved to
+  `5a462837cafa9a7c83f5594b553f341ac6e857ad`; the exercise baseline remains
+  the earlier `3710c9b0…` commit recorded in the failed shadow-04 history.
+- The worktree was clean before
+  `codex/simon-fresh-schema-is-admin-repair` was created from remote `main`.
 - PR #338 is merged and its GitHub merge metadata matches that commit.
+- PR #339 preserved this living log and the Simon-specific `AGENTS.md` rule on
+  remote `main` before the repair branch was created.
 - The two protected LF-normalised hashes match exactly and the documents were
   not changed by this task.
 - `api/admin.js` selects `COALESCE(is_admin, FALSE) AS is_admin` in
   `handleAccessInstructorAccount()`.
 - `db/migrations/013_instructor_is_admin.sql` adds
   `instructors.is_admin BOOLEAN DEFAULT FALSE`.
-- A complete static scan of the 7,391-line `db/migration.sql` found zero
-  `is_admin` references. The omission is therefore real on a fresh aggregate
-  schema.
-- `tests/migration-fresh-schema.integration.spec.js` proves aggregate apply and
-  the moved school foundation, but does not assert `is_admin` or execute admin
-  support access.
+- The repair branch adds exactly one aggregate DDL statement equivalent to
+  migration 013 and no unrelated migration cleanup.
+- `tests/migration-fresh-schema.integration.spec.js` now asserts the column's
+  Boolean/default contract and invokes the real admin route against the same
+  freshly bootstrapped transaction. It covers same-school success, cross-school
+  rejection, the required audit event, unchanged password state, an unused
+  login-code row, no sensitive response fields, and captured route SQL that
+  never references password or login-code storage.
 - `tests/admin-instructor-access.spec.js` is a source-contract test; it does not
   run the route against a freshly bootstrapped database.
-- `npm run check:syntax` currently reports 195 files passing.
+- `npm run check:syntax` reports 195 files passing; the focused launch/auth
+  selection reports 43 tests passing; the Slice 2 rollout-review test reports
+  one passing test.
 - `npm run review:stripe-launch-slice-2` currently reports all 14 checks true,
   with terminal status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`.
+- The protected LF-normalised hashes still match exactly and neither protected
+  document has a worktree diff.
+
+### Initial verification blockage and local-only resolution on 3 August 2026
+
+- Both the fresh-schema suite and the eight-test rollback/payment-contract
+  suite were invoked with all three database gates against the configured
+  non-production test target.
+- The database rejected authentication before either suite could begin its
+  transaction. The fresh-schema run recorded one setup failure and two tests
+  not run; the payment-contract run recorded one setup failure and seven tests
+  not run. These are infrastructure failures, not passing repair evidence.
+- No database schema, fixture, production data, shadow resource, or external
+  payment state was changed by the failed connection attempts.
+- Verification was then completed against a disposable PostgreSQL instance
+  bound only to loopback, with a test-only database identity that was neither
+  production nor a shadow environment. No connection string or credential is
+  retained in this log.
+- All three gates were enabled for both suites. The fresh-schema suite passed
+  3/3 with zero skips and the rollback/payment-contract suite passed 8/8 with
+  zero skips. Both suites used transactions and rolled back their test work.
 
 ### Historical validation evidence
 
@@ -271,23 +301,27 @@ query output and must not be promoted to independently verified evidence.
 
 ## 10. Known defects and blockers
 
-### Blocking defect: aggregate omits migration 013
+### Repair verified: aggregate omitted migration 013
 
 **Observed failure:** `POST /api/admin?action=access-instructor-account` returned
 an error caused by `column "is_admin" does not exist`.
 
 **Repository-confirmed root cause:** the route queries `is_admin`; individual
-migration 013 adds it; the aggregate migration does not. PR #338's empty-schema
-test never checks the column or exercises this route.
+migration 013 adds it; the aggregate migration did not. PR #338's empty-schema
+test never checked the column or exercised this route.
 
 **Why it blocks Slice 2:** the supported instructor email-code path did not
 yield a usable new code, and admin impersonation is the approved fallback. The
 fresh schema cannot run that fallback. Strict stop-on-defect rules also prohibit
 continuing in a partially known environment.
 
-**Required repair:** mirror migration 013 in `db/migration.sql`, assert the
-column on a genuinely empty aggregate schema, and add focused database-backed
-coverage for successful same-school `access-instructor-account` on that schema.
+**Implemented repair:** the focused branch mirrors migration 013 in
+`db/migration.sql`, asserts the column contract on a genuinely empty aggregate
+schema, and adds focused database-backed same-school/cross-school admin-access
+coverage. The three-test fresh-schema suite and eight-test
+rollback/payment-contract suite both pass with all three database gates against
+a disposable confirmed non-production loopback database. The repair blocker is
+closed; Slice 2 acceptance remains separately blocked.
 
 ### Unresolved observations, not yet diagnosed
 
@@ -412,7 +446,8 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 2. Create a tightly scoped repair branch from latest main
 
-- **Status:** Pending.
+- **Status:** Completed on `codex/simon-fresh-schema-is-admin-repair` from
+  `5a462837…`.
 - **Preconditions:** Reverify remote `main`, clean worktree, read this log and
   protected documents.
 - **Evidence required:** Branch base commit and clean pre-change status.
@@ -425,7 +460,7 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 3. Mirror migration 013 into the aggregate
 
-- **Status:** Blocked until step 2.
+- **Status:** Implemented and verified.
 - **Preconditions:** Repair branch; confirm the column is still absent.
 - **Evidence required:** Minimal idempotent aggregate change equivalent to
   `ALTER TABLE instructors ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;`.
@@ -441,7 +476,8 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 4. Add the fresh-schema column regression
 
-- **Status:** Not started.
+- **Status:** Implemented and verified; 3/3 fresh-schema tests pass with zero
+  skips.
 - **Preconditions:** Step 3.
 - **Evidence required:** Triple-gated rollback-only test applies the full
   aggregate to an empty schema and queries column name, type, and default.
@@ -454,7 +490,8 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 5. Add fresh-schema admin-access coverage
 
-- **Status:** Not started.
+- **Status:** Implemented and verified against the real route and freshly
+  bootstrapped aggregate schema.
 - **Preconditions:** Steps 3–4; safe JWT/admin/instructor fixtures inside the
   rollback-only fresh schema.
 - **Evidence required:** A focused database-backed test executes the real
@@ -470,7 +507,9 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 6. Run repair validation
 
-- **Status:** Not started.
+- **Status:** Complete. Syntax, focused launch/auth, rollout review, all 14
+  machine checks, both mandatory database suites, protected hashes, and diff
+  checks pass.
 - **Preconditions:** Steps 3–5 complete.
 - **Evidence required:** 195-file-or-current syntax pass; focused admin-access
   tests; focused Stripe launch selection; Slice 2 rollout-review test; all 14
@@ -653,19 +692,15 @@ money-movement row is an immediate fail-and-stop condition.
 
 ## 15. Next session starts here
 
-The exact next implementation task is:
+The exact next task is:
 
-> From the then-latest remote `main`, create a fresh tightly scoped repair
-> branch. Mirror `db/migrations/013_instructor_is_admin.sql` into
-> `db/migration.sql` without touching the protected Simon documents. Extend the
-> triple-gated rollback-only fresh-schema regression to prove
-> `instructors.is_admin` exists with the expected Boolean/default contract, and
-> add focused database-backed coverage proving
-> `POST /api/admin?action=access-instructor-account` succeeds and audit-logs for
-> a same-school active instructor on a freshly bootstrapped schema while
-> rejecting cross-school access. Run syntax, admin-access, focused Slice 2,
-> 14-check rollout review, rollback/payment-contract integration, and
-> fresh-schema suites. Stop before deployment or any shadow/resource action.
+> Review the three-file diff on
+> `codex/simon-fresh-schema-is-admin-repair`. If it is approved, explicitly
+> authorise commit, push, and creation of a focused repair PR. After that PR is
+> reviewed and merged, add and merge the deployment/database identity preflight
+> and fail-closed shadow return-URL repair. Only then, under separate explicit
+> resource-creation authority and after the identity plan is ready, create the
+> entirely fresh Vercel and Neon resources for `cc-simon-s2-shadow-05`.
 
 Do not resume shadow-04. Do not create shadow-05 in the repair session unless a
 separate explicit task authorises resource creation after the repair PR merges.
@@ -706,3 +741,48 @@ For every future session:
   clean rerun.
 - Made documentation changes only; no migration repair, deployment, database
   mutation, payment, refund, payout, transfer, Connect, or resource action.
+
+### 3 August 2026 — Fresh-schema repair implemented; DB verification blocked
+
+- Fast-forwarded clean local `main` to remote `5a462837…`, confirming PR #339
+  had preserved this log and the Simon `AGENTS.md` rule before branching.
+- Created `codex/simon-fresh-schema-is-admin-repair` from that exact commit.
+- Confirmed the root cause from PRs #337/#338 and repository source: migration
+  013 supplies `instructors.is_admin`, the aggregate omitted it, the admin route
+  selects it, and PR #338 tested neither the column nor the real route.
+- Added only the idempotent historical `is_admin BOOLEAN DEFAULT FALSE` DDL to
+  the aggregate and extended the rollback-only fresh-schema suite with the
+  Boolean/default and database-backed admin-access contracts.
+- Verified `node --check` for the changed test, 195-file syntax, four standalone
+  static admin-access tests, 43 focused launch/auth tests, one Slice 2 rollout
+  review test, and all 14 required machine-review checks.
+- Reverified the protected product and technical-plan LF-normalised hashes
+  exactly; neither protected document changed.
+- Attempted both mandatory triple-gated database suites. The configured
+  confirmed non-production target rejected authentication before a transaction
+  began, so no database assertion passed and no database write occurred.
+- No commit, push, PR, deployment, production/shadow access, Stripe operation,
+  shadow-05 resource, or Slice 3 work was performed.
+
+### 3 August 2026 — Fresh-schema repair database verification completed
+
+- Preserved the rejected-credential attempts above as failed infrastructure
+  evidence rather than rewriting them as a successful run.
+- Downloaded and used a disposable PostgreSQL distribution locally, bound the
+  temporary server only to loopback, and created a test-only database that was
+  neither production nor any shadow environment.
+- Applied the complete aggregate once to the disposable public test schema only
+  to provide the production-shaped base required by the payment-contract suite.
+  Added fake local-only instructor, learner, and admin fixtures; no application
+  migration, production data, or cloud resource was touched.
+- Ran the fresh-schema suite with all three gates. It applied the complete
+  aggregate to its own genuinely empty schema inside a transaction and passed
+  3/3 with zero skips, including the Boolean/default and real-route admin-access
+  contracts.
+- Ran the rollback/payment-contract integration suite with all three gates; it
+  passed 8/8 with zero skips and rolled back its test transaction.
+- The fresh-schema admin fixture inserts the existing tenant-resolution marker
+  only inside the rolled-back test transaction so it can create a second school
+  without weakening the aggregate's school-creation guard.
+- No commit, push, PR, deployment, production/shadow access, Stripe operation,
+  shadow-05 resource, or Slice 3 work was performed.
