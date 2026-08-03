@@ -119,6 +119,17 @@ function readBoundIdentity(env) {
   return identity;
 }
 
+function readApplicationBoundIdentity(env) {
+  if (env.STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST !== undefined) {
+    return readBoundIdentity(env);
+  }
+
+  return readBoundIdentity({
+    ...env,
+    STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST: env.VERCEL_URL,
+  });
+}
+
 function readRuntimeProviderIdentity(env) {
   const identity = {
     vercel: {
@@ -174,7 +185,7 @@ async function collectStripeLaunchShadowIdentity({
     fail('STRIPE_LAUNCH_SHADOW_IDENTITY_MISSING', ['neon.database_query']);
   }
 
-  const bound = readBoundIdentity(env);
+  const bound = readApplicationBoundIdentity(env);
   const runtime = readRuntimeProviderIdentity(env);
   const connection = parsePostgresTarget(connectionString);
 
@@ -224,5 +235,6 @@ module.exports = {
   collectStripeLaunchShadowIdentity,
   identityFingerprint,
   parsePostgresTarget,
+  readApplicationBoundIdentity,
   readBoundIdentity,
 };
