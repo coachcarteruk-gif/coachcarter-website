@@ -12,8 +12,9 @@ FOR DEPLOYMENT-HOST BOOTSTRAP REPAIR REVIEW/MERGE**
 `0c496b0baafc71afbda444afeefafd4eead59a29`
 
 **Current blocker:** the narrow deployment-host bootstrap repair is implemented
-on `codex/simon-deployment-host-bootstrap` and its focused identity suite passes,
-but the change is not yet reviewed or merged. The deployed application now uses
+on `codex/simon-deployment-host-bootstrap` and open as draft PR #343; its
+focused identity suite passes, but the change is not yet reviewed or merged.
+The deployed application now uses
 provider runtime `VERCEL_URL` only when no custom deployment host is configured;
 the independent operator verifier still requires the exact post-deployment host
 and matches it to both application evidence and the Vercel deployment API. A
@@ -121,7 +122,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Shadow Checkout return URLs | Merged; shadow exercise pending | PR #342 merged fail-closed URL binding for all approved producers. Twelve focused tests and CI pass; non-shadow URL semantics remain unchanged. No Stripe Checkout or shadow-05 exercise has been performed. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Review deployment-host bootstrap repair | Review the focused identity helper/test/log diff on `codex/simon-deployment-host-bootstrap`. Do not merge or resume Step 10 deployment without separate approval. |
+| Next implementation | Review deployment-host bootstrap repair | Review draft PR #343 and commit `77237ad…`. Do not merge or resume Step 10 deployment without separate approval. |
 
 ## 6. Chronological project journey
 
@@ -180,6 +181,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 | [#340](https://github.com/coachcarteruk-gif/coachcarter-website/pull/340) | `26b6cdfd7d96f86ffc6988c58c4a46633fc6df38` | Minimal aggregate repair for migration 013 plus three-test fresh-schema and real-route admin-access coverage. | Deployment/database identity binding, correct shadow return URLs, or Slice 2 acceptance. |
 | [#341](https://github.com/coachcarteruk-gif/coachcarter-website/pull/341) | `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a` | Fixed instructor sign-in code verification; intermediate prerequisite-branch baseline. | Any Simon identity/return-URL prerequisite or Slice 2 acceptance. |
 | [#342](https://github.com/coachcarteruk-gif/coachcarter-website/pull/342) | `0c496b0baafc71afbda444afeefafd4eead59a29` | Protected read-only Vercel/Neon identity preflight, independent control-plane verifier, and fail-closed return URLs for all approved Slice 2 Checkout producers; CI green. | A real shadow-05 identity pass, any resource configuration, schema apply, seed, Checkout, or Slice 2 acceptance. |
+| [#343](https://github.com/coachcarteruk-gif/coachcarter-website/pull/343) | `77237ad49b67583cbdb9d53ff82c6e16d6133050` | Draft deployment-host bootstrap repair: runtime `VERCEL_URL` for the deployed application only when no custom host exists; exact operator/control-plane host verification retained. | Merge, Step 10 resume, deployment, provider configuration, schema, seed, Stripe activity, or Slice 2 acceptance. |
 
 ## 8. Shadow-exercise history
 
@@ -781,7 +783,7 @@ rebound, or treated as acceptance evidence during this step.
 
 The exact next task is:
 
-> Review the focused deployment-host bootstrap repair on
+> Review draft PR #343 for the focused deployment-host bootstrap repair on
 > `codex/simon-deployment-host-bootstrap`, based on PR #342 merge `0c496b0…`.
 > Confirm the deployed application may bootstrap its host from runtime
 > `VERCEL_URL` only when no custom host is configured, while the independent
@@ -1078,3 +1080,7 @@ For every future session:
 - No Vercel configuration/deployment, database connection/query/mutation,
   schema apply, seed, production access/configuration, Stripe operation or
   resource, API key, Slice 3 work, or Step 11–18 action was performed.
+- Committed the focused four-file repair as
+  `77237ad49b67583cbdb9d53ff82c6e16d6133050`, pushed only
+  `codex/simon-deployment-host-bootstrap`, and opened draft PR #343. The PR was
+  not merged and Step 10 was not resumed.
