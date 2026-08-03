@@ -694,6 +694,41 @@ CREATE INDEX IF NOT EXISTS idx_ext_events_instructor_date
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ext_events_dedup
   ON instructor_external_events(instructor_id, uid_hash);
 
+-- MULTI-TENANT: SCHOOLS (must precede the first school-scoped FK)
+CREATE TABLE IF NOT EXISTS schools (
+  id                         SERIAL PRIMARY KEY,
+  name                       TEXT NOT NULL,
+  slug                       TEXT UNIQUE NOT NULL,
+  logo_url                   TEXT,
+  primary_colour             TEXT DEFAULT '#f97316',
+  secondary_colour           TEXT DEFAULT '#1e3a5f',
+  accent_colour              TEXT DEFAULT '#3b82f6',
+  contact_email              TEXT,
+  contact_phone              TEXT,
+  website_url                TEXT,
+  stripe_account_id          TEXT,
+  stripe_onboarding_complete BOOLEAN DEFAULT FALSE,
+  platform_fee_pct           NUMERIC(5,2) DEFAULT 0.00,
+  config                     JSONB DEFAULT '{}',
+  active                     BOOLEAN DEFAULT TRUE,
+  created_at                 TIMESTAMPTZ DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed CoachCarter as school #1
+INSERT INTO schools (id, name, slug, contact_email, contact_phone, primary_colour, secondary_colour, accent_colour)
+VALUES (1, 'CoachCarter Driving School', 'coachcarter', 'fraser@coachcarter.uk', NULL, '#f97316', '#1e3a5f', '#3b82f6')
+ON CONFLICT (id) DO NOTHING;
+
+-- Ensure payments_enabled is set for CoachCarter (school #1) so credit deductions fire
+UPDATE schools
+   SET config = config || '{"payments_enabled": true}'::jsonb
+ WHERE id = 1 AND (config IS NULL OR NOT (config ? 'payments_enabled'));
+
+-- Ensure sequence is ahead of seeded id
+SELECT setval('schools_id_seq', GREATEST(nextval('schools_id_seq'), 2));
+-- End multi-tenant school foundation.
+
 -- Instructor-entered timed busy blocks. These are separate from synced
 -- external events so manual blocks are not overwritten by iCal refreshes.
 CREATE TABLE IF NOT EXISTS instructor_busy_blocks (
@@ -891,41 +926,8 @@ ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_last_synced_at TIMESTAM
 ALTER TABLE instructors ADD COLUMN IF NOT EXISTS setmore_sync_error TEXT;
 
 -- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
--- MULTI-TENANT: SCHOOLS
+-- School foundation created above before the first school-scoped FK.
 -- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
-CREATE TABLE IF NOT EXISTS schools (
-  id                         SERIAL PRIMARY KEY,
-  name                       TEXT NOT NULL,
-  slug                       TEXT UNIQUE NOT NULL,
-  logo_url                   TEXT,
-  primary_colour             TEXT DEFAULT '#f97316',
-  secondary_colour           TEXT DEFAULT '#1e3a5f',
-  accent_colour              TEXT DEFAULT '#3b82f6',
-  contact_email              TEXT,
-  contact_phone              TEXT,
-  website_url                TEXT,
-  stripe_account_id          TEXT,
-  stripe_onboarding_complete BOOLEAN DEFAULT FALSE,
-  platform_fee_pct           NUMERIC(5,2) DEFAULT 0.00,
-  config                     JSONB DEFAULT '{}',
-  active                     BOOLEAN DEFAULT TRUE,
-  created_at                 TIMESTAMPTZ DEFAULT NOW(),
-  updated_at                 TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Seed CoachCarter as school #1
-INSERT INTO schools (id, name, slug, contact_email, contact_phone, primary_colour, secondary_colour, accent_colour)
-VALUES (1, 'CoachCarter Driving School', 'coachcarter', 'fraser@coachcarter.uk', NULL, '#f97316', '#1e3a5f', '#3b82f6')
-ON CONFLICT (id) DO NOTHING;
-
--- Ensure payments_enabled is set for CoachCarter (school #1) so credit deductions fire
-UPDATE schools
-   SET config = config || '{"payments_enabled": true}'::jsonb
- WHERE id = 1 AND (config IS NULL OR NOT (config ? 'payments_enabled'));
-
--- Ensure sequence is ahead of seeded id
-SELECT setval('schools_id_seq', GREATEST(nextval('schools_id_seq'), 2));
 
 -- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 -- MULTI-TENANT: SCHOOL PAYOUTS
