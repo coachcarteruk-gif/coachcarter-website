@@ -311,6 +311,73 @@ test.describe('Stripe launch shadow deployment/database identity', () => {
     expect(JSON.stringify(evidence)).not.toContain('secret');
   });
 
+  test('direct verifier accepts the provider-derived pooled host when Neon reports deprecated pooling as disabled', () => {
+    const endpointId = 'ep-frosty-truth-zatfdzrb';
+    const directEndpointHost = `${endpointId}.c-2.eu-west-2.aws.neon.tech`;
+    const pooledEndpointHost = `${endpointId}-pooler.c-2.eu-west-2.aws.neon.tech`;
+    const bound = readBoundIdentity({
+      ...operatorEnv,
+      STRIPE_LAUNCH_SHADOW_NEON_ENDPOINT_HOST: pooledEndpointHost,
+      POSTGRES_URL: `postgresql://shadow_user:test-only@${pooledEndpointHost}/shadowdb?sslmode=require`,
+    });
+    const providerEvidence = {
+      schoolId: 7,
+      bound,
+      application: {
+        ok: true,
+        school_id: 7,
+        identity: bound,
+        identity_fingerprint: identityFingerprint(7, bound),
+      },
+      direct: {
+        endpoint_host: bound.neon.endpoint_host,
+        database_name: bound.neon.database_name,
+      },
+      vercelDeployment: {
+        projectId: bound.vercel.project_id,
+        target: bound.vercel.environment,
+        url: bound.vercel.deployment_host,
+      },
+      neonBranchResponse: {
+        branch: { id: bound.neon.branch_id, project_id: bound.neon.project_id },
+      },
+      neonEndpointsResponse: {
+        endpoints: [{
+          id: endpointId,
+          project_id: bound.neon.project_id,
+          branch_id: bound.neon.branch_id,
+          host: directEndpointHost,
+          region_id: 'aws-eu-west-2',
+          pooler_enabled: false,
+          proxy_host: 'c-2.eu-west-2.aws.neon.tech',
+        }],
+      },
+      neonDatabasesResponse: {
+        databases: [{ name: bound.neon.database_name, branch_id: bound.neon.branch_id }],
+      },
+    };
+    const evidence = verifyProviderBoundIdentity(providerEvidence);
+
+    expect(evidence).toMatchObject({
+      status: 'PASSED',
+      identity: { neon: { endpoint_host: pooledEndpointHost } },
+      approved_to_create_resources: false,
+      approved_to_create_checkout: false,
+    });
+    expect(() => verifyProviderBoundIdentity({
+      ...providerEvidence,
+      neonEndpointsResponse: {
+        endpoints: [{
+          ...providerEvidence.neonEndpointsResponse.endpoints[0],
+          id: 'ep-unrelated-provider-endpoint',
+        }],
+      },
+    })).toThrow(expect.objectContaining({
+      code: 'STRIPE_LAUNCH_SHADOW_IDENTITY_MISMATCH',
+      fields: ['provider.neon.endpoint_host'],
+    }));
+  });
+
   test('direct verifier rejects a provider-side branch mismatch', () => {
     const bound = readBoundIdentity(operatorEnv);
     expect(() => verifyProviderBoundIdentity({
