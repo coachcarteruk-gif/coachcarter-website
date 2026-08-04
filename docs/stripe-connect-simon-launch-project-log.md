@@ -4,8 +4,8 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — SHADOW-05
-STEP 11 PASSED — STEP 12 WRITER REVIEW PASSED, PUBLICATION PENDING — NOT
-DEPLOYED — FIXTURE UNCHANGED**
+STEP 11 PASSED — STEP 12 WRITER DRAFT PR #346 OPEN — NOT DEPLOYED — FIXTURE
+UNCHANGED**
 
 **Last updated:** 4 August 2026
 
@@ -14,11 +14,12 @@ DEPLOYED — FIXTURE UNCHANGED**
 
 **Current blocker:** Independent review of the narrow Step 12 config/agreement
 writer passed after auth-scope, exact runtime-gate, replay-evidence, rollback,
-and error-sanitisation hardening. Publication evidence is still pending. The
-writer remains undeployed and unavailable on shadow-05. The prior Step 12
-attempt stopped before mutation and all recorded fixture counts remain zero.
-This review grants no deployment, environment-change, fixture, Step 12, Stripe,
-later-step, or Slice 3 authority.
+and error-sanitisation hardening. Implementation commit `bfa02f916e933436b51cb78653c2af3d60a8d5c5`
+is pushed on `codex/simon-shadow05-fixture-writer`, and draft PR #346 targets
+`main`. The writer remains undeployed and unavailable on shadow-05. The prior
+Step 12 attempt stopped before mutation and all recorded fixture counts remain
+zero. The commit and draft PR grant no deployment, environment-change, fixture,
+Step 12, Stripe, later-step, or Slice 3 authority.
 
 ## 1. Title and purpose
 
@@ -110,7 +111,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | Remote `main` resolves to PR #345 merge `d911c898…` on 4 August 2026. GitHub reports reviewed head `4c303c7…`, base `6635b8f…`, and all checks successful; the squash-merge tree is byte-for-byte identical to the reviewed head. This provider-evidence log update remains intentionally uncommitted. |
+| Latest baseline | Verified | Refreshed remote `main` resolves to PR #345 merge `d911c898…` on 4 August 2026. Step 12 writer commit `bfa02f9…` has that exact parent, and draft PR #346 targets `main`. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
@@ -119,7 +120,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Shadow Checkout return URLs | Merged; shadow exercise pending | PR #342 merged fail-closed URL binding for all approved producers. Twelve focused tests and CI pass; non-shadow URL semantics remain unchanged. No Stripe Checkout or shadow-05 exercise has been performed. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Publish the reviewed Step 12 writer as a draft PR, then stop | The writer is JWT-school-scoped, authenticated with existing CSRF enforcement, exact shadow/test/Vercel-environment/project gated, atomic, required-audit fail-closed, and exact-replay idempotent. The required 69-test combined suite and Slice 2 static review pass. It remains undeployed, so Step 12 remains blocked. Do not use direct SQL, seed a partial fixture, rerun the aggregate/one-shot identity preflight, or begin Stripe/later-step activity. |
+| Next implementation | Review draft PR #346; deployment requires separate authority | The writer is JWT-school-scoped, authenticated with existing CSRF enforcement, exact shadow/test/Vercel-environment/project gated, atomic, required-audit fail-closed, and exact-replay idempotent. The required 69-test combined suite and Slice 2 static review pass. It remains undeployed, so Step 12 remains blocked. Do not use direct SQL, seed a partial fixture, rerun the aggregate/one-shot identity preflight, deploy the PR, or begin Stripe/later-step activity without separate authority. |
 
 ## 6. Chronological project journey
 
@@ -354,13 +355,13 @@ separately blocked by fresh shadow-05 resource authority, a passing identity
 preflight, and the clean shadow-05 rerun. The prerequisite code itself merged
 in PR #342.
 
-### Current blocker: local Step 12 writer is not reviewed or deployed
+### Current blocker: Step 12 writer is reviewed but not deployed
 
-The minimum config/agreement writer now exists only as uncommitted local code
-on `codex/simon-shadow05-fixture-writer`. It cannot be treated as a supported
-shadow-05 route until it is intentionally staged, reviewed, committed, pushed,
-and deployed under separate authority. No provider configuration or fixture
-state changed during implementation.
+The minimum config/agreement writer is committed on
+`codex/simon-shadow05-fixture-writer` and open as draft PR #346. It cannot be
+treated as a supported shadow-05 route unless the PR is separately reviewed,
+approved, merged, and deployed under new authority. No provider configuration
+or fixture state changed during implementation or publication.
 
 ### Closed blocker: required sensitive verifier inputs could not be recovered
 
@@ -835,13 +836,13 @@ aggregate or the one-shot identity preflight. The retained exact deployment,
 Neon identity, Step 11 schema, `instructors.is_admin`, and zero-fixture evidence
 remains the last accepted provider/database state.
 
-The local branch `codex/simon-shadow05-fixture-writer` now contains the minimum
-school-scoped `simon_launch_v1` shadow config and active agreement writer. Local
-verification passes, but the code is deliberately uncommitted and undeployed.
-The next task is independent review and a separately authorized stage/commit/
-push/deploy sequence. Until deployment identity is reverified and Step 12 is
-explicitly reauthorized, do not create any fixture row, change provider config,
-use direct SQL, or begin Stripe activity, Step 13, a later step, or Slice 3.
+Draft PR #346 contains the independently reviewed minimum school-scoped
+`simon_launch_v1` shadow config and active agreement writer. Verification
+passes, but the code is deliberately undeployed. The next task is review of the
+draft PR; merge, deployment, identity revalidation, and Step 12 execution each
+require fresh explicit authority. Until then, do not create any fixture row,
+change provider config, use direct SQL, or begin Stripe activity, Step 13, a
+later step, or Slice 3.
 
 ## 16. Update protocol
 
@@ -1754,9 +1755,15 @@ For every future session:
   the final publication gate.
 - Independent review found no remaining security, tenancy, idempotency,
   atomicity, audit, schema-contract, protected-document, Stripe-call, or
-  sensitive-payload blocker within this exact writer scope. Commit and draft-PR
-  evidence remain pending final publication and will be recorded without
-  changing the implementation scope.
+  sensitive-payload blocker within this exact writer scope.
+- Staged only the five authorised files, committed them as
+  `bfa02f916e933436b51cb78653c2af3d60a8d5c5` with exact parent
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8`, pushed branch
+  `codex/simon-shadow05-fixture-writer`, and opened
+  [draft PR #346](https://github.com/coachcarteruk-gif/coachcarter-website/pull/346)
+  targeting `main`. The PR body records the safety boundaries and the exact
+  verification evidence and explicitly grants no deployment or fixture
+  authority.
 - No deployment, Vercel or Neon configuration, shadow-05 access or mutation,
   fixture row, Stripe client/API call, Checkout, payment, webhook, refund,
   payout, transfer, Connect object, Step 12 execution, Step 13, later step, or
