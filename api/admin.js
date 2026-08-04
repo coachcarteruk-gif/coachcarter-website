@@ -92,6 +92,12 @@ const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { buildPayoutV2ShadowStatement } = require('./_payout-v2-shadow');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { normaliseReferralCode, updateReferralCodeForLearner } = require('./_referral-code');
+const {
+  StripeLaunchShadowFixtureError,
+  validateStripeLaunchShadowFixtureRequest,
+  authorizeStripeLaunchShadowFixture,
+  createStripeLaunchShadowFixture,
+} = require('./_stripe-launch-shadow-fixture');
 
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 const BROADCAST_MAX_RECIPIENTS = 200;
@@ -353,6 +359,7 @@ module.exports = async (req, res) => {
   if (action === 'mark-complete')   return handleMarkComplete(req, res);
   if (action === 'all-instructors')   return handleAllInstructors(req, res);
   if (action === 'create-instructor') return handleCreateInstructor(req, res);
+  if (action === 'configure-stripe-launch-shadow-fixture') return handleConfigureStripeLaunchShadowFixture(req, res);
   if (action === 'update-instructor') return handleUpdateInstructor(req, res);
   if (action === 'toggle-instructor') return handleToggleInstructor(req, res);
   if (action === 'access-instructor-account') return handleAccessInstructorAccount(req, res);
@@ -2016,6 +2023,53 @@ async function handleCreateInstructor(req, res) {
     console.error('admin create-instructor error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to create instructor', details: 'Internal server error' });
+  }
+}
+
+// -- POST /api/admin?action=configure-stripe-launch-shadow-fixture -----------
+// Deliberately limited to an authenticated admin in the configured test-mode
+// shadow project and school. It creates only the launch config/agreement pair;
+// it does not call Stripe, create users, or bypass the supported fixture flow.
+async function handleConfigureStripeLaunchShadowFixture(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+
+  // This writer is deliberately narrower than ordinary superadmin routes:
+  // the target school must come from the authenticated session itself.
+  const schoolId = admin.school_id;
+  if (!authorizeStripeLaunchShadowFixture({ schoolId })) {
+    return res.status(403).json({
+      error: 'Shadow fixture writer is unavailable',
+      code: 'SHADOW_FIXTURE_UNAVAILABLE',
+    });
+  }
+
+  try {
+    const input = validateStripeLaunchShadowFixtureRequest(req.body || {});
+    const result = await createStripeLaunchShadowFixture({
+      schoolId,
+      admin,
+      req,
+      input,
+      connectionString: process.env.POSTGRES_URL,
+    });
+    return res.status(result.idempotent_replay ? 200 : 201).json(result);
+  } catch (err) {
+    if (err instanceof StripeLaunchShadowFixtureError) {
+      return res.status(err.status).json({ error: err.message, code: err.code });
+    }
+
+    console.error('admin configure-stripe-launch-shadow-fixture error:', err?.code || err?.name || 'unknown');
+    reportError(
+      '/api/admin?action=configure-stripe-launch-shadow-fixture',
+      new Error('Shadow fixture writer failed')
+    );
+    return res.status(500).json({
+      error: 'Failed to configure shadow fixture',
+      code: 'SHADOW_FIXTURE_WRITE_FAILED',
+    });
   }
 }
 

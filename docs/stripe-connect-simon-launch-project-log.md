@@ -4,23 +4,22 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — SHADOW-05
-STEP 10 HOSTNAME REPAIR LOCALLY VERIFIED — REVIEW/MERGE NEXT**
+STEP 11 PASSED — STEP 12 WRITER DRAFT PR #346 OPEN — NOT DEPLOYED — FIXTURE
+UNCHANGED**
 
-**Last updated:** 3 August 2026
+**Last updated:** 4 August 2026
 
 **Verified source baseline:** remote `main` at
-`a8f9f2afb1b9c311720047ce921e17e439ab0a9a`
+`d911c89868eebe86a08a757b22ed6e3524cd5fe8`
 
-**Current blocker:** the narrowly scoped repair branch now accepts only the
-current provider cell label shape, including direct and pooled
-`.c-2.eu-west-2.aws.neon.tech` hosts, while existing formats and fail-closed
-host rejection remain covered. Local syntax, identity/return-URL, shadow/
-payment/rollout regressions, and all 14 Slice 2 machine checks pass. The repair
-is not yet reviewed or merged. The existing shadow database credential remains
-exposed and must be rotated before any future use; the isolated Vercel
-`POSTGRES_URL` and bearer secret must then be replaced before deployment. No
-identity fingerprint exists. Do not seed, apply the aggregate, create a
-Checkout Session, or perform any Stripe operation.
+**Current blocker:** Independent review of the narrow Step 12 config/agreement
+writer passed after auth-scope, exact runtime-gate, replay-evidence, rollback,
+and error-sanitisation hardening. Implementation commit `bfa02f916e933436b51cb78653c2af3d60a8d5c5`
+is pushed on `codex/simon-shadow05-fixture-writer`, and draft PR #346 targets
+`main`. The writer remains undeployed and unavailable on shadow-05. The prior
+Step 12 attempt stopped before mutation and all recorded fixture counts remain
+zero. The commit and draft PR grant no deployment, environment-change, fixture,
+Step 12, Stripe, later-step, or Slice 3 authority.
 
 ## 1. Title and purpose
 
@@ -112,16 +111,16 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | Remote `main` resolves to PR #343 merge `a8f9f2a…` on 3 August 2026. Local `main` and the preserved documentation-only handover remain at PR #342 merge `0c496b0…`; this log is the sole uncommitted change. |
+| Latest baseline | Verified | Refreshed remote `main` resolves to PR #345 merge `d911c898…` on 4 August 2026. Step 12 writer commit `bfa02f9…` has that exact parent, and draft PR #346 targets `main`. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
 | Fresh-schema bootstrap | Repair merged | PR #340 mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests passed against a disposable, confirmed non-production loopback database with the three gates enabled. |
-| Deployment/database identity | Shadow-05 deployed; preflight blocked before provider checks | Vercel reports one READY production deployment from exact `a8f9f2a…`, but the verifier rejects Neon's current provider-issued `.c-2.eu-west-2.aws.neon.tech` hostname shape during local bound-identity parsing. No application, Vercel control-plane, Neon control-plane, or database identity pass and no fingerprint exist. |
+| Deployment/database identity | Step 10 passed; temporary access revoked | Vercel reports clean deployment `dpl_ELTwjwU1yvbuiTHonJjZomjivaWN`, READY on the isolated project's Production target, provider host `cc-simon-s2-shadow-05-n6pepjew7-coachcarteruk-2599s-projects.vercel.app`, exact Git SHA `d911c898…`, and no dirty marker. The one-shot identity preflight passed with fingerprint `sha256:c94c4cc0c3ceaaf24f8401dd8a23e55ba3c26343bda0b3e3ab4a688162aa3127` and database-enforced read-only evidence. Final Neon-key and Vercel-bypass inventories are zero. |
 | Shadow Checkout return URLs | Merged; shadow exercise pending | PR #342 merged fail-closed URL binding for all approved producers. Twelve focused tests and CI pass; non-shadow URL semantics remain unchanged. No Stripe Checkout or shadow-05 exercise has been performed. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Obtain a separately scoped Step 10 repair/credential-rotation authority | Review and minimally repair the Neon endpoint-host validator for the provider's current hostname shape, rotate the exposed shadow database credential, deploy only an explicitly authorised repaired source, and rerun the identity preflight. Do not begin Step 11. |
+| Next implementation | Review draft PR #346; deployment requires separate authority | The writer is JWT-school-scoped, authenticated with existing CSRF enforcement, exact shadow/test/Vercel-environment/project gated, atomic, required-audit fail-closed, and exact-replay idempotent. The required 69-test combined suite and Slice 2 static review pass. It remains undeployed, so Step 12 remains blocked. Do not use direct SQL, seed a partial fixture, rerun the aggregate/one-shot identity preflight, deploy the PR, or begin Stripe/later-step activity without separate authority. |
 
 ## 6. Chronological project journey
 
@@ -181,6 +180,8 @@ If either hash changes, stop and obtain an explicit product-document review.
 | [#341](https://github.com/coachcarteruk-gif/coachcarter-website/pull/341) | `dc0e17a5c6b4a7837a4b633f61f172b87bd6ea7a` | Fixed instructor sign-in code verification; intermediate prerequisite-branch baseline. | Any Simon identity/return-URL prerequisite or Slice 2 acceptance. |
 | [#342](https://github.com/coachcarteruk-gif/coachcarter-website/pull/342) | `0c496b0baafc71afbda444afeefafd4eead59a29` | Protected read-only Vercel/Neon identity preflight, independent control-plane verifier, and fail-closed return URLs for all approved Slice 2 Checkout producers; CI green. | A real shadow-05 identity pass, any resource configuration, schema apply, seed, Checkout, or Slice 2 acceptance. |
 | [#343](https://github.com/coachcarteruk-gif/coachcarter-website/pull/343) | `a8f9f2afb1b9c311720047ce921e17e439ab0a9a` | Runtime `VERCEL_URL` bootstrap for the deployed application only when no custom host exists; exact operator/application/Vercel deployment-host comparison retained. | Step 10 resume, deployment, provider configuration, schema, seed, Stripe activity, or Slice 2 acceptance. |
+| [#344](https://github.com/coachcarteruk-gif/coachcarter-website/pull/344) | `6635b8f786730f04c8b981d0e437dcff81231220` | Minimal acceptance of Neon's optional positive-integer provider cell label, with current direct/pooled host coverage and fail-closed malformed-host regressions. | A real identity preflight pass, schema, seed, Stripe activity, or Slice 2 acceptance. |
+| [#345](https://github.com/coachcarteruk-gif/coachcarter-website/pull/345) | `d911c89868eebe86a08a757b22ed6e3524cd5fe8` | Derives the pooled Neon hostname from the exact endpoint ID plus direct provider host even when deprecated `pooler_enabled` is false; includes a provider-shaped regression and endpoint-ID mismatch rejection. All GitHub and Vercel checks passed. | A real identity preflight pass, schema, seed, Stripe activity, Step 11, or Slice 2 acceptance. |
 
 ## 8. Shadow-exercise history
 
@@ -354,29 +355,43 @@ separately blocked by fresh shadow-05 resource authority, a passing identity
 preflight, and the clean shadow-05 rerun. The prerequisite code itself merged
 in PR #342.
 
-### Current blocker: provider hostname shape rejected by exact merge
+### Current blocker: Step 12 writer is reviewed but not deployed
 
-**Observed failure:** the exact command
-`npm run preflight:stripe-launch-shadow-identity` returned
-`STRIPE_LAUNCH_SHADOW_IDENTITY_MISSING` for `neon.endpoint_host` before making
-an application request, provider control-plane request, or database query.
+The minimum config/agreement writer is committed on
+`codex/simon-shadow05-fixture-writer` and open as draft PR #346. It cannot be
+treated as a supported shadow-05 route unless the PR is separately reviewed,
+approved, merged, and deployed under new authority. No provider configuration
+or fixture state changed during implementation or publication.
 
-**Repository-confirmed root cause:** exact merge `a8f9f2a…` defines
-`NEON_ENDPOINT_HOST_PATTERN` with one DNS label between the endpoint label and
-`.aws.neon.tech`. The provider-issued shadow-05 control-plane and pooled hosts
-contain two labels, `.c-2.eu-west-2.aws.neon.tech`, so the required exact host
-cannot pass `readBoundIdentity`.
+### Closed blocker: required sensitive verifier inputs could not be recovered
 
-**Additional safety blocker:** the existing shadow database credential was
-unintentionally rendered in private tool output during configuration. No
-credential value is retained here. It must be rotated before future use.
+**Observed failure:** after owner-assisted login, the fresh Vercel bearer
+returned HTTP 200 and the exact isolated project/deployment remained verified.
+Vercel lists one Production `POSTGRES_URL` and one Production
+`STRIPE_LAUNCH_SHADOW_CRON_SECRET`, but both are sensitive records. The official
+list endpoint, documented per-variable decrypt endpoint, and isolated
+`vercel env run` probe returned no decrypted values. The repository's existing
+local env file does not contain the complete shadow verifier set.
 
-**Why it blocks Step 10:** changing the validator or deploying a different
-source was outside the exact-merge authority, and the task required an
-immediate stop on malformed identity or secret exposure. No fingerprint or
-provider/database identity pass may be claimed. The verifier key remains the
-single named personal API key created for this preflight; do not create another
-key as a workaround.
+**Repository-confirmed repair already complete:** PR #345 removed reliance on
+Neon's deprecated `pooler_enabled` field. Exact merge `d911c898…` derives the
+pooled candidate only from an exact endpoint-ID/direct-host-label match and is
+READY as clean isolated deployment `dpl_D2UDrPkiKN6sTuKZSaLVQGc2Zyu2`.
+
+**Additional safety event:** a diagnostic PowerShell formatting error rendered
+the stale default CLI access and refresh credentials in private tool output.
+They are not retained here. The CLI session was immediately logged out and its
+exact auth file removed. The one unused Neon verifier key was revoked, and
+zero matching Neon keys plus zero Vercel bypasses remain.
+
+**Why it blocked Step 10:** the exact verifier required the active pooled direct
+database URL and the same bearer used by the deployed application route. Those
+values cannot be reconstructed, guessed, or weakened. Rotating the existing
+Neon database role credential and replacing the isolated Vercel Production
+database URL and shadow bearer are configuration changes outside the supplied
+authority. No verifier run, identity pass, or fingerprint may be claimed.
+Obtain fresh narrowly scoped rotation authority before creating another
+temporary Neon key or attempting the one-shot gate.
 
 ### Unresolved observations, not yet diagnosed
 
@@ -671,16 +686,18 @@ money-movement row is an immediate fail-and-stop condition.
 
 ### 10. Create `cc-simon-s2-shadow-05`
 
-- **Status:** Resources configured and exact merge deployed on 3 August 2026;
-  identity preflight blocked before provider/database checks. Existing Vercel
-  project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` has exactly one READY production
-  deployment, `dpl_6oUNe2Niuuf5HmvDq8QRpxnKCjVz`, whose provider metadata
-  reports exact Git SHA `a8f9f2a…`. Existing isolated Neon project
-  `shiny-bonus-66942766` remains unseeded. The exact merge rejects Neon's
-  current `.c-2.eu-west-2.aws.neon.tech` hostname shape during local identity
-  parsing. The shadow database credential also requires rotation after private
-  tool-output exposure. No identity fingerprint exists, and Step 10 is not
-  complete.
+- **Status:** Completed on 4 August 2026. PR #345 endpoint-payload repair is
+  merged as `d911c898…`; clean exact deployment
+  `dpl_ELTwjwU1yvbuiTHonJjZomjivaWN` is READY on the isolated Production target
+  with provider host
+  `cc-simon-s2-shadow-05-n6pepjew7-coachcarteruk-2599s-projects.vercel.app`
+  and no dirty marker. The exact one-shot identity preflight returned `PASSED`
+  with fingerprint
+  `sha256:c94c4cc0c3ceaaf24f8401dd8a23e55ba3c26343bda0b3e3ab4a688162aa3127`
+  and `transaction_read_only:true`. Temporary Neon and Vercel verifier access
+  was revoked and both final inventories are zero. The database remains
+  unseeded; no schema, Stripe resource, Checkout, payment, refund, payout,
+  transfer, Connect account, or webhook action was performed.
 - **Preconditions:** Steps 7–9 merged; explicit authority to create test
   resources; resource identity plan ready.
 - **Evidence required:** Entirely fresh Vercel project and Neon project/branch/
@@ -703,7 +720,11 @@ rebound, or treated as acceptance evidence during this step.
 
 ### 11. Apply the aggregate once to a genuinely empty schema
 
-- **Status:** Not started.
+- **Status:** Completed on 4 August 2026. The existing Neon Console SQL Editor
+  independently proved zero public tables, accepted the complete LF-normalized
+  reviewed aggregate in one Run, and completed all 956 parsed statements with
+  no error state. Read-only postflight retained sanitised schema counts and the
+  exact `instructors.is_admin` contract.
 - **Preconditions:** Verified shadow-05 binding and zero-table proof.
 - **Evidence required:** Before count zero; one successful aggregate apply;
   retained sanitised schema counts; explicit `instructors.is_admin` proof.
@@ -715,7 +736,10 @@ rebound, or treated as acceptance evidence during this step.
 
 ### 12. Rerun Slice 2 setup from the beginning
 
-- **Status:** Not started.
+- **Status:** Still blocked before mutation. All identity, protected hash, Step
+  11 schema/column, and zero-fixture preconditions passed. A minimum writer now
+  exists and passes local verification, but is uncommitted, unreviewed, and not
+  deployed to shadow-05. No fixture row was created.
 - **Preconditions:** Step 11; supported seeding routes only.
 - **Evidence required:** One admin, one active instructor, create audit, seven
   availability windows, one active shadow config, one active payment-time-valid
@@ -807,49 +831,18 @@ rebound, or treated as acceptance evidence during this step.
 
 ## 15. Next session starts here
 
-The exact next task is:
+Step 12 preflight passed and fixture mutation did not start. Do not rerun the
+aggregate or the one-shot identity preflight. The retained exact deployment,
+Neon identity, Step 11 schema, `instructors.is_admin`, and zero-fixture evidence
+remains the last accepted provider/database state.
 
-> Obtain explicit authority for a narrowly scoped Step 10 repair and shadow
-> credential rotation. Preserve this uncommitted handover, review
-> `NEON_ENDPOINT_HOST_PATTERN` against the provider-issued
-> `.c-2.eu-west-2.aws.neon.tech` host, add focused current-host and rejection
-> tests, and rotate the exposed shadow database credential before future use.
-> Do not create another Neon verifier key. Deploy a repaired source only after
-> its exact commit is separately authorised, then bind the operator verifier to
-> the provider-derived deployment host and rerun
-> `npm run preflight:stripe-launch-shadow-identity`. Stop on any
-> missing/malformed/unknown/mismatched identity or immediately after the first
-> exact pass. Do not substitute a project alias, label, or prior deployment URL.
-
-The next-chat authority must be explicit and limited to this repair path:
-
-- rotate/reset only the existing shadow-05 Neon database role credential,
-  replace only the isolated Vercel project's Production `POSTGRES_URL` secret,
-  and replace its Production `STRIPE_LAUNCH_SHADOW_CRON_SECRET` with a fresh
-  strong value shared only with the one-time verifier;
-- minimally repair the shadow identity hostname validation so the exact
-  provider-issued `.c-2.eu-west-2.aws.neon.tech` control-plane and pooled host
-  shapes pass while unrelated or malformed hosts still fail closed;
-- add focused positive and negative tests, use a fresh `codex/` branch, and
-  permit only the commit/push/PR/merge actions required to establish an exact
-  reviewed repair commit;
-- deploy only that exact repaired commit to existing Vercel project
-  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, reuse the one existing verifier key, and
-  run the independent read-only identity preflight until its first exact pass;
-- after retaining only the sanitised inventory and fingerprint, revoke the
-  one-time verifier key and stop. No Step 11 or later action is implied.
-
-The authority must continue to prohibit new provider resources, schema or seed
-work, production CoachCarter access/configuration, Stripe operations/resources,
-Steps 11–18, Slice 3, unrelated refactors, and secret retention or output.
-
-Do not resume, query, repair, or reuse shadow-04. Do not access production data;
-apply a schema; seed data; create a Checkout Session, payment, refund, payout,
-transfer, Connect account, or webhook; begin Slice 3; or continue into steps
-11–18. A preflight pass grants identity evidence only and does not authorise any
-later operation. If a new Stripe resource is necessary rather than only safely
-configuring existing restricted test credentials, stop and request separate
-authority.
+Draft PR #346 contains the independently reviewed minimum school-scoped
+`simon_launch_v1` shadow config and active agreement writer. Verification
+passes, but the code is deliberately undeployed. The next task is review of the
+draft PR; merge, deployment, identity revalidation, and Step 12 execution each
+require fresh explicit authority. Until then, do not create any fixture row,
+change provider config, use direct SQL, or begin Stripe activity, Step 13, a
+later step, or Slice 3.
 
 ## 16. Update protocol
 
@@ -1276,3 +1269,503 @@ For every future session:
   schema, seed, Stripe operation/resource, Step 11–18, or Slice 3 action was
   performed. The exposed shadow database credential still requires rotation,
   no identity fingerprint exists, and both approval flags remain false.
+
+### 3 August 2026 — Step 10 repair merged and exact deployment READY
+
+- Committed the narrowly scoped repair as
+  `b0bbdfa35aa0ae806c75acaa4159502c0780560f`, pushed
+  `codex/simon-shadow05-neon-host-repair`, opened PR #344, and verified the
+  exact three-file diff and all required GitHub and Vercel checks. PR #344 was
+  marked ready and merged as
+  `6635b8f786730f04c8b981d0e437dcff81231220`; refreshed `origin/main`
+  reports that exact merge with authorised ancestor `a8f9f2a…`.
+- Rotated only the existing shadow-05 Neon database role credential. The first
+  reset's one-time result was not securely captured and was immediately
+  invalidated by a second reset of the same role; only the second credential is
+  current. No credential or connection string was printed or retained.
+- Updated only the isolated Vercel project's Production `POSTGRES_URL` with the
+  final rotated credential and replaced only its Production
+  `STRIPE_LAUNCH_SHADOW_CRON_SECRET` with a fresh strong secret. Confirmed that
+  `STRIPE_LAUNCH_SHADOW_DEPLOYMENT_HOST` remains absent. No CoachCarter
+  production project or configuration was accessed.
+- Deployed a clean detached worktree at exact reviewed merge `6635b8f…` with
+  pinned Vercel CLI `58.4.4`. Vercel control-plane evidence reports project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, deployment
+  `dpl_CTmfmHhBbjDrNFwNmnrnuq73D3cX`, READY, target `production` inside the
+  isolated shadow project, provider host
+  `cc-simon-s2-shadow-05-dr75zu1wu-coachcarteruk-2599s-projects.vercel.app`,
+  and exact Git SHA `6635b8f786730f04c8b981d0e437dcff81231220`.
+- Reverified exactly one active personal verifier key named
+  `cc-simon-s2-shadow-05-identity-preflight`; its provider record reports it has
+  never been used. The one-time key value from the prior operator session is
+  not available in the current secure session. Neon exposes only **Revoke key**
+  for the existing record, with no reveal or regenerate action. Creating or
+  replacing a key is outside authority, so the exact preflight was not run and
+  the existing key was not revoked.
+- This is an action-input blocker only: no identity mismatch, further secret
+  exposure, application request, Neon/Vercel verifier request, separate direct
+  database query, identity fingerprint, schema, migration, seed, Stripe API or
+  resource operation, Step 11–18, or Slice 3 action occurred. Both
+  `approved_to_create_resources:false` and
+  `approved_to_create_checkout:false` remain in force.
+
+### 3 August 2026 — replacement verifier created; launcher stopped before preflight
+
+- The owner explicitly authorised revocation of the unavailable existing Neon
+  verifier key and creation of exactly one replacement. Revoked the old
+  `cc-simon-s2-shadow-05-identity-preflight` record, confirmed it was absent,
+  created one same-named replacement, and confirmed exactly one active matching
+  record. The new value was captured only in ephemeral browser memory; it was
+  not rendered, printed, written to disk, or retained in this log. The browser
+  clipboard was cleared.
+- The first command launcher stopped before provider or database preflight work
+  because the browser's protected clipboard did not cross into the shell. It
+  did not invoke `npm run preflight:stripe-launch-shadow-identity`.
+- Used a single-use loopback-only in-memory handoff for the replacement key. The
+  listener accepted one local connection, never wrote the key to disk, and
+  cleared its variables and environment before closing. The browser-side key
+  variable was cleared immediately after successful delivery.
+- The launcher refreshed the authenticated Vercel session and found exactly one
+  Production `POSTGRES_URL` record and exactly one Production
+  `STRIPE_LAUNCH_SHADOW_CRON_SECRET` record on the isolated project. Before the
+  verifier command, its secret-safe target guard found that the retrieved
+  values did not reproduce the required pooled database host/path plus minimum
+  bearer-secret contract. The guard returned only the sanitised blocker
+  `Isolated Production verifier input identity mismatch` and stopped.
+- Per the explicit stop condition, no retry, further provider request, value
+  inspection, configuration mutation, or key lifecycle action followed. The
+  exact npm preflight was not invoked; there was no application identity
+  request, Neon/Vercel verifier request, separate database connection or query,
+  fingerprint, schema, seed, Stripe operation/resource, Step 11–18, or Slice 3
+  action. The single replacement key remains active but its one-time value is
+  no longer retained. Both approval flags remain false.
+
+### 3 August 2026 — exact preflight reached providers; stopped on Neon endpoint mismatch
+
+- The owner supplied fresh authority to diagnose and repair only the isolated
+  shadow-05 Step 10 verifier inputs and replace unrecoverable verifier keys. No
+  authority was extended to CoachCarter production, schema, seed, Stripe
+  operations/resources, Step 11–18, or Slice 3.
+- Diagnosed the earlier launcher guard without printing values. The default
+  Vercel CLI OAuth refresh credential had rotated and become unusable. Created
+  a separate temporary official pinned-CLI OAuth store, verified its token was
+  current, used it only for this verifier, and securely deleted the exact
+  temporary directory after the stop.
+- Rotated only the existing `neondb_owner` role as required to keep the active
+  direct verifier input known without retrieving stored secrets. Replaced only
+  the isolated Vercel project's Production `POSTGRES_URL` and shadow bearer
+  secret, then redeployed the reviewed merge through Vercel's exact-deployment
+  redeploy control. Intermediate one-time credentials and uncaptured verifier
+  keys were invalidated; no secret was rendered, printed, written into the
+  repository, or retained in this log.
+- Vercel independently reports final deployment
+  `dpl_AGqHtPx4guea8czTijnvgymLyBVE`, READY, target `production` inside project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, provider host
+  `cc-simon-s2-shadow-05-ecezvj7dx-coachcarteruk-2599s-projects.vercel.app`,
+  source `redeploy`, original deployment
+  `dpl_DwezuSnBujaGV5VhjTURy4cutrBr`, and exact Git SHA
+  `6635b8f786730f04c8b981d0e437dcff81231220`.
+- The first two exact npm verifier runs against the final deployment failed
+  closed with `STRIPE_LAUNCH_SHADOW_IDENTITY_PROVIDER_REJECTED`. Status-only
+  Node diagnostics isolated the rejection to the application route: Node
+  received 401, while the Vercel deployment API and all three Neon control-plane
+  endpoints returned 200. The cause was Vercel Deployment Protection intercepting
+  the provider-generated deployment URL before the shadow bearer reached the
+  route.
+- Confirmed the isolated project initially had zero protection-bypass entries.
+  A first generate request using a disallowed special-character shape was
+  rejected before creation. Created exactly one corrected 32-character
+  temporary automation bypass with note
+  `cc-simon-s2-shadow-05-identity-preflight`; Node then received 200 from the
+  protected application identity route using the verifier's already-reviewed
+  `x-vercel-protection-bypass` header support.
+- Ran the exact command
+  `npm run preflight:stripe-launch-shadow-identity`. With the temporary bypass,
+  it reached application runtime evidence, Vercel control-plane evidence, Neon
+  control-plane evidence, the active pooled connection target, and the separate
+  database-enforced read-only connection. It then failed closed with
+  `STRIPE_LAUNCH_SHADOW_IDENTITY_MISMATCH` for exactly
+  `provider.neon.endpoint_host`. No identity pass or fingerprint exists.
+- Stopped on that exact identity mismatch without diagnosis or retry. Revoked
+  the temporary Vercel automation bypass and verified zero bypass entries
+  remained. Revoked the one Neon verifier key and verified it was absent. Cleared
+  all browser, process, environment, clipboard, and loopback-held credential
+  material and removed the temporary OAuth store.
+- No schema, migration, seed, school/admin/instructor/learner/configuration/
+  availability/agreement data, Stripe API/resource, Checkout, payment, refund,
+  payout, transfer, Connect account, webhook, Step 11–18, or Slice 3 action was
+  performed. `approved_to_create_resources:false` and
+  `approved_to_create_checkout:false` remain in force.
+
+### 4 August 2026 — endpoint repair exact deployment READY; Vercel OAuth blocked preflight
+
+- Verified PR #345 merged as squash commit
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8` from reviewed head
+  `4c303c7bff6313709e05a1a99664de2982907df3` and base
+  `6635b8f786730f04c8b981d0e437dcff81231220`. The merge tree is identical to
+  the reviewed head, only the verifier and its focused test differ from base,
+  and every reported GitHub/Vercel check passed.
+- The root cause was the verifier treating Neon's deprecated
+  `pooler_enabled:false` response field as proof that no pooled hostname exists.
+  Current provider evidence supplies the direct endpoint host plus endpoint ID,
+  while pooling is selected by inserting `-pooler` in that exact host label.
+  The repair derives a pooled candidate only when the exact endpoint ID equals
+  the direct host's first label, retaining fail-closed project/branch/host
+  equality. The provider-shaped false-flag regression passes and a mismatched
+  endpoint ID still fails on `provider.neon.endpoint_host`.
+- Focused verification passed: 48 identity/return-URL tests, 31 shadow-operation/
+  payment-contract/rollout tests, syntax checks for all 198 files, and all 14
+  Slice 2 static review checks with terminal status
+  `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. Protected-document hashes remained
+  unchanged.
+- Deployed a detached exact-merge worktree with pinned Vercel CLI `58.4.4`.
+  Discarded the first build as acceptance evidence because Vercel recorded a
+  dirty marker caused only by temporary `.gitignore` line endings. Final clean
+  deployment `dpl_D2UDrPkiKN6sTuKZSaLVQGc2Zyu2` is READY on the isolated
+  Production target at provider host
+  `cc-simon-s2-shadow-05-50txkjluh-coachcarteruk-2599s-projects.vercel.app`,
+  with exact Git SHA `d911c898…` and no dirty marker.
+- Confirmed all required isolated Production environment records exist as
+  encrypted values, the current Neon compute still maps direct host
+  `ep-frosty-truth-zatfdzrb.c-2.eu-west-2.aws.neon.tech` to pooled host
+  `ep-frosty-truth-zatfdzrb-pooler.c-2.eu-west-2.aws.neon.tech`, and both
+  temporary inventories initially contained zero matching entries.
+- Created one same-named temporary Neon verifier key and captured its one-time
+  value only in browser memory. A loopback-only launcher received it, but the
+  default Vercel CLI bearer was rejected with HTTP 403 before bypass creation
+  or npm invocation. The key was immediately revoked and both inventories were
+  reverified at zero.
+- While diagnosing that stale bearer, a PowerShell formatting mistake rendered
+  the default Vercel CLI access and refresh credentials in private tool output.
+  They are not reproduced here. The session was immediately logged out, and
+  the exact local auth file was removed so the rendered material is neither
+  active nor retained on disk.
+- Attempted a fresh official pinned-CLI OAuth session in an isolated temporary
+  store. The signed-in Vercel device page showed the correct CLI request but
+  kept `Allow` disabled, including after one state-preserving reload. Stopped
+  without forcing the control or creating a broader personal API token, killed
+  the login process, and removed the exact temporary OAuth directory.
+- The exact `npm run preflight:stripe-launch-shadow-identity` command was not
+  invoked in this session, so there is no new terminal verifier status or
+  fingerprint. No temporary Neon key or Vercel bypass remains. No database
+  query/mutation, schema, migration, seed, Stripe API/resource, Checkout,
+  payment, refund, payout, transfer, Connect account, webhook, Step 11–18, or
+  Slice 3 action was performed. Both approval flags remain false.
+
+### 4 August 2026 — owner-assisted Vercel login restored; sensitive inputs remain blocked
+
+- The owner completed a fresh Vercel CLI device login. Status-only checks
+  confirmed user `coachcarteruk-2599`, exact isolated project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, zero existing protection bypasses, and a
+  fresh direct bearer response of HTTP 200. Final clean deployment
+  `dpl_D2UDrPkiKN6sTuKZSaLVQGc2Zyu2` remained READY with exact Git SHA
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8` and no dirty marker.
+- Created one replacement Neon verifier key only after confirming zero matching
+  records. Its value remained in browser/process memory and the clipboard was
+  cleared. The guarded launcher created exactly one 32-character Vercel
+  automation bypass, but Vercel's `env run` completed only its environment
+  loading phase and did not execute the child npm command. The key still
+  reported `Last used: never`, proving no Neon control-plane call occurred.
+  The bypass was revoked in the launcher's `finally` block and verified at
+  zero; the unused key was then revoked and verified absent. This was not a
+  terminal verifier result and was not treated as a retry.
+- A clean isolated `env run` probe then proved that required sensitive
+  Production variables were not injected. The official Vercel v10 environment
+  list reported one Production `POSTGRES_URL` record with type `sensitive`,
+  `decrypted:false`, and no returned value. `decrypt=true` on the list and the
+  documented v1 per-variable decrypt endpoint also returned no decrypted value.
+  The repository's pre-existing `.env.local` contains `POSTGRES_URL` but none
+  of the shadow identity variables or shadow bearer; it was read only for key
+  presence and was not modified.
+- Stopped because the exact verifier needs both the active pooled direct
+  database URL and the deployed route's shadow bearer. Reconstructing or
+  guessing either value is prohibited. Rotating the existing shadow Neon role
+  and replacing the isolated project's two Production sensitive variables are
+  outside the supplied provider authority. The exact npm preflight was not
+  invoked, no fingerprint exists, and no temporary Neon key or Vercel bypass
+  remains.
+- Removed the temporary non-secret runner. No database query/mutation, schema,
+  migration, seed, Stripe API/resource, Checkout, payment, refund, payout,
+  transfer, Connect account, webhook, Step 11–18, or Slice 3 action was
+  performed. Both approval flags remain false.
+
+### 4 August 2026 - shadow-05 identity preflight passed; temporary access revoked
+
+- The owner explicitly authorized resetting only shadow-05's existing Neon
+  database-role credential, replacing only the isolated Vercel project's
+  Production `POSTGRES_URL` and `STRIPE_LAUNCH_SHADOW_CRON_SECRET`, deploying
+  exact merge `d911c89868eebe86a08a757b22ed6e3524cd5fe8`, running the identity
+  preflight once, revoking temporary access, and stopping. No Step 11 or Stripe
+  resource authority was supplied.
+- Reconfirmed the exact boundaries before mutation: Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, Neon project
+  `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, role
+  `neondb_owner`, pooled endpoint
+  `ep-frosty-truth-zatfdzrb-pooler.c-2.eu-west-2.aws.neon.tech`, database
+  `neondb`, one sensitive Production record for each authorized variable, and
+  zero initial Vercel protection bypasses and matching Neon verifier keys.
+- Reset only `neondb_owner`. The first reset succeeded but its one-time
+  credential was lost when a local guarded-launcher error formatter failed
+  before either Vercel variable changed. A subsequent UI reset credential and
+  an initial temporary Neon key were rendered in private automation traces;
+  each was treated as exposed and invalidated immediately. The final same-role
+  reset credential and replacement verifier key were captured only in memory,
+  with the clipboard cleared. No other Neon role, branch, database, endpoint,
+  schema, or data was changed.
+- Replaced the existing sensitive Production `POSTGRES_URL` and
+  `STRIPE_LAUNCH_SHADOW_CRON_SECRET` records only. Provider metadata confirms
+  exactly one sensitive Production record remains for each key, updated at
+  `1785823251725` and `1785823345242` respectively. No value is recorded here.
+- Deployed the clean detached merge with pinned Vercel CLI `58.4.4`. Independent
+  Vercel evidence reports deployment `dpl_ELTwjwU1yvbuiTHonJjZomjivaWN`, READY,
+  target `production`, project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, provider
+  host
+  `cc-simon-s2-shadow-05-n6pepjew7-coachcarteruk-2599s-projects.vercel.app`,
+  exact Git SHA `d911c89868eebe86a08a757b22ed6e3524cd5fe8`, and no dirty marker.
+- Created exactly one temporary 32-character Vercel automation bypass with note
+  `cc-simon-s2-shadow-05-identity-preflight`, then invoked the exact command
+  `npm run preflight:stripe-launch-shadow-identity` once. It returned `PASSED`
+  for school `1`, exact Vercel and Neon identities, database-enforced
+  `transaction_read_only:true`, and identity fingerprint
+  `sha256:c94c4cc0c3ceaaf24f8401dd8a23e55ba3c26343bda0b3e3ab4a688162aa3127`.
+  Both `approved_to_create_resources:false` and
+  `approved_to_create_checkout:false` remained false.
+- The launcher's first bypass cleanup request omitted Vercel's required
+  `regenerate:false` field and therefore did not revoke the entry. The official
+  current request contract was loaded, the same single matching entry was
+  revoked with `regenerate:false`, and the final project inventory was verified
+  at zero. The final Neon verifier key was revoked and verified absent; browser
+  memory, process environment, loopback payloads, and clipboard-held credential
+  material were cleared.
+- Stopped after the first identity PASS. No schema, migration, seed,
+  school/admin/instructor/learner/configuration/availability/agreement data,
+  Stripe API/resource, Checkout, payment, refund, payout, transfer, Connect
+  account, webhook, Step 11-18, or Slice 3 action was performed.
+
+### 4 August 2026 - Step 11 fresh-task handoff prepared
+
+- Updated the mutable status table, completed Step 10 record, current blocker,
+  and next-session section to reflect the accepted shadow-05 identity evidence
+  and the transition to Step 11.
+- Recorded a copy-ready, schema-only authority prompt for a fresh task. It
+  authorises zero-table proof, one exact aggregate apply, sanitised schema
+  counts, and explicit `instructors.is_admin` verification only. It requires a
+  stop before any retry, credential lifecycle action, Vercel change, provider
+  resource creation, seeding, Stripe call, Step 12, later step, or Slice 3.
+- This handoff-preparation session performed no provider query or mutation,
+  schema apply, seed, credential action, Stripe operation/resource, Checkout,
+  payment, webhook, refund, payout, transfer, Connect account, Step 11, Step 12,
+  later step, or Slice 3 action.
+
+### 4 August 2026 - Step 11 blocked at connected prepared-statement boundary
+
+- Re-read the complete required worker rules, protected Simon product
+  specification and technical plan, Stripe Connect reference, and this living
+  log. Reverified the protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Proved exact source merge
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8`, identical reviewed/merge tree
+  `d0ef8bf30df3bc0a875113e84cc6bdbf0a6bbeec`, and exact aggregate Git blob
+  `18ba0b92450931e3af8f3803ebcab019b73b9709` (430434 bytes; SHA-256
+  `9fe0ab57f495930c6a08982f8fecc89af9dbe7dbf9df21211bb9beb5b759cf77`).
+- Independently reconfirmed Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, accepted READY Production deployment
+  `dpl_ELTwjwU1yvbuiTHonJjZomjivaWN`, provider host
+  `cc-simon-s2-shadow-05-n6pepjew7-coachcarteruk-2599s-projects.vercel.app`,
+  and exact Git SHA `d911c898…`. Reconfirmed Neon project
+  `shiny-bonus-66942766`, default branch `br-empty-cell-za5kh6nr`, read-write
+  endpoint `ep-frosty-truth-zatfdzrb`, pooled host
+  `ep-frosty-truth-zatfdzrb-pooler.c-2.eu-west-2.aws.neon.tech`, and database
+  `neondb` through the existing OAuth-connected Neon access.
+- Before any apply submission, both a direct catalog count and Neon's table
+  inventory proved zero public base tables; `public.instructors` was absent.
+  The retained Step 10 evidence still records zero final Neon verifier keys and
+  Vercel bypasses. No verifier credential was present in the process
+  environment, and no temporary access or provider resource was created.
+- The connected transaction executor rejected the exact aggregate because it
+  cannot insert multiple commands into one prepared statement. A second
+  statement-array transaction, used only after an independent zero-table proof
+  established the first rejection was a definite no-op, was rejected at the
+  same prepared-statement boundary. No DDL committed in either transaction.
+- Stopped without another apply route. Final independent catalog and provider
+  table-list reads still report zero public base tables, no
+  `public.instructors`, and an empty table inventory. Therefore no sanitised
+  post-schema counts or `instructors.is_admin` contract can be claimed and Step
+  11 remains blocked rather than completed.
+- No credential was reset, revealed, written, or retained; no Vercel
+  configuration or provider resource changed; no temporary local artifact was
+  created; and no school/admin/instructor/learner/availability/config/agreement
+  seed, Stripe call/resource, Checkout, payment, webhook, refund, payout,
+  transfer, Connect account, Step 12, later step, Slice 3, production access,
+  staging, commit, push, or PR action occurred.
+
+### 4 August 2026 - Step 11 aggregate applied once through Neon Console
+
+- The owner separately authorized the existing Neon Console SQL Editor path
+  for Step 11 only. The authenticated console independently showed project
+  `shiny-bonus-66942766` (`cc-simon-s2-shadow-05`), organisation
+  `org-fancy-forest-47074420`, production branch
+  `br-empty-cell-za5kh6nr`, endpoint `ep-frosty-truth-zatfdzrb`, and database
+  `neondb`. No credential, API key, bypass, connection string, or provider
+  resource was created or exposed.
+- Before the one Run action, the Console SQL Editor returned database `neondb`,
+  zero public base tables, and `public.instructors` absent. This independently
+  reconfirmed that the earlier connected prepared-statement rejections were
+  definite no-ops and the target remained genuinely empty.
+- Reverified the exact reviewed aggregate as Git blob
+  `18ba0b92450931e3af8f3803ebcab019b73b9709`, 430434 source bytes, SHA-256
+  `9fe0ab57f495930c6a08982f8fecc89af9dbe7dbf9df21211bb9beb5b759cf77`.
+  The browser editor normalized only CRLF line endings to LF; a full editor
+  select/copy comparison matched the derived 423039-byte LF-normalized source
+  exactly with SHA-256
+  `6e4964ee1324f156539486941c9bf28e846d536907c0fca71f0f581fba54bf7a`.
+  The temporary browser clipboard content was cleared before execution.
+- Invoked **Run** exactly once. Neon parsed 956 statements, completed with zero
+  progress/incomplete tabs, all 956 result tabs enabled, no error alert/result,
+  and the editor returned to the Run-ready state. No second Run or retry was
+  performed.
+- Read-only postflight retained only sanitised schema counts: 120 public base
+  tables, 0 views, 0 materialized views, 89 sequences, 580 indexes, 37 public
+  functions, 108 non-internal public triggers, 2191 public constraints, and
+  1612 public columns. Core sentinels `schools`, `instructors`,
+  `payout_funding_sources`, `lesson_payment_contracts`, `payout_runs`, and
+  `instructor_payout_batches` are present, as is final aggregate function
+  `stripe_launch_guard_payout_source_update()`.
+- Explicit `instructors.is_admin` proof passed: exactly one column, PostgreSQL
+  `data_type='boolean'`, `udt_name='bool'`, `column_default='false'`, and
+  `is_nullable='YES'`, matching the reviewed historical
+  `BOOLEAN DEFAULT FALSE` contract.
+- Step 11 is complete and Step 12 remains unauthorized. No separate seed,
+  school/admin/instructor/learner/availability/config/agreement fixture,
+  application route, credential/configuration change, Stripe call/resource,
+  Checkout, payment, webhook, refund, payout, transfer, Connect account, later
+  step, Slice 3, CoachCarter production access, staging, commit, push, or PR
+  action occurred.
+
+### 4 August 2026 - Step 12 preflight passed; fixture blocked before mutation
+
+- The owner explicitly authorized Step 12 only: minimum school-1 fixture setup
+  through existing supported application routes, independent read-only database
+  verification, living-log update, cleanup, and stop. Direct SQL writes,
+  unsupported scripts, credential exposure, Stripe activity, and later steps
+  remained prohibited.
+- Re-read `AGENTS.md`, `CLAUDE.md`, both complete protected Simon documents,
+  `docs/stripe-connect.md`, and this complete living log. Reverified the
+  protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Reconfirmed Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, READY
+  Production deployment `dpl_ELTwjwU1yvbuiTHonJjZomjivaWN`, provider host
+  `cc-simon-s2-shadow-05-n6pepjew7-coachcarteruk-2599s-projects.vercel.app`,
+  and exact deployed Git SHA
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8`. Reconfirmed Neon project
+  `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, read-write endpoint
+  `ep-frosty-truth-zatfdzrb`, direct and pooled provider hosts, region
+  `aws-eu-west-2`, and database `neondb`. The retained accepted identity
+  fingerprint remains
+  `sha256:c94c4cc0c3ceaaf24f8401dd8a23e55ba3c26343bda0b3e3ab4a688162aa3127`;
+  the one-shot preflight was not rerun.
+- A single sanitised read-only database preflight reproduced the exact Step 11
+  evidence: 120 public base tables, 0 views, 0 materialized views, 89 sequences,
+  580 indexes, 37 public functions, 108 non-internal public triggers, 2191
+  public constraints, and 1612 public columns. `instructors.is_admin` remains
+  exactly one `boolean`/`bool` column with default `false` and nullable `YES`.
+- The fixture-absence gate passed: school ID 1 is the only school and exists
+  exactly once; administrators, instructors, active instructors, availability
+  windows, `create-instructor` audit actions, launch configs, other-school
+  launch configs, agreements, and active payment-time-valid agreements all
+  count zero.
+- Route inspection proved supported writers exist for admin creation,
+  authenticated instructor creation with its required audit action, audited
+  admin impersonation, and instructor availability. The exact deployed source
+  contains no application INSERT/UPDATE writer for
+  `stripe_connect_launch_configs` or
+  `instructor_payout_agreement_versions`. A second read-only database check
+  found no instructor trigger and no stored function that inserts either row.
+- Stopped before the first fixture mutation because creating the available
+  admin/instructor/availability subset would leave Step 12 partially completed,
+  while completing the config/agreement subset would require a prohibited
+  direct SQL or unsupported path. No application mutation route was invoked and
+  no fixture, audit, credential, local temporary artifact, provider setting,
+  Stripe object/call, Checkout, payment, webhook, refund, payout, transfer,
+  Connect account, later step, Slice 3, commit, push, or PR action occurred.
+
+### 4 August 2026 - Step 12 writer implemented and verified locally only
+
+- The owner authorized the next implementation task after the Step 12 blocker
+  was reported. Work started from exact `d911c89868eebe86a08a757b22ed6e3524cd5fe8`
+  on local branch `codex/simon-shadow05-fixture-writer`; `HEAD` and
+  `origin/main` both resolve to that SHA. The pre-existing uncommitted living-log
+  changes were preserved.
+- Reverified both protected LF-normalised hashes exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Added the shadow-only authenticated admin action
+  `configure-stripe-launch-shadow-fixture`. Its school is auth-derived and must
+  exactly match the configured shadow school, test Stripe mode, and exact
+  Vercel project. The route requires an explicit confirmation and bounded
+  agreement inputs; it makes no Stripe request.
+- The transaction locks the operation, verifies one active same-school school,
+  admin, and instructor, rejects any existing/partial state or other-school
+  launch config, and inserts exactly one `simon_launch_v1` shadow config plus
+  one active payment-time-valid agreement. A required audit write occurs in the
+  same transaction; audit failure rolls back both rows. Exact command replay is
+  idempotent only when the stored actor, instructor, row IDs, fingerprints, and
+  agreement terms all match.
+- Added focused tests for strict input and runtime gates, exact creation,
+  replay, changed-command conflict, partial/other-school state, cross-school
+  instructor rejection, audit rollback, and dispatcher safety. Updated the
+  explicit Slice 1 schema-consumer allowlist for this reviewed writer.
+- Verification passed: 66/66 focused and adjacent Playwright tests, the Slice 2
+  rollout review with 14/14 checks and status
+  `PREPARED_NOT_APPROVED_NOT_DEPLOYED`, the 199-file syntax scan, the 271-file
+  C1 scan, and `git diff --check`.
+- This is local implementation evidence only. Nothing was staged, committed,
+  pushed, reviewed, deployed, or configured; no shadow-05 route or database was
+  accessed; no fixture row, provider setting, credential, Stripe object/call,
+  payment, refund, payout, transfer, Connect account, later step, or Slice 3
+  action occurred. Step 12 remains blocked before mutation.
+
+### 4 August 2026 - Step 12 writer independently reviewed and hardened
+
+- Re-read the complete required worker rules, protected Simon product
+  specification and technical implementation plan, Stripe Connect reference,
+  and this complete living log before review. Reverified the protected
+  LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Refreshed `origin/main` and proved branch
+  `codex/simon-shadow05-fixture-writer`, `HEAD`, `origin/main`, and merge-base
+  all resolve to exact authorised baseline
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8`. The complete worktree inventory
+  contained only the five authorised paths.
+- Reviewed every tracked and untracked line, including the complete pre-existing
+  living-log diff. Narrow repairs make the target school come only from the
+  authenticated JWT, compare the configured and runtime Vercel environments in
+  addition to the exact project/test/shadow gates, verify every stored
+  payment-time config/agreement/audit fact on replay, prove rollback when either
+  insert or the required audit fails, and prevent raw unexpected errors from
+  reaching the client or error alert.
+- Fresh verification passed exactly: the required five-file Playwright command
+  passed 69/69 with one worker; `npm.cmd run check:syntax` passed 199 files;
+  `npm.cmd run check:c1` passed 271 files; and
+  `npm.cmd run review:stripe-launch-slice-2` passed all 14/14 checks with status
+  `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. `git diff --check` is required again at
+  the final publication gate.
+- Independent review found no remaining security, tenancy, idempotency,
+  atomicity, audit, schema-contract, protected-document, Stripe-call, or
+  sensitive-payload blocker within this exact writer scope.
+- Staged only the five authorised files, committed them as
+  `bfa02f916e933436b51cb78653c2af3d60a8d5c5` with exact parent
+  `d911c89868eebe86a08a757b22ed6e3524cd5fe8`, pushed branch
+  `codex/simon-shadow05-fixture-writer`, and opened
+  [draft PR #346](https://github.com/coachcarteruk-gif/coachcarter-website/pull/346)
+  targeting `main`. The PR body records the safety boundaries and the exact
+  verification evidence and explicitly grants no deployment or fixture
+  authority.
+- No deployment, Vercel or Neon configuration, shadow-05 access or mutation,
+  fixture row, Stripe client/API call, Checkout, payment, webhook, refund,
+  payout, transfer, Connect object, Step 12 execution, Step 13, later step, or
+  Slice 3 action was authorised or performed. Step 12 and deployment remain
+  explicitly unauthorised.
