@@ -1769,3 +1769,249 @@ For every future session:
   payout, transfer, Connect object, Step 12 execution, Step 13, later step, or
   Slice 3 action was authorised or performed. Step 12 and deployment remain
   explicitly unauthorised.
+
+### 4 August 2026 - Step 12 merged writer deployed; authentication blocker stopped fixture mutation
+
+- Refreshed clean local `main` from `origin/main`, confirmed PR #346 merged as
+  `2fde59383dd98432cc8f7cef2f589322cadae260`, and created fresh branch
+  `codex/simon-shadow05-step12-fixture`. Before modification, `HEAD`,
+  `origin/main`, and merge-base all resolved to that exact merge; staged,
+  unstaged, untracked, and branch-diff inventories were empty.
+- Re-read the complete required worker rules, protected Simon product
+  specification and technical implementation plan, Stripe Connect reference,
+  complete updated living log, and merged writer. Reverified the protected
+  LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- The exact required command
+  `npm.cmd test -- tests/stripe-launch-shadow-fixture.spec.js tests/stripe-launch-shadow-operations.spec.js tests/admin-instructor-access.spec.js tests/stripe-launch-schema-foundation.spec.js tests/stripe-launch-payment-contracts.spec.js --workers=1`
+  passed 69/69 tests with one worker. `npm.cmd run check:syntax` passed 199
+  files; `npm.cmd run check:c1` passed 271 files; and
+  `npm.cmd run review:stripe-launch-slice-2` passed 14/14 checks with terminal
+  status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. `git diff --check` passed with
+  no diagnostics.
+- Deployed only a clean detached worktree at exact merged commit
+  `2fde59383dd98432cc8f7cef2f589322cadae260` to existing isolated Vercel
+  project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` (`cc-simon-s2-shadow-05`) using
+  pinned Vercel CLI `58.4.4`. Sanitised control-plane evidence reports
+  deployment `dpl_wMkXMwRFx4S3EWkKfYT3W71vLvFu`, READY, target `production`
+  inside the isolated project, provider host
+  `cc-simon-s2-shadow-05-8h7d43yra-coachcarteruk-2599s-projects.vercel.app`,
+  source `cli`, exact Git SHA `2fde59383dd98432cc8f7cef2f589322cadae260`,
+  commit message `Add shadow launch fixture writer (#346)`, and no dirty
+  metadata marker. No Vercel or Neon environment, secret, permission, project
+  binding, database schema, or migration changed.
+- Post-deployment sanitised identity checks reconfirmed Neon project
+  `shiny-bonus-66942766` (`cc-simon-s2-shadow-05`), default/primary ready branch
+  `br-empty-cell-za5kh6nr`, and database `neondb`. Required isolated Production
+  shadow/database gate variable records remain present. A read-only public
+  application request to the exact deployment returned an empty school-1
+  instructor list, consistent with the independently queried database. The
+  one-shot identity preflight was not rerun.
+- The first protected-deployment read used `vercel curl`, whose CLI
+  automatically generated one automation bypass despite the intended
+  read-only scope. It was identified by its exact new timestamp and scope,
+  revoked immediately with `regenerate:false`, and the isolated project's
+  final protection-bypass inventory was verified at zero. It was not used for
+  a fixture mutation and no secret value was printed or retained.
+- Step 12 stopped before the first application mutation because the isolated
+  project has no `ADMIN_SECRET` or `JWT_SECRET` environment record while the
+  shadow database contains zero administrators. Therefore the supported
+  first-admin bootstrap cannot authenticate, no admin session can be minted,
+  and the required authenticated
+  `configure-stripe-launch-shadow-fixture` route cannot be invoked without an
+  unauthorised Vercel configuration change or unsupported writer. The route was
+  called zero times; its required once-only confirmation and agreement terms
+  were not submitted.
+- Final sanitised read-only verification proves exactly one active school row
+  for school 1, but zero school-1 admins, zero instructors, zero active
+  instructors, zero availability windows, zero `create-instructor` audits,
+  zero `stripe-launch-shadow-fixture.create` audits, zero school-1 launch
+  configs, zero other-school launch configs, zero agreements, and zero active
+  payment-time-valid agreements. It also proves zero launch earnings, payout
+  runs, instructor payout batches, transfer intents/attempts, refund
+  intents/attempts/events/event lines, legacy instructor payouts, and payout
+  line items. No partial fixture or prohibited money state exists.
+- Step 12 is **blocked before fixture mutation**, not complete. Because the
+  success condition was not met, no log commit, push, or draft PR was created.
+  Step 13, all later steps, Slice 3, production deployment/access, live money
+  activity, Checkout, payment, webhook, refund, payout, transfer, and Stripe
+  Connect actions remain unauthorised and were not performed.
+
+### 4 August 2026 - Step 12 authentication repair resumed; availability route blocked partial fixture
+
+- Resumed only the explicitly authorised Step 12 continuation on existing
+  branch `codex/simon-shadow05-step12-fixture`. After refreshing `origin/main`,
+  `HEAD`, `origin/main`, and merge-base all resolved to exact required commit
+  `2fde59383dd98432cc8f7cef2f589322cadae260`. The complete initial worktree
+  inventory contained only the preserved append-only living-log modification;
+  no untracked or other modified path existed.
+- Reverified the protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+  Neither protected document changed.
+- The exact required five-file command passed 69/69 tests with one worker:
+  `npm.cmd test -- tests/stripe-launch-shadow-fixture.spec.js tests/stripe-launch-shadow-operations.spec.js tests/admin-instructor-access.spec.js tests/stripe-launch-schema-foundation.spec.js tests/stripe-launch-payment-contracts.spec.js --workers=1`.
+  `npm.cmd run check:syntax` passed 199 files; `npm.cmd run check:c1` passed
+  271 files; `npm.cmd run review:stripe-launch-slice-2` passed 14/14 checks
+  with terminal status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`; and
+  `git diff --check` passed with no diagnostic.
+- Initial read-only identity and zero-state verification reconfirmed isolated
+  Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, prior exact deployment
+  `dpl_wMkXMwRFx4S3EWkKfYT3W71vLvFu`, Neon project
+  `shiny-bonus-66942766`, default/primary ready branch
+  `br-empty-cell-za5kh6nr`, database `neondb`, one active school-1 row, and
+  zero admins, instructors, availability, fixture audits, configs, agreements,
+  and prohibited-money rows. The one-shot identity preflight and aggregate
+  migration were not rerun.
+- Generated a new shadow-only `JWT_SECRET` and temporary `ADMIN_SECRET` only in
+  process memory, added both to the isolated Production environment without
+  exposing their values, and deployed clean exact commit `2fde593...` as
+  `dpl_g5fwQnttzSDWm963BjHT8x3c9ym3` (READY, Production target, provider host
+  `cc-simon-s2-shadow-05-jvuquil2k-coachcarteruk-2599s-projects.vercel.app`).
+  Independent pre-bootstrap checks reconfirmed the exact deployment commit,
+  both auth-variable names present, the approved Neon identity, and the full
+  database zero state.
+- Created exactly one temporary project-scoped Vercel automation bypass and
+  submitted one bootstrap request to the provider deployment URL. Vercel
+  protection returned a definite HTTP 401 before the application route; no
+  database mutation occurred. The bypass was revoked with `regenerate:false`
+  and verified at zero. Cleanup removed that temporary `ADMIN_SECRET`; the
+  new `JWT_SECRET` remained. No second bypass was created.
+- Sanitised project evidence then proved SSO protection mode
+  `all_except_custom_domains`; a read-only request to the project Production
+  alias reached the application and returned its own expected unauthorised
+  response. A fresh in-memory temporary `ADMIN_SECRET` was therefore added for
+  the supported bootstrap route, without another bypass. Clean exact commit
+  `2fde593...` was deployed as bootstrap deployment
+  `dpl_CdEsb4Af2WvWDpAujs4q636HjQd6` (READY, Production target, provider host
+  `cc-simon-s2-shadow-05-p03pdpq1j-coachcarteruk-2599s-projects.vercel.app`).
+  Independent checks again proved both auth-variable names, exact provider
+  identity, zero bypasses, and the complete zero fixture/money state before
+  mutation.
+- The supported `create-admin` route created exactly one active school-1
+  synthetic admin. `ADMIN_SECRET` was removed immediately afterward and the
+  final exact-commit deployment was made as
+  `dpl_2Z3eBaqXs4TBrtREs8MhUhLWqc7G` (READY, Production target, provider host
+  `cc-simon-s2-shadow-05-gg6nyoex4-coachcarteruk-2599s-projects.vercel.app`,
+  exact Git SHA `2fde59383dd98432cc8f7cef2f589322cadae260`). Final Vercel
+  inventory proves `JWT_SECRET` present, `ADMIN_SECRET` absent, and zero
+  protection bypasses.
+- Authentication through the supported admin login route succeeded. The
+  supported admin route then created exactly one same-school active synthetic
+  instructor and exactly one required `create-instructor` audit. Supported
+  admin instructor access also succeeded and created one
+  `admin.instructor_access_start` audit. The subsequent supported
+  `set-availability` request returned a definite HTTP 500 and left exactly zero
+  availability windows. No retry was made.
+- The in-memory bootstrap password, cookies, JWT material, temporary admin
+  secret, and bypass secret were destroyed when the guarded process stopped.
+  The existing single admin therefore cannot be reauthenticated in this task
+  without a new Vercel authentication repair, supported password-recovery
+  channel, or prohibited direct database mutation. Creating a second admin
+  would violate the exact-one final fixture. This is the new exact Step 12
+  blocker and requires fresh explicit authority; it was not worked around.
+- Final sanitised Neon counts are: active school-1 rows `1`; school-1 admins
+  `1` (`1` active); school-1 instructors `1` (`1` active); availability
+  windows `0`; `create-instructor` audits `1`; instructor-access audits `1`;
+  fixture-writer audits `0`; school-1 launch configs `0`; other-school launch
+  configs `0`; school-1 agreements `0`; active payment-time-valid agreements
+  `0`. The fixture writer call count is exactly `0` and its confirmation or
+  bounded terms were never submitted.
+- Final prohibited-money counts are all zero: booking earnings, payout runs,
+  instructor payout batches, transfer intents, transfer attempts, refund
+  intents, refund attempts, refund events, refund-event lines, instructor
+  payouts, and payout line items. No Stripe client/API call, Checkout, payment,
+  webhook, refund, payout, transfer, Connect object, schema/migration change,
+  provider binding change, production access, Step 13, later step, or Slice 3
+  action occurred.
+- Step 12 remains **blocked with a partial non-financial fixture**, not
+  complete. Per the supplied success gate, this living-log update remains the
+  only worktree modification and must not be committed, pushed, or opened as a
+  PR in this session. Step 13, all later steps, Slice 3, production deployment,
+  live money activity, Checkout, payments, refunds, webhooks, payouts,
+  transfers, and Stripe Connect actions remain unauthorised.
+
+### 4 August 2026 - Step 12 completed after supported shadow admin recovery
+
+- Resumed only Step 12 on `codex/simon-shadow05-step12-fixture` after fresh
+  explicit authority for isolated shadow authentication recovery. Refreshed
+  `origin/main` and reconfirmed `HEAD`, `origin/main`, and merge-base as exact
+  required commit `2fde59383dd98432cc8f7cef2f589322cadae260`; the preserved
+  append-only living log was the sole worktree modification and no untracked
+  path existed.
+- Reverified the protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  for the product specification and
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`
+  for the technical plan. Neither protected document changed.
+- Reran the exact required five-file command
+  `npm.cmd test -- tests/stripe-launch-shadow-fixture.spec.js tests/stripe-launch-shadow-operations.spec.js tests/admin-instructor-access.spec.js tests/stripe-launch-schema-foundation.spec.js tests/stripe-launch-payment-contracts.spec.js --workers=1`;
+  it passed 69/69 tests with one worker. `npm.cmd run check:syntax` passed 199
+  files, `npm.cmd run check:c1` passed 271 files, and
+  `npm.cmd run review:stripe-launch-slice-2` passed 14/14 checks with terminal
+  status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. `git diff --check` passed.
+- Sanitised runtime evidence identified the earlier availability HTTP 500 as
+  an import-time `STRIPE_CREDENTIAL_MISSING` failure in `/api/instructor`: its
+  `_lesson-requests.js` dependency eagerly created a payments-purpose Stripe
+  client even though shadow-05 deliberately has no Stripe credential. No
+  availability SQL had executed. No credential was added and no Stripe client
+  or API call was made. The continuation instead used the existing supported,
+  school-scoped admin route `/api/instructors?action=set-availability`, which
+  does not import the Stripe-dependent instructor module.
+- Reconfirmed before recovery that isolated Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` and Neon project
+  `shiny-bonus-66942766`, default/primary ready branch
+  `br-empty-cell-za5kh6nr`, database `neondb`, and school 1 remained exact.
+  Counts were one active admin and one active instructor, with zero
+  availability windows, launch configs, agreements, fixture audits, and all
+  prohibited-money rows.
+- Recovered only the existing synthetic school-1 admin through the supported
+  `request-reset`, `reset-password`, and admin `login` application routes; no
+  second admin was created. The expiring six-digit reset code alone crossed an
+  explicitly approved temporary workspace file. The guarded process read and
+  deleted that file before sending the password-reset request; final filesystem
+  verification proved it absent. The generated password, session cookies,
+  CSRF value, and all other authentication material remained process-memory
+  only and were destroyed when the process exited. The reset and login routes
+  each returned HTTP 200, session verification succeeded, exactly one
+  `admin.password_reset` audit exists, and no active unused reset token remains.
+- The supported admin availability route returned HTTP 200 and created exactly
+  seven active windows for instructor 1, one for every distinct day of week.
+  Read-only verification proved exactly seven rows before the fixture writer
+  was invoked.
+- Called `configure-stripe-launch-shadow-fixture` exactly once with the exact
+  confirmation `CREATE_STRIPE_LAUNCH_SHADOW_FIXTURE_CONFIRMED`, command
+  `shadow-05-step-12-config-v1`, instructor 1, split `9000` bps, weekly
+  franchise fee `9000` minor units, currency `gbp`, and document version
+  `simon-shadow-agreement-v1`. The single call returned HTTP 201,
+  `idempotent_replay: false`, accounting version `simon_launch_v1`, and mode
+  `shadow`. It was not retried or replayed.
+- No additional deployment was needed. Sanitised provider evidence reconfirmed
+  the authorised bootstrap same-commit deployment
+  `dpl_CdEsb4Af2WvWDpAujs4q636HjQd6` and final same-commit deployment
+  `dpl_2Z3eBaqXs4TBrtREs8MhUhLWqc7G`; the latter remains the isolated project's
+  latest READY Production-target deployment at exact Git SHA
+  `2fde59383dd98432cc8f7cef2f589322cadae260`. Final Production environment
+  inventory proves `JWT_SECRET` present and `ADMIN_SECRET` absent, without
+  exposing values. SSO protection remains `all_except_custom_domains` and the
+  project protection-bypass count is zero.
+- Final sanitised Neon counts are: active school-1 rows `1`; school-1 admins
+  `1` (`1` active); school-1 instructors `1` (`1` active); active availability
+  windows `7` across `7` distinct days; `create-instructor` audits `1`;
+  instructor-access audits `1`; password-reset audits `1`; exact-command
+  fixture-writer audits `1`; school-1 `simon_launch_v1` shadow configs `1`;
+  other-school launch configs `0`; active payment-time-valid agreements with
+  the exact authorised bounded terms `1`; and active unused admin reset tokens
+  `0`. No unexpected partial fixture state remains.
+- Final prohibited-money counts are all zero: booking earnings, payout runs,
+  instructor payout batches, transfer intents, transfer attempts, refund
+  intents, refund attempts, refund events, refund-event lines, instructor
+  payouts, and payout line items. No Stripe client/API call, Checkout, payment,
+  webhook, refund, payout, transfer, Connect object, schema/migration change,
+  provider binding change, production-system access, Step 13, later step, or
+  Slice 3 action occurred.
+- Step 12 is **complete**. This append-only living log remains the only modified
+  file. Step 13, all later steps, Slice 3, production deployment, live money
+  activity, Checkout, payments, refunds, webhooks, payouts, transfers, and
+  Stripe Connect actions remain unauthorised.
