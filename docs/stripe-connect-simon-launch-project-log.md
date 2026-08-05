@@ -2279,3 +2279,46 @@ For every future session:
   booking/refund, reconciliation, earnings, payout, transfer, refund, dispute,
   Connect/onboarding, live-mode, production-system, Step 14, later-step, or
   Slice 3 action occurred.
+- Published the focused repair as commit
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6` on
+  `codex/simon-shadow05-webhook-reliability-repair` and opened draft PR
+  [#348](https://github.com/coachcarteruk-gif/coachcarter-website/pull/348)
+  against `main`. The PR remains draft and was not merged.
+- Deployed only that exact repair commit to isolated Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`. Deployment
+  `dpl_2EjhdwJRmzHNmxiNumyovjpRrMPC` is READY on the Production target at
+  provider host
+  `cc-simon-s2-shadow-05-6tg3durim-coachcarteruk-2599s-projects.vercel.app`,
+  with alias `cc-simon-s2-shadow-05.vercel.app` and Vercel-reported Git SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`. The temporary ignored local
+  project binding used for this exact deployment was immediately restored to
+  its pre-task shadow-04 value; the tracked worktree remained clean.
+- Secret-safe post-deploy Vercel API verification proved exactly one encrypted
+  Production `STRIPE_MODE` record and confirmed its decrypted value equals
+  `test` without revealing it; `JWT_SECRET` is present; `ADMIN_SECRET` is
+  absent; all four SMTP records remain absent; SSO protection remains
+  `all_except_custom_domains`; and the protection-bypass inventory is zero.
+  No environment variable or protection setting changed during or after the
+  deployment.
+- Stripe Dashboard read-only verification reconfirmed exact dedicated test
+  destination `we_1U0qdyIqhTSdZedS2h8O3RxW` is Active at
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook`, in visible Sandbox /
+  Test mode, with the same eight event subscriptions. The conclusively obsolete
+  shadow-04 destination remains Disabled. No event was resent and no test event
+  was generated.
+- Final read-only Neon verification reconfirmed exact project
+  `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, and database `neondb`. The exact existing evidence
+  remains one booking, one `slot_purchase`, one BCS attribution, one funding
+  source, one `direct_slot` contract, one processed receipt for
+  `evt_1U0qsRIqhTSdZedSIyzFDydP`, and one failed learner confirmation attempt.
+  Contract `4af03473-9cfd-4051-9606-654245e1b6ab` remains `pending` with exact
+  funds-availability time `2026-08-07T00:00:00Z`. Booking earnings, payout runs,
+  instructor payout batches, payout transfers, transfer attempts, refund
+  intents, refund attempts, refund events, refund-event lines, dispute evidence,
+  school Connect accounts, and instructor Connect accounts all remain exactly
+  zero.
+- Step 13 remains **incomplete and paused after the reliability repair**. The
+  payment-origin exercise was not resumed. No Checkout, payment, card entry,
+  event replay, early reconciliation, manual booking/refund, money movement,
+  live-mode, production-system, Step 14, later-step, or Slice 3 action occurred.
