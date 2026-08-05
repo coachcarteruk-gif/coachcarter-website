@@ -2015,3 +2015,310 @@ For every future session:
   file. Step 13, all later steps, Slice 3, production deployment, live money
   activity, Checkout, payments, refunds, webhooks, payouts, transfers, and
   Stripe Connect actions remain unauthorised.
+
+### 4 August 2026 - Step 13 stopped before Checkout: required Stripe credentials absent
+
+- The owner authorised Project Log Step 13 only: exercise the four approved
+  Stripe test-mode origins in order on isolated `shadow-05`, stop on the first
+  failure, append the evidence here, and publish only if all four origins
+  completed. Adding, copying, rotating, or changing Stripe/Vercel credentials
+  or environment variables was explicitly outside scope.
+- Refreshed clean local `main` to
+  `6b24cf784b77eae78d29744245b6876e740adfd3`, with `HEAD`, `origin/main`, and
+  merge-base identical, then created fresh branch
+  `codex/simon-shadow05-step13-payment-origins`. Step 12 evidence commit
+  `d34a135d7e33faeb019c4a3c09b61ff375def675` is a PR-head commit and therefore
+  is not an ancestor of the squash merge on `main`; its tree and the
+  `6b24cf7...` tree are exactly identical, so the required Step 12 content is
+  present without ambiguity. Initial staged, unstaged, untracked, and branch
+  diff inventories were empty.
+- Re-read the complete worker rules, `CLAUDE.md`, protected Simon product
+  specification and technical implementation plan, living project log, Slice
+  2 rollout review, Stripe Connect reference, and all four origin producers,
+  webhook/materialiser, exact source writer, and reconciler. Reverified the
+  protected LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+  Neither protected document changed. The aggregate migration and one-shot
+  identity preflight were not rerun.
+- The exact required five-file command
+  `npm.cmd test -- tests/stripe-launch-shadow-fixture.spec.js tests/stripe-launch-shadow-operations.spec.js tests/admin-instructor-access.spec.js tests/stripe-launch-schema-foundation.spec.js tests/stripe-launch-payment-contracts.spec.js --workers=1`
+  passed 69/69 tests. The additional four-origin command
+  `npm.cmd test -- tests/stripe-launch-shadow-return-urls.spec.js tests/webhook-slot-booking.spec.js tests/webhook-offer-bcs.spec.js tests/test-date-lesson-booking.spec.js tests/payout-v2-source-ingestion.spec.js tests/stripe-dynamic-payment-methods.spec.js tests/stripe-launch-payment-contracts.spec.js --workers=1`
+  passed 77/77 tests. `npm.cmd run check:syntax` passed 199 files,
+  `npm.cmd run check:c1` passed 271 files,
+  `npm.cmd run review:stripe-launch-slice-2` passed 14/14 checks with terminal
+  status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`, and `git diff --check` passed.
+- Read-only provider revalidation proved exact isolated Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` (`cc-simon-s2-shadow-05`), latest READY
+  Production-target deployment `dpl_2Z3eBaqXs4TBrtREs8MhUhLWqc7G`, provider
+  host `cc-simon-s2-shadow-05-gg6nyoex4-coachcarteruk-2599s-projects.vercel.app`,
+  exact deployed Git SHA `2fde59383dd98432cc8f7cef2f589322cadae260`, SSO protection
+  `all_except_custom_domains`, and zero protection-bypass entries. Read-only
+  Neon revalidation proved exact project `shiny-bonus-66942766`, default/primary
+  ready branch `br-empty-cell-za5kh6nr`, and database `neondb`.
+- Sanitised fixture revalidation proved one active school-1 row, one active
+  school-1 admin, one active school-1 instructor, seven active availability
+  windows across seven distinct days, one exact-command fixture audit, one
+  school-1 `simon_launch_v1` shadow config, zero other-school configs, one
+  active payment-time-valid instructor-1 agreement with split `9000` bps,
+  weekly fee `9000` minor units, currency `gbp`, and document version
+  `simon-shadow-agreement-v1`, plus zero active unused admin reset tokens.
+- The mandatory pre-Stripe credential-name gate classified `STRIPE_MODE` as
+  `test` and inspected no Stripe credential value. Production inventory found
+  zero `STRIPE_PAYMENTS_RESTRICTED_KEY`, zero
+  `STRIPE_RECONCILIATION_RESTRICTED_KEY`, zero
+  `STRIPE_PLATFORM_RESTRICTED_KEY`, zero `STRIPE_SECRET_KEY`, and zero
+  `STRIPE_WEBHOOK_SECRET` records. Therefore neither the supported payments
+  client nor reconciliation client can authenticate, and the deployed webhook
+  cannot verify Stripe signatures. The exact blocker is **required Stripe test
+  payment/reconciliation credentials and webhook secret are absent from the
+  isolated shadow-05 Production environment, while this step has no authority
+  to add or change them**.
+- Stopped before the first `direct_slot` attempt and before creating any Stripe
+  Checkout Session, PaymentIntent, Charge, webhook event, application booking,
+  `booking_credit_sources` row, funding source, or payment contract.
+  `direct_slot`, `test_date_direct`, `one_off_offer`, and `captured_request`
+  attempted-origin counts are all zero; no unsupported origin was attempted.
+- Final read-only counts remain zero for school-1 lesson payment contracts,
+  payout funding sources, launch booking earnings, payout runs, instructor
+  payout batches, transfer intents, transfer attempts, refund intents, refund
+  attempts, refund events, refund-event lines, legacy instructor payouts, and
+  all school payout line items. No credential/configuration change, deployment,
+  schema/migration change, Stripe API call/object, test or live payment,
+  webhook delivery, refund, payout, transfer, Connect action, production-system
+  access, Step 14, later step, or Slice 3 action occurred.
+- Step 13 is **blocked before origin exercise and is not complete**. Per the
+  supplied stop gate, this append-only living-log update is the only worktree
+  modification and must not be staged, committed, pushed, or opened as a PR in
+  this session.
+
+### 4 August 2026 - Step 13 resumed; stopped after direct-slot evidence remained pending
+
+- After the preceding credential blocker was recorded, the owner gave fresh
+  explicit authority to source only the already-isolated shadow-04 test-mode
+  restricted credentials, register a dedicated shadow-05 test webhook, add
+  only those three test values to shadow-05, redeploy the approved application
+  commit, and resume Step 13. Live credentials and every other project remained
+  excluded.
+- In the Stripe Dashboard's visible Sandbox context, identified the shadow-04
+  payments-purpose and reconciliation-purpose `rk_test_...` keys without
+  logging their values. Sanitised permission probes proved the payments key can
+  read/create Checkout and PaymentIntent objects but cannot administer webhook
+  endpoints, while the reconciliation key can read Checkout Sessions,
+  PaymentIntents, Charges, and balance transactions. No live key was used.
+- Created exactly one dedicated test webhook destination
+  `cc-simon-s2-shadow-05`, ID `we_1U0qdyIqhTSdZedS2h8O3RxW`, bound to
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook`. It subscribes only to
+  `account.updated`, `charge.failed`, `checkout.session.async_payment_failed`,
+  `checkout.session.async_payment_succeeded`, `checkout.session.completed`,
+  `checkout.session.expired`, `payment_intent.payment_failed`, and
+  `payment_intent.succeeded`. Its signing secret was transferred only through
+  guarded process memory and was not logged, copied to the clipboard, or
+  written to disk.
+- Added only `STRIPE_PAYMENTS_RESTRICTED_KEY`,
+  `STRIPE_RECONCILIATION_RESTRICTED_KEY`, and `STRIPE_WEBHOOK_SECRET` as
+  sensitive Production variables in exact isolated Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` (`cc-simon-s2-shadow-05`). Redeployed the
+  previously approved deployment without source changes. The resulting exact
+  deployment is `dpl_2Y8REiAomzHXGmqx5m9hvRDzA7fd`, READY on the Production
+  target, provider host
+  `cc-simon-s2-shadow-05-a31gc7khb-coachcarteruk-2599s-projects.vercel.app`,
+  exact Git SHA `2fde59383dd98432cc8f7cef2f589322cadae260`, and custom alias
+  `cc-simon-s2-shadow-05.vercel.app`. `STRIPE_MODE` remains exactly `test`;
+  `JWT_SECRET` remains present; `ADMIN_SECRET` remains absent; and protection
+  bypass count remains zero.
+- Post-deploy read-only verification reconfirmed exact Neon project
+  `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, database `neondb`, one active school-1 row, one
+  active admin, one active instructor, seven active availability windows across
+  seven days, one exact `shadow-05-step-12-config-v1` fixture audit, one
+  `simon_launch_v1` shadow config, zero other-school configs, and the one active
+  instructor-1 agreement with split `9000` bps, weekly fee `9000` minor units,
+  currency `gbp`, and document version `simon-shadow-agreement-v1`. All payment
+  and prohibited-operation counts were still zero before Checkout.
+- Recovered only the existing synthetic admin through the supported
+  `request-reset`, `reset-password`, and login UI, creating no second admin.
+  The single-use code was observed read-only and submitted through the normal
+  application form; the generated password and session material remained in
+  process memory. There are now exactly two historical
+  `admin.password_reset` audits, and active unused admin reset tokens remain
+  zero.
+- Began origin 1, `direct_slot`, only after the clean pre-state. Used the normal
+  supported guest `checkout-slot-guest` route once for a unique synthetic
+  school-1 learner and the existing instructor/agreement. Stripe Checkout
+  visibly identified the transaction as Sandbox, charged only official test
+  card details, displayed the exact GBP 82.50 amount, and returned to the exact
+  shadow-05 provider host. Its cancel URL was also bound to that exact
+  shadow-05 provider host; neither URL fell back to `coachcarter.uk`. No
+  ambiguous Checkout retry or second identity was used.
+- The signed webhook produced exactly one scheduled 90-minute booking, ID `1`,
+  for learner `1`, instructor `1`, school `1`, on 10 August 2026 at 10:00,
+  booking purpose `lesson`, and exact list price `8250` pence. Exactly one
+  `slot_purchase` credit transaction, ID `1`, amount `8250`, exactly one BCS
+  attribution, exactly one funding source, ID `1`, exactly one immutable
+  contract `4af03473-9cfd-4051-9606-654245e1b6ab`, and exactly one learner
+  confirmation attempt exist. No duplicate booking, source, BCS row, contract,
+  or receipt attempt exists.
+- Exact sanitised Stripe evidence is Checkout Session
+  `cs_test_b18JfmifnTWZRDMTtnq6sQWSkHLvO1i0lKsi6a9ZEHdj9KpEb7SV7bur3v`,
+  PaymentIntent `pi_3U0qsPIqhTSdZedS2Xi4DZDN`, Charge
+  `ch_3U0qsPIqhTSdZedS2XhVtLvQ`, and balance transaction
+  `txn_3U0qsPIqhTSdZedS2gWKkLmQ`. The source and contract agree on origin
+  `direct_slot`, accounting version `simon_launch_v1`, launch regime, gross
+  `8250` GBP minor units, exact Stripe fee `288`, fee source
+  `balance_transaction`, split `9000` bps, payment creation time
+  `2026-08-04T22:32:01.000Z`, and funds-availability time
+  `2026-08-07T00:00:00.000Z`. Neither source nor contract has an ineligibility
+  or contradiction code.
+- The mandatory origin success gate nevertheless failed: Stripe reports the
+  exact balance transaction status as `pending` until 7 August 2026, so the
+  funding source evidence completeness and immutable contract evidence status
+  are both correctly `pending`, not the required `complete`. This is genuine
+  delayed Stripe availability evidence. It was not manufactured, overridden,
+  or manually changed, and the reconciliation writer was not invoked early.
+- Stopped immediately on that first-origin failure. `test_date_direct`,
+  `one_off_offer`, and `captured_request` were not attempted. Final school-1
+  counts are one booking, one `slot_purchase`, one BCS row, one funding source,
+  and one `direct_slot` contract; all other approved-origin contract counts are
+  zero. Launch booking earnings, legacy booking earnings, payout runs, payout
+  batches, transfer intents, transfer attempts, refund intents, refund
+  attempts, refund events, refund-event lines, instructor payouts, payout line
+  items, school Connect accounts, and instructor Connect accounts all remain
+  exactly zero.
+- Step 13 is **not complete**. The exact blocker is: the single supported
+  `direct_slot` test payment has correct, non-contradictory exact evidence, but
+  Stripe funds are not available until 7 August 2026 and therefore its contract
+  cannot yet be complete. Per the stop gate, this append-only living log remains
+  the only worktree modification and must not be staged, committed, pushed, or
+  opened as a PR. No live-mode, production-system, Connect/onboarding, earnings,
+  payout, transfer, refund, dispute, schema/migration, Step 14, later-step, or
+  Slice 3 action occurred. Step 14, Slice 3, and all later work remain
+  unauthorised.
+
+### 5 August 2026 - Step 13 webhook isolation and post-commit reliability repair prepared
+
+- The owner authorised a repair-only continuation: attribute and recoverably
+  disable the obsolete duplicate webhook if conclusive, inspect only shadow-05
+  SMTP variable names/classification, repair the post-commit notification
+  boundary, test and publish a draft PR, then deploy only the exact repair SHA
+  to isolated shadow-05. Resuming any payment origin, replaying the Stripe event,
+  creating another Checkout or payment, running reconciliation before the
+  pending contract's natural availability time, or beginning Step 14/Slice 3
+  remained explicitly prohibited.
+- Started fresh branch
+  `codex/simon-shadow05-webhook-reliability-repair` from exact clean source
+  `6b24cf784b77eae78d29744245b6876e740adfd3`, with `HEAD`, `origin/main`, and
+  merge-base identical, while carrying forward only this append-only project-log
+  diff. Reconfirmed the LF-normalised protected hashes exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`;
+  neither protected document changed.
+- Read-only Vercel evidence reconfirmed isolated project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` (`cc-simon-s2-shadow-05`) and current
+  READY Production-target deployment `dpl_2Y8REiAomzHXGmqx5m9hvRDzA7fd`,
+  provider host
+  `cc-simon-s2-shadow-05-a31gc7khb-coachcarteruk-2599s-projects.vercel.app`,
+  alias `cc-simon-s2-shadow-05.vercel.app`, and exact deployed Git SHA
+  `2fde59383dd98432cc8f7cef2f589322cadae260`. Exact deployment-scoped runtime
+  logs show the first `checkout.session.completed` delivery returned 500 after
+  `handleSlotBooking` raised `ESOCKET` / `ECONNREFUSED` at `127.0.0.1:587`,
+  followed by the idempotent 200 delivery; they contain no
+  `uq_instructor_slot` failure for shadow-05.
+- Stripe Dashboard read-only delivery evidence conclusively attributed the
+  misleading duplicate-slot owner alert to obsolete test destination
+  `cc-simon-s2-shadow-04`, ID `we_1U0HBfIqhTSdZedSgka7EVQ6`, endpoint
+  `https://cc-simon-s2-shadow-04.vercel.app/api/webhook`. That destination
+  received exact event `evt_1U0qsRIqhTSdZedSIyzFDydP` and exact Checkout
+  Session
+  `cs_test_b18JfmifnTWZRDMTtnq6sQWSkHLvO1i0lKsi6a9ZEHdj9KpEb7SV7bur3v`
+  at 4 August 2026 23:32:08 BST and returned HTTP 200. The request itself
+  contained the shadow-05 provider return URLs and the same direct-slot
+  identity. This matches the owner alert at `2026-08-04T22:32:07.132Z` and the
+  already-contaminated shadow-04 slot. With attribution conclusive, disabled
+  this one destination recoverably on 5 August; it now shows `Disabled` and was
+  not deleted. Dedicated shadow-05 destination `we_1U0qdyIqhTSdZedS2h8O3RxW`
+  and all live destinations were untouched.
+- A names/classification-only Vercel Production environment inventory for
+  exact shadow-05 proved `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS`
+  are all absent. Repository evidence identifies no existing isolated test-only
+  SMTP sink. No SMTP variable was added, copied, revealed, or changed; using
+  live credentials or improvising a relay remained prohibited. Isolated SMTP
+  configuration is therefore a recorded environment blocker, not a reason to
+  make the paid-booking webhook retry after its core state is committed.
+- Prepared a narrow `slot_booking` repair in `api/webhook.js`: core booking,
+  BCS, funding-source, and immutable payment-contract writes remain inside the
+  existing retryable handler boundary, while the subsequent learner and
+  instructor confirmation sends are individually awaited and caught. Both
+  attempts still pass through `createTransporter()` and its existing
+  `notification_log` audit wrapper; a synchronous transport-construction failure
+  is explicitly audit-logged. Failure reporting emits only bounded recipient
+  role, purpose, error name, and error code, and its owner alert is best-effort.
+  Signature verification, event receipts, payment idempotency, the genuine
+  booking-insert refund/alert/apology path, and all money/Connect behaviour are
+  unchanged.
+- Added `tests/webhook-slot-booking-reliability.spec.js`. Its three executed
+  webhook tests prove: learner SMTP failure after exact singular core writes
+  returns 200 and marks the receipt processed; the instructor attempt still
+  runs and the failed notification is recorded; replay returns the duplicate
+  200 path without another booking, `slot_purchase`, BCS row, funding source,
+  contract, or notification; a launch-contract write failure still marks the
+  receipt failed and returns 500; and a genuine booking-insert failure restores
+  the credit while retaining the owner alert and learner apology path. The
+  focused file passed 3/3 twice. The required command
+  `npm.cmd test -- tests/webhook-slot-booking.spec.js tests/stripe-launch-payment-contracts.spec.js tests/payout-v2-source-ingestion.spec.js --workers=1`
+  passed 40/40. `npm.cmd run check:syntax` passed 199 files,
+  `npm.cmd run check:c1` passed 271 files, the Slice 2 rollout review passed all
+  14 checks with status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`, and
+  `git diff --check` passed.
+- At this append point no repair commit, push, PR, or deployment existed yet;
+  shadow-05 still ran exact app SHA `2fde593...`. The existing direct-slot
+  payment/booking evidence was not replayed or mutated. Its immutable contract
+  remains naturally pending until `2026-08-07T00:00:00Z`; Step 13 remains
+  incomplete and paused after this repair. No new Checkout, payment, manual
+  booking/refund, reconciliation, earnings, payout, transfer, refund, dispute,
+  Connect/onboarding, live-mode, production-system, Step 14, later-step, or
+  Slice 3 action occurred.
+- Published the focused repair as commit
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6` on
+  `codex/simon-shadow05-webhook-reliability-repair` and opened draft PR
+  [#348](https://github.com/coachcarteruk-gif/coachcarter-website/pull/348)
+  against `main`. The PR remains draft and was not merged.
+- Deployed only that exact repair commit to isolated Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`. Deployment
+  `dpl_2EjhdwJRmzHNmxiNumyovjpRrMPC` is READY on the Production target at
+  provider host
+  `cc-simon-s2-shadow-05-6tg3durim-coachcarteruk-2599s-projects.vercel.app`,
+  with alias `cc-simon-s2-shadow-05.vercel.app` and Vercel-reported Git SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`. The temporary ignored local
+  project binding used for this exact deployment was immediately restored to
+  its pre-task shadow-04 value; the tracked worktree remained clean.
+- Secret-safe post-deploy Vercel API verification proved exactly one encrypted
+  Production `STRIPE_MODE` record and confirmed its decrypted value equals
+  `test` without revealing it; `JWT_SECRET` is present; `ADMIN_SECRET` is
+  absent; all four SMTP records remain absent; SSO protection remains
+  `all_except_custom_domains`; and the protection-bypass inventory is zero.
+  No environment variable or protection setting changed during or after the
+  deployment.
+- Stripe Dashboard read-only verification reconfirmed exact dedicated test
+  destination `we_1U0qdyIqhTSdZedS2h8O3RxW` is Active at
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook`, in visible Sandbox /
+  Test mode, with the same eight event subscriptions. The conclusively obsolete
+  shadow-04 destination remains Disabled. No event was resent and no test event
+  was generated.
+- Final read-only Neon verification reconfirmed exact project
+  `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, and database `neondb`. The exact existing evidence
+  remains one booking, one `slot_purchase`, one BCS attribution, one funding
+  source, one `direct_slot` contract, one processed receipt for
+  `evt_1U0qsRIqhTSdZedSIyzFDydP`, and one failed learner confirmation attempt.
+  Contract `4af03473-9cfd-4051-9606-654245e1b6ab` remains `pending` with exact
+  funds-availability time `2026-08-07T00:00:00Z`. Booking earnings, payout runs,
+  instructor payout batches, payout transfers, transfer attempts, refund
+  intents, refund attempts, refund events, refund-event lines, dispute evidence,
+  school Connect accounts, and instructor Connect accounts all remain exactly
+  zero.
+- Step 13 remains **incomplete and paused after the reliability repair**. The
+  payment-origin exercise was not resumed. No Checkout, payment, card entry,
+  event replay, early reconciliation, manual booking/refund, money movement,
+  live-mode, production-system, Step 14, later-step, or Slice 3 action occurred.
