@@ -2279,3 +2279,924 @@ For every future session:
   booking/refund, reconciliation, earnings, payout, transfer, refund, dispute,
   Connect/onboarding, live-mode, production-system, Step 14, later-step, or
   Slice 3 action occurred.
+- Published the focused repair as commit
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6` on
+  `codex/simon-shadow05-webhook-reliability-repair` and opened draft PR
+  [#348](https://github.com/coachcarteruk-gif/coachcarter-website/pull/348)
+  against `main`. The PR remains draft and was not merged.
+- Deployed only that exact repair commit to isolated Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`. Deployment
+  `dpl_2EjhdwJRmzHNmxiNumyovjpRrMPC` is READY on the Production target at
+  provider host
+  `cc-simon-s2-shadow-05-6tg3durim-coachcarteruk-2599s-projects.vercel.app`,
+  with alias `cc-simon-s2-shadow-05.vercel.app` and Vercel-reported Git SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`. The temporary ignored local
+  project binding used for this exact deployment was immediately restored to
+  its pre-task shadow-04 value; the tracked worktree remained clean.
+- Secret-safe post-deploy Vercel API verification proved exactly one encrypted
+  Production `STRIPE_MODE` record and confirmed its decrypted value equals
+  `test` without revealing it; `JWT_SECRET` is present; `ADMIN_SECRET` is
+  absent; all four SMTP records remain absent; SSO protection remains
+  `all_except_custom_domains`; and the protection-bypass inventory is zero.
+  No environment variable or protection setting changed during or after the
+  deployment.
+- Stripe Dashboard read-only verification reconfirmed exact dedicated test
+  destination `we_1U0qdyIqhTSdZedS2h8O3RxW` is Active at
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook`, in visible Sandbox /
+  Test mode, with the same eight event subscriptions. The conclusively obsolete
+  shadow-04 destination remains Disabled. No event was resent and no test event
+  was generated.
+- Final read-only Neon verification reconfirmed exact project
+  `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, and database `neondb`. The exact existing evidence
+  remains one booking, one `slot_purchase`, one BCS attribution, one funding
+  source, one `direct_slot` contract, one processed receipt for
+  `evt_1U0qsRIqhTSdZedSIyzFDydP`, and one failed learner confirmation attempt.
+  Contract `4af03473-9cfd-4051-9606-654245e1b6ab` remains `pending` with exact
+  funds-availability time `2026-08-07T00:00:00Z`. Booking earnings, payout runs,
+  instructor payout batches, payout transfers, transfer attempts, refund
+  intents, refund attempts, refund events, refund-event lines, dispute evidence,
+  school Connect accounts, and instructor Connect accounts all remain exactly
+  zero.
+- Step 13 remains **incomplete and paused after the reliability repair**. The
+  payment-origin exercise was not resumed. No Checkout, payment, card entry,
+  event replay, early reconciliation, manual booking/refund, money movement,
+  live-mode, production-system, Step 14, later-step, or Slice 3 action occurred.
+
+### 5 August 2026 - One-time Step 13 sequencing amendment stopped before Checkout
+
+- The owner explicitly authorised a one-time Step 13 sequencing amendment:
+  preserve the existing pending `direct_slot` payment unchanged; exercise
+  `test_date_direct`, `one_off_offer`, and `captured_request` in that strict
+  order with Stripe's official bypass-pending international test card; require
+  each new origin to be complete before starting the next; and stop on the
+  first failure. Early `direct_slot` reconciliation, Step 14, Slice 3, live
+  mode, payouts, transfers, refunds, disputes, and Connect onboarding remained
+  expressly prohibited.
+- The preflight worktree was clean on
+  `codex/simon-shadow05-webhook-reliability-repair` at exact HEAD
+  `6de370f2f2ba0469f6076e94d5d9658ab1ceb6ff`. Reconfirmed the protected
+  LF-normalised SHA-256 values exactly as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`;
+  neither protected document changed.
+- Read-only Vercel identity verification reconfirmed isolated project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, exact READY Production-target deployment
+  `dpl_2EjhdwJRmzHNmxiNumyovjpRrMPC`, provider host
+  `cc-simon-s2-shadow-05-6tg3durim-coachcarteruk-2599s-projects.vercel.app`,
+  alias `cc-simon-s2-shadow-05.vercel.app`, and deployed Git SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`. Read-only Neon verification
+  reconfirmed exact project `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, and database `neondb`.
+- The exact pre-origin database snapshot remained one scheduled booking, one
+  `slot_purchase`, one BCS attribution, one funding source, one processed
+  receipt, and one `direct_slot` contract. Contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` remained `pending`, with gross `8250`
+  GBP minor units, fee `288`, no ineligibility or contradiction code, and exact
+  funds-availability time `2026-08-07T00:00:00Z`. Counts for
+  `test_date_direct`, `one_off_offer`, and `captured_request` contracts were all
+  zero. The existing booking remained 10 August 2026, 10:00-11:30, with
+  purpose `lesson`; the seven instructor availability windows remained active
+  from 09:00 to 17:00 on all seven days.
+- Every prohibited-operation preflight remained zero: live-mode receipts,
+  launch and legacy booking earnings, payout runs, instructor payout batches,
+  transfer intents and attempts, refund intents and attempts, refund events and
+  lines, payment disputes and dispute events, and connected-account scopes.
+- Before creating the first `test_date_direct` Checkout, the normal shadow-05
+  learner sign-in UI was used for the existing synthetic learner. The UI
+  returned `Failed to send code`. Exact deployment-scoped runtime evidence at
+  `2026-08-05T08:10:41Z` shows `POST /api/magic-link` returned HTTP 500 because
+  the email-code send raised `ESOCKET` / `ECONNREFUSED` at `127.0.0.1:587`,
+  consistent with the already-recorded absence of an isolated SMTP sink.
+- No authentication code was retrieved from Neon or any browser credential
+  store, and no workaround, password mutation, environment/configuration
+  change, or direct database mutation was attempted. The safety gate rejected
+  reading the live email authentication code from the database after normal
+  delivery failed, so the exercise stopped at that boundary.
+- `test_date_direct`, `one_off_offer`, and `captured_request` were not attempted.
+  No Checkout Session, PaymentIntent, Charge, card entry, webhook delivery,
+  booking, credit transaction, BCS row, funding source, or payment contract was
+  created in this continuation. The existing `direct_slot` payment and contract
+  were not reconciled, replayed, or changed. No live-mode, payout, transfer,
+  refund, dispute, Connect/onboarding, Step 14, later-step, or Slice 3 action
+  occurred. Step 13 remains incomplete and paused before the first newly
+  authorised origin.
+- Two subsequent Stripe test-mode webhook warning emails were attributed
+  read-only to legacy destinations receiving automatic retries for the original
+  `direct_slot` event, not to a new payment. Destination
+  `rehearsal-1-7-test`, ID `we_1TVRRbIqhTSdZedS5mdOHWWB`, is still Active at
+  `https://coachcarter.uk/api/webhook`, is described in Stripe as
+  `Rehearsal for plan 1.7 — delete after May 13`, and showed 57/57 failed
+  deliveries for the displayed week. Its retry of exact PaymentIntent event
+  `evt_3U0qsPIqhTSdZedS21dZLaz8` returned HTTP 307 with redirect target
+  `https://www.coachcarter.uk/api/webhook`; Stripe therefore classified the
+  delivery as failed.
+- Legacy destination `CoachCarter production`, ID
+  `we_1T3B9jIqhTSdZedSZjCfwjxX`, is still Active at
+  `https://booking-system-production-55a5.up.railway.app/webhook`, listens only
+  to `checkout.session.completed`, and showed 30/30 failed deliveries for the
+  displayed week. Its automatic retries of exact original event
+  `evt_1U0qsRIqhTSdZedSIyzFDydP` and Checkout Session
+  `cs_test_b18JfmifnTWZRDMTtnq6sQWSkHLvO1i0lKsi6a9ZEHdj9KpEb7SV7bur3v`
+  returned HTTP 404 with `Application not found`.
+- The dedicated shadow-05 test destination remained Active. Neither legacy
+  destination was disabled, deleted, edited, or resent during this read-only
+  attribution, and no Stripe object or application financial row was created
+  or changed.
+- The owner then explicitly authorised recoverably disabling only those two
+  conclusively attributed legacy test destinations. In Stripe's visible
+  Sandbox context, disabled `rehearsal-1-7-test`
+  (`we_1TVRRbIqhTSdZedS5mdOHWWB`) and `CoachCarter production`
+  (`we_1T3B9jIqhTSdZedSZjCfwjxX`) through each destination's supported
+  `Disable destination` control. Neither destination was deleted, edited,
+  resent, or had its signing secret rolled.
+- Post-action Stripe Dashboard verification showed both exact legacy rows as
+  `Disabled` and retained their original URLs and subscription counts. The
+  dedicated shadow-05 destination remained `Active` at
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook` with eight subscribed
+  events. No shadow destination other than the two explicitly authorised
+  legacy endpoints was changed, and no live-mode destination was accessed or
+  changed.
+
+### 5 August 2026 - Authorised shadow-05 authentication bypass stopped before Checkout
+
+- Re-read `AGENTS.md` and this complete living log before resuming. Preserved
+  the existing append-only uncommitted log changes. Local branch remained
+  `codex/simon-shadow05-webhook-reliability-repair` at exact HEAD
+  `6de370f2f2ba0469f6076e94d5d9658ab1ceb6ff`; no file other than this living
+  log was modified, and nothing was staged, committed, or pushed.
+- Reconfirmed the two protected-document LF-normalised SHA-256 values as
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+  Neither protected document changed.
+- Read-only Vercel verification reconfirmed isolated project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, exact READY Production-target deployment
+  `dpl_2EjhdwJRmzHNmxiNumyovjpRrMPC`, alias
+  `cc-simon-s2-shadow-05.vercel.app`, and deployed Git SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`. Read-only Neon verification
+  reconfirmed exact project `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, and database `neondb`.
+- In Stripe Dashboard visible Sandbox / Test mode, reconfirmed dedicated
+  destination `we_1U0qdyIqhTSdZedS2h8O3RxW` is `Active` at the exact
+  shadow-05 webhook URL with its eight subscriptions. The two conclusively
+  obsolete destinations `we_1TVRRbIqhTSdZedS5mdOHWWB` and
+  `we_1T3B9jIqhTSdZedSZjCfwjxX` remained `Disabled`. No destination was
+  edited, resent, rotated, enabled, disabled, or deleted.
+- The read-only pre-authentication database gate reconfirmed school `1`, the
+  exact synthetic learner and instructor identities, and exactly one existing
+  lesson booking, one `slot_purchase` credit transaction, one booking-credit
+  attribution, one payout funding source, and one processed test-mode Stripe
+  receipt. Live-mode receipts remained zero. Contract counts remained
+  `direct_slot=1`, `test_date_direct=0`, `one_off_offer=0`, and
+  `captured_request=0`.
+- Existing `direct_slot` contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` remained exactly `pending` with
+  PaymentIntent `pi_3U0qsPIqhTSdZedS2Xi4DZDN`, charge
+  `ch_3U0qsPIqhTSdZedS2XhVtLvQ`, balance transaction
+  `txn_3U0qsPIqhTSdZedS2gWKkLmQ`, gross `8250`, Stripe fee `288`, exact
+  availability `2026-08-07T00:00:00Z`, and null ineligibility and contradiction
+  codes. It was not reconciled, replayed, or otherwise changed.
+- Every prohibited-operation ledger checked in the preflight was zero,
+  including launch and legacy booking earnings and sources, payout batches,
+  payout runs and source-import runs, instructor payout batches and payouts,
+  all transfer intents/transfers/sources/attempts, school payouts and line
+  items, payout adjustments, refund intents/attempts/events/lines/notes,
+  disputes/evidence/notifications, connected-account scopes and state events,
+  connected-bank payouts and links, payout obligations/applications, and
+  statements/delivery attempts.
+- Under the owner's isolated shadow-05 authentication authority, the normal
+  learner sign-in UI generated exactly one fresh login-code record for the
+  existing synthetic learner. Normal delivery failed as expected. Exact
+  deployment-scoped runtime evidence contains only the `08:49:27Z`
+  `POST /api/magic-link` HTTP 500, caused by `ESOCKET` / `ECONNREFUSED` at
+  `127.0.0.1:587`. A narrowly scoped Neon read proved exactly one newly
+  generated, then-current code record; no other authentication row was read,
+  and the code value was never printed, persisted, or added to this log.
+- The official verification endpoint was not reached. The local execution
+  safety gate rejected passing the current code in a command because command
+  arguments could be logged. The in-app browser's security policy separately
+  rejected same-origin script execution, and its supported automation surface
+  could not reach the verification form that remains hidden after the SMTP 500.
+  Those blocked attempts caused no application request: Vercel logs through
+  `09:05:08Z` contain no verification call, and the exact code record remained
+  `used=false` until it expired naturally at `2026-08-05T09:04:28.037Z`.
+  No cookie, session, browser credential store, password, token, or unrelated
+  authentication record was inspected or changed. No direct database mutation
+  was made.
+- Stopped at that authentication boundary. No instructor code was requested,
+  no synthetic learner or instructor session was established, and
+  `test_date_direct`, `one_off_offer`, and `captured_request` were not begun.
+  No Checkout Session, PaymentIntent, charge, balance transaction, card entry,
+  webhook delivery, booking, credit transaction, BCS attribution, funding
+  source, or new payment contract was created.
+- Final read-only Neon verification remained identical: origin counts
+  `direct_slot=1`, `test_date_direct=0`, `one_off_offer=0`, and
+  `captured_request=0`; core counts remained one booking, one `slot_purchase`,
+  one booking-credit source, one payout funding source, and one processed
+  receipt; live receipts remained zero; the preserved direct contract remained
+  exactly pending with its original immutable evidence; and the combined total
+  across every checked prohibited-operation ledger remained exactly zero.
+  Step 13 therefore remains **incomplete and paused before
+  `test_date_direct`**. No live-mode, payout, transfer, refund, dispute,
+  Connect/onboarding, Step 14, later-step, or Slice 3 action occurred.
+
+### 5 August 2026 - Temporary client recovery prepared; deployment approval blocked
+
+- Re-read `AGENTS.md`, `CLAUDE.md`, both complete protected Simon documents,
+  the complete living log, the Stripe Connect/payment/security references, the
+  per-instructor credit audit, and the booking-status contract. Reconfirmed the
+  main workspace still had this append-only log as its only modification.
+- Created the explicitly authorised isolated detached worktree
+  `C:\tmp\cc-simon-shadow05-auth-recovery-c84a37e` at exact application SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`. No commit, branch, push, or PR
+  was created.
+- Added only gated client-side recovery code to
+  `public/learner/login.js` and `public/instructor/login.js`. It activates only
+  when the exact hostname is `cc-simon-s2-shadow-05.vercel.app`, the query
+  parameter `shadow_auth_recovery=1` is present, and the normal
+  `send-email-code` request returns HTTP 500. It then exposes the existing
+  verification-code screen while retaining the login email, role, purpose,
+  and school-1 context. No server authentication, verification, cookie, JWT,
+  database, schema, migration, environment, SMTP, Stripe, webhook, or secret
+  code changed.
+- Both changed scripts passed `node --check`; `git diff --check` passed. The
+  temporary source diff contains exactly those two client files, with 41
+  insertions and 3 replacements. The local Vercel binding contains only the
+  non-secret exact team/project identifiers.
+- The attempted pinned Vercel CLI Production-target deployment was rejected
+  before execution by the local action safety reviewer, which required a more
+  explicit user confirmation for deploying uncommitted authentication-client
+  changes even to the isolated shadow-05 project. No Vercel deployment request
+  was made, so the alias remains on the clean exact `c84a37...` application.
+- Stopped at that approval boundary. No login code was generated or read, no
+  learner or instructor session was established, and no Checkout, payment,
+  webhook delivery, booking, credit transaction, BCS attribution, funding
+  source, contract, reconciliation, refund, payout, transfer, dispute, Connect
+  action, Step 14, later step, or Slice 3 operation occurred. Existing
+  `direct_slot` evidence was not replayed, reconciled, or changed; the remaining
+  origins were not begun.
+
+### 5 August 2026 - Temporary recovery deployed; OTP value read blocked
+
+- After the owner explicitly confirmed the security-sensitive deployment at
+  action time, deployed the uncommitted two-file client recovery artifact from
+  exact base SHA `c84a37ed58701f4711fe5de6d189fc2423620bb6` only to isolated
+  Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`. Deployment
+  `dpl_7iZWTE6pNa8turwjMmqgLW3eMSeA` is READY on that project's Production
+  target, reports exact Git SHA `c84a37...` with the expected dirty marker,
+  and owns alias `cc-simon-s2-shadow-05.vercel.app`. No environment variable,
+  provider setting, database, webhook, or Stripe resource changed.
+- Independent Vercel evidence proved the exact isolated project and deployment.
+  The read-only pre-authentication Neon gate then reconfirmed database `neondb`,
+  one exact school-1 synthetic learner and instructor, origin counts
+  `direct_slot=1`, `test_date_direct=0`, `one_off_offer=0`, and
+  `captured_request=0`, and one booking, `slot_purchase`, BCS attribution,
+  payout funding source, and processed test receipt. Live receipts remained
+  zero and every checked prohibited-operation ledger remained zero.
+- Preserved direct contract `4af03473-9cfd-4051-9606-654245e1b6ab` remained
+  exactly `pending` with its original PaymentIntent, charge, balance
+  transaction, gross `8250`, fee `288`, availability
+  `2026-08-07T00:00:00Z`, and null ineligibility/contradiction codes.
+- The visible supported learner login flow generated exactly one fresh current
+  unused school-1 learner login-code record, and the expected SMTP HTTP 500
+  exposed the existing verification form through the gated client recovery.
+  A metadata-only Neon query proved the record singular, current, unused,
+  purpose `login`, role `learner`, and attributable to that request.
+- The credential-bearing Neon query was rejected before execution by the local
+  action safety reviewer pending a fresh action-time confirmation. No OTP value
+  was returned, printed, persisted, or entered; no verification request was
+  sent and no learner session was established. No instructor code was
+  requested.
+- Stopped before authentication completion and before the mandatory clean-SHA
+  restoration/payment preflight. No Checkout, card entry, payment, webhook,
+  booking, credit transaction, BCS attribution, funding source, contract,
+  reconciliation, refund, payout, transfer, dispute, Connect action, Step 14,
+  later step, or Slice 3 operation occurred. The gated temporary recovery
+  deployment remains active pending the owner's immediate direction; the clean
+  SHA has not yet been redeployed because no payment can begin in this state.
+
+### 5 August 2026 - Learner authenticated; instructor OTP confirmation blocked
+
+- The owner supplied fresh action-time authority to read and enter the exact
+  shadow-05 learner OTP and authorised exactly one replacement learner request
+  if the earlier record had expired. A metadata-only query proved the original
+  learner record expired, so the visible supported learner send-code flow was
+  invoked exactly once for the authorised replacement.
+- The replacement learner record was singular, current, unused, school `1`,
+  purpose `login`, role `learner`, and attributable to that request. Its value
+  moved only from the Neon query result in process memory into the visible
+  existing six-digit form; it was never printed, persisted, copied to the
+  clipboard, placed in a command argument, or added to this log.
+- The first programmatic per-box entry attempt left only the first field
+  populated and sent no verification request. Re-reading the same still-current
+  unused record and typing it as ordinary keystrokes through the form succeeded.
+  The code was consumed once and the existing learner session cookie was issued.
+- The synthetic learner then reached the existing Terms acceptance screen.
+  No legal terms were accepted on the learner's behalf. Without inspecting
+  cookies, tokens, local storage, or session contents, the supported learner
+  profile page successfully called its authenticated read model and rendered
+  the exact synthetic learner profile and signed-in navigation. Learner
+  authentication is therefore complete.
+- The visible supported instructor login flow was then invoked exactly once
+  for the exact school-1 synthetic instructor. SMTP failed as expected, the
+  gated client recovery exposed the existing verification form, and a
+  metadata-only Neon query proved exactly one fresh singular, current, unused
+  school-1 instructor record with purpose `login` and role `instructor`.
+- The credential-bearing instructor query was rejected before execution by the
+  local action safety reviewer because the latest action-time confirmation was
+  learner-specific. No instructor OTP value was returned, printed, persisted,
+  or entered; no instructor verification request was sent and no instructor
+  session was established.
+- Stopped at that instructor-specific confirmation boundary. The temporary
+  gated deployment remains active, the clean SHA has not yet been restored,
+  and the mandatory pre-Checkout gate has not run. No Checkout, card entry,
+  payment, webhook, booking, credit transaction, BCS attribution, funding
+  source, contract, reconciliation, refund, payout, transfer, dispute, Connect
+  action, Step 14, later step, or Slice 3 operation occurred. Existing
+  `direct_slot` evidence remains untouched.
+
+### 5 August 2026 - Both sessions established; clean SHA restored
+
+- The owner supplied fresh action-time authority to read and enter the exact
+  shadow-05 instructor OTP and authorised exactly one replacement instructor
+  request if the inaccessible earlier record expired. The original record was
+  allowed to expire naturally. Only after a metadata query proved there was no
+  current unused instructor token did the visible supported instructor flow
+  issue the one authorised replacement request.
+- The replacement instructor record was singular, current, unused, school `1`,
+  purpose `login`, role `instructor`, and attributable to that request. Its
+  value moved only from the Neon query result in process memory into the
+  visible existing six-digit form; it was never printed, persisted, copied to
+  the clipboard, placed in a command argument, or added to this log. The form
+  consumed it once and redirected to the instructor calendar.
+- Without inspecting cookies, tokens, local storage, or session contents, the
+  supported instructor profile page successfully called its authenticated read
+  model and rendered exact synthetic instructor
+  `instructor.shadow05.step12@example.invalid`, name
+  `Shadow Step 12 Instructor`, and signed-in navigation. Instructor
+  authentication is therefore complete.
+- Restored the two temporary client files to exact clean source SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`; the detached worktree then had
+  no tracked diff and passed `git diff --check`. Deployed that clean source
+  only to isolated Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`.
+  Deployment `dpl_FKLpQBKToEhbNLSasQTXDKc91hQh` is READY, Production-targeted,
+  owns alias `cc-simon-s2-shadow-05.vercel.app`, and provider metadata reports
+  the exact Git SHA with no dirty-source marker.
+- Against that clean alias, the supported learner profile page rendered exact
+  synthetic learner `Shadow Step 13 Learner` with signed-in navigation, and the
+  supported instructor profile page rendered the exact synthetic instructor
+  with signed-in navigation. Both sessions therefore survived clean-source
+  restoration. No legal terms were accepted on the learner's behalf.
+- Removed only temporary worktree
+  `C:\tmp\cc-simon-shadow05-auth-recovery-c84a37e` after the clean deployment
+  and both session checks succeeded. The main workspace still has this living
+  log as its only modification; it remains unstaged and uncommitted.
+- No Checkout, card entry, payment, webhook delivery, booking, credit
+  transaction, BCS attribution, funding source, contract, reconciliation,
+  refund, payout, transfer, dispute, Connect action, Step 14, later step, or
+  Slice 3 operation occurred during authentication and restoration. The
+  mandatory pre-Checkout isolation/ledger/provider gate remains next.
+
+### 5 August 2026 - `test_date_direct` attempted once; stopped on missing launch evidence
+
+- The mandatory pre-Checkout gate passed against clean deployment
+  `dpl_FKLpQBKToEhbNLSasQTXDKc91hQh`: Vercel reported exact Git SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6`, READY Production target, exact
+  isolated project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, and alias
+  `cc-simon-s2-shadow-05.vercel.app`. Supported learner and instructor profile
+  pages both remained authenticated on that alias.
+- Read-only Neon preflight reconfirmed exact project
+  `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, database `neondb`,
+  active school `1`, the exact synthetic identities, one booking, one
+  `slot_purchase`, one BCS attribution, one funding source, and one processed
+  test receipt. Origin counts were `direct_slot=1`, `test_date_direct=0`,
+  `one_off_offer=0`, and `captured_request=0`; live receipts and every checked
+  prohibited-operation ledger were zero.
+- Stripe Dashboard visibly remained in Sandbox. Dedicated destination
+  `we_1U0qdyIqhTSdZedS2h8O3RxW` was Active at the exact shadow-05 webhook URL
+  with eight events. Obsolete destinations
+  `we_1TVRRbIqhTSdZedS5mdOHWWB` and
+  `we_1T3B9jIqhTSdZedSZjCfwjxX` remained Disabled. No destination was edited,
+  resent, rotated, enabled, disabled, or deleted.
+- Through the supported learner Driving Test page, saved the synthetic fixture
+  date `2026-08-12`, time `11:00`, and centre `Reading Test Centre`. The normal
+  booking page then proved one available recommended 90-minute slot,
+  `10:15-11:45`, with the exact existing instructor, saved pickup address,
+  zero same-instructor credit, and server price GBP `8250` minor units.
+- Created exactly one `test_date_direct` Checkout attempt. Stripe-hosted
+  Checkout visibly showed Sandbox, the exact 90-minute test-date item and
+  GBP 82.50 amount, the exact synthetic learner email, and a success/cancel
+  host belonging to the clean shadow-05 provider deployment. Submitted exactly
+  once with Stripe's authorised official bypass-pending test card; no retry or
+  second identity was used.
+- Stripe completed exact Checkout Session
+  `cs_test_a1ZaOg4f77LkkKVjlyN2r64fkdAKZKwIVOr5JOsydpoWipbqNALhtG9qoo`,
+  PaymentIntent `pi_3U197HIqhTSdZedS15voowoW`, charge
+  `ch_3U197HIqhTSdZedS13sFGPgw`, and balance transaction
+  `txn_3U197HIqhTSdZedS1FnpGeGB`. Dashboard evidence shows Succeeded, gross
+  `8250`, Stripe fee `226`, net `8024`, the official test-card ending `0278`,
+  and funds displayed as available immediately on 5 August. Checkout metadata
+  correctly contained origin `test_date_direct`, schema
+  `simon_launch_payment_v1`, and immutable candidate
+  `d7222fee-25aa-4211-81ae-36a16ac142b6`.
+- Dedicated webhook delivery of event
+  `evt_1U197IIqhTSdZedShCv0DUxf` returned HTTP 200 and the school-1 receipt is
+  `processed` with no last error. Exact Vercel runtime evidence contains one
+  `POST action=checkout-test-date` HTTP 200 and one webhook HTTP 200. The only
+  logged post-commit errors are the expected isolated SMTP `ESOCKET` failures
+  for learner and instructor confirmations; the repair correctly kept them
+  outside the retryable core boundary.
+- The required origin success gate nevertheless failed. Neon contains exactly
+  one new scheduled test-date booking, ID `2`, for `2026-08-12` at
+  `10:15-11:45`, purpose `test_date`, test start `11:00`, centre
+  `Reading Test Centre`, and list price `8250`; exactly one new
+  `slot_purchase`, ID `2`; and exactly one new BCS row, ID `3`. However the
+  credit transaction retained null charge and fee snapshots, the booking has
+  null `lesson_payment_contract_id`, total funding sources remained `1`, and
+  candidate `d7222fee-25aa-4211-81ae-36a16ac142b6` produced zero funding
+  sources and zero immutable contracts. Origin count therefore remains
+  `test_date_direct=0`, not the required singular `complete` result.
+- Read-only source inspection explains the observed stop state as a webhook
+  timing gap: when exact Stripe charge/balance evidence is missing at
+  materialisation time, `materializeLaunchPaymentContract` returns a pending,
+  non-materialised result without inserting a funding source or contract. The
+  webhook still completes and its receipt becomes processed, so the now-visible
+  immediate Stripe evidence is not consumed without a later reconciliation or
+  event replay. Neither was authorised or invoked here.
+- Stopped immediately on this first-origin failure. `one_off_offer` and
+  `captured_request` were not begun. Final core counts are two bookings, two
+  `slot_purchase` rows, two BCS attributions, one funding source, two processed
+  test receipts, zero failed receipts, and zero live receipts. Every checked
+  earnings, payout, transfer, refund, dispute, connected-account, obligation,
+  statement, and delivery-attempt ledger remains exactly zero.
+- Existing `direct_slot` contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` remains untouched and exactly
+  `pending`, with original PaymentIntent `pi_3U0qsPIqhTSdZedS2Xi4DZDN`, charge
+  `ch_3U0qsPIqhTSdZedS2XhVtLvQ`, balance transaction
+  `txn_3U0qsPIqhTSdZedS2gWKkLmQ`, gross `8250`, fee `288`, availability
+  `2026-08-07T00:00:00Z`, and null ineligibility/contradiction codes.
+  No live-mode, payout, transfer, refund, dispute, Connect/onboarding,
+  reconciliation, Step 14, later-step, or Slice 3 action occurred. Step 13
+  remains **incomplete and stopped after the single failed
+  `test_date_direct` attempt**.
+
+### 6 August 2026 - Webhook timing repair prepared and locally verified
+
+- Continued from exact clean source SHA
+  `c84a37ed58701f4711fe5de6d189fc2423620bb6` in isolated worktree
+  `C:\tmp\cc-simon-shadow05-evidence-timing-repair-c84a37e` on focused branch
+  `codex/simon-shadow05-evidence-timing-repair`. The main workspace retained
+  this append-only project log as its only modification; no protected spec was
+  edited and no existing shadow-05 financial row was touched.
+- Confirmed the timing defect: a launch candidate with temporarily incomplete
+  Charge/balance evidence returned a pending, non-materialised result, while
+  the slot-booking handler ignored that result and allowed the event receipt to
+  become processed. Prepared a narrow repair that fails only this retryable
+  evidence state after singular booking, BCS, test-date flag, and post-commit
+  notification attempts have completed. A later webhook delivery uses the
+  existing-transaction path to materialise evidence without repeating those
+  effects. Fully evidenced contracts with genuinely pending Stripe funds still
+  complete normally.
+- Added an exact historical-candidate recovery gate restricted to
+  `test_date_direct`. Its dry run is outside the cron lock and performs no
+  audit or financial writes. Before execution it requires the exact school,
+  candidate, Checkout Session, PaymentIntent, charge, balance transaction,
+  booking, credit transaction, BCS, amount, fee, currency, active mapping,
+  instructor, cutover, agreement, and fresh available Stripe evidence, while
+  proving zero existing source/contract evidence. Execution additionally
+  requires the literal confirmation and audit records, and postflights exactly
+  one source, one complete contract, and one booking link. Broad reconciliation
+  is not invoked by this path.
+- Focused launch and webhook tests passed `37/37`; the complete non-database
+  Stripe launch, payout-source, and slot-booking regression set passed
+  `150/150`. Repository syntax passed for `199` files, the C1 check passed for
+  `271` files, the Stripe Slice 2 rollout review reported no failures, and
+  `git diff --check` passed. The historical payout-source rollout manifest
+  remains deliberately blocked by pre-existing base-SHA artifact drift; this
+  repair neither expands nor resolves that older rollout authority.
+- No branch push, PR, deployment, provider dry run, candidate recovery,
+  reconciliation, Checkout, payment, webhook replay, refund, payout, transfer,
+  dispute, Connect action, `one_off_offer`, `captured_request`, Step 14, later
+  step, or Slice 3 action had occurred at this checkpoint. Existing
+  `direct_slot` contract `4af03473-9cfd-4051-9606-654245e1b6ab` remained
+  untouched.
+
+### 6 August 2026 - Repair committed locally; external publication paused
+
+- Staged only the seven reviewed repair/test files in the isolated worktree and
+  created local commit `1bd75e2` (`Repair Stripe launch evidence retries`) on
+  branch `codex/simon-shadow05-evidence-timing-repair`. The living project log
+  was not staged or committed and remains only in the main workspace.
+- The managed action reviewer rejected the attempted GitHub push because
+  publishing would export those seven repository files to the external remote
+  and required fresh explicit approval after that risk was surfaced. No retry,
+  workaround, push, PR, deployment, provider preflight, candidate recovery, or
+  later Step 13 origin was attempted. Existing `direct_slot` evidence remains
+  untouched.
+
+### 6 August 2026 - Repair published and deployed; recovery dry run blocked before invocation
+
+- After fresh owner approval of the stated external-publication risk, pushed
+  exact commit `1bd75e2ac49972fa498ef33c81e5433f2d30945a` to branch
+  `codex/simon-shadow05-evidence-timing-repair` and opened draft PR `#349`,
+  `https://github.com/coachcarteruk-gif/coachcarter-website/pull/349`, against
+  `main`. GitHub reports that exact SHA as the draft PR head.
+- Bound only the isolated worktree to Vercel project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` and deployed the exact clean repair
+  commit. Deployment `dpl_9K2mX1q318veJVK1wCXFT9oUyEuT` is READY on the
+  Production target, owns alias `cc-simon-s2-shadow-05.vercel.app`, and provider
+  metadata reports exact Git SHA
+  `1bd75e2ac49972fa498ef33c81e5433f2d30945a`, branch
+  `codex/simon-shadow05-evidence-timing-repair`, and no dirty-source marker.
+- Supported profile-page checks on the repaired alias proved both existing
+  sessions remained valid. The learner profile rendered exact synthetic
+  `Shadow Step 13 Learner`; the instructor profile read model rendered exact
+  synthetic `Shadow Step 12 Instructor` and
+  `instructor.shadow05.step12@example.invalid`. No cookie, token, browser
+  storage, credential store, or authentication record was inspected, and no
+  legal term was accepted.
+- A fresh read-only Neon query against project `shiny-bonus-66942766`, branch
+  `br-empty-cell-za5kh6nr`, database `neondb`, reconfirmed one exact school-1
+  `slot_purchase` ID `2`, booking ID `2`, and BCS ID `3`; gross `8250`; null
+  local fee snapshots; scheduled `test_date`; no refund; null booking contract
+  link; zero target sources; zero target contracts; `direct_slot=1`; and
+  `test_date_direct=0`.
+- Attempted to obtain the deployed shadow-operation credential without
+  exposing or changing it by pulling the isolated project's Production
+  environment into one exact temporary `C:\tmp` file. Vercel correctly
+  exported the sensitive value as empty, so the client-side length guard
+  stopped before sending any HTTP request; the temporary file was removed in a
+  `finally` block. No valid credential exists in the process environment.
+- A subsequent presence/length-only check of repository-local environment
+  files was rejected by the managed safety reviewer as credential probing from
+  a new source. The files were not searched and no workaround was attempted.
+  Therefore neither the deployed read-only recovery gate nor the authorised
+  execution endpoint has been invoked. Candidate
+  `d7222fee-25aa-4211-81ae-36a16ac142b6` remains missing, `one_off_offer` and
+  `captured_request` remain unstarted, and existing `direct_slot` evidence
+  remains untouched.
+
+### 6 August 2026 - Approved root credential check found no key
+
+- After fresh owner approval, inspected only repository-root `.env*` files for
+  the presence and minimum length of `STRIPE_LAUNCH_SHADOW_CRON_SECRET`, without
+  printing or persisting any value. No root file contained the key.
+- The managed safety reviewer rejected extending the same value-suppressed
+  check to nested repository `.env*` files because that was a broader credential
+  scope requiring separate explicit approval. No nested file was searched, no
+  deployed dry-run or recovery request was sent, and candidate
+  `d7222fee-25aa-4211-81ae-36a16ac142b6` remains unchanged. `one_off_offer` and
+  `captured_request` remain unstarted; existing `direct_slot` evidence remains
+  untouched.
+
+### 6 August 2026 - Approved nested credential check also found no key
+
+- After separate owner approval, checked nested repository `.env*` files for
+  only the presence and minimum length of
+  `STRIPE_LAUNCH_SHADOW_CRON_SECRET`, excluding `.git` and dependency content
+  and never printing or persisting a value. The result was zero matches.
+- The installed Vercel CLI exposes no decrypt or reveal option. A proposed
+  deployment-ID-specific read-only environment pull for exact READY deployment
+  `dpl_9K2mX1q318veJVK1wCXFT9oUyEuT` was rejected by the managed safety reviewer
+  as a new credential source requiring separate explicit approval. It was not
+  executed. No dry-run or recovery HTTP request was sent; the candidate and
+  existing `direct_slot` evidence remain unchanged.
+
+### 6 August 2026 - Deployment-specific credential pull unavailable; recovery blocked
+
+- After separate owner approval, attempted exactly one deployment-ID-specific
+  read-only Vercel environment pull for READY deployment
+  `dpl_9K2mX1q318veJVK1wCXFT9oUyEuT`, with value output suppressed and an exact
+  temporary-file cleanup guard. Vercel rejected the operation before creating
+  a file because deployment-specific pulls require an `INITIALIZING`
+  deployment and this exact deployment is already `READY`.
+- The Production environment export provides an empty placeholder for this
+  sensitive value, the process environment has no valid value, and approved
+  root and nested repository `.env*` checks found no key. All safe existing
+  credential sources are therefore exhausted. No application dry run or
+  recovery execution was invoked.
+- The timing repair remains implemented, tested, published in draft PR `#349`,
+  and deployed at exact SHA
+  `1bd75e2ac49972fa498ef33c81e5433f2d30945a`. Candidate
+  `d7222fee-25aa-4211-81ae-36a16ac142b6` remains unmaterialised;
+  `one_off_offer` and `captured_request` remain unstarted. Existing
+  `direct_slot` contract `4af03473-9cfd-4051-9606-654245e1b6ab` remains
+  untouched. Step 13 is blocked before the deployed recovery dry run pending
+  access to the original shadow-operation credential or new authority to
+  change configuration.
+
+### 6 August 2026 - Exact `test_date_direct` candidate recovered complete
+
+- The owner explicitly authorised replacing only isolated shadow-05's
+  Production `STRIPE_LAUNCH_SHADOW_CRON_SECRET`, redeploying exact repair commit
+  `1bd75e2ac49972fa498ef33c81e5433f2d30945a`, and using the replacement for the
+  exact candidate recovery. No other Vercel variable, Stripe credential, or
+  webhook destination was changed.
+- Generated a fresh strong replacement only in process memory. Two attempted
+  `vercel env update` calls were rejected by Vercel's sensitive-variable update
+  API before changing provider state. The documented same-key force-replace
+  path then overwrote exactly the existing sensitive Production
+  `STRIPE_LAUNCH_SHADOW_CRON_SECRET` record. The value was passed through
+  redirected standard input without a command-line argument, file, log, or
+  printed output.
+- Redeployed the unchanged clean isolated worktree. Deployment
+  `dpl_8KnJgNG4qgZGXm8K3XfYx4w5cgVs` is READY on isolated project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, Production-targeted, owns alias
+  `cc-simon-s2-shadow-05.vercel.app`, and provider metadata reports exact Git
+  SHA `1bd75e2ac49972fa498ef33c81e5433f2d30945a`, exact repair branch, and no
+  dirty marker.
+- The deployed exact-candidate dry run performed only immutable Stripe reads
+  and exact local identity checks. It returned `ready`, `dry_run=true`, school
+  `1`, origin `test_date_direct`, candidate
+  `d7222fee-25aa-4211-81ae-36a16ac142b6`, booking `2`, credit transaction `2`,
+  BCS `3`, exact Checkout Session, PaymentIntent, charge and balance
+  transaction, gross `8250`, Stripe fee `226`, and currency `gbp`.
+- Invoked the authorised execution endpoint exactly once with the literal
+  confirmation. It returned `complete`, `dry_run=false`, and the same exact
+  identity. The replacement bearer and random byte buffer were then cleared
+  from process memory, and the secret-free temporary runner was removed.
+- Read-only Neon postflight proved exactly one target funding source, exactly
+  one immutable contract, and exactly one booking link. Contract
+  `d7222fee-25aa-4211-81ae-36a16ac142b6` is origin `test_date_direct`, regime
+  `launch`, evidence `complete`, exact gross `8250`, fee `226`, GBP, exact
+  PaymentIntent `pi_3U197HIqhTSdZedS15voowoW`, charge
+  `ch_3U197HIqhTSdZedS13sFGPgw`, balance transaction
+  `txn_3U197HIqhTSdZedS1FnpGeGB`, available at
+  `2026-08-05T18:00:35.000Z`, with null contradiction and ineligibility codes.
+  Source evidence is also `complete` and singular. Audit postflight found
+  exactly one recovery-started and one recovery-completed record.
+- Origin counts are now `direct_slot=1` and `test_date_direct=1`.
+  Existing `direct_slot` contract `4af03473-9cfd-4051-9606-654245e1b6ab`
+  remains exactly `pending`, with its original PaymentIntent, charge, balance
+  transaction, gross `8250`, fee `288`, GBP, availability
+  `2026-08-07T00:00:00.000Z`, and null contradiction/ineligibility codes. It was
+  not selected, replayed, reconciled, or changed.
+- `one_off_offer` and `captured_request` had not begun at this checkpoint. No
+  payout, earning, transfer, refund, dispute, Connect, Step 14, later-step, or
+  Slice 3 action occurred.
+
+### 6 August 2026 - `one_off_offer` completed singularly through Sandbox Checkout
+
+- Read-only Neon preflight on exact project `shiny-bonus-66942766`, branch
+  `br-empty-cell-za5kh6nr`, database `neondb` proved one eligible synthetic
+  learner, no pending offers, active instructor availability, and no conflict
+  for Thursday 13 August 2026 at `09:00-10:30`. Standard Lesson was active at
+  the server-owned price of GBP `8250` for 90 minutes. The learner's
+  `terms_accepted_at` remained null.
+- The calendar offer modal exposed a viewport defect at the browser's 720px
+  height: its action sat wholly outside the visible viewport. Keyboard and
+  scrolling checks sent no POST and Neon remained at zero offers. Continued
+  through the supported instructor Dashboard payment-link surface, which uses
+  the same fixed `create-offer` contract and provides a scrollable modal.
+- Created exactly one fixed, non-repeating payment-link offer through visible
+  instructor UI for the existing synthetic learner. Offer `1` is manual,
+  Standard Lesson, GBP `8250`, scheduled `2026-08-13` at `09:00-10:30`, with
+  null `max_repeat_weeks`. Isolated SMTP/SMS delivery failed as expected, but
+  the product rendered the acceptance link and held the slot once.
+- Opened that token on the isolated shadow-05 host. The acceptance page visibly
+  showed the exact learner, instructor, date, time, duration, and GBP `82.50`.
+  Stripe-hosted Checkout visibly showed Sandbox, the exact item and amount,
+  and the immutable deployment-specific shadow-05 success/cancel host.
+- Submitted exactly one card payment with Stripe's authorised official
+  bypass-pending test card ending `0278`. No retry or second Checkout was
+  created. Stripe returned to isolated `offer-success.html`; the initial
+  product message was `Booking in progress` while webhook processing settled.
+- Read-only Neon postflight proved offer `1` accepted once, booking `3`
+  scheduled once, `slot_purchase` credit transaction `3` once, BCS `4` once,
+  payout funding source `4` once, and immutable contract
+  `72c4e43b-69f0-49f1-b459-9ff2a0d6c4bf` once. The contract is origin
+  `one_off_offer`, regime `launch`, evidence `complete`, gross `8250`, Stripe
+  fee `226`, GBP, PaymentIntent `pi_3U1MqlIqhTSdZedS1Xgm22dO`, charge
+  `ch_3U1MqlIqhTSdZedS1wYygD98`, balance transaction
+  `txn_3U1MqlIqhTSdZedS1nRaBzIf`, funds available
+  `2026-08-06T08:40:28.000Z`, and null contradiction/ineligibility codes.
+  Source evidence is singular and `complete`; the booking links to that exact
+  contract.
+- Receipt `evt_1U1MqnIqhTSdZedS9rLNdBI9` is test mode, singular, `processed`,
+  and has null last error. Exact deployment runtime logs show the first webhook
+  delivery returned HTTP 500 after isolated SMTP connection refusal, followed
+  by successful HTTP 200 retry processing. This exercised the repaired retry
+  path without duplicating the offer, booking, slot purchase, BCS, funding
+  source, contract, or receipt.
+- Origin counts are now exactly `direct_slot=1`, `test_date_direct=1`, and
+  `one_off_offer=1`. Protected direct-slot contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` remains unchanged and pending with its
+  original PaymentIntent, charge, balance transaction, gross `8250`, fee
+  `288`, GBP, availability `2026-08-07T00:00:00.000Z`, and null contradiction
+  and ineligibility codes. No reconciliation, replay, payout, earning,
+  transfer, refund, dispute, Connect, Step 14, later-step, or Slice 3 action
+  occurred. The next and only remaining Step 13 origin is `captured_request`.
+
+### 6 August 2026 - `captured_request` stopped pending before capture
+
+- Read-only Neon preflight on exact project `shiny-bonus-66942766`, branch
+  `br-empty-cell-za5kh6nr`, database `neondb` proved no pending requests and no
+  booking conflict for Friday 14 August 2026 at `09:00-10:30`. The instructor's
+  original `request_to_book` setting was false.
+- Enabled `request_to_book` once through the visible instructor Profile and
+  confirmed it in Neon. Through the visible signed-in learner booking UI,
+  selected the exact available Standard Lesson request for Friday 14 August at
+  `09:00-10:30`; the confirmation visibly stated GBP `82.50` would only be
+  charged if the instructor accepted.
+- Stripe-hosted Sandbox Checkout visibly showed the exact lesson request and
+  GBP `82.50` hold semantics. Submitted exactly one authorisation with Stripe's
+  authorised official bypass-pending test card ending `0278`. No retry or
+  second Checkout was created.
+- Read-only Neon post-authorisation proved exactly one pending request, ID `1`,
+  payment method `card_hold`, amount `8250`, Checkout Session
+  `cs_test_a1ss4vbYdGOIRFCx6TVvS4jAW06IYVKAkpp4q8grrob8thxUUf4vUL31aX`, and
+  PaymentIntent `pi_3U1MxLIqhTSdZedS2bi13Uox`. It has null booking,
+  hold-transaction, decision, and release fields and expires at
+  `2026-08-08T08:47:17.748Z`.
+- The visible instructor Dashboard correctly reported one future request and
+  linked to `/instructor/?date=2026-08-14`. On two supported navigations plus a
+  direct alias reload, the visible Calendar consistently rendered the exact
+  date and availability but omitted the request card and therefore exposed no
+  Accept or Decline control. Neon continued to prove the request was pending.
+- Stopped under the exercise's pending/ambiguity rule. Did not call
+  `accept-request` directly, manufacture a UI control, retry Checkout, capture
+  the PaymentIntent, create a booking, or materialise a `captured_request`
+  contract. Restored the instructor's original `request_to_book=false` through
+  the visible Profile and confirmed it in Neon.
+- Final stopped-state read proved exactly one pending request, zero bookings in
+  the requested slot, and zero `captured_request` contracts. Protected
+  direct-slot contract `4af03473-9cfd-4051-9606-654245e1b6ab` remains unchanged
+  and pending with gross `8250`, fee `288`, its original PaymentIntent, charge,
+  balance transaction and availability, and null contradiction/ineligibility
+  codes. No payout, earning, transfer, refund, dispute, Connect, Step 14,
+  later-step, or Slice 3 action occurred. Step 13 remains incomplete pending a
+  supported visible instructor acceptance path or separately authorised scope
+  to repair that UI defect.
+
+### Next-session handover - calendar request card repair and Step 13 resume
+
+- Begin from exact repair commit
+  `1bd75e2ac49972fa498ef33c81e5433f2d30945a`, but do not add the calendar fix
+  to draft PR `#349`. Create a separate tightly scoped branch named
+  `codex/simon-shadow05-calendar-request-card-repair` from that exact commit so
+  the evidence-timing repair remains independently reviewable.
+- The living log is intentionally modified but unstaged in the primary
+  workspace while Step 13 is incomplete. Preserve it and all unrelated user
+  changes. Do not switch or clean that dirty worktree; use a separate worktree
+  for the new branch if needed.
+- First read `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`,
+  `docs/stripe-connect.md`, and this entire living log. Inspect the visible
+  Calendar read/render path for `/api/instructor?action=list-requests` and add
+  the smallest focused test that reproduces the missing future request card.
+  Keep the repair UI/read-model-only unless evidence proves otherwise; do not
+  change `accept-request`, capture, booking, ledger, webhook, refund, payout,
+  transfer, Connect, or other money mutation behaviour.
+- Validate the focused repair locally, review the exact diff, publish it as a
+  separate draft PR, and deploy only its exact clean commit to isolated
+  shadow-05. Do not change any environment variable or deploy to another
+  project. Verify the alias and deployed Git SHA before browser use.
+- Before touching request ID `1`, query isolated Neon project
+  `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, database `neondb`.
+  Continue only if the request is still singular, `pending`, unbooked,
+  unreleased, unexpired, and its exact Sandbox PaymentIntent remains safely
+  capturable. Its recorded expiry is `2026-08-08T08:47:17.748Z`. If it is no
+  longer an exact valid pending candidate, stop and report; do not create or
+  submit a replacement request without new owner authority.
+- If valid, enable `request_to_book` only as needed through visible Profile UI,
+  confirm the repaired Calendar visibly renders the exact 14 August
+  `09:00-10:30` request, and click its Accept control exactly once. Do not call
+  the mutation endpoint directly and do not retry on any error, pending result,
+  duplicate, contradiction, or ambiguity. Restore the original
+  `request_to_book=false` setting afterward.
+- Declare Step 13 complete only after read-only postflight proves exactly one
+  accepted request, one booking, singular ledger/funding-source links, and one
+  immutable `captured_request` contract with complete Stripe fee/balance-
+  transaction/availability evidence and null contradiction/ineligibility
+  codes. Recheck all prior origin counts and protected direct-slot contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` unchanged. Append the outcome here;
+  do not begin Step 14 or Slice 3.
+
+### 6 August 2026 - Calendar request-card repair and Step 13 completed
+
+- Preserved the dirty primary workspace and its unstaged living-log change.
+  Created isolated worktree
+  `C:\\tmp\\cc-simon-shadow05-calendar-request-card-repair` on fresh branch
+  `codex/simon-shadow05-calendar-request-card-repair` from exact commit
+  `1bd75e2ac49972fa498ef33c81e5433f2d30945a`. Draft PR `#349` was not
+  modified.
+- Diagnosed a split-read Calendar failure: `schedule-range` and
+  `list-requests` were fetched together, but the Calendar parsed and threw on
+  a failed schedule response before consuming a successful request response.
+  Dashboard parsed its independent reads and therefore still reported the
+  request. The Calendar's later availability/date render then obscured the
+  schedule error, leaving the exact date and availability visible without the
+  request card.
+- Added focused browser regression
+  `tests/instructor-calendar-request-card.spec.js`, proving a successful exact
+  future pending request still renders with visible Accept and Decline controls
+  when the independent schedule-range read fails. The minimum production fix
+  only moves existing request-response parsing ahead of schedule parsing in
+  `public/instructor/index.js`; no API, mutation, Stripe, booking, webhook,
+  ledger, refund, payout, transfer, Connect, or configuration code changed.
+- Verification passed: focused Calendar plus existing day-planner tests `4/4`,
+  syntax check `199` files, C1 control check `271` files, and
+  `git diff --check`. Reviewed diff contains only the two intended files.
+  Clean repair commit
+  `07871219afc9fc66084f2f8bc1bf609b23802dfd` has exact parent
+  `1bd75e2ac49972fa498ef33c81e5433f2d30945a`. Published separate draft PR
+  `#350`, `Render pending lesson requests on instructor Calendar`.
+- Deployed only exact clean repair commit `07871219...` to existing isolated
+  Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`. Deployment
+  `dpl_2PhCs5DreBMCxHNducTRQpZocnVd` is READY and Production-targeted. Before
+  browser interaction, Vercel control-plane evidence proved the exact Git SHA,
+  correct branch/project, no alias error, and ownership of
+  `https://cc-simon-s2-shadow-05.vercel.app`. No environment variable or
+  project setting changed.
+- Mandatory read-only Neon preflight on exact project
+  `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, database `neondb`
+  at server time `2026-08-06T10:09:25.595351Z` proved request ID `1` singular,
+  pending, unbooked, unreleased, and unexpired until
+  `2026-08-08T08:47:17.748Z`. It retained exact PaymentIntent
+  `pi_3U1MxLIqhTSdZedS2bi13Uox`, GBP `8250`, Friday 14 August 2026
+  `09:00-10:30`, zero slot bookings, and zero `captured_request` source or
+  contract rows. Stripe's visible Sandbox dashboard independently showed the
+  same GBP `82.50` PaymentIntent as `Uncaptured`, with a live Capture control
+  and latest charge `ch_3U1MxLIqhTSdZedS2IivkS3r`.
+- Enabled `request_to_book` only through the visible instructor Profile. The
+  repaired deployed Calendar visibly rendered exactly one Friday 14 August
+  request card at `09:00-10:30` for `Shadow Step 13 Learner`, labelled
+  `Card held`, with singular Accept and Decline controls. Invoked that visible
+  Accept control exactly once. The browser-control call timed out while the
+  native confirmation/input command was resolving, so no second click or
+  mutation retry was attempted. Immediate read-only Neon state proved that the
+  single original interaction had completed once. Restored
+  `request_to_book=false` through the visible Profile and confirmed it in the
+  final database read.
+- Read-only Neon postflight proved request ID `1` is accepted once with booking
+  ID `4`; the exact slot has one scheduled 90-minute booking, one
+  `slot_purchase` credit transaction ID `4`, one BCS row ID `6`, one payout
+  funding source ID `5`, and one linked immutable payment contract
+  `c85048ef-573d-4a4e-a978-3df54cd18b1d`. Every booking, credit, BCS, source,
+  and contract link is singular and same-school; no slot release or refund
+  marker exists.
+- The `captured_request` source and contract are both `complete`, origin/regime
+  `captured_request`/`launch`, gross `8250`, Stripe fee `226`, GBP, split
+  `9000` bps, exact PaymentIntent `pi_3U1MxLIqhTSdZedS2bi13Uox`, charge
+  `ch_3U1MxLIqhTSdZedS2IivkS3r`, balance transaction
+  `txn_3U1MxLIqhTSdZedS2iThfXkc`, and funds available at
+  `2026-08-06T10:12:55.000Z`. Contract ineligibility and contradiction codes
+  are null; source contradiction is null. Stripe's visible Sandbox postflight
+  independently showed `Succeeded`, GBP `82.50 captured`, Stripe fee GBP
+  `2.26`, and net GBP `80.24` for the exact payment.
+- Receipt `evt_3U1MxLIqhTSdZedS2k1Y9vWJ` is test mode, singular,
+  `payment_intent.succeeded`, `processed`, and has null last error. Duplicate
+  receipt-event count is zero. Exact materialisation counts are booking `1`,
+  slot purchase `1`, BCS `1`, funding source `1`, and contract `1`.
+- Final origin counts are exactly `direct_slot=1`, `test_date_direct=1`,
+  `one_off_offer=1`, and `captured_request=1` for both contracts and funding
+  sources. Protected direct-slot contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` remains unchanged and pending with
+  its original PaymentIntent, charge, balance transaction, gross `8250`, fee
+  `288`, GBP, availability `2026-08-07T00:00:00.000Z`, fingerprint, and null
+  contradiction/ineligibility codes.
+- A separate read-only prohibited-effect postflight returned zero exact-payment
+  refund events, zero contract refund intents, zero legacy booking earnings,
+  zero instructor or school payout line items for booking `4`, zero launch
+  earnings for the captured-request contract, and zero school-1 payout
+  transfers.
+- Step 13 is complete. No direct mutation endpoint call, second acceptance,
+  replacement request, Checkout Session, card entry, refund, payout, earning,
+  transfer, dispute, Connect action, environment change, Step 14, later step,
+  or Slice 3 action occurred. The Stripe plugin was neither installed nor
+  used. This living-log update remains unstaged in the preserved primary
+  workspace.
+
+### 6 August 2026 - Calendar request-card repair PR merged
+
+- After PR `#349` was squash-merged as commit
+  `a332e400fa3d5deddc8f22d4b14ceef4028495f3`, rebased the separate
+  calendar repair onto that exact `main` commit. The corrected branch remained
+  one commit and two files only: `public/instructor/index.js` and
+  `tests/instructor-calendar-request-card.spec.js`. Its final repair commit was
+  `26727e088216906be3333231ddc1d617acddc0f0` with exact parent `a332e400...`.
+- Repeated focused verification passed locally after the rebase: Calendar plus
+  existing day-planner tests `4/4`, syntax check `199` files, C1 control check
+  `271` files, and `git diff --check`. All four Vercel deployment contexts and
+  Vercel Preview Comments reported success for the corrected PR head.
+- GitHub Actions then experienced a declared major outage affecting hosted
+  runners, workflow starts, and webhook triggers. Two PR workflow attempts
+  were cancelled before executing repository steps; the dependent Playwright
+  jobs were skipped. A manually requested retry for run `31125542938` was
+  accepted for exact head `26727e08...` but remained queued with no jobs in the
+  Actions API during the outage. These cancellations were infrastructure
+  outcomes, not test failures.
+- The owner reported the PR UI green and squash-merged PR `#350`, `Render
+  pending lesson requests on instructor Calendar`. Post-merge GitHub metadata
+  independently confirms state `MERGED` at `2026-08-06T21:55:13Z`, one commit,
+  the exact two intended files, and squash-merge commit
+  `e89a99bf4e14216ae04bbd79e6f54b2e1d263150`. A direct remote-ref read proves
+  `refs/heads/main` is exactly `e89a99bf...`.
+- At this verification point GitHub still reported the Actions major outage,
+  the old retry remained queued in the API, and no post-merge push workflow for
+  `e89a99bf...` was visible, consistent with GitHub's published webhook
+  throttling. The merge and remote `main` state are verified; a clean
+  post-outage Actions result is not independently available from the API yet.
+- No code, deployment, environment, Stripe, booking, ledger, refund, payout,
+  transfer, Connect, Step 14, later-step, or Slice 3 action was taken during
+  this merge follow-up. The preserved primary workspace remains on its original
+  branch with this living log modified and unstaged.
