@@ -18,6 +18,7 @@
 // retries failed with TLS errors and the customer never received a
 // confirmation email. See DEVELOPMENT-ROADMAP.md entry 2.88.
 
+const { neon } = require('@neondatabase/serverless');
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
 const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
 const { verifyCronAuth } = require('./_auth');
@@ -25,6 +26,8 @@ const { createTransporter } = require('./_auth-helpers');
 const { logAuditRequired } = require('./_audit');
 const { withCronLock } = require('./_cron-lock');
 const {
+  RECOVERY_CONFIRMATION,
+  recoverExactLaunchPaymentCandidate,
   reconcilePendingLaunchPaymentContracts,
 } = require('./_stripe-launch-payment-reconciler');
 const { loadShadowLaunchConfig } = require('./_stripe-launch-payment-contracts');
@@ -52,6 +55,39 @@ module.exports = async (req, res) => {
   });
   if (!cronAuthenticated && !shadowAuth) return res.status(401).json({ error: 'Unauthorised' });
 
+  // Keep the exact-candidate preflight outside withCronLock so a dry run does
+  // not write even a temporary lease row. This path performs only immutable
+  // Stripe reads and exact local identity checks.
+  if (shadowAuth && req.query?.recovery_candidate_id && req.query.dry_run === 'true') {
+    const sql = neon(process.env.POSTGRES_URL);
+    try {
+      const config = await loadShadowLaunchConfig(sql, shadowAuth.schoolId);
+      if (!config) {
+        return res.status(409).json(exactRecoveryBlocked(
+          shadowAuth.schoolId,
+          'STRIPE_LAUNCH_SHADOW_NOT_CONFIGURED'
+        ));
+      }
+      const recovery = await runExactCandidateRecovery({
+        sql,
+        req,
+        shadowAuth,
+        dryRun: true,
+      });
+      return res.status(200).json({
+        ok: true,
+        shadow: true,
+        school_id: shadowAuth.schoolId,
+        exact_candidate_recovery: recovery,
+      });
+    } catch (err) {
+      return res.status(409).json(exactRecoveryBlocked(
+        shadowAuth.schoolId,
+        sanitiseRecoveryErrorCode(err)
+      ));
+    }
+  }
+
   // Lease 540s — paging through Stripe sessions can be slow on busy days.
   // Hourly schedule means a 9-min lease is well below the next firing.
   return withCronLock(req, res, 'cron-reconcile-payments', 540, async (sql) => {
@@ -61,6 +97,71 @@ module.exports = async (req, res) => {
         const err = new Error('Shadow launch is not configured for the authenticated school');
         err.code = 'STRIPE_LAUNCH_SHADOW_NOT_CONFIGURED';
         throw err;
+      }
+      if (req.query?.recovery_candidate_id) {
+        if (req.query.confirmation !== RECOVERY_CONFIRMATION) {
+          return {
+            ok: false,
+            shadow: true,
+            school_id: shadowAuth.schoolId,
+            exact_candidate_recovery: {
+              status: 'blocked',
+              code: 'STRIPE_LAUNCH_RECOVERY_CONFIRMATION_REQUIRED',
+            },
+          };
+        }
+        try {
+          await logAuditRequired(sql, {
+            adminId: null,
+            adminEmail: null,
+            action: 'stripe-launch-shadow-exact-candidate-recovery-started',
+            targetType: 'payment_contract_candidate',
+            targetId: null,
+            details: {
+              operation: shadowAuth.operation,
+              project_id: shadowAuth.projectId,
+              candidate_id: req.query.recovery_candidate_id,
+              booking_id: req.query.booking_id,
+              credit_transaction_id: req.query.credit_transaction_id,
+            },
+            schoolId: shadowAuth.schoolId,
+            req,
+          });
+          const recovery = await runExactCandidateRecovery({
+            sql,
+            req,
+            shadowAuth,
+            dryRun: false,
+          });
+          await logAuditRequired(sql, {
+            adminId: null,
+            adminEmail: null,
+            action: 'stripe-launch-shadow-exact-candidate-recovery',
+            targetType: 'payment_contract_candidate',
+            targetId: null,
+            details: {
+              operation: shadowAuth.operation,
+              project_id: shadowAuth.projectId,
+              candidate_id: recovery.identity.candidate_id,
+              booking_id: recovery.identity.booking_id,
+              credit_transaction_id: recovery.identity.credit_transaction_id,
+              status: recovery.status,
+            },
+            schoolId: shadowAuth.schoolId,
+            req,
+          });
+          return {
+            ok: true,
+            shadow: true,
+            school_id: shadowAuth.schoolId,
+            exact_candidate_recovery: recovery,
+          };
+        } catch (err) {
+          return exactRecoveryBlocked(
+            shadowAuth.schoolId,
+            sanitiseRecoveryErrorCode(err)
+          );
+        }
       }
       await logAuditRequired(sql, {
         adminId: null,
@@ -165,6 +266,43 @@ module.exports = async (req, res) => {
     };
   });
 };
+
+function runExactCandidateRecovery({ sql, req, shadowAuth, dryRun }) {
+  return recoverExactLaunchPaymentCandidate({
+    sql,
+    connectionString: process.env.POSTGRES_URL,
+    schoolId: shadowAuth.schoolId,
+    candidateId: req.query.recovery_candidate_id,
+    checkoutSessionId: req.query.checkout_session_id,
+    paymentIntentId: req.query.payment_intent_id,
+    chargeId: req.query.charge_id,
+    balanceTransactionId: req.query.balance_transaction_id,
+    bookingId: req.query.booking_id,
+    creditTransactionId: req.query.credit_transaction_id,
+    bookingCreditSourceId: req.query.booking_credit_source_id,
+    origin: req.query.payment_origin,
+    grossAmountMinor: req.query.gross_amount_minor,
+    stripeFeeMinor: req.query.stripe_fee_minor,
+    currency: req.query.currency,
+    dryRun,
+    confirmation: req.query.confirmation,
+  });
+}
+
+function sanitiseRecoveryErrorCode(err) {
+  return /^[A-Z0-9_]{1,100}$/.test(String(err?.code || ''))
+    ? err.code
+    : 'STRIPE_LAUNCH_RECOVERY_FAILED';
+}
+
+function exactRecoveryBlocked(schoolId, code) {
+  return {
+    ok: false,
+    shadow: true,
+    school_id: schoolId,
+    exact_candidate_recovery: { status: 'blocked', code },
+  };
+}
 
 async function sendAlert(missing) {
   const to = process.env.ERROR_ALERT_EMAIL || process.env.STAFF_EMAIL;

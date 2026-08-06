@@ -391,9 +391,9 @@ async function materializeLaunchPaymentContract({
     if (evidence.missing.length > 0) {
       // The booking, slot-purchase ledger row, BCS attribution, and immutable
       // Stripe candidate metadata are already durable by this point. Delayed
-      // balance-transaction evidence is therefore a reconciliation state, not
-      // a webhook failure. No source/contract is guessed until exact evidence
-      // becomes available.
+      // balance-transaction evidence is therefore a retryable waiting state.
+      // No source/contract is guessed until exact evidence becomes available;
+      // the caller chooses whether to request transport retry or reconcile it.
       return {
         enabled: true,
         candidate: true,

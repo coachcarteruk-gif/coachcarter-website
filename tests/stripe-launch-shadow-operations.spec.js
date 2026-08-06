@@ -68,6 +68,11 @@ test.describe('Stripe launch shadow operation authentication', () => {
     expect(reconcile).toContain('schoolId: shadowAuth.schoolId');
     expect(reconcile).toContain("action: 'stripe-launch-shadow-reconcile-payments'");
     expect(reconcile).toContain("action: 'stripe-launch-shadow-reconcile-payments-started'");
+    expect(reconcile).toContain("req.query.dry_run === 'true'");
+    expect(reconcile).toContain("action: 'stripe-launch-shadow-exact-candidate-recovery-started'");
+    expect(reconcile).toContain("action: 'stripe-launch-shadow-exact-candidate-recovery'");
+    expect(reconcile.indexOf("req.query.dry_run === 'true'"))
+      .toBeLessThan(reconcile.indexOf("return withCronLock(req, res, 'cron-reconcile-payments'"));
     expect(requests).toContain('operation: SHADOW_OPERATIONS.EXPIRE_REQUESTS');
     expect(requests).toContain('runRequestExpiry(sql, { schoolId: shadowAuth?.schoolId || null })');
     expect(requests).toContain("action: 'stripe-launch-shadow-expire-requests'");

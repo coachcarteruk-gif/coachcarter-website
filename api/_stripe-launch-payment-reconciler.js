@@ -6,9 +6,40 @@ const {
 const {
   LAUNCH_ACCOUNTING_VERSION,
   SHADOW_WRITER_MODE,
+  PAYMENT_ORIGINS,
   buildLaunchEvidenceDecision,
+  compareLocalStripeFeeEvidence,
   materializeLaunchPaymentContract,
+  parseLaunchPaymentCandidate,
 } = require('./_stripe-launch-payment-contracts');
+
+const RECOVERY_CONFIRMATION = 'RECOVER_STRIPE_LAUNCH_CANDIDATE_CONFIRMED';
+
+function recoveryError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+function requiredRecoveryText(value, field, pattern) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text || (pattern && !pattern.test(text))) {
+    throw recoveryError('STRIPE_LAUNCH_RECOVERY_INPUT_INVALID', `${field} is invalid`);
+  }
+  return text;
+}
+
+function requiredRecoveryInteger(value, field) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw recoveryError('STRIPE_LAUNCH_RECOVERY_INPUT_INVALID', `${field} is invalid`);
+  }
+  return parsed;
+}
+
+function stripeId(value) {
+  return typeof value === 'string' ? value : value?.id || null;
+}
 
 function asIsoTimestamp(value) {
   if (!value) return null;
@@ -133,6 +164,357 @@ async function finalizePendingContract({
     }
     return { status: 'complete', completed_at: completedAt };
   });
+}
+
+async function recoverExactLaunchPaymentCandidate({
+  sql,
+  connectionString,
+  schoolId,
+  candidateId,
+  checkoutSessionId,
+  paymentIntentId,
+  chargeId,
+  balanceTransactionId,
+  bookingId,
+  creditTransactionId,
+  bookingCreditSourceId,
+  origin,
+  grossAmountMinor,
+  stripeFeeMinor,
+  currency,
+  dryRun = true,
+  confirmation = null,
+  paymentObjectFetcher = fetchLaunchPaymentObject,
+  stripeEvidenceFetcher = fetchSessionFundingEvidence,
+  contractMaterializer = materializeLaunchPaymentContract,
+  now = new Date(),
+  transactionRunner = withNeonTransaction,
+}) {
+  if (typeof sql !== 'function') {
+    throw new TypeError('sql must be a Neon-compatible tagged query function');
+  }
+  const scopedSchoolId = requiredRecoveryInteger(schoolId, 'schoolId');
+  const scopedBookingId = requiredRecoveryInteger(bookingId, 'bookingId');
+  const scopedCreditTransactionId = requiredRecoveryInteger(
+    creditTransactionId,
+    'creditTransactionId'
+  );
+  const scopedBookingCreditSourceId = requiredRecoveryInteger(
+    bookingCreditSourceId,
+    'bookingCreditSourceId'
+  );
+  const expectedCandidateId = requiredRecoveryText(
+    candidateId,
+    'candidateId',
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  ).toLowerCase();
+  const expectedCheckoutSessionId = requiredRecoveryText(
+    checkoutSessionId,
+    'checkoutSessionId',
+    /^cs_(?:test_)?[A-Za-z0-9]+$/
+  );
+  const expectedPaymentIntentId = requiredRecoveryText(
+    paymentIntentId,
+    'paymentIntentId',
+    /^pi_[A-Za-z0-9]+$/
+  );
+  const expectedChargeId = requiredRecoveryText(chargeId, 'chargeId', /^ch_[A-Za-z0-9]+$/);
+  const expectedBalanceTransactionId = requiredRecoveryText(
+    balanceTransactionId,
+    'balanceTransactionId',
+    /^txn_[A-Za-z0-9]+$/
+  );
+  if (origin !== PAYMENT_ORIGINS.TEST_DATE_DIRECT) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_ORIGIN_REJECTED',
+      'Exact candidate recovery is restricted to test_date_direct'
+    );
+  }
+  const expectedGross = requiredRecoveryInteger(grossAmountMinor, 'grossAmountMinor');
+  const expectedFee = requiredRecoveryInteger(stripeFeeMinor, 'stripeFeeMinor');
+  const expectedCurrency = requiredRecoveryText(currency, 'currency', /^[a-zA-Z]{3}$/).toLowerCase();
+  if (dryRun !== true && confirmation !== RECOVERY_CONFIRMATION) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_CONFIRMATION_REQUIRED',
+      'Exact candidate recovery confirmation is required'
+    );
+  }
+
+  const localRows = await sql`
+    SELECT ct.id AS credit_transaction_id,
+           ct.school_id,
+           ct.learner_id,
+           ct.instructor_id,
+           ct.amount_pence,
+           ct.stripe_fee_pence AS credit_transaction_fee_pence,
+           ct.stripe_session_id,
+           ct.stripe_payment_intent_id,
+           i.active AS instructor_active,
+           b.id AS booking_id,
+           b.status AS booking_status,
+           b.booking_purpose,
+           b.lesson_payment_contract_id AS booking_contract_id,
+           b.stripe_fee_pence AS booking_fee_pence,
+           b.stripe_fee_source,
+           bcs.id AS booking_credit_source_id,
+           bcs.contribution_pence,
+           bcs.stripe_fee_pence AS booking_credit_source_fee_pence,
+           bcs.refunded_at,
+           cfg.cutover_at,
+           (SELECT COUNT(*)::int
+              FROM booking_credit_sources active_bcs
+              JOIN lesson_bookings active_b
+                ON active_b.id = active_bcs.booking_id
+               AND active_b.school_id = active_bcs.school_id
+             WHERE active_bcs.school_id = ${scopedSchoolId}
+               AND active_bcs.credit_transaction_id = ${scopedCreditTransactionId}
+               AND active_b.status IN ('scheduled', 'chargeable')
+               AND active_bcs.refunded_at IS NULL) AS active_mapping_count,
+           (SELECT COUNT(*)::int
+              FROM payout_funding_sources s
+             WHERE s.school_id = ${scopedSchoolId}
+               AND (
+                 s.credit_transaction_id = ${scopedCreditTransactionId}
+                 OR s.lesson_payment_contract_id = ${expectedCandidateId}::uuid
+                 OR s.stripe_payment_intent_id = ${expectedPaymentIntentId}
+                 OR s.stripe_charge_id = ${expectedChargeId}
+               )) AS funding_source_count,
+           (SELECT COUNT(*)::int
+              FROM lesson_payment_contracts c
+             WHERE c.school_id = ${scopedSchoolId}
+               AND (
+                 c.id = ${expectedCandidateId}::uuid
+                 OR c.stripe_payment_intent_id = ${expectedPaymentIntentId}
+                 OR c.stripe_charge_id = ${expectedChargeId}
+               )) AS payment_contract_count
+      FROM credit_transactions ct
+      JOIN booking_credit_sources bcs
+        ON bcs.id = ${scopedBookingCreditSourceId}
+       AND bcs.school_id = ct.school_id
+       AND bcs.credit_transaction_id = ct.id
+      JOIN lesson_bookings b
+        ON b.id = ${scopedBookingId}
+       AND b.school_id = bcs.school_id
+       AND b.id = bcs.booking_id
+       AND b.learner_id = ct.learner_id
+       AND b.instructor_id = ct.instructor_id
+      JOIN instructors i
+        ON i.id = ct.instructor_id
+       AND i.school_id = ct.school_id
+      JOIN learner_users lu
+        ON lu.id = ct.learner_id
+       AND lu.school_id = ct.school_id
+      JOIN stripe_connect_launch_configs cfg
+        ON cfg.school_id = ct.school_id
+       AND cfg.accounting_version = ${LAUNCH_ACCOUNTING_VERSION}
+       AND cfg.mode = ${SHADOW_WRITER_MODE}
+     WHERE ct.id = ${scopedCreditTransactionId}
+       AND ct.school_id = ${scopedSchoolId}
+       AND ct.type = 'slot_purchase'
+     LIMIT 2
+  `;
+  if (localRows.length !== 1) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_LOCAL_IDENTITY_MISMATCH',
+      'Exact local payment candidate identity is not singular'
+    );
+  }
+  const local = localRows[0];
+  const localMismatch = (
+    Number(local.credit_transaction_id) !== scopedCreditTransactionId
+    || Number(local.booking_id) !== scopedBookingId
+    || Number(local.booking_credit_source_id) !== scopedBookingCreditSourceId
+    || local.stripe_session_id !== expectedCheckoutSessionId
+    || local.stripe_payment_intent_id !== expectedPaymentIntentId
+    || Number(local.amount_pence) !== expectedGross
+    || Number(local.contribution_pence) !== expectedGross
+    || local.booking_status !== 'scheduled'
+    || local.booking_purpose !== 'test_date'
+    || local.instructor_active !== true
+    || local.refunded_at != null
+    || local.booking_contract_id != null
+    || Number(local.active_mapping_count) !== 1
+  );
+  if (localMismatch) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_LOCAL_IDENTITY_MISMATCH',
+      'Exact local payment candidate evidence does not match'
+    );
+  }
+  if (Number(local.funding_source_count) !== 0 || Number(local.payment_contract_count) !== 0) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_NOT_MISSING',
+      'Exact payment candidate already has financial evidence'
+    );
+  }
+
+  let paymentObject;
+  let evidence;
+  try {
+    paymentObject = await paymentObjectFetcher({
+      stripe_checkout_session_id: expectedCheckoutSessionId,
+      stripe_payment_intent_id: expectedPaymentIntentId,
+    });
+    evidence = await stripeEvidenceFetcher(paymentObject);
+  } catch (_) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_STRIPE_READ_FAILED',
+      'Fresh immutable Stripe evidence could not be read'
+    );
+  }
+  const paymentObjectIntentId = stripeId(paymentObject?.payment_intent);
+  const candidate = parseLaunchPaymentCandidate(paymentObject?.metadata || {}, origin);
+  const decision = buildLaunchEvidenceDecision({ fundingEvidence: evidence, now });
+  const localFeeContradictions = compareLocalStripeFeeEvidence({
+    creditTransactionFeePence: local.credit_transaction_fee_pence,
+    bookingFeePence: local.booking_fee_pence,
+    bookingFeeSource: local.stripe_fee_source,
+    bookingContributionFeePence: local.booking_credit_source_fee_pence,
+    stripeFeePence: expectedFee,
+  });
+  const evidenceMismatch = (
+    paymentObject?.object !== 'checkout.session'
+    || paymentObject?.id !== expectedCheckoutSessionId
+    || paymentObject?.payment_status !== 'paid'
+    || paymentObjectIntentId !== expectedPaymentIntentId
+    || candidate?.candidateId !== expectedCandidateId
+    || evidence?.paymentIntentId !== expectedPaymentIntentId
+    || evidence?.paymentIntentStatus !== 'succeeded'
+    || evidence?.chargeId !== expectedChargeId
+    || evidence?.chargePaid !== true
+    || evidence?.chargeCaptured !== true
+    || evidence?.chargePaymentIntentId !== expectedPaymentIntentId
+    || evidence?.balanceTransactionId !== expectedBalanceTransactionId
+    || evidence?.balanceTransactionSourceId !== expectedChargeId
+    || evidence?.balanceTransactionType !== 'charge'
+    || evidence?.balanceTransactionStatus !== 'available'
+    || Number(evidence?.balanceTransactionAmountPence) !== expectedGross
+    || String(evidence?.balanceTransactionCurrency || '').toLowerCase() !== expectedCurrency
+    || Number(evidence?.amountPence) !== expectedGross
+    || String(evidence?.currency || '').toLowerCase() !== expectedCurrency
+    || Number(evidence?.feePence) !== expectedFee
+    || evidence?.source !== 'balance_transaction'
+    || localFeeContradictions.length > 0
+    || !decision.paymentCreatedAt
+    || new Date(decision.paymentCreatedAt).getTime() < new Date(local.cutover_at).getTime()
+    || decision.missing.length > 0
+    || decision.contradictory.length > 0
+    || decision.fundsAvailable !== true
+  );
+  if (evidenceMismatch) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_STRIPE_IDENTITY_MISMATCH',
+      'Fresh immutable Stripe evidence does not match the exact candidate'
+    );
+  }
+
+  const agreementRows = await sql`
+    SELECT COUNT(*)::int AS agreement_count
+      FROM instructor_payout_agreement_versions a
+     WHERE a.school_id = ${scopedSchoolId}
+       AND a.instructor_id = ${Number(local.instructor_id)}
+       AND a.status = 'active'
+       AND a.starts_at <= ${decision.paymentCreatedAt}::timestamptz
+       AND (a.ends_at IS NULL OR a.ends_at > ${decision.paymentCreatedAt}::timestamptz)
+  `;
+  if (Number(agreementRows[0]?.agreement_count) !== 1) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_AGREEMENT_MISMATCH',
+      'Exact candidate recovery requires one active agreement at payment creation'
+    );
+  }
+
+  const identity = {
+    school_id: scopedSchoolId,
+    candidate_id: expectedCandidateId,
+    origin,
+    booking_id: scopedBookingId,
+    credit_transaction_id: scopedCreditTransactionId,
+    booking_credit_source_id: scopedBookingCreditSourceId,
+    checkout_session_id: expectedCheckoutSessionId,
+    payment_intent_id: expectedPaymentIntentId,
+    charge_id: expectedChargeId,
+    balance_transaction_id: expectedBalanceTransactionId,
+    gross_amount_minor: expectedGross,
+    stripe_fee_minor: expectedFee,
+    currency: expectedCurrency,
+  };
+  if (dryRun === true) {
+    return { status: 'ready', dry_run: true, identity };
+  }
+
+  const result = await contractMaterializer({
+    connectionString,
+    schoolId: scopedSchoolId,
+    creditTransactionId: scopedCreditTransactionId,
+    bookingId: scopedBookingId,
+    metadata: paymentObject.metadata,
+    expectedOrigin: origin,
+    fundingEvidence: evidence,
+    eventContext: {
+      stripeEventId: null,
+      stripeEventType: 'exact_candidate_recovery',
+    },
+    now,
+    transactionRunner,
+  });
+  if (
+    result?.materialized !== true
+    || result?.contract?.id !== expectedCandidateId
+    || result?.contract?.evidence_status !== 'complete'
+    || result?.contract?.ineligibility_code != null
+    || result?.contract?.contradiction_code != null
+  ) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_RESULT_INVALID',
+      'Exact candidate recovery did not produce one complete contract'
+    );
+  }
+
+  const postflight = await sql`
+    SELECT
+      (SELECT COUNT(*)::int
+         FROM payout_funding_sources s
+        WHERE s.school_id = ${scopedSchoolId}
+          AND s.credit_transaction_id = ${scopedCreditTransactionId}
+          AND s.lesson_payment_contract_id = ${expectedCandidateId}::uuid
+          AND s.stripe_payment_intent_id = ${expectedPaymentIntentId}
+          AND s.stripe_charge_id = ${expectedChargeId}
+          AND s.stripe_balance_transaction_id = ${expectedBalanceTransactionId}
+          AND s.evidence_completeness = 'complete'
+          AND s.contradiction_code IS NULL) AS funding_source_count,
+      (SELECT COUNT(*)::int
+         FROM lesson_payment_contracts c
+        WHERE c.school_id = ${scopedSchoolId}
+          AND c.id = ${expectedCandidateId}::uuid
+          AND c.origin = ${origin}
+          AND c.stripe_payment_intent_id = ${expectedPaymentIntentId}
+          AND c.stripe_charge_id = ${expectedChargeId}
+          AND c.stripe_balance_transaction_id = ${expectedBalanceTransactionId}
+          AND c.gross_amount_minor = ${expectedGross}
+          AND c.stripe_fee_minor = ${expectedFee}
+          AND c.currency = ${expectedCurrency}
+          AND c.evidence_status = 'complete'
+          AND c.ineligibility_code IS NULL
+          AND c.contradiction_code IS NULL) AS payment_contract_count,
+      (SELECT COUNT(*)::int
+         FROM lesson_bookings b
+        WHERE b.school_id = ${scopedSchoolId}
+          AND b.id = ${scopedBookingId}
+          AND b.lesson_payment_contract_id = ${expectedCandidateId}::uuid) AS booking_link_count
+  `;
+  const verified = postflight[0];
+  if (
+    Number(verified?.funding_source_count) !== 1
+    || Number(verified?.payment_contract_count) !== 1
+    || Number(verified?.booking_link_count) !== 1
+  ) {
+    throw recoveryError(
+      'STRIPE_LAUNCH_RECOVERY_POSTFLIGHT_FAILED',
+      'Exact candidate recovery postflight was not singular'
+    );
+  }
+  return { status: 'complete', dry_run: false, identity };
 }
 
 async function reconcilePendingLaunchPaymentContracts({
@@ -340,7 +722,9 @@ async function reconcilePendingLaunchPaymentContracts({
 }
 
 module.exports = {
+  RECOVERY_CONFIRMATION,
   comparePendingContract,
   finalizePendingContract,
+  recoverExactLaunchPaymentCandidate,
   reconcilePendingLaunchPaymentContracts,
 };

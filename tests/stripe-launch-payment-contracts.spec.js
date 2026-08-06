@@ -15,7 +15,9 @@ const {
   materializeLaunchPaymentContract,
 } = require('../api/_stripe-launch-payment-contracts');
 const {
+  RECOVERY_CONFIRMATION,
   comparePendingContract,
+  recoverExactLaunchPaymentCandidate,
   reconcilePendingLaunchPaymentContracts,
 } = require('../api/_stripe-launch-payment-reconciler');
 const { fetchSessionFundingEvidence } = require('../api/_stripe-fee');
@@ -50,6 +52,78 @@ function exactEvidence(overrides = {}) {
     feePence: 103,
     source: 'balance_transaction',
     reviewReasons: [],
+    ...overrides,
+  };
+}
+
+function recoveryLocalRow(overrides = {}) {
+  return {
+    credit_transaction_id: 11,
+    school_id: 7,
+    learner_id: 8,
+    instructor_id: 9,
+    amount_pence: 5500,
+    credit_transaction_fee_pence: null,
+    stripe_session_id: 'cs_test_launch123',
+    stripe_payment_intent_id: 'pi_launch123',
+    instructor_active: true,
+    booking_id: 13,
+    booking_status: 'scheduled',
+    booking_purpose: 'test_date',
+    booking_contract_id: null,
+    booking_fee_pence: null,
+    stripe_fee_source: null,
+    booking_credit_source_id: 17,
+    contribution_pence: 5500,
+    booking_credit_source_fee_pence: 0,
+    refunded_at: null,
+    cutover_at: '2026-07-01T00:00:00.000Z',
+    active_mapping_count: 1,
+    funding_source_count: 0,
+    payment_contract_count: 0,
+    ...overrides,
+  };
+}
+
+function recoveryPaymentObject() {
+  return {
+    id: 'cs_test_launch123',
+    object: 'checkout.session',
+    payment_status: 'paid',
+    payment_intent: 'pi_launch123',
+    metadata: {
+      payment_contract_candidate_id: candidateId,
+      payment_contract_schema_version: PAYMENT_CONTRACT_SCHEMA_VERSION,
+      payment_origin: PAYMENT_ORIGINS.TEST_DATE_DIRECT,
+    },
+  };
+}
+
+function recoveryInput(overrides = {}) {
+  return {
+    connectionString: 'not-used',
+    schoolId: 7,
+    candidateId,
+    checkoutSessionId: 'cs_test_launch123',
+    paymentIntentId: 'pi_launch123',
+    chargeId: 'ch_launch123',
+    balanceTransactionId: 'txn_launch123',
+    bookingId: 13,
+    creditTransactionId: 11,
+    bookingCreditSourceId: 17,
+    origin: PAYMENT_ORIGINS.TEST_DATE_DIRECT,
+    grossAmountMinor: 5500,
+    stripeFeeMinor: 103,
+    currency: 'gbp',
+    now: new Date('2026-08-04T00:00:00.000Z'),
+    paymentObjectFetcher: async () => recoveryPaymentObject(),
+    stripeEvidenceFetcher: async () => exactEvidence({
+      paymentIntentId: 'pi_launch123',
+      chargeId: 'ch_launch123',
+      chargePaymentIntentId: 'pi_launch123',
+      balanceTransactionId: 'txn_launch123',
+      balanceTransactionSourceId: 'ch_launch123',
+    }),
     ...overrides,
   };
 }
@@ -340,6 +414,138 @@ test.describe('Stripe launch immutable evidence', () => {
     });
     expect(result).toMatchObject({ checked: 0, completed: 0, failed: 0 });
     expect(stripeCalls).toBe(0);
+  });
+
+  test('historical processed candidate recovery dry-runs read-only, then materializes exactly once', async () => {
+    let materializerCalls = 0;
+    let postflightReady = false;
+    const sql = async (strings) => {
+      const text = strings.join('');
+      if (/FROM credit_transactions ct/i.test(text)) return [recoveryLocalRow()];
+      if (/FROM instructor_payout_agreement_versions a/i.test(text)) {
+        return [{ agreement_count: 1 }];
+      }
+      if (/AS booking_link_count/i.test(text)) {
+        return [{
+          funding_source_count: postflightReady ? 1 : 0,
+          payment_contract_count: postflightReady ? 1 : 0,
+          booking_link_count: postflightReady ? 1 : 0,
+        }];
+      }
+      return [];
+    };
+    const contractMaterializer = async () => {
+      materializerCalls += 1;
+      postflightReady = true;
+      return {
+        materialized: true,
+        created: true,
+        contract: {
+          id: candidateId,
+          evidence_status: 'complete',
+          ineligibility_code: null,
+          contradiction_code: null,
+        },
+      };
+    };
+
+    const dryRun = await recoverExactLaunchPaymentCandidate(recoveryInput({
+      sql,
+      dryRun: true,
+      contractMaterializer,
+    }));
+    expect(dryRun).toMatchObject({
+      status: 'ready',
+      dry_run: true,
+      identity: {
+        candidate_id: candidateId,
+        booking_id: 13,
+        credit_transaction_id: 11,
+        booking_credit_source_id: 17,
+      },
+    });
+    expect(dryRun.identity.origin).toBe(PAYMENT_ORIGINS.TEST_DATE_DIRECT);
+    expect(materializerCalls).toBe(0);
+
+    const recovered = await recoverExactLaunchPaymentCandidate(recoveryInput({
+      sql,
+      dryRun: false,
+      confirmation: RECOVERY_CONFIRMATION,
+      contractMaterializer,
+    }));
+    expect(recovered).toMatchObject({
+      status: 'complete',
+      dry_run: false,
+      identity: {
+        candidate_id: candidateId,
+        checkout_session_id: 'cs_test_launch123',
+        payment_intent_id: 'pi_launch123',
+        charge_id: 'ch_launch123',
+        balance_transaction_id: 'txn_launch123',
+        gross_amount_minor: 5500,
+        stripe_fee_minor: 103,
+        currency: 'gbp',
+      },
+    });
+    expect(materializerCalls).toBe(1);
+  });
+
+  test('exact candidate recovery refuses identity drift, existing evidence, and non-test-date origins', async () => {
+    let stripeCalls = 0;
+    const base = recoveryInput({
+      sql: async () => [recoveryLocalRow({ funding_source_count: 1 })],
+      paymentObjectFetcher: async () => {
+        stripeCalls += 1;
+        return recoveryPaymentObject();
+      },
+    });
+    await expect(recoverExactLaunchPaymentCandidate(base)).rejects.toMatchObject({
+      code: 'STRIPE_LAUNCH_RECOVERY_NOT_MISSING',
+    });
+    expect(stripeCalls).toBe(0);
+
+    await expect(recoverExactLaunchPaymentCandidate(recoveryInput({
+      sql: async () => [recoveryLocalRow()],
+      origin: PAYMENT_ORIGINS.DIRECT_SLOT,
+    }))).rejects.toMatchObject({
+      code: 'STRIPE_LAUNCH_RECOVERY_ORIGIN_REJECTED',
+    });
+
+    await expect(recoverExactLaunchPaymentCandidate(recoveryInput({
+      sql: async () => [recoveryLocalRow()],
+      stripeEvidenceFetcher: async () => exactEvidence({ feePence: 104 }),
+    }))).rejects.toMatchObject({
+      code: 'STRIPE_LAUNCH_RECOVERY_STRIPE_IDENTITY_MISMATCH',
+    });
+
+    let materializerCalls = 0;
+    await expect(recoverExactLaunchPaymentCandidate(recoveryInput({
+      sql: async (strings) => (
+        /FROM credit_transactions ct/i.test(strings.join(''))
+          ? [recoveryLocalRow({ credit_transaction_fee_pence: 102 })]
+          : [{ agreement_count: 1 }]
+      ),
+      dryRun: false,
+      confirmation: RECOVERY_CONFIRMATION,
+      contractMaterializer: async () => { materializerCalls += 1; },
+    }))).rejects.toMatchObject({
+      code: 'STRIPE_LAUNCH_RECOVERY_STRIPE_IDENTITY_MISMATCH',
+    });
+    expect(materializerCalls).toBe(0);
+
+    await expect(recoverExactLaunchPaymentCandidate(recoveryInput({
+      sql: async (strings) => (
+        /FROM credit_transactions ct/i.test(strings.join(''))
+          ? [recoveryLocalRow()]
+          : [{ agreement_count: 0 }]
+      ),
+      dryRun: false,
+      confirmation: RECOVERY_CONFIRMATION,
+      contractMaterializer: async () => { materializerCalls += 1; },
+    }))).rejects.toMatchObject({
+      code: 'STRIPE_LAUNCH_RECOVERY_AGREEMENT_MISMATCH',
+    });
+    expect(materializerCalls).toBe(0);
   });
 
   test('treats legacy null/zero fee placeholders as unknown but preserves known mismatches', () => {

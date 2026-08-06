@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { sendWhatsApp } = require('./_whatsapp');
 const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
+const { logNotification } = require('./_notification-log');
 const { SCHEDULED, BLOCKING_STATUSES, blocksSlot, isTerminal } = require('./_booking-status');
 const { fetchSessionFeePence, fetchSessionFundingEvidence } = require('./_stripe-fee');
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
@@ -42,6 +43,106 @@ function isMissingBookingPurposeSchema(err) {
   const msg = String(err?.message || '');
   return err?.code === '42703'
     && /column .*?(booking_purpose|test_start_time|test_centre).*? does not exist/i.test(msg);
+}
+
+function safeNotificationErrorField(value, fallback) {
+  const text = String(value || '').trim();
+  return /^[A-Za-z0-9_.:-]{1,80}$/.test(text) ? text : fallback;
+}
+
+function reportPostCommitBookingEmailFailure({ recipientRole, purpose, error }) {
+  const safeRole = recipientRole === 'instructor' ? 'instructor' : 'learner';
+  const safePurpose = safeNotificationErrorField(purpose, 'booking.slot_confirmation');
+  const errorName = safeNotificationErrorField(error?.name, 'Error');
+  const errorCode = safeNotificationErrorField(error?.code, 'UNKNOWN');
+
+  // Keep transport details, addresses, and provider responses out of the
+  // operator-visible error path. notification_log remains the audit record
+  // for the underlying delivery attempt and its bounded error message.
+  console.error('[slot_booking] post-commit email delivery failed', {
+    recipient_role: safeRole,
+    purpose: safePurpose,
+    error_name: errorName,
+    error_code: errorCode,
+  });
+
+  try {
+    const alertError = new Error(
+      `Post-commit ${safeRole} booking email failed (${errorName}/${errorCode})`
+    );
+    alertError.name = 'NotificationDeliveryError';
+    reportError('/api/webhook (slot_booking post-commit notification)', alertError);
+  } catch (_) {
+    // Reporting is best-effort and must never change the webhook outcome.
+  }
+}
+
+async function recordTransportSetupFailure(mailOptions, error) {
+  const logMeta = mailOptions?._log || {};
+  const errorName = safeNotificationErrorField(error?.name, 'Error');
+  const errorCode = safeNotificationErrorField(error?.code, 'UNKNOWN');
+  await logNotification({
+    channel: 'email',
+    purpose: logMeta.purpose || 'booking.slot_confirmation',
+    recipient: mailOptions?.to || '',
+    deliveryStatus: 'failed',
+    errorMessage: `Transport setup failed (${errorName}/${errorCode})`,
+    payloadSummary: mailOptions?.subject || null,
+    learnerId: logMeta.learnerId,
+    instructorId: logMeta.instructorId,
+    schoolId: logMeta.schoolId,
+  });
+}
+
+async function deliverPostCommitBookingEmails({
+  learnerMail,
+  instructorMail = null,
+  createMailer = createTransporter,
+}) {
+  const attempts = [
+    { recipientRole: 'learner', mailOptions: learnerMail },
+    ...(instructorMail
+      ? [{ recipientRole: 'instructor', mailOptions: instructorMail }]
+      : []),
+  ];
+
+  let transporter;
+  try {
+    transporter = createMailer();
+  } catch (error) {
+    for (const attempt of attempts) {
+      await recordTransportSetupFailure(attempt.mailOptions, error);
+      reportPostCommitBookingEmailFailure({
+        recipientRole: attempt.recipientRole,
+        purpose: attempt.mailOptions?._log?.purpose,
+        error,
+      });
+    }
+    return attempts.map(attempt => ({
+      recipientRole: attempt.recipientRole,
+      delivered: false,
+    }));
+  }
+
+  const outcomes = [];
+  // Deliberately sequential and independently caught: a learner failure must
+  // not suppress the instructor attempt (or vice versa), while both sends go
+  // through createTransporter's notification_log audit wrapper.
+  for (const attempt of attempts) {
+    const purpose = attempt.mailOptions?._log?.purpose;
+    try {
+      await transporter.sendMail(attempt.mailOptions);
+      outcomes.push({ recipientRole: attempt.recipientRole, delivered: true });
+    } catch (error) {
+      reportPostCommitBookingEmailFailure({
+        recipientRole: attempt.recipientRole,
+        purpose,
+        error,
+      });
+      outcomes.push({ recipientRole: attempt.recipientRole, delivered: false });
+    }
+  }
+  return outcomes;
 }
 
 // Resolve school_id from Stripe metadata with a tenant-safe fallback.
@@ -293,6 +394,20 @@ async function ensurePayoutV2StripeSource({
     }
     throw err;
   }
+}
+
+function launchMaterializationRetryError(result) {
+  if (
+    result?.enabled === true
+    && result?.candidate === true
+    && result?.materialized === false
+    && result?.status === 'pending'
+  ) {
+    const err = new Error('Launch payment evidence is temporarily incomplete');
+    err.code = 'STRIPE_LAUNCH_EVIDENCE_RETRY_REQUIRED';
+    return err;
+  }
+  return null;
 }
 
 async function handleCapturedRequestSource(paymentIntent, payoutV2Receipt) {
@@ -1169,7 +1284,7 @@ async function handleSlotBooking(session, eventContext = null) {
           creditTransaction: existingCreditTx,
           durationMins: chargeMins,
         });
-        await ensurePayoutV2StripeSource({
+        const launchResult = await ensurePayoutV2StripeSource({
           sql,
           schoolId,
           creditTransactionId: Number(existingCreditTx.id),
@@ -1188,6 +1303,8 @@ async function handleSlotBooking(session, eventContext = null) {
               : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
           },
         });
+        const retryError = launchMaterializationRetryError(launchResult);
+        if (retryError) throw retryError;
         return;
       }
       if (existingBooking && isTerminal(existingBooking.status)) {
@@ -1262,7 +1379,7 @@ async function handleSlotBooking(session, eventContext = null) {
           Number.isSafeInteger(explicitPayoutV2SchoolId) &&
           explicitPayoutV2SchoolId > 0
         ) {
-          await ensurePayoutV2StripeSource({
+          const launchResult = await ensurePayoutV2StripeSource({
             sql,
             schoolId: explicitPayoutV2SchoolId,
             creditTransactionId: Number(racedCreditTx.id),
@@ -1281,6 +1398,8 @@ async function handleSlotBooking(session, eventContext = null) {
                 : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
             },
           });
+          const retryError = launchMaterializationRetryError(launchResult);
+          if (retryError) throw retryError;
         } else if (eventContext?.launchEnabled === true) {
           throw new Error(`STRIPE_LAUNCH_BOOKING_NOT_READY: ${session.id}`);
         }
@@ -1440,11 +1559,12 @@ async function handleSlotBooking(session, eventContext = null) {
       creditTransaction: slotCreditTx,
       durationMins: chargeMins,
     });
+    let deferredLaunchRetryError = null;
     if (
       Number.isSafeInteger(explicitPayoutV2SchoolId) &&
       explicitPayoutV2SchoolId > 0
     ) {
-      await ensurePayoutV2StripeSource({
+      const launchResult = await ensurePayoutV2StripeSource({
         sql,
         schoolId: explicitPayoutV2SchoolId,
         creditTransactionId: Number(slotCreditTx.id),
@@ -1463,6 +1583,7 @@ async function handleSlotBooking(session, eventContext = null) {
             : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
         },
       });
+      deferredLaunchRetryError = launchMaterializationRetryError(launchResult);
     }
 
     if (bookingPurpose === 'test_date') {
@@ -1508,8 +1629,10 @@ async function handleSlotBooking(session, eventContext = null) {
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
 
-    // 7. Send confirmation emails
-    const transporter = createTransporter();
+    // 7. Send confirmation emails after all core payment, booking, BCS,
+    // funding-source, and launch-contract writes have completed. Delivery is
+    // best-effort from this point: the payment webhook must not be retried just
+    // because SMTP is unavailable.
     const isoDate1 = scheduledDate instanceof Date ? scheduledDate.toISOString().slice(0, 10) : String(scheduledDate).slice(0, 10);
     const lessonDate = new Date(isoDate1 + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -1525,8 +1648,7 @@ async function handleSlotBooking(session, eventContext = null) {
       duration_str: durationStr
     });
 
-    // Email to learner
-    await transporter.sendMail({
+    const learnerMail = {
       _log: {
         purpose: 'booking.slot_confirmation_learner',
         learnerId,
@@ -1561,11 +1683,10 @@ async function handleSlotBooking(session, eventContext = null) {
         content:  icsContent,
         contentType: 'text/calendar; method=PUBLISH'
       }]
-    });
+    };
 
-    // Email to instructor
-    if (instructor?.email) {
-      await transporter.sendMail({
+    const instructorMail = instructor?.email
+      ? {
         _log: {
           purpose: 'booking.slot_confirmation_instructor',
           learnerId,
@@ -1591,8 +1712,10 @@ async function handleSlotBooking(session, eventContext = null) {
             </a>
           </p>
         `
-      });
-    }
+      }
+      : null;
+
+    await deliverPostCommitBookingEmails({ learnerMail, instructorMail });
 
     // WhatsApp notifications (non-blocking)
     sendWhatsApp(learner?.phone,
@@ -1603,6 +1726,15 @@ async function handleSlotBooking(session, eventContext = null) {
       `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`,
       { purpose: 'booking.slot_confirmation_instructor', learnerId, instructorId, schoolId }
     );
+
+    // Keep a launch candidate retryable when exact Charge/balance evidence was
+    // not visible yet, but only after the singular booking/test flag and
+    // post-commit notification attempts have happened. On a later delivery,
+    // the existing-transaction path above performs contract materialization
+    // and returns before repeating any of those effects. A fully evidenced
+    // contract whose Stripe funds are genuinely pending is materialized and
+    // does not produce this retry signal.
+    if (deferredLaunchRetryError) throw deferredLaunchRetryError;
 
   } catch (err) {
     console.error('❌ handleSlotBooking error:', err);
@@ -2737,3 +2869,4 @@ async function getRawBody(req) {
 module.exports._handleCreditPurchase = handleCreditPurchase;
 module.exports._paymentIntentToCreditSession = paymentIntentToCreditSession;
 module.exports._validatePayoutV2ReceiptScope = validatePayoutV2ReceiptScope;
+module.exports._deliverPostCommitBookingEmails = deliverPostCommitBookingEmails;
