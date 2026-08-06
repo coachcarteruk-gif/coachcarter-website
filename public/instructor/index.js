@@ -314,6 +314,22 @@ async function fetchUnifiedData() {
     if (scheduleRes && scheduleRes.status === 401) { signOut(); return; }
     if (requestRes && requestRes.status === 401) { signOut(); return; }
 
+    // Requests are an independent Calendar read model. Consume them before the
+    // wider schedule response so a schedule-range failure cannot hide an
+    // otherwise actionable pending request (the Dashboard already treats the
+    // two responses independently).
+    if (requestRes) {
+      const data = await requestRes.json();
+      if (!requestRes.ok) throw new Error(data.error || 'Failed to load lesson requests');
+      pendingRequestCache = {};
+      for (const request of (data.requests || []).filter(item => item.status === 'pending')) {
+        const ds = String(request.scheduled_date || '').slice(0, 10);
+        if (!pendingRequestCache[ds]) pendingRequestCache[ds] = [];
+        pendingRequestCache[ds].push(request);
+      }
+      requestsLoaded = true;
+    }
+
     if (scheduleRes) {
       const data = await scheduleRes.json();
       if (!scheduleRes.ok) throw new Error(data.error || 'Failed to load schedule');
@@ -349,17 +365,6 @@ async function fetchUnifiedData() {
       loadedRanges.push({ from, to });
     }
 
-    if (requestRes) {
-      const data = await requestRes.json();
-      if (!requestRes.ok) throw new Error(data.error || 'Failed to load lesson requests');
-      pendingRequestCache = {};
-      for (const request of (data.requests || []).filter(item => item.status === 'pending')) {
-        const ds = String(request.scheduled_date || '').slice(0, 10);
-        if (!pendingRequestCache[ds]) pendingRequestCache[ds] = [];
-        pendingRequestCache[ds].push(request);
-      }
-      requestsLoaded = true;
-    }
   } catch (err) {
     showError(err.message || 'Failed to load schedule');
   }
