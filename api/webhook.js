@@ -396,6 +396,20 @@ async function ensurePayoutV2StripeSource({
   }
 }
 
+function launchMaterializationRetryError(result) {
+  if (
+    result?.enabled === true
+    && result?.candidate === true
+    && result?.materialized === false
+    && result?.status === 'pending'
+  ) {
+    const err = new Error('Launch payment evidence is temporarily incomplete');
+    err.code = 'STRIPE_LAUNCH_EVIDENCE_RETRY_REQUIRED';
+    return err;
+  }
+  return null;
+}
+
 async function handleCapturedRequestSource(paymentIntent, payoutV2Receipt) {
   if (!payoutV2Receipt?.claimed) return;
   const sql = payoutV2Receipt.sql;
@@ -1270,7 +1284,7 @@ async function handleSlotBooking(session, eventContext = null) {
           creditTransaction: existingCreditTx,
           durationMins: chargeMins,
         });
-        await ensurePayoutV2StripeSource({
+        const launchResult = await ensurePayoutV2StripeSource({
           sql,
           schoolId,
           creditTransactionId: Number(existingCreditTx.id),
@@ -1289,6 +1303,8 @@ async function handleSlotBooking(session, eventContext = null) {
               : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
           },
         });
+        const retryError = launchMaterializationRetryError(launchResult);
+        if (retryError) throw retryError;
         return;
       }
       if (existingBooking && isTerminal(existingBooking.status)) {
@@ -1363,7 +1379,7 @@ async function handleSlotBooking(session, eventContext = null) {
           Number.isSafeInteger(explicitPayoutV2SchoolId) &&
           explicitPayoutV2SchoolId > 0
         ) {
-          await ensurePayoutV2StripeSource({
+          const launchResult = await ensurePayoutV2StripeSource({
             sql,
             schoolId: explicitPayoutV2SchoolId,
             creditTransactionId: Number(racedCreditTx.id),
@@ -1382,6 +1398,8 @@ async function handleSlotBooking(session, eventContext = null) {
                 : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
             },
           });
+          const retryError = launchMaterializationRetryError(launchResult);
+          if (retryError) throw retryError;
         } else if (eventContext?.launchEnabled === true) {
           throw new Error(`STRIPE_LAUNCH_BOOKING_NOT_READY: ${session.id}`);
         }
@@ -1541,11 +1559,12 @@ async function handleSlotBooking(session, eventContext = null) {
       creditTransaction: slotCreditTx,
       durationMins: chargeMins,
     });
+    let deferredLaunchRetryError = null;
     if (
       Number.isSafeInteger(explicitPayoutV2SchoolId) &&
       explicitPayoutV2SchoolId > 0
     ) {
-      await ensurePayoutV2StripeSource({
+      const launchResult = await ensurePayoutV2StripeSource({
         sql,
         schoolId: explicitPayoutV2SchoolId,
         creditTransactionId: Number(slotCreditTx.id),
@@ -1564,6 +1583,7 @@ async function handleSlotBooking(session, eventContext = null) {
             : STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
         },
       });
+      deferredLaunchRetryError = launchMaterializationRetryError(launchResult);
     }
 
     if (bookingPurpose === 'test_date') {
@@ -1706,6 +1726,15 @@ async function handleSlotBooking(session, eventContext = null) {
       `📋 New booking!\n\n👤 ${learner?.name || 'Unknown'}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n\nView schedule: https://coachcarter.uk/instructor/`,
       { purpose: 'booking.slot_confirmation_instructor', learnerId, instructorId, schoolId }
     );
+
+    // Keep a launch candidate retryable when exact Charge/balance evidence was
+    // not visible yet, but only after the singular booking/test flag and
+    // post-commit notification attempts have happened. On a later delivery,
+    // the existing-transaction path above performs contract materialization
+    // and returns before repeating any of those effects. A fully evidenced
+    // contract whose Stripe funds are genuinely pending is materialized and
+    // does not produce this retry signal.
+    if (deferredLaunchRetryError) throw deferredLaunchRetryError;
 
   } catch (err) {
     console.error('❌ handleSlotBooking error:', err);

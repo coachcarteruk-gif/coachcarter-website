@@ -34,6 +34,9 @@ function eventFixture() {
           charge_minutes: '90',
           amount_pence: '8250',
           transmission_type: 'manual',
+          payment_contract_candidate_id: '11111111-1111-4111-8111-111111111111',
+          payment_contract_schema_version: 'simon_launch_payment_v1',
+          payment_origin: 'direct_slot',
         },
       },
     },
@@ -58,6 +61,8 @@ function createState(overrides = {}) {
     failPurposes: new Set(),
     coreFailure: null,
     bookingInsertError: null,
+    materializationResults: [],
+    testBookedUpdates: 0,
     ...overrides,
   };
 
@@ -108,6 +113,10 @@ function createState(overrides = {}) {
       return [{ name: 'Test Learner', email: 'learner@example.test', phone: null }];
     }
     if (query.includes('DELETE FROM slot_reservations')) return [];
+    if (query.includes('SET test_instructor_booked = TRUE')) {
+      state.testBookedUpdates += 1;
+      return [];
+    }
     return [];
   };
 
@@ -120,6 +129,7 @@ function loadWebhook(state) {
     stripeClients: path.join(repoRoot, 'api', '_stripe-clients.js'),
     stripeFee: path.join(repoRoot, 'api', '_stripe-fee.js'),
     creditGrant: path.join(repoRoot, 'api', '_credit-grant.js'),
+    dbTransaction: path.join(repoRoot, 'api', '_db-transaction.js'),
     receipts: path.join(repoRoot, 'api', '_stripe-event-receipts.js'),
     launchContracts: path.join(repoRoot, 'api', '_stripe-launch-payment-contracts.js'),
     authHelpers: path.join(repoRoot, 'api', '_auth-helpers.js'),
@@ -172,6 +182,27 @@ function loadWebhook(state) {
       },
     },
   };
+  require.cache[require.resolve(files.dbTransaction)] = {
+    exports: {
+      withNeonTransaction: async (_options, callback) => callback({
+        query: async text => {
+          if (text.includes('INSERT INTO lesson_bookings')) {
+            if (state.bookingInsertError) throw state.bookingInsertError;
+            const row = {
+              id: 201,
+              status: 'scheduled',
+              scheduled_date: '2026-08-10',
+              start_time: '10:00:00',
+              end_time: '11:30:00',
+            };
+            state.bookings.push(row);
+            return { rows: [row] };
+          }
+          return { rows: [] };
+        },
+      }),
+    },
+  };
   require.cache[require.resolve(files.receipts)] = {
     exports: {
       claimStripeEventReceipt: async () => {
@@ -199,12 +230,28 @@ function loadWebhook(state) {
       loadShadowLaunchConfig: async () => ({ enabled: true }),
       materializeLaunchPaymentContract: async (args) => {
         if (state.coreFailure) throw state.coreFailure;
-        state.payoutSources.push({ credit_transaction_id: args.creditTransactionId });
-        state.paymentContracts.push({
-          booking_id: args.bookingId,
-          payment_origin: args.expectedOrigin,
-        });
-        return { created: true };
+        const result = state.materializationResults.length
+          ? state.materializationResults.shift()
+          : {
+            enabled: true,
+            candidate: true,
+            materialized: true,
+            created: true,
+            contract: { evidence_status: 'complete' },
+          };
+        if (result.materialized) {
+          if (!state.payoutSources.length) {
+            state.payoutSources.push({ credit_transaction_id: args.creditTransactionId });
+          }
+          if (!state.paymentContracts.length) {
+            state.paymentContracts.push({
+              booking_id: args.bookingId,
+              payment_origin: args.expectedOrigin,
+              evidence_status: result.contract?.evidence_status || 'complete',
+            });
+          }
+        }
+        return result;
       },
       isStripeLaunchSchemaUnavailable: () => false,
     },
@@ -306,7 +353,7 @@ test.describe('slot-booking webhook post-commit reliability', () => {
     expect(state.bookingCreditSources).toHaveLength(1);
     expect(state.payoutSources).toHaveLength(1);
     expect(state.paymentContracts).toEqual([
-      { booking_id: 201, payment_origin: 'direct_slot' },
+      { booking_id: 201, payment_origin: 'direct_slot', evidence_status: 'complete' },
     ]);
     expect(state.notificationAttempts).toEqual([
       { purpose: 'booking.slot_confirmation_learner', delivery_status: 'failed' },
@@ -329,6 +376,99 @@ test.describe('slot-booking webhook post-commit reliability', () => {
     expect(state.bookingCreditSources).toHaveLength(1);
     expect(state.payoutSources).toHaveLength(1);
     expect(state.paymentContracts).toHaveLength(1);
+    expect(state.sendAttempts).toHaveLength(2);
+  });
+
+  test('missing launch evidence retries materialization without duplicating core rows or notifications', async () => {
+    const event = eventFixture();
+    event.data.object.metadata.booking_purpose = 'test_date';
+    event.data.object.metadata.payment_origin = 'test_date_direct';
+    event.data.object.metadata.test_time = '10:45';
+    event.data.object.metadata.test_centre = 'Reading Test Centre';
+    const state = createState({
+      event,
+      materializationResults: [
+        {
+          enabled: true,
+          candidate: true,
+          materialized: false,
+          status: 'pending',
+          reasons: ['missing_stripe_fee_evidence'],
+        },
+        {
+          enabled: true,
+          candidate: true,
+          materialized: true,
+          created: true,
+          contract: { evidence_status: 'complete' },
+        },
+      ],
+    });
+    const webhook = loadWebhook(state);
+
+    const first = await callWebhook(webhook);
+    expect(first.statusCode).toBe(500);
+    expect(state.receiptStatus).toBe('failed');
+    expect(state.receiptFailed).toBe(1);
+    expect(state.creditTransactions).toHaveLength(1);
+    expect(state.bookings).toHaveLength(1);
+    expect(state.bookingCreditSources).toHaveLength(1);
+    expect(state.payoutSources).toHaveLength(0);
+    expect(state.paymentContracts).toHaveLength(0);
+    expect(state.testBookedUpdates).toBe(1);
+    expect(state.sendAttempts).toEqual([
+      'booking.slot_confirmation_learner',
+      'booking.slot_confirmation_instructor',
+    ]);
+
+    const retry = await callWebhook(webhook);
+    expect(retry.statusCode).toBe(200);
+    expect(retry.body).toEqual({ received: true });
+    expect(state.receiptStatus).toBe('processed');
+    expect(state.receiptProcessed).toBe(1);
+    expect(state.creditTransactions).toHaveLength(1);
+    expect(state.bookings).toHaveLength(1);
+    expect(state.bookingCreditSources).toHaveLength(1);
+    expect(state.payoutSources).toHaveLength(1);
+    expect(state.paymentContracts).toEqual([
+      { booking_id: 201, payment_origin: 'test_date_direct', evidence_status: 'complete' },
+    ]);
+    expect(state.testBookedUpdates).toBe(1);
+    expect(state.sendAttempts).toHaveLength(2);
+
+    const duplicate = await callWebhook(webhook);
+    expect(duplicate.statusCode).toBe(200);
+    expect(duplicate.body).toEqual({ received: true, duplicate: true });
+    expect(state.creditTransactions).toHaveLength(1);
+    expect(state.bookings).toHaveLength(1);
+    expect(state.bookingCreditSources).toHaveLength(1);
+    expect(state.payoutSources).toHaveLength(1);
+    expect(state.paymentContracts).toHaveLength(1);
+    expect(state.testBookedUpdates).toBe(1);
+    expect(state.sendAttempts).toHaveLength(2);
+  });
+
+  test('complete evidence with pending Stripe funds commits normally', async () => {
+    const state = createState({
+      materializationResults: [{
+        enabled: true,
+        candidate: true,
+        materialized: true,
+        created: true,
+        contract: { evidence_status: 'pending' },
+      }],
+    });
+    const webhook = loadWebhook(state);
+
+    const response = await callWebhook(webhook);
+
+    expect(response.statusCode).toBe(200);
+    expect(state.receiptStatus).toBe('processed');
+    expect(state.receiptFailed).toBe(0);
+    expect(state.payoutSources).toHaveLength(1);
+    expect(state.paymentContracts).toEqual([
+      { booking_id: 201, payment_origin: 'direct_slot', evidence_status: 'pending' },
+    ]);
     expect(state.sendAttempts).toHaveLength(2);
   });
 
