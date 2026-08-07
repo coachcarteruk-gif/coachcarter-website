@@ -4,22 +4,18 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 NOT ACCEPTED — SHADOW-04 FAILED — SHADOW-05
-STEP 11 PASSED — STEP 12 WRITER DRAFT PR #346 OPEN — NOT DEPLOYED — FIXTURE
-UNCHANGED**
+STEP 14 CROSS-CUTTING VALIDATION PASSED — STEP 15 NOT STARTED — NO SLICE 3**
 
-**Last updated:** 4 August 2026
+**Last updated:** 7 August 2026
 
 **Verified source baseline:** remote `main` at
-`d911c89868eebe86a08a757b22ed6e3524cd5fe8`
+`cca163ebcba338fb160e88b805e7816796b5398a`
 
-**Current blocker:** Independent review of the narrow Step 12 config/agreement
-writer passed after auth-scope, exact runtime-gate, replay-evidence, rollback,
-and error-sanitisation hardening. Implementation commit `bfa02f916e933436b51cb78653c2af3d60a8d5c5`
-is pushed on `codex/simon-shadow05-fixture-writer`, and draft PR #346 targets
-`main`. The writer remains undeployed and unavailable on shadow-05. The prior
-Step 12 attempt stopped before mutation and all recorded fixture counts remain
-zero. The commit and draft PR grant no deployment, environment-change, fixture,
-Step 12, Stripe, later-step, or Slice 3 authority.
+**Current blocker:** Step 14 is complete, but this grants no authority for Step
+15, Step 16, Step 17, formal Slice 2 acceptance, or Slice 3. The next operation
+must begin only under separately scoped owner authority from the exact committed
+Step 14 handover and must reverify current repository, provider, and school-1
+state before acting.
 
 ## 1. Title and purpose
 
@@ -111,16 +107,16 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | Refreshed remote `main` resolves to PR #345 merge `d911c898…` on 4 August 2026. Step 12 writer commit `bfa02f9…` has that exact parent, and draft PR #346 targets `main`. |
+| Latest baseline | Verified | `origin/main` and `HEAD` resolved to PR #351 merge `cca163eb…`; the required ancestor check for that exact Step 13 handover commit passed before Step 14. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
 | Fresh-schema bootstrap | Repair merged | PR #340 mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests passed against a disposable, confirmed non-production loopback database with the three gates enabled. |
-| Deployment/database identity | Step 10 passed; temporary access revoked | Vercel reports clean deployment `dpl_ELTwjwU1yvbuiTHonJjZomjivaWN`, READY on the isolated project's Production target, provider host `cc-simon-s2-shadow-05-n6pepjew7-coachcarteruk-2599s-projects.vercel.app`, exact Git SHA `d911c898…`, and no dirty marker. The one-shot identity preflight passed with fingerprint `sha256:c94c4cc0c3ceaaf24f8401dd8a23e55ba3c26343bda0b3e3ab4a688162aa3127` and database-enforced read-only evidence. Final Neon-key and Vercel-bypass inventories are zero. |
+| Deployment/database identity | Step 14 reverified | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe was visibly and programmatically Sandbox/test mode. |
 | Shadow Checkout return URLs | Merged; shadow exercise pending | PR #342 merged fail-closed URL binding for all approved producers. Twelve focused tests and CI pass; non-shadow URL semantics remain unchanged. No Stripe Checkout or shadow-05 exercise has been performed. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Next implementation | Review draft PR #346; deployment requires separate authority | The writer is JWT-school-scoped, authenticated with existing CSRF enforcement, exact shadow/test/Vercel-environment/project gated, atomic, required-audit fail-closed, and exact-replay idempotent. The required 69-test combined suite and Slice 2 static review pass. It remains undeployed, so Step 12 remains blocked. Do not use direct SQL, seed a partial fixture, rerun the aggregate/one-shot identity preflight, deploy the PR, or begin Stripe/later-step activity without separate authority. |
+| Next implementation | Step 15 only with separate authority | Step 14 passed and is documentation-only after this handover. Do not infer permission for Step 15/16/17, formal Slice 2 acceptance, a new Stripe object, deployment/environment change, direct SQL write, production mutation, money movement, or Slice 3. |
 
 ## 6. Chronological project journey
 
@@ -767,7 +763,7 @@ rebound, or treated as acceptance evidence during this step.
 
 ### 14. Run delayed, replay, mismatch, isolation, and negative paths
 
-- **Status:** Not started.
+- **Status:** Completed on 7 August 2026; see the append-only Step 14 entry.
 - **Preconditions:** At least one clean origin fixture and controlled test
   adapters/events.
 - **Evidence required:** Every cross-cutting scenario in section 11 passes,
@@ -3200,3 +3196,113 @@ For every future session:
   transfer, Connect, Step 14, later-step, or Slice 3 action was taken during
   this merge follow-up. The preserved primary workspace remains on its original
   branch with this living log modified and unstaged.
+
+### 7 August 2026 - Step 14 cross-cutting Slice 2 validation completed
+
+- Preserved the deliberately dirty primary workspace and both pre-existing
+  clean worktrees. Created isolated worktree
+  `C:\\tmp\\cc-simon-shadow05-step14-cross-cutting-validation` on branch
+  `codex/simon-shadow05-step14-cross-cutting-validation` from exact clean
+  `origin/main` commit `cca163ebcba338fb160e88b805e7816796b5398a`.
+  `HEAD`, `origin/main`, and merge-base matched, and the required ancestor check
+  for `cca163eb...` passed.
+- Before publication, GitHub Actions run `31129319266` for exact baseline
+  `cca163ebcba338fb160e88b805e7816796b5398a` was independently checked and
+  reported completed/success for workflow `ci`.
+- Re-read the complete required project, product, technical, rollout, Stripe,
+  and living-log sources. Reverified the LF-normalised protected hashes exactly:
+  product specification
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+  Neither protected document changed.
+- Local gates passed before external validation: repository syntax `199`
+  files, C1 controls `271` files, Slice 2 rollout review `14/14` with no
+  failures and static status `PREPARED_NOT_APPROVED_NOT_DEPLOYED`, and `80/80`
+  focused Playwright tests covering payment contracts, shadow operations/auth,
+  required audits, rollout review, schema/fixture foundation, webhook
+  reliability, and instructor-login audit failure. The required triple-gated,
+  rollback-only `stripe-launch-payment-contracts.integration.spec.js` suite
+  passed `8/8` with zero skips against a disposable loopback PostgreSQL 17.7
+  production-shaped aggregate. It was not connected to production or
+  shadow-05 and was stopped after the run.
+- The reproducible matrix passed: delayed balance-transaction evidence remains
+  pending without guessed values and controlled reconciliation promotes only
+  exact available evidence; webhook and reconciliation replay are idempotent;
+  exact fee mismatch, amount/currency/Stripe-link mismatch, and one-payment-to-
+  many-lessons are rejected; pre-cutover payment is ineligible; reschedule
+  continuity is conserved; cross-school candidates remain untouched; shadow
+  auth fails closed; required start/completion auditing and audit-write failure
+  stop behaviour hold; and prohibited money/effect writers remain absent.
+- Reverified isolated identities read-only before the operation: exact Vercel
+  project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, Neon project
+  `shiny-bonus-66942766`, branch `br-empty-cell-za5kh6nr`, database `neondb`,
+  and school `1`. Stripe's dashboard visibly showed Sandbox/test mode account
+  `acct_1QUSsNIqhTSdZedS`; programmatic gates also returned test mode. Dedicated
+  active webhook destination `we_1U0qdyIqhTSdZedS2h8O3RxW` remained bound to
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook` for the eight approved
+  events. Historical transient HTTP 500 deliveries were followed by successful
+  HTTP 200 retries, and receipt postflight remained singular and processed.
+- Read-only preflight proved all four approved origins singular, with the three
+  prior contracts complete and protected direct-slot contract
+  `4af03473-9cfd-4051-9606-654245e1b6ab` still pending. Stripe independently
+  showed its exact test-mode GBP `82.50` payment succeeded, fee GBP `2.88`, net
+  GBP `79.62`, and funds available on 7 August. Local evidence retained exact
+  PaymentIntent `pi_3U0qsPIqhTSdZedS2Xi4DZDN`, charge
+  `ch_3U0qsPIqhTSdZedS2XhVtLvQ`, balance transaction
+  `txn_3U0qsPIqhTSdZedS2gWKkLmQ`, gross `8250`, fee `288`, GBP, availability
+  `2026-08-07T00:00:00.000Z`, one booking link, and null contradiction and
+  ineligibility codes. Both deployed unauthenticated reconciliation and expiry
+  requests returned HTTP 401 without writes.
+- Before any possible shadow write, presented the exact singular reconciliation
+  operation, exact project/database/school/contract identities, expected
+  contract/source/audit writes, replay protection, prohibited effects, and
+  stop conditions; the owner gave fresh action-time confirmation. The existing
+  sensitive bearer could not be retrieved because the provider returned no
+  value. Work stopped before calling the endpoint, and the owner separately
+  authorised replacement of only `STRIPE_LAUNCH_SHADOW_CRON_SECRET`, an
+  unchanged exact-SHA redeploy, and one use.
+- The first authorised replacement/deploy produced READY deployment
+  `dpl_55NnBN1BwjSRhNo2PcgWUgauLjeb`, but newline handling and a local response-
+  parser mismatch stopped the procedure before the endpoint was called. The
+  bearer was cleared; read-only Neon evidence proved the contract still
+  pending, no operation audits, and every prohibited effect still zero. No
+  retry was inferred. The owner then gave fresh recovery confirmation for a
+  newline-free replacement, unchanged exact-SHA deployment verification, and
+  one request.
+- Replaced only the sensitive shadow bearer without a trailing newline and
+  redeployed unchanged clean app SHA
+  `07871219afc9fc66084f2f8bc1bf609b23802dfd`. Connected Vercel postflight
+  reports current READY Production-target deployment
+  `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact project, exact SHA, and alias
+  `cc-simon-s2-shadow-05.vercel.app`. The singular authenticated reconciliation
+  request was then sent exactly once. It returned HTTP 200, `ok=true`,
+  `shadow=true`, programmatic test mode, school `1`, `checked=1`,
+  `pending_contracts=1`, `unmaterialized_origins=0`, `completed=1`, and all
+  pending/contradictory/ineligible/failed counts zero. The exact contract result
+  was `complete`. The bearer and transient random bytes were cleared, and no
+  second request was sent.
+- School-scoped read-only Neon postflight proved the direct contract and source
+  singular and complete, with every immutable Stripe identity, amount,
+  currency, availability time, fingerprint, and booking link conserved. All
+  four origins are exactly one complete contract each; pending contracts and
+  unmaterialized origins are zero. Audit log counts are exactly one
+  `stripe-launch-shadow-reconcile-payments-started` and one
+  `stripe-launch-shadow-reconcile-payments`; completion details record
+  `checked=1`, `completed=1`, and zero pending, contradictory, and failed.
+  Stripe receipts remain exactly four test-mode processed rows, with zero
+  failed, processing, live, or duplicate event IDs.
+- Final prohibited-effect counts for school `1` are all exactly zero:
+  `stripe_launch_booking_earnings`, `payout_runs`,
+  `instructor_payout_batches`, `stripe_launch_transfer_intents` and attempts,
+  `refund_intents` and attempts, `connect_account_state_events`,
+  `payout_statements` and delivery attempts, `payment_disputes` and events,
+  `instructor_payout_obligations` and applications, and
+  `payout_batch_earning_dispositions`. No Checkout Session, PaymentIntent,
+  payment, webhook destination, Connect resource, schema/migration, direct SQL
+  mutation, payout, earning, transfer, refund, dispute, onboarding, bank payout,
+  live-mode, or CoachCarter production mutation was created or performed. The
+  Stripe plugin was neither installed nor used.
+- Step 14 is complete. This documentation-only handover does not accept Slice
+  2 and grants no authority for Step 15, Step 16, Step 17, Slice 3, or any later
+  operation.
