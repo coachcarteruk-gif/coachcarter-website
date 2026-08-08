@@ -3,20 +3,18 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SLICE 2 NOT FORMALLY ACCEPTED — SHADOW-04 FAILED —
-SHADOW-05 STEP 16 FINAL EVIDENCE PACKAGE COMPLETE — STEP 17 NOT STARTED — NO
-SLICE 3**
+**Current status:** **SLICE 2 ACCEPTED — SHADOW-04 FAILED AND PRESERVED —
+SHADOW-05 STEP 17 FORMAL DECISION COMPLETE — STEP 18 / SLICE 3 ON HOLD**
 
 **Last updated:** 8 August 2026
 
 **Verified source baseline:** remote `main` at
-`b9aee19d71598364c4d6ff33d9ad4f4631535890`
+`8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`
 
-**Current blocker:** Step 16 is complete, but Slice 2 has not been formally
-accepted or rejected. Step 17 must begin only under separately scoped owner
-authority from the exact committed Step 16 handover and must independently
-review the complete evidence package. No Step 17, Slice 3, provider, database,
-Stripe, money, or production operation is authorised by this log.
+**Current blocker:** Slice 2 is formally accepted, but Step 18 remains a hold
+gate. Slice 3 requires a new, separately scoped task and approval from fresh
+latest-main review. This decision grants no Slice 3, provider, database,
+Stripe, payment, refund, payout, transfer, money, or production authority.
 
 ## 1. Title and purpose
 
@@ -108,17 +106,17 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | `origin/main` resolves to PR #353 squash merge `b9aee19d71598364c4d6ff33d9ad4f4631535890`; source `fe75c7a70f565fe73a6dd41d62ef08df4959b0e1`; PR #353 changed only this living log. Previous Step 15 baseline `ec648a578949fe8e585fee13f125df74311743b2` remains an ancestor. Exact merge-commit Actions run `31227210226` completed successfully. |
+| Latest baseline | Verified | `origin/main` resolves to PR #354 merge `8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`; source `7e08023d9e251e397d6c784e056c92c76574fc79`. Step 16 baseline `b9aee19d71598364c4d6ff33d9ad4f4631535890` is the merge parent. PR #354 changed only the rollout review and this living log. Exact merge-commit Actions run `31246352745` completed successfully. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
-| Slice 2: payment contracts | Merged but not accepted | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Static status remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
+| Slice 2: payment contracts | Formally accepted for completed shadow evidence | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Step 17 independently accepted the complete shadow-05 Slice 2 record on 8 August 2026. Production rollout remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
 | Fresh-schema bootstrap | Repair merged | PR #340 mirrors migration 013 and extends the rollback-only aggregate test for the Boolean/default contract plus real admin support access, tenancy, audit, password, and login-code boundaries. All three fresh-schema tests and all eight rollback/payment-contract tests passed against a disposable, confirmed non-production loopback database with the three gates enabled. |
-| Deployment/database identity | Step 16 reverified read-only | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, default/primary branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe remained Sandbox/Test account `acct_1QUSsNIqhTSdZedS` with exact active eight-event webhook `we_1U0qdyIqhTSdZedS2h8O3RxW` and no live shadow-05 binding. |
-| Shadow Checkout return URLs | Merged; shadow exercise complete but not accepted | PR #342 merged fail-closed URL binding for all approved producers. All four approved shadow-05 origins are singular and complete, but Slice 2 has not been formally accepted. |
+| Deployment/database identity | Step 17 reverified read-only | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, default/primary branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe remained Sandbox/Test account `acct_1QUSsNIqhTSdZedS` with exact active eight-event webhook `we_1U0qdyIqhTSdZedS2h8O3RxW` and no live shadow-05 binding. |
+| Shadow Checkout return URLs | Merged; accepted shadow evidence | PR #342 merged fail-closed URL binding for all approved producers. All four approved shadow-05 origins are singular and complete; Step 17 accepted the Slice 2 evidence. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
-| Final Slice 2 evidence | Step 16 complete; decision pending | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. The focused local validation matrix is green. Slice 2 remains not formally accepted. |
-| Next implementation | Step 17 only with separate authority | Step 16 is documentation/read-only and grants no permission for formal acceptance, rejection, a Stripe object, deployment/environment change, direct SQL write, production mutation, money movement, or Slice 3. |
+| Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
+| Next implementation | Step 18 hold | No Slice 3 work is authorised. A new, separately scoped task and approval must start from fresh latest `main`; this acceptance decision grants no provider/database/Stripe mutation, production action, or money movement. |
 
 ## 6. Chronological project journey
 
@@ -819,7 +817,10 @@ rebound, or treated as acceptance evidence during this step.
 
 ### 17. Formally accept or reject Slice 2
 
-- **Status:** Not started.
+- **Status:** Completed on 8 August 2026: `SLICE 2 ACCEPTED` after independent
+  review of the exact merged Step 16 package plus fresh read-only repository,
+  CI, Vercel, Neon, Stripe, school-scoped database, protected-hash, and local
+  validation evidence.
 - **Preconditions:** Step 16 complete and independently reviewed.
 - **Evidence required:** Every required origin and cross-cutting check passes,
   environment identity is proven, and no defect or prohibited effect remains.
@@ -832,7 +833,8 @@ rebound, or treated as acceptance evidence during this step.
 
 ### 18. Hold Slice 3
 
-- **Status:** Pending Slice 2 acceptance.
+- **Status:** Active hold. Slice 2 is accepted, but no separately scoped Slice 3
+  task or approval exists.
 - **Preconditions:** Formal step 17 acceptance plus a separately scoped Slice 3
   task/approval.
 - **Evidence required:** Accepted Slice 2 record and fresh latest-main review.
@@ -843,18 +845,17 @@ rebound, or treated as acceptance evidence during this step.
 
 ## 15. Next session starts here
 
-Step 16 is complete from exact `origin/main`
-`b9aee19d71598364c4d6ff33d9ad4f4631535890`. The final evidence package is in
-the Slice 2 rollout review and the 8 August 2026 Step 16 append-only entry below.
-All fresh read-only counts matched; every prohibited-effect count remained
-zero; protected hashes and local validation were green.
+Step 17 is complete from exact reviewed `origin/main`
+`8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`. The formal dated decision is
+`SLICE 2 ACCEPTED`; its exact provenance, checks, limitations, and authority
+boundary are in the Slice 2 rollout review and the 8 August 2026 Step 17
+append-only entry below.
 
-Slice 2 remains not formally accepted or rejected. The next possible task is
-Step 17 only, under fresh explicit owner authority and independent review of
-the committed Step 16 package. Do not infer that evidence collection is an
-acceptance decision. Do not rerun reconciliation or expiry, replay a webhook,
-change Stripe/Vercel/Neon state, mutate the database, start Slice 3, or perform
-any production or money operation.
+Step 18 is an active hold. Do not start Slice 3 without a new, separately
+scoped task and approval from fresh latest-main review. Do not infer production
+approval from Slice 2 shadow acceptance. Do not rerun reconciliation or expiry,
+replay a webhook, change Stripe/Vercel/Neon state, mutate the database, or
+perform any production or money operation under this handover.
 
 ## 16. Update protocol
 
@@ -3524,3 +3525,54 @@ For every future session:
 - Step 16 is complete. Slice 2 remains not formally accepted or rejected. Step
   17 and Slice 3 have not begun, and this handover grants no authority for
   either or for any production or money operation.
+
+### 8 August 2026 - Step 17 formally accepted Slice 2
+
+- Worked only in fresh isolated worktree
+  `C:\\tmp\\cc-simon-slice2-step17-formal-decision` on branch
+  `codex/simon-slice2-step17-formal-decision`. The primary workspace and all
+  preserved worktrees were left untouched.
+- Fetched current remote refs and independently verified PR
+  [#354](https://github.com/coachcarteruk-gif/coachcarter-website/pull/354) is
+  merged from source commit
+  `7e08023d9e251e397d6c784e056c92c76574fc79`. Merge commit
+  `8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211` is exact `origin/main`, has Step
+  16 baseline `b9aee19d71598364c4d6ff33d9ad4f4631535890` as its parent, and changed
+  only this log and the Slice 2 rollout review. Exact merge-commit Actions run
+  [31246352745](https://github.com/coachcarteruk-gif/coachcarter-website/actions/runs/31246352745)
+  completed successfully, including syntax/encoding and Playwright jobs.
+- Fresh read-only Vercel, Neon, Stripe Dashboard, and explicitly
+  `school_id=1` Neon SQL checks reproduced the exact Step 16 resource identities,
+  four singular complete origin contracts and sources, protected direct-slot
+  evidence, exact audit and receipt counts, zero terminal discrepancies, and
+  the complete prohibited-effect matrix at zero. Stripe remained Sandbox/Test
+  with the exact active eight-event shadow-05 webhook and no live binding; the
+  protected payment independently remained GBP `82.50` succeeded, GBP `2.88`
+  fee, GBP `79.62` net, with funds available on 7 August.
+- Reverified the protected LF-normalised hashes exactly: product specification
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4` and
+  technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Fresh local validation passed syntax `199`, C1 controls `271`, all `14/14`
+  static Slice 2 checks with production status
+  `PREPARED_NOT_APPROVED_NOT_DEPLOYED`, and the exact focused Playwright matrix
+  `80/80`. `git diff --check` passed and the final diff remained limited to the
+  two authorised decision documents.
+- Independently reviewed every protected Slice 2 acceptance criterion and the
+  retained Step 14 cross-cutting evidence. The historical rollback-only
+  PostgreSQL 17.7 result (`8/8`, zero skips) and action-time request evidence
+  were not replayed because this documentation/read-only decision task
+  provisioned no disposable database and authorised no operation. The retained
+  merged evidence, current source-level validation and exact-main CI, and fresh
+  terminal-state/zero-effect checks make this an explicit limitation, not an
+  unresolved acceptance defect.
+- **Formal decision: `SLICE 2 ACCEPTED`.** This accepts only the completed
+  shadow-05 Slice 2 evidence and payment-contract controls. Production rollout
+  remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`.
+- No reconciliation, expiry, webhook replay, Checkout, PaymentIntent, payment,
+  provider/environment/deployment change, credential operation, database
+  write/DDL, earning, payout, transfer, refund, Connect, live-mode, production,
+  or money action occurred. The Stripe plugin was neither installed nor used.
+- Step 18 is now an active hold. Slice 3 requires a new, separately scoped task
+  and approval from fresh latest-main review; this decision grants no such
+  authority.

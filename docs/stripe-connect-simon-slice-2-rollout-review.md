@@ -1,7 +1,6 @@
 # Stripe Connect Simon launch — Slice 2 rollout review
 
-Status: **STEP 16 FINAL EVIDENCE PACKAGE COMPLETE — SLICE 2 NOT FORMALLY
-ACCEPTED — STEP 17 NOT STARTED — NO SLICE 3**
+Status: **SLICE 2 ACCEPTED — STEP 17 COMPLETE — STEP 18 / SLICE 3 ON HOLD**
 
 This packet covers Slice 2 only: immutable payment candidate metadata, exact
 Stripe payment/fee/availability evidence, one-payment-to-one-active-lesson
@@ -250,6 +249,83 @@ commit time.
 - This package establishes evidence completeness for Step 16 only. A separate,
   explicitly authorised Step 17 review must make any formal `SLICE 2 ACCEPTED`
   or rejection decision. No such decision is made here.
+
+## Step 17 formal decision — 8 August 2026
+
+**Decision: `SLICE 2 ACCEPTED`.** The independently reviewed Step 16 package,
+fresh read-only repository/provider/database checks, and fresh local validation
+satisfy the protected Slice 2 acceptance criteria. This accepts the completed
+shadow-05 Slice 2 evidence and payment-contract controls only. It does not
+approve production rollout, Step 18, Slice 3, live Stripe, Connect onboarding,
+payouts, transfers, refunds, database or provider mutation, or any money
+movement.
+
+The decision used exact current provenance rather than relying only on the
+Step 16 narrative:
+
+- PR [#354](https://github.com/coachcarteruk-gif/coachcarter-website/pull/354)
+  is merged from source commit
+  `7e08023d9e251e397d6c784e056c92c76574fc79`; merge commit
+  `8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211` is exact current
+  `origin/main`, has Step 16 baseline
+  `b9aee19d71598364c4d6ff33d9ad4f4631535890` as its parent, and changed only
+  this rollout review and the Simon launch project log.
+- Exact merge-commit Actions run
+  [31246352745](https://github.com/coachcarteruk-gif/coachcarter-website/actions/runs/31246352745)
+  completed successfully on `main`; both syntax/encoding and Playwright jobs
+  passed for exact SHA `8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`.
+- Vercel still reports exact project
+  `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT`, READY production-target deployment
+  `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, alias
+  `cc-simon-s2-shadow-05.vercel.app`, and deployed application SHA
+  `07871219afc9fc66084f2f8bc1bf609b23802dfd`. Neon still reports exact project
+  `shiny-bonus-66942766`, ready default/primary branch
+  `br-empty-cell-za5kh6nr`, database `neondb`, and every fresh tenant-table read
+  explicitly used `school_id=1`.
+- Stripe Sandbox/Test account `acct_1QUSsNIqhTSdZedS` still has exact active
+  eight-event destination `we_1U0qdyIqhTSdZedS2h8O3RxW` bound to
+  `https://cc-simon-s2-shadow-05.vercel.app/api/webhook` at API version
+  `2024-11-20.acacia`; the separate live destination view has no shadow-05
+  binding. The protected direct-slot payment independently remains succeeded
+  at GBP `82.50`, fee GBP `2.88`, net GBP `79.62`, with the exact retained
+  PaymentIntent and charge and funds available on 7 August.
+- Fresh school-1 SQL reproduced one complete contract and one complete launch
+  source for each of `direct_slot`, `test_date_direct`, `one_off_offer`, and
+  `captured_request`; all pending, contradictory, ineligible post-cutover,
+  unsupported-origin, and unmaterialized-origin counts were zero. The exact
+  audit result remained `checked=1`, `completed=1`, `pending=0`,
+  `contradictory=0`, `failed=0`; all four test receipts remained processed,
+  with no live, failed, processing, received, manual-review, or duplicate-ID
+  receipt. Every prohibited-effect table listed above remained at zero.
+- Protected LF-normalised hashes remained exact: product specification
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4` and
+  technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Fresh local validation reproduced syntax `199`, C1 controls `271`, all
+  `14/14` static rollout checks with production status
+  `PREPARED_NOT_APPROVED_NOT_DEPLOYED`, and the exact focused Playwright
+  selection `80/80`. `git diff --check` passed and the final diff remained
+  limited to the two authorised decision documents.
+
+The Step 14 cross-cutting record is accepted as retained evidence for delayed
+materialization, replay/idempotency, exact-fee and mismatch handling,
+one-payment/one-active-lesson enforcement, pre-cutover exclusion, reschedule
+continuity, tenant isolation, fail-closed authentication/auditing, webhook
+reliability, and prohibited-writer absence. The historical triple-gated
+rollback-only PostgreSQL 17.7 result (`8/8`, zero skips) was not rerun in Step
+17 because this task provisioned no disposable database. Historical request
+timing and action-time confirmation were likewise not replayed. Those limits
+are explicit and do not create an unresolved acceptance defect: the committed
+result is retained from the merged Step 14 handover, its current source-level
+contracts are covered by the fresh non-database matrix and exact-main CI, and
+fresh independent read-only checks reproduced the resulting terminal state and
+zero-effect boundaries. No Step 17 provider, database, Stripe, payment, or
+production mutation was performed; the Stripe plugin was neither installed
+nor used.
+
+Step 18 remains a hold gate. Slice 3 may begin only under a new, separately
+scoped task and approval from fresh latest-main review. This decision itself
+grants no implementation or operational authority.
 
 ## Proposed production rollout — not authorised
 
