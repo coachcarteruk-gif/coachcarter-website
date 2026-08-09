@@ -39,8 +39,10 @@ const { requireAuth }       = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { logAudit }          = require('./_audit');
+const { createConnectV2Handler } = require('./_connect-v2-routes');
 
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
+const handleConnectV2 = createConnectV2Handler();
 
 function setCors(res) {
 }
@@ -57,6 +59,7 @@ function verifyAdminJWT(req) {
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
+  if (await handleConnectV2(req, res)) return;
   if (action === 'create-account')      return handleCreateAccount(req, res);
   if (action === 'onboarding-link')     return handleOnboardingLink(req, res);
   if (action === 'connect-status')      return handleConnectStatus(req, res);
