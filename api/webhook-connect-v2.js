@@ -24,9 +24,16 @@ function eventCreatedIso(event) {
 }
 
 function defaultDependencies() {
+  const env = process.env;
+  let sql;
   return {
-    env: process.env,
-    sql: process.env.POSTGRES_URL ? neon(process.env.POSTGRES_URL) : null,
+    env,
+    getSql: () => {
+      if (sql) return sql;
+      if (!env.POSTGRES_URL) return null;
+      sql = neon(env.POSTGRES_URL);
+      return sql;
+    },
     createClient: (mode) => createAccountsV2StripeClient({ expectedMode: mode }),
     now: () => new Date(),
   };
@@ -34,6 +41,17 @@ function defaultDependencies() {
 
 function createConnectV2WebhookHandler(overrides = {}) {
   const deps = { ...defaultDependencies(), ...overrides };
+  let sqlResolved = false;
+  let resolvedSql;
+  const getSql = () => {
+    if (!sqlResolved) {
+      resolvedSql = Object.prototype.hasOwnProperty.call(deps, 'sql')
+        ? deps.sql
+        : deps.getSql();
+      sqlResolved = true;
+    }
+    return resolvedSql;
+  };
   return async function connectV2Webhook(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED' });
     const secret = deps.env.STRIPE_CONNECT_V2_WEBHOOK_SECRET;
@@ -54,7 +72,9 @@ function createConnectV2WebhookHandler(overrides = {}) {
     }
 
     try {
-      const prior = await store.loadEventReceipt(deps.sql, envelope.id);
+      const sql = getSql();
+      if (!sql) throw new Error('CONNECT_V2_DATABASE_UNAVAILABLE');
+      const prior = await store.loadEventReceipt(sql, envelope.id);
       if (prior) {
         const sameEnvelope = prior.evidence_json?.event_envelope_fingerprint === envelope.fingerprint
           && prior.stripe_account_id === envelope.account_id
@@ -64,7 +84,7 @@ function createConnectV2WebhookHandler(overrides = {}) {
         return res.status(200).json({ received: true, duplicate: true });
       }
 
-      const scope = await store.loadScopeByAccount(deps.sql, envelope.account_id);
+      const scope = await store.loadScopeByAccount(sql, envelope.account_id);
       if (!scope || scope.owner_type !== 'instructor' || !scope.school_id || !scope.instructor_id) {
         reportError('/api/webhook-connect-v2 (unknown account scope)', new Error('CONNECT_V2_UNKNOWN_ACCOUNT_SCOPE'));
         return res.status(409).json({ error: true, code: 'CONNECT_V2_UNKNOWN_ACCOUNT_SCOPE' });
@@ -78,7 +98,7 @@ function createConnectV2WebhookHandler(overrides = {}) {
       if (!['test', 'live'].includes(mode) || envelope.livemode !== (mode === 'live') || deps.env.STRIPE_MODE !== mode) {
         return res.status(409).json({ error: true, code: 'CONNECT_V2_EVENT_MODE_MISMATCH' });
       }
-      const school = await store.loadSchoolConfig(deps.sql, scope.school_id);
+      const school = await store.loadSchoolConfig(sql, scope.school_id);
       const gate = core.evaluateConnectV2Gate({ env: deps.env, schoolConfig: school?.config, operation: 'webhook' });
       if (!gate.enabled) return res.status(202).json({ received: true, processed: false, reason: 'inactive' });
 
@@ -110,7 +130,7 @@ function createConnectV2WebhookHandler(overrides = {}) {
         observedAt,
         providerEventCreatedAt: eventCreatedIso(event),
       });
-      await store.insertObservation(deps.sql, {
+      await store.insertObservation(sql, {
         ...normalized,
         event_envelope_fingerprint: envelope.fingerprint,
       });

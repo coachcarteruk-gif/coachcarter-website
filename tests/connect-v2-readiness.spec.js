@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -77,6 +78,18 @@ function responseRecorder() {
 
 test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
   test.describe.configure({ mode: 'serial' });
+  test('webhook module import defers database client construction', () => {
+    const output = execFileSync(process.execPath, [
+      '-e',
+      "require('./api/webhook-connect-v2'); process.stdout.write('imported')",
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, POSTGRES_URL: 'ci-placeholder-not-a-database-url' },
+    });
+    expect(output).toBe('imported');
+  });
+
   test('all enablement gates are exact, school scoped, and live mode has an extra gate', () => {
     const schoolConfig = { features: { stripe_connect_accounts_v2: true } };
     expect(core.evaluateConnectV2Gate({ env: {}, schoolConfig, operation: 'account_create' }).enabled).toBe(false);
