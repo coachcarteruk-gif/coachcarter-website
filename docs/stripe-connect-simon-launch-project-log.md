@@ -3852,3 +3852,102 @@ For every future session:
   creation, onboarding, an event destination, an agreement, payout behavior,
   legacy Connect change, production activation, or Slice 5. Slice 5 was not
   started and requires new, separately scoped owner authority.
+
+### 9 August 2026 - Slice 4 non-production staging acceptance stopped at Vercel target guard
+
+- Began from a fresh isolated worktree
+  `C:\tmp\coachcarter-simon-slice4-staging-acceptance` on branch
+  `codex/simon-slice4-staging-acceptance`. Read-only
+  `git ls-remote origin refs/heads/main`, the fetched `origin/main`, worktree
+  `HEAD`, and merge base all resolved to exact required commit
+  `ccafbfc483937f2005f99f334134c92d46c8f28b`, which includes merged PR #359.
+  All existing worktrees and user changes were preserved.
+- Re-read the complete required worker/project/Stripe/launch documents and
+  reverified the protected LF-normalised SHA-256 values before action:
+  product specification
+  `79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+  and technical implementation plan
+  `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+  Neither protected document was edited.
+- Created only disposable Neon branch `br-dark-recipe-zarmjbix`, name
+  `cc-simon-s4-acceptance-01-20260809`, at `2026-08-09T18:02:22Z` in exact
+  isolated project `shiny-bonus-66942766`, organisation
+  `org-fancy-forest-47074420`, database `neondb`. The branch is non-primary,
+  non-default, unprotected, and descended from the already-isolated shadow
+  branch; every SQL call named it explicitly.
+- Corrected read-only preflight proved the implementation's actual observation
+  ledger is `connect_account_state_events`, all real migration prerequisites
+  exist, migration 041 was absent, and conflicting instructor-owner and
+  school-owner mapping counts were both zero. It also recorded school gate
+  absent, payout engine `v1`, no legacy school/instructor account mapping, no
+  connected-account scopes, an inactive inherited Slice 3 `shadow` config, and
+  zero payout runs/refund intents/refund events/launch earnings/transfer
+  intents/payout transfers.
+- Applied only exact repository migration
+  `db/migrations/041_connect_v2_onboarding_readiness.sql` as one transaction to
+  `br-dark-recipe-zarmjbix`. Postflight proved the three new tables present
+  with zero rows, all six reviewed indexes, all three append-only/identity
+  triggers, and the existing agreement trigger bound to the hardened function.
+  Migration 041 was not destructively rolled back.
+- Added synthetic school-1 instructors `2` (`Slice 4 Synthetic Fraser`) and
+  `3` (`Slice 4 Synthetic Simon`) plus synthetic school-1 superadmin `2`.
+  Synthetic emails use the reserved `.invalid` domain; no real name, email,
+  password, bank detail, or connected account was reused. A distinct random
+  bcrypt value was generated after a safety control correctly rejected an
+  attempted plan to copy an existing hash.
+- Created isolated Vercel project `prj_JfBT8mm5ob4CWwseF8Ym62fJ4wSk`, name
+  `cc-simon-s4-staging-01`, under team
+  `team_DXEEAusHmjcfcr6auPjqloL0` at `2026-08-09T18:12:11.593Z`. Provider
+  preflight reported `live=false`, no latest deployment, and no domains.
+  Configured Preview only with the disposable Neon URL, staging JWT and base
+  URL, `STRIPE_MODE=test`, and the reviewed account-create, account-link,
+  dashboard-link, agreement, webhook-processing, and global gates. No
+  Production variable was added and `STRIPE_CONNECT_V2_LIVE_ENABLED` remained
+  absent. A local `sk_test_...` credential was used as the documented fallback
+  because a least-privilege Accounts v2 restricted key was not retrievable; it
+  was never called.
+- `vercel link` created ignored local `.vercel/project.json` and `.env.local`
+  state and temporarily appended a redundant `.env*` ignore line. That line
+  was removed immediately; `.gitignore` now hashes exactly to its `HEAD` blob.
+  No secret file is tracked or included in the documentation change.
+- Submitted exact command
+  `npx.cmd --yes vercel@latest deploy --yes --scope coachcarteruk-2599s-projects`
+  without `--prod`. Vercel's first-deployment behaviour nevertheless assigned
+  target `production`, created deployment
+  `dpl_2dvLLths8Xe4rPaTtLoyHLyWaQaW`, and assigned project aliases
+  `cc-simon-s4-staging-01.vercel.app` and
+  `cc-simon-s4-staging-01-coachcarteruk-2599s-projects.vercel.app`. It was
+  created at `2026-08-09T18:23:18.683Z`, became `READY` at
+  `2026-08-09T18:24:06.466Z`, and reports exact Git SHA
+  `ccafbfc483937f2005f99f334134c92d46c8f28b`. Provider metadata reports
+  `gitDirty=1` solely because the redundant ignore line existed at upload.
+- Stopped immediately on that production-target identity, before any
+  application request or Stripe API call. The isolated deployment's
+  Production environment has exactly zero variables, so it contains no Neon
+  URL, Stripe credential/mode, JWT, global/operation gate, or live gate and is
+  inert. No CoachCarter production project, alias, domain, deployment,
+  environment, database, school configuration, payment, refund, earning,
+  payout, transfer, or Slice 3 state was read for mutation or changed.
+- Per fail-closed cleanup, overwrote the five Preview operation gates to
+  `false` between `2026-08-09T18:24:38.946Z` and `18:24:53.975Z`, then the
+  Preview global gate to `false` at `18:24:57.703Z`. The live gate remains
+  absent. Set the disposable database's school-1 JSON Boolean to `false` at
+  `18:25:08.282Z`. No dedicated Accounts v2 event destination was created, so
+  none required disabling. Retained the branch, migration, deployment, and
+  synthetic rows as evidence; no provider/database evidence was deleted.
+- Final disposable-database evidence shows zero Accounts v2 creation intents,
+  attempts, onboarding-link events, connected-account scopes, accounts, or
+  provider mappings. Synthetic instructors `2` and `3` remain unpaused with
+  `stripe_account_id=NULL`. Before/after hashes match exactly for legacy
+  Connect state `7b1a79ae40ffd98871758eda5f46a220`, inherited Slice 3 config
+  `d7edd0928fd680cb66f3b155be666b09`, and lesson payment contracts
+  `b6ec3337d53441f01ec5b39e780d029a`; payout/refund/earning/transfer tables
+  remained empty with MD5 `d41d8cd98f00b204e9800998ecf8427e`.
+- Because the stop gate fired, no deterministic Accounts v2 recipient,
+  ambiguous-result injection/reconciliation, hosted onboarding link, refresh/
+  return/expiry/replay/tamper/tenant/instructor test, thin-event destination or
+  delivery, agreement draft/accept/activate/immutability/overlap exercise,
+  current-state retrieval, or complete post-exercise regression matrix was
+  run. Slice 3 was not activated and Slice 5 was not started. Slice 4 staging
+  acceptance remains incomplete and requires new authority plus a Vercel path
+  proven not to auto-classify its first deployment as production.
