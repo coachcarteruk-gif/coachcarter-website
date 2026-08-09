@@ -78,10 +78,10 @@ function responseRecorder() {
 
 test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
   test.describe.configure({ mode: 'serial' });
-  test('webhook module import defers database client construction', () => {
+  test('Connect v2 module import and route factory defer database client construction', () => {
     const output = execFileSync(process.execPath, [
       '-e',
-      "require('./api/webhook-connect-v2'); process.stdout.write('imported')",
+      "require('./api/webhook-connect-v2'); require('./api/_connect-v2-routes').createConnectV2Handler(); process.stdout.write('imported')",
     ], {
       cwd: root,
       encoding: 'utf8',

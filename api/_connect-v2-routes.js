@@ -164,9 +164,16 @@ async function loadReadiness(sql, { schoolId, instructorId, mode }) {
 }
 
 function defaultDependencies() {
+  const env = process.env;
+  let sql;
   return {
-    env: process.env,
-    sql: process.env.POSTGRES_URL ? neon(process.env.POSTGRES_URL) : null,
+    env,
+    getSql: () => {
+      if (sql) return sql;
+      if (!env.POSTGRES_URL) return null;
+      sql = neon(env.POSTGRES_URL);
+      return sql;
+    },
     createAccountsClient: (mode) => createAccountsV2StripeClient({ expectedMode: mode }),
     createDashboardClient: (mode) => createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.CONNECT_V1, expectedMode: mode }),
     now: () => new Date(),
@@ -199,12 +206,22 @@ async function reconcileIntent({ sql, stripe, intent, schoolId, instructorId, mo
 
 function createConnectV2Handler(overrides = {}) {
   const deps = { ...defaultDependencies(), ...overrides };
+  let sqlResolved = false;
+  let resolvedSql;
+  const getSql = () => {
+    if (!sqlResolved) {
+      resolvedSql = Object.prototype.hasOwnProperty.call(deps, 'sql')
+        ? deps.sql
+        : deps.getSql();
+      sqlResolved = true;
+    }
+    return resolvedSql;
+  };
 
   return async function handleConnectV2(req, res) {
     const action = req.query?.action;
     if (!V2_ACTIONS.has(action)) return false;
     try {
-      const sql = deps.sql;
       const env = deps.env;
       const instructorOnly = !action.startsWith('v2-admin-');
       const requiredRoles = action === 'v2-admin-agreement-activate' ? ['superadmin'] : instructorOnly ? ['instructor'] : ['admin'];
@@ -216,6 +233,8 @@ function createConnectV2Handler(overrides = {}) {
       const schoolId = getSchoolId(user, req);
       if (!schoolId) refuse(403, 'SCHOOL_SCOPE_REQUIRED', 'A school scope is required');
       const instructorId = instructorOnly ? positiveInt(user.id, 'instructor') : positiveInt(req.query?.instructor_id || req.body?.instructor_id, 'instructor_id');
+      const sql = getSql();
+      if (!sql) refuse(503, 'CONNECT_V2_DATABASE_UNAVAILABLE', 'Accounts v2 database is unavailable');
       const mode = expectedMode(env);
 
       if (action === 'v2-status') {

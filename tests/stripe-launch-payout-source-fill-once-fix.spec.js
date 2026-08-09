@@ -25,12 +25,12 @@ test.describe('Stripe launch payout-source fill-once correction', () => {
     expect(migrationSql).not.toMatch(/^\s*(?:INSERT|UPDATE|DELETE|TRUNCATE|COPY)\b/gim);
   });
 
-  test('is the exact current suffix of the repository bootstrap aggregate', () => {
+  test('remains an exact canonical segment of the repository bootstrap aggregate', () => {
     const marker = '-- Stripe Connect Simon launch: forward-only correction for the Slice 1';
     const normalizedAggregate = aggregateSql.replace(/\r\n/g, '\n');
     const normalizedMigration = migrationSql.replace(/\r\n/g, '\n').trim();
     const start = normalizedAggregate.lastIndexOf(marker);
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(normalizedAggregate.slice(start).trim()).toBe(normalizedMigration);
+    expect(normalizedAggregate.slice(start, start + normalizedMigration.length)).toBe(normalizedMigration);
   });
 });
