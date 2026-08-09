@@ -3,19 +3,20 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SLICE 2 ACCEPTED — SLICE 3 IMPLEMENTED INACTIVE —
-PRODUCTION ACTIVATION NOT APPROVED — SLICE 4 NOT AUTHORISED**
+**Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
+POST-MERGE INACTIVE VERIFIED — PRODUCTION ACTIVATION NOT APPROVED — SLICE 4
+NOT AUTHORISED**
 
-**Last updated:** 8 August 2026
+**Last updated:** 9 August 2026
 
 **Verified source baseline:** remote `main` at
-`7be7920e07c75767e8eb923d3f122d62947f1899`
+`ea3a65cb3871924025f2355f388b98488bd71219`
 
-**Current blocker:** Slice 3 code is prepared behind a strict school-scoped
-state that remains inactive. Production deployment/activation, school config
-mutation, product communication, and readiness approval have not occurred.
-Slice 4 and every provider, payment, refund, payout, transfer, or money action
-remain outside this task's authority.
+**Current blocker:** Slice 3 is merged and deployed, but the production
+CoachCarter school remains inactive because the exact nested retirement path is
+absent. Production activation, school-config mutation, product communication,
+and readiness approval have not occurred. Slice 4 and every provider, payment,
+refund, payout, transfer, or money action remain outside this task's authority.
 
 ## 1. Title and purpose
 
@@ -54,19 +55,22 @@ The source hierarchy is:
    — implementation sequence, slice gates, tests, and acceptance criteria.
 3. `AGENTS.md` and `CLAUDE.md` — repository, tenancy, auth, money, and safety
    rules.
-4. [`stripe-connect-simon-slice-2-rollout-review.md`](stripe-connect-simon-slice-2-rollout-review.md)
+4. [`stripe-connect-simon-slice-3-rollout-review.md`](stripe-connect-simon-slice-3-rollout-review.md)
+   — exact Slice 3 merge, CI/deployment, production-inactive evidence, preserved
+   contracts, and the prepared but unexecuted activation/rollback runbook.
+5. [`stripe-connect-simon-slice-2-rollout-review.md`](stripe-connect-simon-slice-2-rollout-review.md)
    — committed Slice 2 controls and pass gates. Its `shadow-01`/`shadow-02`
    narrative predates shadow-04 and is historical, not the current resume point.
-5. [`stripe-launch-schema-foundation-rollout-review.md`](stripe-launch-schema-foundation-rollout-review.md)
+6. [`stripe-launch-schema-foundation-rollout-review.md`](stripe-launch-schema-foundation-rollout-review.md)
    — verified Slice 1 production schema evidence.
-6. [`stripe-connect.md`](stripe-connect.md) and
+7. [`stripe-connect.md`](stripe-connect.md) and
    [`payout-v2-source-ingestion-rollout-review.md`](payout-v2-source-ingestion-rollout-review.md)
    — current v1 and older inactive Payout v2 context. Where they conflict with
    the protected Simon documents, the protected Simon product specification
    governs the future launch.
-7. Committed code, migrations, tests, rollout manifests, Git history, and
+8. Committed code, migrations, tests, rollout manifests, Git history, and
    reviewed PR evidence.
-8. This log — the current journey/handover record, not a replacement for
+9. This log — the current journey/handover record, not a replacement for
    product authority or executable tests.
 
 ### Protected-document integrity
@@ -98,16 +102,18 @@ If either hash changes, stop and obtain an explicit product-document review.
   email-code UI or audited admin impersonation route.
 - Do not backfill historic payments, edit historical financial ledgers, move a
   cutover timestamp, release ambiguous claims, or invent a new Stripe identity.
-- No production payout, transfer, refund, Connect onboarding, live payment,
-  payout-engine transition, or Slice 3 operation is authorised by this log.
-- Do not start Slice 3 until Slice 2 is formally accepted with a clean,
-  independently bound environment and every required scenario passing.
+- No production retirement activation, payout, transfer, refund, Connect
+  onboarding, live payment, payout-engine transition, or Slice 4 operation is
+  authorised by this log.
+- Slice 3 is merged and deployed inactive. Do not activate it until a separate
+  approved change satisfies the runbook and stop conditions in the Slice 3
+  rollout review.
 
 ## 5. Current status at a glance
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | `origin/main` resolves to PR #355 merge `7be7920e07c75767e8eb923d3f122d62947f1899`. Exact post-merge Actions run `31248540845` completed successfully. This is the authoritative Slice 3 source baseline. |
+| Latest baseline | Verified | `origin/main` resolves to PR #356 merge `ea3a65cb3871924025f2355f388b98488bd71219`. Exact post-merge Actions run `31299415244` completed successfully, including syntax/encoding and Playwright jobs. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Formally accepted for completed shadow evidence | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Step 17 independently accepted the complete shadow-05 Slice 2 record on 8 August 2026. Production rollout remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
@@ -115,10 +121,10 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Deployment/database identity | Step 17 reverified read-only | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, default/primary branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe remained Sandbox/Test account `acct_1QUSsNIqhTSdZedS` with exact active eight-event webhook `we_1U0qdyIqhTSdZedS2h8O3RxW` and no live shadow-05 binding. |
 | Shadow Checkout return URLs | Merged; accepted shadow evidence | PR #342 merged fail-closed URL binding for all approved producers. All four approved shadow-05 origins are singular and complete; Step 17 accepted the Slice 2 evidence. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
-| Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
+| Money movement | Not performed | The Slice 3 post-merge review performed no payment, refund, earning, payout, transfer, Connect, webhook replay, reconciliation, or other money/provider mutation. |
 | Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
-| Slice 3: retired new products | Implemented, inactive, not deployed | Strict school config Boolean gates repeated learner bookings, Reserved Weekly Slot creation, and flexible/repeating offers before mutation; existing balances, bookings, series, management, history, and in-flight webhook settlement remain. Production activation is a separate approval. |
-| Next implementation | Slice 4 hold | Slice 4 is not authorised. Slice 3 deployment/activation also remains outside this implementation task. |
+| Slice 3: retired new products | Merged, deployed, production inactive verified | PR #356 merged as `ea3a65cb…`; exact CI and four Vercel deployments are successful/READY. A serializable read-only production query proved school `1` is CoachCarter and the nested retirement value/type are absent. Supported one-off and grandfathered contracts remain; activation is a separate approval. |
+| Next implementation | Activation and Slice 4 hold | The exact activation/rollback runbook is prepared but unexecuted. Production activation and Slice 4 are not authorised. |
 
 ## 6. Chronological project journey
 
@@ -3625,3 +3631,70 @@ For every future session:
   payout, transfer, refund, Connect, production, or money operation occurred.
   Slice 3 remains `IMPLEMENTED_INACTIVE_NOT_DEPLOYED`; production activation is
   a separate communication/readiness decision and Slice 4 remains unauthorised.
+
+### 9 August 2026 - Slice 3 post-merge inactive verification completed
+
+- Received separately scoped authority for post-merge inactive verification
+  only. Production activation, school-config mutation, payments, refunds,
+  earnings, payouts, transfers, webhook replay, and Slice 4 remained prohibited.
+- Fetched current remote refs and verified PR
+  [#356](https://github.com/coachcarteruk-gif/coachcarter-website/pull/356)
+  merged at `2026-08-09T06:40:35Z` with exact merge commit
+  `ea3a65cb3871924025f2355f388b98488bd71219`. That commit was exact
+  `origin/main` and the base of isolated branch
+  `codex/simon-slice3-postmerge-inactive-verification` in worktree
+  `C:\\tmp\\cc-simon-slice3-postmerge-inactive-verification`.
+- Inspected the primary workspace and every registered worktree before work.
+  All were clean except the already-dirty detached `cc5f` worktree; its existing
+  tracked and untracked user changes were recorded and left untouched. No
+  pre-existing workspace was changed.
+- Exact post-merge Actions run
+  [31299415244](https://github.com/coachcarteruk-gif/coachcarter-website/actions/runs/31299415244)
+  was a successful `main` push run at exact SHA `ea3a65cb...`. Jobs
+  `syntax + encoding checks` (`93209674152`) and `playwright e2e`
+  (`93209698709`) passed. GitHub reported successful deployments for the exact
+  SHA to `coachcarter-website`, `coachcarter-website-main`,
+  `cc-simon-s2-shadow-01`, and `cc-simon-s2-shadow-03`; direct read-only Vercel
+  inspection independently reported the bound deployment IDs production-target
+  and `READY`.
+- Reverified the protected LF-normalised hashes before editing: product
+  specification
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4` and
+  technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Ran one minimum-field production Neon `SELECT` inside a serializable read-only
+  transaction. It proved the row exists for exact school `1`, name
+  `CoachCarter Driving School`, slug `coachcarter`; both the nested retirement
+  value and its JSON type were SQL `NULL`, proving the path is absent and
+  retirement inactive. The query did not select or print the complete config,
+  connection string, or any secret. No production write or DDL was issued.
+- Passive public GET checks returned HTTP 200 for the CoachCarter home page,
+  ordinary learner booking page, and actual fixed-offer acceptance page.
+- Fresh local validation passed syntax `200`, C1 controls `272`, `112/112`
+  focused retirement/preservation contract assertions, `53/53` additional
+  ordinary one-off/fixed-offer/credit/reserved/payment-contract assertions, and
+  `8/8` installed-system-Chrome UI assertions with two live-API cases skipped by
+  design. The passing matrix covers strict inactive/active state interpretation,
+  pre-mutation 410 gates, direct one-off checkout, fixed and free offers,
+  grandfathered credit reads/spending/returns, existing series and Reserved
+  management, historical ledgers/source snapshots, idempotent webhook
+  settlement, and the one-payment/one-lesson whitelist.
+- The initial browser harness used Python static serving and returned 404 for
+  clean URLs; the unchanged tests passed after the temporary loopback server
+  matched clean-URL behavior. One additional batch initially stopped during
+  discovery because no Stripe credential existed; it passed with a visibly
+  synthetic non-authenticating test constructor placeholder. Neither attempt
+  reached Stripe or any production mutation. All temporary harness and result
+  files were removed.
+- Updated the Slice 3 rollout review with exact merge/deployment evidence,
+  production-inactive proof, preservation results, and exact school-1
+  activation/rollback SQL. The runbook requires a locked serializable
+  transaction, exact identity and row-count predicates, minimum before/after
+  evidence, safe expected-410 smokes, rollback to JSON Boolean `false`, and
+  explicit stop conditions. It is documentation only and was not executed.
+- No activation, config flip, database write/DDL, environment or deployment
+  change, Checkout, PaymentIntent, payment, refund, earning, payout, transfer,
+  Connect action, webhook replay, reconciliation, expiry, live-mode action, or
+  Slice 4 work occurred. Slice 3 is
+  `MERGED_DEPLOYED_INACTIVE_VERIFIED`; production activation remains a separate
+  approval and Slice 4 remains unauthorised.
