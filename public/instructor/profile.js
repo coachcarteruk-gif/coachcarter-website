@@ -226,7 +226,7 @@
             <option value="56" ${p.max_booking_days_ahead === 56 ? 'selected' : ''}>8 weeks ahead</option>
             <option value="84" ${p.max_booking_days_ahead === 84 || !p.max_booking_days_ahead ? 'selected' : ''}>12 weeks ahead (default)</option>
           </select>
-          <p class="field-hint">Learners will only see and book your slots inside this window. Offers with repeats still use their separate offer rules.</p>
+          <p class="field-hint">Learners will only see and book your slots inside this window. One-off lesson offers use the same 12-week platform ceiling.</p>
         </div>
       </div>
 

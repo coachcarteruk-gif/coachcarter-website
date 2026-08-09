@@ -18,6 +18,7 @@ let creditBalance = 0;
 let balanceMinutes = 0;
 let selectedInstructorBalanceMinutes = 0;
 let paymentsEnabled = true; // assume true until balance API tells us otherwise
+let incompatibleProductsRetired = false; // strict school feature state; absent defaults inactive
 let instructors   = [];
 let lessonTypes   = [];
 // True when lesson-type prices came back instructor-scoped (and learner-scoped
@@ -327,6 +328,8 @@ async function loadBalance() {
     creditBalance = data.credit_balance;
     balanceMinutes = data.balance_minutes || 0;
     if (data.payments_enabled !== undefined) paymentsEnabled = !!data.payments_enabled;
+    incompatibleProductsRetired = data.incompatible_products_retired === true;
+    applyProductRetirementUi();
     updateCreditBadge();
   } catch {}
 }
@@ -340,6 +343,8 @@ async function loadSelectedInstructorBalance(slot) {
     if (!res.ok) throw new Error(data.error || 'Failed to load instructor balance');
     selectedInstructorBalanceMinutes = data.selected_instructor_balance_minutes || 0;
     if (data.payments_enabled !== undefined) paymentsEnabled = !!data.payments_enabled;
+    incompatibleProductsRetired = data.incompatible_products_retired === true;
+    applyProductRetirementUi();
   } catch {
     selectedInstructorBalanceMinutes = 0;
   }
@@ -354,6 +359,20 @@ function updateCreditBadge() {
   // Hide credits banner for guests (they have no account - guestBanner covers this case)
   // and when payments are disabled.
   document.getElementById('noCreditsBanner').style.display = (auth && paymentsEnabled && balanceMinutes === 0) ? 'flex' : 'none';
+}
+
+function applyProductRetirementUi() {
+  if (!incompatibleProductsRetired) return;
+  const repeatToggle = document.getElementById('repeatToggle');
+  if (repeatToggle) repeatToggle.checked = false;
+  document.getElementById('repeatOptions')?.classList.remove('open');
+  const repeatSection = document.getElementById('repeatSection');
+  if (repeatSection) repeatSection.style.display = 'none';
+  const paidPrompt = document.getElementById('reservedWeeklyPaidPrompt');
+  if (paidPrompt) paidPrompt.style.display = 'none';
+  const successPrompt = document.getElementById('reservedWeeklySuccessPrompt');
+  if (successPrompt) successPrompt.style.display = 'none';
+  repeatConflicts = [];
 }
 
 // ─── Lesson Types ───────────────────────────────────────────────────────────
@@ -1728,7 +1747,7 @@ function applyRequestModeUi(isGuest, ltPriceStr, chargeMins) {
     // replaced it — avoids clobbering path-specific text (e.g. the
     // payments-disabled 'free' override) on ordinary opens.
     requestUiApplied = false;
-    if (repeatSection && !isGuest) repeatSection.style.display = '';
+    if (repeatSection && !isGuest && !incompatibleProductsRetired) repeatSection.style.display = '';
     if (creditNote) {
       creditNote.innerHTML = `This will use <strong id="mdDeductHours">${esc(formatHours(chargeMins))}</strong> from your balance. `
         + `Cancel 48+ hours before and it returns automatically.`;
@@ -1829,7 +1848,7 @@ function openBookModal(el) {
     document.getElementById('guestFields').style.display = 'none';
     const claimCta = document.getElementById('claimTrialCta');
     if (claimCta) claimCta.style.display = 'none';
-    document.getElementById('repeatSection').style.display = '';
+    document.getElementById('repeatSection').style.display = incompatibleProductsRetired ? 'none' : '';
     syncRepeatWindowOptions();
     if (needsProfileFields) {
       document.getElementById('profileFields').style.display = 'block';
@@ -2174,6 +2193,10 @@ function closeBookModal() {
 let repeatConflicts = [];
 
 function toggleRepeatOptions() {
+  if (incompatibleProductsRetired) {
+    applyProductRetirementUi();
+    return;
+  }
   const open = document.getElementById('repeatToggle').checked;
   document.getElementById('repeatOptions').classList.toggle('open', open);
   syncRepeatCountButtons();
@@ -2183,6 +2206,7 @@ function toggleRepeatOptions() {
 
 function getRepeatWeeks() {
   if (slotRequestMode) return 1;
+  if (incompatibleProductsRetired) return 1;
   if (!document.getElementById('repeatToggle').checked) return 1;
   return parseInt(document.getElementById('repeatWeeksSelect').value, 10);
 }
@@ -2212,7 +2236,7 @@ function syncRepeatWindowOptions() {
   const select = document.getElementById('repeatWeeksSelect');
   if (!repeatSection || !repeatToggle || !select) return maxWeeks;
 
-  const canRepeat = maxWeeks >= 2;
+  const canRepeat = !incompatibleProductsRetired && maxWeeks >= 2;
   repeatSection.style.display = canRepeat ? '' : 'none';
   if (!canRepeat) {
     repeatToggle.checked = false;
@@ -2668,6 +2692,7 @@ function showBookSuccess(weeks, dates) {
   const reservedWeeklyPrompt = document.getElementById('reservedWeeklySuccessPrompt');
   if (reservedWeeklyPrompt) {
     reservedWeeklyPrompt.style.display = weeks && weeks > 1 ? 'none' : 'block';
+    if (incompatibleProductsRetired) reservedWeeklyPrompt.style.display = 'none';
   }
   recurringAnchorBookingId = isSingleBooking ? lastBookingId : null;
   recurringAnchorContext = isSingleBooking && pendingSlot ? {
@@ -2853,6 +2878,10 @@ function setRecurringGate(message, tone = '') {
 }
 
 function openRecurringBlockModal(source) {
+  if (incompatibleProductsRetired) {
+    showToast('New Reserved Weekly Slots are no longer available. Existing reserved lessons can still be managed.', 'error');
+    return;
+  }
   window.posthog && posthog.capture('recurring_block_preview_opened', { source });
   clearSlotTimer();
   document.getElementById('bookModal').classList.remove('open');
@@ -2907,7 +2936,7 @@ function updateRecurringAnchorCopy(preview) {
 }
 
 async function loadRecurringBlockPreview() {
-  if (!auth || !recurringAnchorBookingId || recurringPreviewBusy) return;
+  if (incompatibleProductsRetired || !auth || !recurringAnchorBookingId || recurringPreviewBusy) return;
   recurringPreviewBusy = true;
   recurringPreview = null;
   document.getElementById('recurringBlockLoading').textContent = 'Loading weekly options...';
@@ -2984,6 +3013,10 @@ function renderRecurringBlockPreview() {
 }
 
 async function confirmRecurringBlock() {
+  if (incompatibleProductsRetired) {
+    showToast('New Reserved Weekly Slots are no longer available.', 'error');
+    return;
+  }
   if (recurringConfirmMode === 'bank') {
     return startRecurringBlockBankCheckout();
   }

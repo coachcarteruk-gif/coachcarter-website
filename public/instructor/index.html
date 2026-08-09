@@ -1034,6 +1034,9 @@
         <div class="notes-label">Lesson type</div>
         <select id="offerLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
       </div>
+      <div id="offerRetirementNotice" style="display:none;padding:10px 12px;border:1px solid #fed7aa;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:0.82rem;line-height:1.45;">
+        Offers are now for one specific lesson. Flexible and weekly-repeat offers are no longer available.
+      </div>
       <div id="offerFlexibleRow">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
           <input type="checkbox" id="offerFlexible" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
@@ -1051,7 +1054,7 @@
             <input type="time" id="offerTime" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;" step="1800" value="09:00">
           </div>
         </div>
-        <div style="margin-top:10px;">
+        <div id="offerRepeatRow" style="margin-top:10px;">
           <div class="notes-label">Weekly repeats (optional)</div>
           <select id="offerMaxRepeatWeeks" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
             <option value="1">No repeat - single lesson only</option>

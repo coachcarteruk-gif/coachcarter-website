@@ -218,7 +218,12 @@ async function handleBalance(req, res) {
                  FROM learner_credit_balances lcb
                 WHERE lcb.learner_id = lu.id
                   AND lcb.school_id = ${schoolId}
-             ), lu.balance_minutes, 0) AS balance_minutes
+             ), lu.balance_minutes, 0) AS balance_minutes,
+             COALESCE((
+               SELECT s.config->'features'->'retire_incompatible_products' = 'true'::jsonb
+                 FROM schools s
+                WHERE s.id = lu.school_id
+             ), false) AS incompatible_products_retired
         FROM learner_users lu
        WHERE lu.id = ${user.id}
          AND lu.school_id = ${schoolId}
@@ -274,6 +279,7 @@ async function handleBalance(req, res) {
       credit_balance:  balanceRow.credit_balance,
       balance_minutes: balanceRow.balance_minutes || 0,
       balance_hours:   ((balanceRow.balance_minutes || 0) / 60).toFixed(1),
+      incompatible_products_retired: balanceRow.incompatible_products_retired === true,
       balances: balances.map(row => ({
         instructor_id: row.instructor_id,
         instructor_name: row.instructor_name,

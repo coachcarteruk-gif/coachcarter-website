@@ -3,18 +3,19 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SLICE 2 ACCEPTED — SHADOW-04 FAILED AND PRESERVED —
-SHADOW-05 STEP 17 FORMAL DECISION COMPLETE — STEP 18 / SLICE 3 ON HOLD**
+**Current status:** **SLICE 2 ACCEPTED — SLICE 3 IMPLEMENTED INACTIVE —
+PRODUCTION ACTIVATION NOT APPROVED — SLICE 4 NOT AUTHORISED**
 
 **Last updated:** 8 August 2026
 
 **Verified source baseline:** remote `main` at
-`8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`
+`7be7920e07c75767e8eb923d3f122d62947f1899`
 
-**Current blocker:** Slice 2 is formally accepted, but Step 18 remains a hold
-gate. Slice 3 requires a new, separately scoped task and approval from fresh
-latest-main review. This decision grants no Slice 3, provider, database,
-Stripe, payment, refund, payout, transfer, money, or production authority.
+**Current blocker:** Slice 3 code is prepared behind a strict school-scoped
+state that remains inactive. Production deployment/activation, school config
+mutation, product communication, and readiness approval have not occurred.
+Slice 4 and every provider, payment, refund, payout, transfer, or money action
+remain outside this task's authority.
 
 ## 1. Title and purpose
 
@@ -106,7 +107,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | `origin/main` resolves to PR #354 merge `8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`; source `7e08023d9e251e397d6c784e056c92c76574fc79`. Step 16 baseline `b9aee19d71598364c4d6ff33d9ad4f4631535890` is the merge parent. PR #354 changed only the rollout review and this living log. Exact merge-commit Actions run `31246352745` completed successfully. |
+| Latest baseline | Verified | `origin/main` resolves to PR #355 merge `7be7920e07c75767e8eb923d3f122d62947f1899`. Exact post-merge Actions run `31248540845` completed successfully. This is the authoritative Slice 3 source baseline. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Formally accepted for completed shadow evidence | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Step 17 independently accepted the complete shadow-05 Slice 2 record on 8 August 2026. Production rollout remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
@@ -116,7 +117,8 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
 | Money movement | Not performed | No payout, transfer, refund, Connect onboarding, live Stripe, or Slice 3 action was performed in shadow-04. |
 | Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
-| Next implementation | Step 18 hold | No Slice 3 work is authorised. A new, separately scoped task and approval must start from fresh latest `main`; this acceptance decision grants no provider/database/Stripe mutation, production action, or money movement. |
+| Slice 3: retired new products | Implemented, inactive, not deployed | Strict school config Boolean gates repeated learner bookings, Reserved Weekly Slot creation, and flexible/repeating offers before mutation; existing balances, bookings, series, management, history, and in-flight webhook settlement remain. Production activation is a separate approval. |
+| Next implementation | Slice 4 hold | Slice 4 is not authorised. Slice 3 deployment/activation also remains outside this implementation task. |
 
 ## 6. Chronological project journey
 
@@ -833,29 +835,32 @@ rebound, or treated as acceptance evidence during this step.
 
 ### 18. Hold Slice 3
 
-- **Status:** Active hold. Slice 2 is accepted, but no separately scoped Slice 3
-  task or approval exists.
+- **Status:** Hold lifted only for the separately scoped 8 August 2026 Slice 3
+  implementation task. The implementation is prepared inactive; production
+  deployment/activation remains held.
 - **Preconditions:** Formal step 17 acceptance plus a separately scoped Slice 3
   task/approval.
 - **Evidence required:** Accepted Slice 2 record and fresh latest-main review.
 - **Stop conditions:** Slice 2 is failed, incomplete, or merely “prepared.”
-- **Expected output:** No Slice 3 work until the gate is satisfied.
+- **Expected output:** Inactive, school-scoped implementation with focused
+  preservation and direct-bypass tests; no production activation.
 - **Relevant artifacts:** Protected implementation sequence.
 - **Production/money risk:** Prevents premature product/payment changes.
 
 ## 15. Next session starts here
 
-Step 17 is complete from exact reviewed `origin/main`
-`8e7a7598a3acd20cf0ec0cbec7b2e334f6d48211`. The formal dated decision is
-`SLICE 2 ACCEPTED`; its exact provenance, checks, limitations, and authority
-boundary are in the Slice 2 rollout review and the 8 August 2026 Step 17
-append-only entry below.
+Slice 3 implementation started from exact reviewed `origin/main`
+`7be7920e07c75767e8eb923d3f122d62947f1899` after PR #355 and exact CI run
+`31248540845` were verified. The implementation is inactive unless an exact
+school config Boolean is separately enabled. Read
+[`stripe-connect-simon-slice-3-rollout-review.md`](stripe-connect-simon-slice-3-rollout-review.md)
+before review, deployment, or activation.
 
-Step 18 is an active hold. Do not start Slice 3 without a new, separately
-scoped task and approval from fresh latest-main review. Do not infer production
-approval from Slice 2 shadow acceptance. Do not rerun reconciliation or expiry,
-replay a webhook, change Stripe/Vercel/Neon state, mutate the database, or
-perform any production or money operation under this handover.
+Do not infer production activation from the Slice 3 code or Slice 2 shadow
+acceptance. No school flag has been changed. Slice 4 remains on hold. Do not
+rerun reconciliation or expiry, replay a webhook, change Stripe/Vercel/Neon
+state, mutate production data, or perform a money operation under this
+handover.
 
 ## 16. Update protocol
 
@@ -3576,3 +3581,47 @@ For every future session:
 - Step 18 is now an active hold. Slice 3 requires a new, separately scoped task
   and approval from fresh latest-main review; this decision grants no such
   authority.
+
+### 8 August 2026 - Slice 3 retired-product implementation prepared inactive
+
+- Received the separately scoped Slice 3 implementation authority that lifted
+  Step 18 only for this task. It granted no Slice 4, deployment, production
+  activation, provider mutation, database mutation, or money authority.
+- Verified PR #355 merged as
+  `7be7920e07c75767e8eb923d3f122d62947f1899`, exact current `origin/main`, and
+  confirmed exact post-merge CI run `31248540845` passed. Reverified the
+  protected LF-normalised hashes before editing: product specification
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4` and
+  technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Preserved the primary workspace and every existing worktree exactly as found,
+  including the pre-existing dirty detached `cc5f` worktree. Created isolated
+  worktree `C:\\tmp\\cc-simon-slice3-retire-products` on branch
+  `codex/simon-slice3-retire-products` from exact `origin/main`.
+- Added strict school-scoped state
+  `schools.config.features.retire_incompatible_products === true`. Missing,
+  malformed, string, numeric, null, and false values remain inactive. Active
+  creation attempts return stable HTTP 410 code
+  `PRODUCT_CREATION_RETIRED` before mutation.
+- Gated repeated learner bookings, Reserved Weekly Slot preview/credit commit/
+  bank Checkout creation, flexible offers, repeating offer creation, and
+  flexible/repeating acceptance. Existing self-serve Lesson Credit purchase
+  endpoints retain their earlier server-side `410 CREDIT_PURCHASE_RETIRED`.
+- Removed active-state learner/instructor entry points and corrected admin copy.
+  Preserved one-off booking/payment-link offers, per-instructor balance reads and
+  spending, cancellation returns, recurring status/moves/cancellations/series
+  management, historical ledgers, and idempotent in-flight webhook settlement.
+  Legacy-credit and retired multi-booking sources remain outside the exact
+  one-payment/one-lesson whitelist and remain £0 automated launch earnings.
+- Verification passed: syntax 200 files; C1 controls 272 files; 157/157 focused
+  and affected non-browser tests; and 8/8 Chrome browser assertions covering
+  inactive legacy behavior plus active retirement UI. `git diff --check` passed
+  and protected hashes remained exact. The local Playwright package expected a
+  newer bundled Chromium revision than cached, so browser tests used the already
+  installed system Chrome through a temporary config outside the repository;
+  no browser or dependency was downloaded.
+- No deployment, config flip, Neon write/DDL, Stripe/Vercel mutation, Checkout,
+  PaymentIntent, payment, webhook replay, reconciliation, expiry, earning,
+  payout, transfer, refund, Connect, production, or money operation occurred.
+  Slice 3 remains `IMPLEMENTED_INACTIVE_NOT_DEPLOYED`; production activation is
+  a separate communication/readiness decision and Slice 4 remains unauthorised.

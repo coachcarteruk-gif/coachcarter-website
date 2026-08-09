@@ -136,9 +136,15 @@ Learner and instructor user-facing sign-in uses a 6-digit email code. Admins ret
 
 **July 2026 policy reversal** (deliberate, Fraser-requested — supersedes the old 4-week cap): `instructors.max_booking_days_ahead` (1–84 days, DB default 84) **is** the learner-facing window. The platform ceiling is 84 days — `MAX_DAYS_AHEAD = 84` in `api/slots.js`, `PLATFORM_MAX_DAYS = 84` in `public/learner/book.js`. Each instructor sets their window from the instructor profile ("How far ahead learners can book"). The ceiling covers `?action=available` (outer bounds; still max 31 days per request — the learner feed fetches in ≤31-day chunks), `?action=book`, `?action=checkout-slot`, `?action=checkout-slot-guest`, `?action=reschedule`, `?action=book-free-trial`, `?action=create-offer` (first-slot date), and the lesson-request paths. Per-instructor window enforcement is `isDateWithinBookingWindow()` beside each outer guard. The learner feed window is the chosen instructor's window, or the widest window in the school under "All instructors" (the server filters each slot by its own instructor's window); the book.html date grid collapses past 6 weeks behind a "Show later dates" button.
 
-The **only** path that may legitimately create bookings past the 84-day ceiling is `bookOfferSeries()` in `api/offers.js`, called from `api/webhook.js handleOfferBooking` and `handleFreeOffer`. An instructor sets `lesson_offers.max_repeat_weeks` (1–18) when creating the offer; the learner picks 1..max on the accept page; the webhook fans out a weekly series with `series_id`, skipping clashed weeks (existing booking, blackout, no DoW availability) and rolling to the next free week up to an 18-week lookahead from the original date. Pricing is per-lesson × N (Stripe `quantity`); if we can't fill all weeks, Stripe is partially refunded for the unused ones.
+The historical `bookOfferSeries()` path in `api/offers.js` can create bookings past the 84-day ceiling only for an offer accepted while the school's incompatible-product retirement state is inactive. Slice 3 retires new repeat offers for enabled schools; do not present the historical series path as a new-booking workaround. Existing series records and in-flight pre-retirement Stripe sessions must still settle and remain manageable.
 
-Don't add paths that bypass the 84-day platform ceiling for ordinary learner self-serve booking. If an instructor wants to book a learner further out, they use the offer-with-repeats flow.
+Don't add paths that bypass the 84-day platform ceiling for ordinary learner self-serve booking.
+
+## Simon Slice 3 retired products
+
+`schools.config.features.retire_incompatible_products === true` is the only active retirement value; missing, malformed, string, numeric, or false values are inactive. The state is always loaded by exact authenticated/offer `school_id`. When active, server routes must return `410 PRODUCT_CREATION_RETIRED` before any insert, credit mutation, hold, notification, or Stripe call for learner repeats, Reserved Weekly Slot creation, flexible offers, or repeating offers. UI hiding is defence-in-depth, not authority.
+
+Do not gate grandfathered Lesson Credit balance reads/spending/returns, existing series/status/move/cancel management, historical ledgers, or webhook settlement for Stripe sessions created before activation. Retired/legacy-funded lessons remain £0 automated Simon-launch earnings. Production activation is a separate communication/readiness decision and is not implied by merging the implementation.
 
 ## Broadcast offers
 

@@ -28,6 +28,7 @@ const {
   prepareLaunchPaymentCandidate,
 } = require('./_stripe-launch-payment-contracts');
 const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-return-urls');
+const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
 
 function dateOnly(value) {
   if (!value) return null;
@@ -416,9 +417,13 @@ async function handleGetOffer(req, res) {
 
     // Determine what details the learner still needs to provide
     // Prefer offer's own learner_name, fall back to joined learner_users name
+    const isFlexible = !offer.scheduled_date && !offer.start_time;
+    const incompatibleProductsRetired = await loadRetiredProductState(sql, Number(offer.school_id));
+    if (incompatibleProductsRetired && isFlexible) {
+      return sendRetiredProduct(res, 'flexible_offer');
+    }
     const resolvedName = offer.offer_learner_name || offer.learner_name || '';
     const needsDetails = !resolvedName || !offer.learner_phone || !offer.learner_pickup_address;
-    const isFlexible = !offer.scheduled_date && !offer.start_time;
     const isTrialOffer = offer.lesson_type_slug === 'trial';
     const originalPricePence = offer.price_pence ?? 8250;
 
@@ -456,6 +461,7 @@ async function handleGetOffer(req, res) {
         trigger: offer.trigger || null,
         max_repeat_weeks: offer.max_repeat_weeks || null,
         is_flexible: isFlexible,
+        incompatible_products_retired: incompatibleProductsRetired,
         learner_email: offer.learner_email,
         learner_name: resolvedName,
         learner_phone: offer.learner_phone || '',
@@ -570,6 +576,11 @@ async function handleAcceptOffer(req, res) {
       if (isNaN(rw) || rw < 1)
         return res.status(400).json({ error: 'repeat_weeks must be a positive integer' });
       repeatWeeksClean = Math.min(rw, offerMaxRepeat);
+    }
+
+    if (await loadRetiredProductState(sql, schoolId)) {
+      if (isFlexible) return sendRetiredProduct(res, 'flexible_offer');
+      if (repeatWeeksClean > 1) return sendRetiredProduct(res, 'repeated_offer');
     }
 
     // offer_price_pence (custom price) takes precedence over discount_pct

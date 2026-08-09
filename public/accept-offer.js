@@ -26,6 +26,7 @@
           ALREADY_ACCEPTED: 'Already accepted',
           CANCELLED: 'Offer cancelled',
           SUPERSEDED: 'Slot already booked',
+          PRODUCT_CREATION_RETIRED: 'Offer no longer available',
           NOT_FOUND: 'Offer not found'
         };
         var messages = {
@@ -33,6 +34,7 @@
           ALREADY_ACCEPTED: 'This lesson offer has already been accepted and paid for.',
           CANCELLED: 'This lesson offer was cancelled by the instructor.',
           SUPERSEDED: 'Sorry - that slot is no longer available! Another learner booked it first.',
+          PRODUCT_CREATION_RETIRED: 'Flexible and repeated lesson products have been retired. Ask your instructor to send a new offer for one specific lesson.',
           NOT_FOUND: 'This offer link is invalid. Please check the link from your email.'
         };
         showError(titles[data.code] || 'Unavailable', messages[data.code] || data.message || 'Something went wrong.');
@@ -136,7 +138,7 @@
     }
 
     // Weekly-repeat picker (slot-pinned offers only). Builds 1..max_repeat_weeks.
-    var maxRepeat = (!o.is_flexible && o.max_repeat_weeks) ? parseInt(o.max_repeat_weeks, 10) : 1;
+    var maxRepeat = (!o.incompatible_products_retired && !o.is_flexible && o.max_repeat_weeks) ? parseInt(o.max_repeat_weeks, 10) : 1;
     if (maxRepeat > 1) {
       var repeatSection = document.getElementById('repeat-section');
       var repeatSel = document.getElementById('repeat-weeks');

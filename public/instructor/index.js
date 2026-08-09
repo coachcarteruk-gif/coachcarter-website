@@ -90,6 +90,7 @@ let instructorTransmissionType = 'manual'; // from profile, used for one-off slo
 let loadedRanges = []; // [{from, to}] already fetched
 let requestsLoaded = false;
 let selectedBooking = null;
+let incompatibleProductsRetired = false;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
@@ -123,8 +124,26 @@ async function loadCalendarPrefs() {
       calendarStartHour = data.instructor.calendar_start_hour || 7;
       instructorSlug = data.instructor.slug || null;
       instructorTransmissionType = normaliseTransmissionType(data.instructor.transmission_type) || 'manual';
+      incompatibleProductsRetired = data.instructor.incompatible_products_retired === true;
+      applyOfferRetirementUi();
     }
   } catch {}
+}
+
+function applyOfferRetirementUi() {
+  const notice = document.getElementById('offerRetirementNotice');
+  const flexibleRow = document.getElementById('offerFlexibleRow');
+  const repeatRow = document.getElementById('offerRepeatRow');
+  if (notice) notice.style.display = incompatibleProductsRetired ? '' : 'none';
+  if (flexibleRow) flexibleRow.style.display = incompatibleProductsRetired ? 'none' : '';
+  if (repeatRow) repeatRow.style.display = incompatibleProductsRetired ? 'none' : '';
+  if (!incompatibleProductsRetired) return;
+  const flexible = document.getElementById('offerFlexible');
+  if (flexible) flexible.checked = false;
+  const repeats = document.getElementById('offerMaxRepeatWeeks');
+  if (repeats) repeats.value = '1';
+  const slotFields = document.getElementById('offerSlotFields');
+  if (slotFields) slotFields.style.display = '';
 }
 
 // ─── View switching ──────────────────────────────────────────────────────────
@@ -2390,6 +2409,7 @@ async function openOfferModal(prefillEmail, prefillName) {
   // Reset weekly-repeats selector to "no repeat"
   const repeatSel = document.getElementById('offerMaxRepeatWeeks');
   if (repeatSel) repeatSel.value = '1';
+  applyOfferRetirementUi();
 
   // Reset audience radio (default: one specific learner - preserves existing UX)
   const audOne = document.getElementById('offerAudienceOne');
@@ -2410,7 +2430,7 @@ async function openOfferModal(prefillEmail, prefillName) {
     // so the "Flexible - learner picks their own time" option doesn't apply.
     // Hide it entirely in broadcast mode rather than disabling it (less confusing).
     const flexRow = document.getElementById('offerFlexibleRow');
-    if (flexRow) flexRow.style.display = isBroadcast ? 'none' : '';
+    if (flexRow) flexRow.style.display = (isBroadcast || incompatibleProductsRetired) ? 'none' : '';
     if (isBroadcast) {
       flexCb.checked = false;
       document.getElementById('offerSlotFields').style.display = '';
@@ -2746,7 +2766,7 @@ async function sendOffer() {
   const offerName = document.getElementById('offerName').value.trim();
   const sendEmail = document.getElementById('offerSendEmail').checked;
   const email = document.getElementById('offerEmail').value.trim();
-  const flexible = document.getElementById('offerFlexible').checked;
+  const flexible = !incompatibleProductsRetired && document.getElementById('offerFlexible').checked;
   const date = document.getElementById('offerDate').value;
   const time = document.getElementById('offerTime').value;
   const lessonTypeId = document.getElementById('offerLessonType').value;
@@ -2794,7 +2814,7 @@ async function sendOffer() {
   // Weekly-repeats cap (1 = single lesson, 2..18 = learner picks count on accept page).
   // Only valid for slot-pinned offers; the API rejects flexible+repeat anyway.
   const repeatSel = document.getElementById('offerMaxRepeatWeeks');
-  const maxRepeatWeeks = (!flexible && repeatSel) ? parseInt(repeatSel.value, 10) : 1;
+  const maxRepeatWeeks = (!incompatibleProductsRetired && !flexible && repeatSel) ? parseInt(repeatSel.value, 10) : 1;
 
   try {
     const payload = {
