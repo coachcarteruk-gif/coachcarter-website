@@ -4,19 +4,23 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
-POST-MERGE INACTIVE VERIFIED — PRODUCTION ACTIVATION NOT APPROVED — SLICE 4
-NOT AUTHORISED**
+POST-MERGE INACTIVE VERIFIED — SLICE 4 MERGED AND DEPLOYED, POST-MERGE
+INACTIVE VERIFIED — PRODUCTION ACTIVATION NOT APPROVED — SLICE 5 NOT
+AUTHORISED**
 
 **Last updated:** 9 August 2026
 
 **Verified source baseline:** remote `main` at
-`ea3a65cb3871924025f2355f388b98488bd71219`
+`be6f06dc619bb941078ab19e1a8814772fc5e993`
 
-**Current blocker:** Slice 3 is merged and deployed, but the production
-CoachCarter school remains inactive because the exact nested retirement path is
-absent. Production activation, school-config mutation, product communication,
-and readiness approval have not occurred. Slice 4 and every provider, payment,
-refund, payout, transfer, or money action remain outside this task's authority.
+**Current blocker:** Slice 4 Accounts v2 readiness code is merged and deployed,
+but remains inactive. No school feature flag or Vercel global, operation,
+webhook, or live gate exists; migration 041 is unapplied; and no Accounts v2
+identity, onboarding link/session, dedicated event destination, agreement, or
+payout activation exists. Slice 3 production activation remains separately
+unapproved. Slice 5 and every provider, configuration, database, payment,
+refund, earning, payout, transfer, cutover, or money action require new,
+separately scoped authority.
 
 ## 1. Title and purpose
 
@@ -3740,3 +3744,111 @@ For every future session:
   school flag change, replay, deployment, payment, refund, earning, payout,
   transfer, cutover, Slice 3 activation, or Slice 5 work occurred. Status is
   `IMPLEMENTED_INACTIVE_NOT_DEPLOYED`.
+
+### 9 August 2026 - Slice 4 post-merge inactive verification completed
+
+- Received separately scoped Slice 4 post-merge inactive-verification authority
+  only. No Stripe, Vercel configuration, database, school configuration,
+  deployment-state, payment, refund, earning, payout, transfer, cutover, Slice
+  3 activation, or Slice 5 mutation was authorised or performed.
+- Verified PR [#358](https://github.com/coachcarteruk-gif/coachcarter-website/pull/358),
+  `Slice 4: prepare inactive Accounts v2 readiness`, merged at
+  `2026-08-09T17:08:51Z` with exact squash commit
+  `be6f06dc619bb941078ab19e1a8814772fc5e993`. Exact `HEAD`, `origin/main`, and
+  merge-base all matched that SHA. Created isolated worktree
+  `C:\tmp\cc-simon-slice4-postmerge-inactive-verification` on branch
+  `codex/simon-slice4-postmerge-inactive-verification` from that commit; no
+  existing worktree was switched or changed.
+- Exact merge-triggered GitHub Actions push run
+  [31325635483](https://github.com/coachcarteruk-gif/coachcarter-website/actions/runs/31325635483)
+  completed successfully for exact SHA `be6f06dc...`. Job
+  `syntax + encoding checks` (`93275424866`) passed from
+  `2026-08-09T17:08:57Z` to `17:09:09Z`; `playwright e2e`
+  (`93275453716`) passed from `17:09:12Z` to `17:10:26Z`.
+- GitHub reported exactly four final successful Vercel contexts and four
+  production-environment deployment records for the exact SHA. Direct
+  read-only Vercel API inspection independently proved all four deployments
+  were production-targeted, `READY`, sourced from repository
+  `coachcarteruk-gif/coachcarter-website`, ref `main`, and exact Git SHA
+  `be6f06dc619bb941078ab19e1a8814772fc5e993`:
+  - `coachcarter-website-main`: project
+    `prj_rvHVfX2lCxAugCtYGcoYMk37W4zk`, deployment
+    `dpl_FZMnqTz6zubnKRrzcZYR9gXobuki`, GitHub deployment `5820957584`, alias
+    `coachcarter-website-main.vercel.app`;
+  - `cc-simon-s2-shadow-03`: project
+    `prj_zz7VKC3stOrJvlw8Rbc4FHMf6leW`, deployment
+    `dpl_2NW6HLodVve4WVkkwkif4i9nGq51`, GitHub deployment `5820957698`, alias
+    `cc-simon-s2-shadow-03.vercel.app`;
+  - `cc-simon-s2-shadow-01`: project
+    `prj_CprETJA11YddzEz9hrbxfUtBUplK`, deployment
+    `dpl_8wFKiKgrv3hLA7TcdVGyCsyBwhyM`, GitHub deployment `5820958026`, alias
+    `cc-simon-s2-shadow-01.vercel.app`;
+  - `coachcarter-website`: project `prj_ikyhcHbDHOR4jDQuZUeGFv3pw1Lk`,
+    deployment `dpl_5pUSWp4qWJCMbxWqQMEhRXHqPDk2`, GitHub deployment
+    `5820963783`, aliases `coachcarter.uk` and `www.coachcarter.uk`.
+  No deployment, redeploy, promotion, alias, domain, project, or environment
+  mutation was submitted during this verification.
+- Read-only Vercel environment metadata returned zero variables with prefix
+  `STRIPE_CONNECT_V2` in each of the four deployed projects. Therefore the
+  global gate, every account/link/dashboard/agreement/webhook operation gate,
+  live gate, and dedicated webhook secret all remain absent. No value or secret
+  was read or printed.
+- At `2026-08-09T17:22:37.702Z`, one minimum-field serializable, deferrable,
+  read-only production Neon transaction proved there is exactly one school;
+  school `1`, `CoachCarter Driving School`, slug `coachcarter`, has no
+  `features.stripe_connect_accounts_v2` path or JSON type. Migration 041 is not
+  applied: all three Slice 4 tables and its guard function resolve SQL `NULL`.
+  School 1 has zero connected-account scopes, zero account-state observations,
+  zero Slice 4 creation identities, zero onboarding-link events, and zero
+  payout agreement versions (draft, accepted, approved, and active are all
+  zero). Its payout engine remains exactly `v1`, and `payout_runs` remains zero.
+- The same transaction recorded the current legacy-Connect production shape
+  without exposing account IDs: seven school-1 instructors, one legacy mapping,
+  one onboarding-complete row, one paused-payout row, and canonical state hash
+  `9a61690d542ccd0938dcc92e035491eab5d0513a9971aff713819aac6ec81dbe`.
+  The merged source changes only dispatch the separately named v2 actions before
+  legacy actions; every legacy action-handler body is byte-identical to the
+  parent commit, and no payout implementation file was changed by PR #358.
+- At `2026-08-09T17:23:33.500Z`, aggregate-only Stripe live-mode GET/list
+  inspection found one existing event destination but zero destination names or
+  webhook URLs matching Accounts/Connect v2 or `/api/webhook-connect-v2`.
+  Accounts v2 recipient listing found one provider-visible recipient account
+  but zero with CoachCarter Slice 4 metadata prefix `cc:connect-v2:`. The one
+  existing legacy connected account remained singular; its sanitized provider
+  state hash was
+  `4134cece57903987429bfd1373b89074582389ab9f44ce4711d35453311e5651`.
+  No Stripe create, update, delete, enable, disable, ping, retrieve-related,
+  onboarding, login-link, webhook delivery, payment, refund, payout, transfer,
+  or other mutation call was made.
+- These independent controls confirm no Accounts v2 account creation, webhook
+  destination, onboarding link/session, agreement acceptance/activation, payout
+  behaviour activation, or legacy Connect replacement occurred. With every
+  gate absent, the school flag absent, migration tables absent, and no v2
+  mapping, the deployed code cannot reach provider mutation paths. Passive
+  production GETs followed the canonical-host redirect and returned `200` for
+  home and instructor earnings, `401` for both legacy `connect-status` and v2
+  `v2-status` without authentication, and `405` for GET on the POST-only v2
+  webhook boundary.
+- Reverified the protected LF-normalised hashes exactly: product specification
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4` and
+  technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+  Neither protected document changed between Slice 4's base and merge commit.
+- Inspected all 22 registered worktrees by exact path, branch/detached state,
+  commit, and porcelain status. Twenty-one were clean. Only the pre-existing
+  detached `C:\Users\Fraser\.codex\worktrees\cc5f\coachcarter-website-main`
+  remained dirty with its same 12 tracked and two untracked user entries; it
+  and every other existing worktree were left untouched.
+- Fresh local merged-SHA verification passed syntax for `204` JavaScript files,
+  C1 controls for `276` files, and all `14/14` focused Accounts v2 inactive
+  contract tests. The focused matrix proves exact fail-closed gates, school and
+  role scope, deterministic recipient identity, ambiguous-create reconciliation
+  without replacement, current-evidence readiness, signed onboarding state,
+  thin-event validation/replay safety, inactive no-Stripe behavior, migration
+  append-only constraints, and absence of payout/refund/earning/cutover/
+  retirement writers. `git diff --check` passed after the documentation update.
+- Slice 4 status is `MERGED_DEPLOYED_INACTIVE_VERIFIED`. This evidence update
+  does not approve migration 041, any gate or school flag, Accounts v2 account
+  creation, onboarding, an event destination, an agreement, payout behavior,
+  legacy Connect change, production activation, or Slice 5. Slice 5 was not
+  started and requires new, separately scoped owner authority.
