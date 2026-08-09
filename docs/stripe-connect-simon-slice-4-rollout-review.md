@@ -11,6 +11,13 @@ Staging acceptance attempt: 9 August 2026 on
 #359). The attempt stopped before Accounts v2 provider use because Vercel
 classified the isolated project's first deployment as a `production` target.
 
+Staging acceptance attempt 2: 9 August 2026 on
+`codex/simon-slice4-staging-acceptance-2`, exact source and then-current
+`origin/main` `90183a9889458581718fb3438403e703f36b8b9a` (merged PR #360).
+This attempt also stopped before configuration or Accounts v2 provider use:
+Vercel classified an explicitly requested `--target preview` first deployment
+as `production` and assigned project aliases.
+
 ## Authority and non-actions
 
 This slice implements only the Accounts v2 onboarding and agreement-readiness
@@ -343,3 +350,68 @@ regression matrix was performed. Slice 3 was not activated and Slice 5 was not
 started. Resumption requires a new isolated Vercel project that is proven able
 to accept a first deployment on a non-production target before source upload,
 or an explicitly approved alternative that cannot be auto-promoted.
+
+## Slice 4 staging acceptance attempt 2 - stopped 9 August 2026
+
+Attempt 2 used a fresh worktree
+`C:\tmp\coachcarter-simon-slice4-staging-acceptance-2` and branch
+`codex/simon-slice4-staging-acceptance-2`. Before action, remote
+`origin/main`, fetched `origin/main`, and worktree `HEAD` all resolved to
+`90183a9889458581718fb3438403e703f36b8b9a`. The protected LF-normalised
+SHA-256 values again matched exactly:
+`79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+and `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+No protected document or existing worktree was changed.
+
+Read-only Neon revalidation named only retained disposable branch
+`br-dark-recipe-zarmjbix`, database `neondb`, project
+`shiny-bonus-66942766`. It remained non-default and unprotected with migration
+041 intact; the school gate was `false`; owner-mapping duplicate counts were
+zero; synthetic instructors `2` and `3` remained active, unpaused, and without
+legacy Stripe mappings; and Accounts v2 intents, attempts, links, scopes,
+observations, and synthetic agreements all remained zero. Payout engine `v1`,
+the inactive Slice 3 `shadow` config, and all zero payout/refund/earning/
+transfer counts were unchanged. No SQL write was submitted in attempt 2.
+
+Created replacement isolated Vercel project
+`prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, name `cc-simon-s4-staging-02`, team
+`team_DXEEAusHmjcfcr6auPjqloL0`, at `2026-08-09T20:01:24.142Z`. Initial
+provider state was `live=false`, with no deployment or domain. Before source
+upload, exact dry-run command `vercel deploy --dry --target preview
+--skip-domain` failed because Vercel permits `--skip-domain` only for
+production deployments. The operator explicitly approved the safer supported
+form with `--target preview` and required target/alias verification before any
+configuration.
+
+After cleaning Vercel's local link artefacts, `.gitignore` hashed byte-for-byte
+to `HEAD` and the worktree was clean. Exact command
+`npx.cmd --yes vercel@latest deploy --target preview --yes --scope
+coachcarteruk-2599s-projects --json` uploaded exact source commit
+`90183a9889458581718fb3438403e703f36b8b9a` with zero project environment
+variables. Vercel nevertheless returned target `production`, created
+deployment `dpl_53R1HXZHMgYu7QpBSV2kNEVZzrFv`, and assigned aliases
+`cc-simon-s4-staging-02.vercel.app` and
+`cc-simon-s4-staging-02-coachcarteruk-2599s-projects.vercel.app`. The
+deployment was created at `2026-08-09T20:05:43.527Z`, started building at
+`20:05:44.465Z`, and became `READY` at `20:06:40.153Z`. Independent provider
+retrieval confirms `target=production`, exact Git SHA, and no dirty-source
+marker.
+
+That provider identity triggered the mandatory immediate stop. Final project
+metadata proves exactly zero total, Production, Preview, and
+`STRIPE_CONNECT_V2*` environment variables. Therefore the deployment has no
+Neon URL, Stripe key, JWT secret, Stripe mode, global/operation gate, live
+gate, webhook secret, or school authority and is inert. No staging alias was
+manually created or repointed; only Vercel's automatic first-deployment aliases
+exist. No Stripe API call, account, Account Link, dashboard link, event
+destination, event delivery, agreement action, payment, refund, earning,
+payout, transfer, or Slice 3 action occurred. No cleanup gate or destination
+mutation was necessary because none was configured or created. The replacement
+project and deployment were retained as non-destructive evidence.
+
+The full Slice 4 staging acceptance and regression postflight remain
+unexecuted. A third attempt must not rely on Vercel CLI first-deployment target
+selection. It requires either a provider-side project/environment setup that
+can be read-only proven Preview before source upload, or a different explicitly
+approved isolated non-production host. Production, Slice 3 activation, and
+Slice 5 remain outside authority.
