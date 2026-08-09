@@ -73,6 +73,7 @@ const {
   prepareLaunchPaymentCandidate,
 } = require('./_stripe-launch-payment-contracts');
 const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-return-urls');
+const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -2813,6 +2814,9 @@ async function handleRecurringBlockPreview(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    if (await loadRetiredProductState(sql, schoolId)) {
+      return sendRetiredProduct(res, 'reserved_weekly_slot');
+    }
     const preview = await buildRecurringBlockPreview(sql, {
       anchorBookingId: req.query.booking_id,
       learnerId: user.id,
@@ -2848,6 +2852,9 @@ async function handleRecurringBlockCommit(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    if (await loadRetiredProductState(sql, schoolId)) {
+      return sendRetiredProduct(res, 'reserved_weekly_slot');
+    }
     const preview = await buildRecurringBlockPreview(sql, {
       anchorBookingId: anchor_booking_id,
       learnerId: user.id,
@@ -3410,6 +3417,17 @@ async function handleRecurringBlockBankCheckout(req, res) {
   if (!user) return res.status(401).json({ error: true, code: 'UNAUTHORISED', message: 'Unauthorised' });
   const schoolId = user.school_id || 1;
   const { anchor_booking_id, lessons } = req.body || {};
+  const sql = neon(process.env.POSTGRES_URL);
+
+  try {
+    if (await loadRetiredProductState(sql, schoolId)) {
+      return sendRetiredProduct(res, 'reserved_weekly_slot');
+    }
+  } catch (err) {
+    console.error('recurring-block-bank-checkout retirement check error:', err);
+    reportError('/api/slots?action=recurring-block-bank-checkout', err);
+    return res.status(500).json({ error: true, code: 'RETIREMENT_STATE_FAILED', message: 'Failed to verify product availability' });
+  }
 
   let bankPaymentOptions;
   try {
@@ -3425,7 +3443,6 @@ async function handleRecurringBlockBankCheckout(req, res) {
     throw err;
   }
 
-  const sql = neon(process.env.POSTGRES_URL);
   let hold = null;
   let createdSession = null;
 
@@ -3908,6 +3925,10 @@ async function handleBook(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    if (isRecurring && await loadRetiredProductState(sql, schoolId)) {
+      return sendRetiredProduct(res, 'repeated_booking');
+    }
 
     // 0. Look up lesson type
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId);

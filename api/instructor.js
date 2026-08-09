@@ -67,6 +67,7 @@ const {
   restoreBookingCreditSourcesActive,
   copyRefundedBookingCreditSources,
 } = require('./_bcs-refund-marker');
+const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -1337,7 +1338,12 @@ async function handleProfile(req, res) {
              COALESCE(broadcast_offers_enabled, false) AS broadcast_offers_enabled,
              COALESCE(bulk_tiers_enabled, false) AS bulk_tiers_enabled,
              COALESCE(social_video_opt_in, false) AS social_video_opt_in,
-             COALESCE(request_to_book, false) AS request_to_book
+             COALESCE(request_to_book, false) AS request_to_book,
+             COALESCE((
+               SELECT s.config->'features'->'retire_incompatible_products' = 'true'::jsonb
+                 FROM schools s
+                WHERE s.id = instructors.school_id
+             ), false) AS incompatible_products_retired
       FROM instructors
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
@@ -4210,6 +4216,13 @@ async function handleCreateOffer(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+
+    if (isFlexible && await loadRetiredProductState(sql, schoolId)) {
+      return sendRetiredProduct(res, 'flexible_offer');
+    }
+    if (maxRepeatWeeksClean > 1 && await loadRetiredProductState(sql, schoolId)) {
+      return sendRetiredProduct(res, 'repeated_offer');
+    }
 
     // Look up lesson type (default to standard)
     let lessonType;
