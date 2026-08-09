@@ -143,3 +143,23 @@ The admin instructor-list Payments badge is DB-only and won't flag a re-blocked 
 | 4. Amber "Action required" *(NEW)* | DB complete, but Stripe live state is unhealthy | `.connect-banner.pending` + red count badge |
 | 5. Amber "Payouts Paused" | `payouts_paused=true` | `.connect-banner.pending` |
 | 6. Green "Payouts Active" | All checks pass | `.connect-banner.active` |
+
+## Accounts v2 Slice 4 readiness foundation (inactive)
+
+Slice 4 adds a separate Accounts v2 recipient/Express readiness path. It does
+not reinterpret or replace the legacy one-way `stripe_onboarding_complete`
+field. `v2-status` uses the latest append-only observation plus exact tenant,
+mode, configuration, ownership, and active agreement evidence. Missing, stale,
+contradictory, pending, restricted, non-Express, wrong-mode, wrong-account, or
+requirements-due evidence is always not ready.
+
+Account creation and link/dashboard generation require exact global,
+operation, school JSON-Boolean, and (for live mode) live gates. All are absent
+and inactive by default. A durable identity intent precedes Stripe; an
+ambiguous response enters reconciliation and is never retried as a new
+identity. Accounts v2 thin events use a dedicated signed endpoint and retrieve
+provider-current state before appending an observation.
+
+Full contract, truth table, unexecuted staging procedure, and non-destructive
+disable steps:
+[`stripe-connect-simon-slice-4-rollout-review.md`](stripe-connect-simon-slice-4-rollout-review.md).

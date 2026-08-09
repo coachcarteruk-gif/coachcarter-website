@@ -3036,6 +3036,7 @@ function escapeHtml(s) {
 async function loadPayouts() {
   // Fire the balance fetch in parallel - independent network call, no need to chain.
   loadPlatformBalance();
+  loadConnectV2Readiness();
   try {
     const res = await fetchAdmin('/api/admin?action=payout-overview');
     const data = await res.json();
@@ -3103,6 +3104,36 @@ async function loadPayouts() {
   } catch (err) {
     console.error('Failed to load payouts:', err);
     toast('Failed to load payouts', 'error');
+  }
+}
+
+async function loadConnectV2Readiness() {
+  const target = document.getElementById('connect-v2-readiness');
+  if (!target) return;
+  try {
+    const response = await fetchAdmin('/api/connect?action=v2-admin-readiness');
+    const data = await response.json();
+    if (!response.ok || !Array.isArray(data.readiness)) throw new Error(data.code || 'readiness_failed');
+    if (data.readiness.length === 0) {
+      target.innerHTML = '<span style="color:var(--muted);">No instructors found.</span>';
+      return;
+    }
+    target.innerHTML = `<div style="overflow-x:auto;"><table class="data-table">
+      <thead><tr><th>Instructor</th><th>Recipient</th><th>Transfers</th><th>Agreement</th><th>Result</th><th>Blocking evidence</th></tr></thead>
+      <tbody>${data.readiness.map(item => {
+        const blockerText = (item.blockers || []).length ? item.blockers.join(', ').replaceAll('_', ' ') : 'None';
+        return `<tr>
+          <td>${escapeHtml(item.instructor_name || `Instructor ${item.instructor_id}`)}</td>
+          <td>${escapeHtml(item.dashboard_type === 'express' ? 'Express' : item.dashboard_type || 'Unknown')}</td>
+          <td>${escapeHtml(item.transfers_capability_status || 'unknown')}</td>
+          <td>${escapeHtml(item.agreement_status || 'missing')}</td>
+          <td><span style="font-weight:700;color:${item.ready ? '#166534' : '#b45309'};">${item.ready ? 'Ready' : 'Not ready'}</span></td>
+          <td style="max-width:340px;font-size:0.78rem;">${escapeHtml(blockerText)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  } catch (error) {
+    target.innerHTML = '<span style="color:#991b1b;">Accounts v2 readiness evidence is unavailable. It is treated as not ready.</span>';
   }
 }
 

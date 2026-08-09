@@ -757,6 +757,26 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `admin-create-account` | POST | Admin JWT | Create Express account for a specific instructor |
 | `admin-send-invite` | POST | Admin JWT | Create account + email onboarding link to instructor |
 
+Slice 4 adds separately versioned, inactive-by-default actions without changing
+those legacy routes:
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `v2-account` | POST | Instructor JWT | Deterministically create/retrieve/reconcile one same-school Accounts v2 recipient |
+| `v2-onboarding-link` | POST | Instructor JWT | Create a recipient hosted-onboarding link after exact gates |
+| `v2-onboarding-refresh` / `v2-onboarding-return` | GET | Instructor JWT + signed state | Validate exact scope and refresh link/current status |
+| `v2-status` | GET | Instructor JWT | Database-only current readiness and blockers; no historical completion boolean |
+| `v2-dashboard-link` | POST | Instructor JWT | Gated Express dashboard login link |
+| `v2-agreements` / `v2-agreement-accept` | GET / POST | Instructor JWT | Read and accept an exact immutable agreement fingerprint |
+| `v2-admin-readiness` | GET | Admin JWT | Sanitized school-scoped readiness diagnostics |
+| `v2-admin-agreement-draft` | POST | Admin JWT | Append a server-validated agreement draft |
+| `v2-admin-agreement-activate` | POST | Superadmin JWT | Activate an accepted version only after current account readiness |
+
+`api/webhook-connect-v2.js` is the dedicated Accounts v2 thin-event boundary.
+See `docs/stripe-connect-simon-slice-4-rollout-review.md` for gates, schema,
+ordering, replay, reconciliation, staging, and rollback rules. These routes do
+not activate payouts or replace legacy Connect.
+
 ### API — `api/cron-payouts.js` (Vercel Cron — Fridays 09:00 UTC)
 
 Processes weekly payouts for all onboarded instructors. Auth: CRON_SECRET or Admin JWT.

@@ -289,6 +289,51 @@
     `;
   }
 
+  function connectV2BlockerLabel(code) {
+    const labels = {
+      account_mapping_missing: 'Accounts v2 recipient not created',
+      account_state_missing: 'Current Stripe status has not been observed',
+      account_state_stale_or_invalid: 'Stripe status needs refreshing',
+      recipient_configuration_inactive: 'Recipient configuration is not active',
+      dashboard_not_express: 'Express dashboard access is not confirmed',
+      transfers_capability_not_active: 'Transfers capability is not active',
+      requirements_outstanding: 'Stripe still needs information',
+      agreement_missing: 'Payout agreement is not available',
+      agreement_not_active: 'Payout agreement is not active',
+      agreement_not_accepted: 'Payout agreement is awaiting acceptance',
+      agreement_not_approved: 'Payout agreement is awaiting approval'
+    };
+    return labels[code] || 'Readiness evidence is incomplete';
+  }
+
+  function renderConnectV2Readiness(status, agreements) {
+    if (!status || status.error) return '';
+    const latest = agreements && agreements.agreements && agreements.agreements[0];
+    const blockers = Array.isArray(status.blockers) ? status.blockers : [];
+    const blockerRows = blockers.slice(0, 5).map(code => `<li>${connectV2BlockerLabel(code)}</li>`).join('');
+    const accepted = latest && latest.accepted_at;
+    const acceptButton = status.agreement_actions_active && latest && latest.status === 'draft' && !accepted
+      ? `<button class="connect-btn" data-action="accept-v2-agreement" data-id="${latest.id}" data-fingerprint="${latest.agreement_fingerprint}">Accept agreement v${latest.version_number}</button>`
+      : '';
+    const onboardingButton = status.active && blockers.includes('account_mapping_missing')
+      ? '<button class="connect-btn" data-action="start-v2-connect">Start reviewed Stripe setup</button>'
+      : status.active && (blockers.includes('requirements_outstanding') || blockers.includes('account_state_stale_or_invalid'))
+        ? '<button class="connect-btn" data-action="continue-v2-connect">Continue reviewed Stripe setup</button>'
+        : '';
+    return `
+      <div class="section-card" aria-label="Accounts v2 readiness">
+        <div class="section-title">Future automated payout readiness</div>
+        <div class="connect-banner ${status.ready ? 'active' : 'pending'}" style="margin:12px 0 0;">
+          <div class="connect-banner-text">
+            <div class="connect-banner-title">${status.ready ? 'Readiness evidence complete' : 'Not ready'}</div>
+            <div class="connect-banner-desc">${status.active ? 'This reviewed Accounts v2 flow is enabled for your school.' : 'This Accounts v2 flow is inactive and does not change your current payouts.'}</div>
+            ${blockerRows ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:0.8rem;">${blockerRows}</ul>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">${acceptButton}${onboardingButton}</div>
+        </div>
+      </div>`;
+  }
+
   function renderNextPayout(preview) {
     if (!preview.onboarding_complete || preview.eligible_lessons === 0) return '';
     return `
@@ -440,18 +485,21 @@
 
     try {
       // Fetch all data in parallel
-      const [summary, week, history, connectStatus, payoutPreview, payoutHistory] = await Promise.all([
+      const [summary, week, history, connectStatus, payoutPreview, payoutHistory, connectV2Status, connectV2Agreements] = await Promise.all([
         apiFetch('earnings-summary'),
         apiFetch('earnings-week', `&week_start=${currentWeekStart}`),
         apiFetch('earnings-history', `&limit=${HISTORY_LIMIT}&offset=0`),
         ccAuth.fetchAuthed('/api/connect?action=connect-status').then(r => r.json()).catch(() => ({ has_account: false, onboarding_complete: false })),
         apiFetch('next-payout-preview').catch(() => null),
-        apiFetch('payout-history', '&limit=10').catch(() => ({ payouts: [] }))
+        apiFetch('payout-history', '&limit=10').catch(() => ({ payouts: [] })),
+        ccAuth.fetchAuthed('/api/connect?action=v2-status').then(r => r.json()).catch(() => null),
+        ccAuth.fetchAuthed('/api/connect?action=v2-agreements').then(r => r.json()).catch(() => ({ agreements: [] }))
       ]);
 
       const container = document.getElementById('earningsContent');
       container.innerHTML =
         renderConnectBanner(connectStatus) +
+        renderConnectV2Readiness(connectV2Status, connectV2Agreements) +
         renderSummary(summary) +
         (payoutPreview ? renderNextPayout(payoutPreview) : '') +
         renderWeek(week) +
@@ -483,6 +531,45 @@
     setTimeout(() => t.classList.remove('show'), 3500);
   }
 
+  async function startV2Connect() {
+    try {
+      const created = await ccAuth.fetchAuthed('/api/connect?action=v2-account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await created.json();
+      if (!created.ok && data.state !== 'reconciling') return showToast(data.message || 'Reviewed Stripe setup is unavailable.', 'error');
+      if (data.state === 'reconciling') return showToast('Stripe account identity is being reconciled. No second account will be created.');
+      return continueV2Connect();
+    } catch (_) {
+      showToast('Reviewed Stripe setup is unavailable.', 'error');
+    }
+  }
+
+  async function continueV2Connect() {
+    try {
+      const response = await ccAuth.fetchAuthed('/api/connect?action=v2-onboarding-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await response.json();
+      if (response.ok && data.url) window.location.href = data.url;
+      else showToast(data.message || 'Reviewed Stripe onboarding is unavailable.', 'error');
+    } catch (_) {
+      showToast('Reviewed Stripe onboarding is unavailable.', 'error');
+    }
+  }
+
+  async function acceptV2Agreement(button) {
+    if (!window.confirm('Accept this exact payout agreement version? Accepted terms cannot be edited.')) return;
+    try {
+      const response = await ccAuth.fetchAuthed('/api/connect?action=v2-agreement-accept', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agreement_id: button.dataset.id, agreement_fingerprint: button.dataset.fingerprint })
+      });
+      const data = await response.json();
+      if (!response.ok) return showToast(data.message || 'Agreement could not be accepted.', 'error');
+      showToast('Agreement accepted. Admin approval is still required.');
+      init();
+    } catch (_) {
+      showToast('Agreement could not be accepted.', 'error');
+    }
+  }
+
   init();
 
 document.addEventListener('click', function (e) {
@@ -494,6 +581,9 @@ document.addEventListener('click', function (e) {
   else if (a === 'start-connect') startConnectOnboarding();
   else if (a === 'continue-connect') continueConnectOnboarding();
   else if (a === 'open-stripe') openStripeDashboard();
+  else if (a === 'start-v2-connect') startV2Connect();
+  else if (a === 'continue-v2-connect') continueV2Connect();
+  else if (a === 'accept-v2-agreement') acceptV2Agreement(t);
   else if (a === 'retry-init') init();
 });
 })();

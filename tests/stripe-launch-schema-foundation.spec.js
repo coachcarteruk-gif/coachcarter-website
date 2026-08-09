@@ -291,7 +291,7 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(review.reviewStatus).toBe(STATUS);
   });
 
-  test('only the explicitly reviewed Slice 2 modules and shadow fixture writer import the Slice 1 schema', () => {
+  test('only explicitly reviewed Slice 2/Slice 4 modules and shadow fixture writer import the Slice 1 schema', () => {
     const applicationFiles = [
       ...walkFiles(path.join(root, 'api')),
       ...walkFiles(path.join(root, 'js')),
@@ -302,6 +302,7 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
       .filter((file) => launchNamePattern.test(fs.readFileSync(file, 'utf8')))
       .map((file) => path.relative(root, file));
     expect(violations.sort()).toEqual([
+      path.join('api', '_connect-v2-store.js'),
       path.join('api', '_stripe-launch-payment-contracts.js'),
       path.join('api', '_stripe-launch-payment-reconciler.js'),
       path.join('api', '_stripe-launch-shadow-fixture.js'),

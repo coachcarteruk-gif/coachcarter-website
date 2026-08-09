@@ -3698,3 +3698,45 @@ For every future session:
   Slice 4 work occurred. Slice 3 is
   `MERGED_DEPLOYED_INACTIVE_VERIFIED`; production activation remains a separate
   approval and Slice 4 remains unauthorised.
+
+### 9 August 2026 - Slice 4 Accounts v2/agreement readiness prepared inactive
+
+- Received separately scoped Slice 4 implementation authority. It granted no
+  provider mutation, migration application, production configuration,
+  deployment, merge, Slice 3 activation, Slice 5, payout, earning, transfer,
+  refund, payment, or cutover authority.
+- Fetched current refs and verified PR #357 merged at exact current
+  `origin/main` commit `502e675dc338cf2d232045e09289fdc1fb5387c5`.
+  Reverified protected LF-normalised hashes before editing: product
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`
+  and technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Preserved the primary workspace and every registered worktree exactly as
+  found, including the pre-existing dirty detached `cc5f` worktree. Created
+  `C:\tmp\cc-simon-slice4-accounts-v2-readiness` on branch
+  `codex/simon-slice4-accounts-v2-readiness` from exact `origin/main`.
+- Confirmed pinned `stripe@22.4.0` / API `2026-07-29.dahlia` supports the
+  reviewed Accounts v2 account, recipient, Account Link, thin-event parsing,
+  and related-object contract. No dependency/API upgrade occurred.
+- Added strict inactive route/webhook gates, durable creation identity and
+  reconciliation evidence, latest-state readiness, signed link state,
+  append-only agreement workflow, instructor/admin diagnostics, and additive
+  unexecuted migration 041. Legacy Connect and every money/retirement/cutover
+  path remain unchanged.
+- Verification passed syntax (204 files), C1 (276 files), 15/15 focused mocked
+  and installed-system-Chrome assertions, all 14 canonical launch-schema checks,
+  250/250 broader Stripe/auth/tenant/
+  booking/credit/refund/payout/webhook/launch regressions, and all 9 migration
+  035 byte/rollout guards under temporary LF normalization with exact original
+  checkout bytes restored. Final syntax/C1 reruns and `git diff --check` passed;
+  both protected LF-normalised hashes remained exact. The primary workspace and
+  all registered worktrees were re-inspected and remained unchanged, including
+  the pre-existing dirty detached `cc5f` worktree.
+- Added `docs/stripe-connect-simon-slice-4-rollout-review.md` with exact gates,
+  identity/reconciliation, readiness, agreement, event ordering, unexecuted
+  staging, and non-destructive rollback rules.
+- No Stripe call, provider mutation, account/link/onboarding session, event
+  destination change, production read/write, migration application, Vercel or
+  school flag change, replay, deployment, payment, refund, earning, payout,
+  transfer, cutover, Slice 3 activation, or Slice 5 work occurred. Status is
+  `IMPLEMENTED_INACTIVE_NOT_DEPLOYED`.
