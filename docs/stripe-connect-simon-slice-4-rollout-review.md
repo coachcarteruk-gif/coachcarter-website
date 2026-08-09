@@ -1,9 +1,15 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `IMPLEMENTED_INACTIVE_NOT_DEPLOYED`
+Status: `MERGED_DEPLOYED_INACTIVE; STAGING_ACCEPTANCE_STOPPED`
 Prepared: 9 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
+
+Staging acceptance attempt: 9 August 2026 on
+`codex/simon-slice4-staging-acceptance`, exact source and then-current
+`origin/main` `ccafbfc483937f2005f99f334134c92d46c8f28b` (includes merged PR
+#359). The attempt stopped before Accounts v2 provider use because Vercel
+classified the isolated project's first deployment as a `production` target.
 
 ## Authority and non-actions
 
@@ -11,13 +17,14 @@ This slice implements only the Accounts v2 onboarding and agreement-readiness
 foundation. It does not activate or replace legacy Connect, either payout
 engine, Slice 3 retirement, earnings, transfers, refunds, or cutover.
 
-No Stripe account, Account Link, onboarding session, login link, event
+During the original implementation/review session, no Stripe account, Account Link, onboarding session, login link, event
 destination, payment, refund, payout, transfer, or other provider resource was
 created or changed. No test/live Stripe mutation was submitted. No database
 migration or SQL write was applied to staging or production. No Vercel project,
 deployment, alias, domain, secret, key, environment variable, school feature,
 or webhook was changed. The Stripe plugin was neither installed nor used.
-Nothing was deployed or merged.
+Nothing was deployed or merged in that implementation session. The later,
+partially executed staging attempt and its hard stop are recorded below.
 
 The protected LF-normalised hashes were exact before implementation:
 
@@ -169,7 +176,7 @@ provider buttons appear only when the server reports active. The admin Payouts
 page adds a read-only readiness table and explicitly says it cannot activate
 money behavior.
 
-## Test/staging runbook — not executed
+## Test/staging runbook — original plan; partial stopped attempt recorded below
 
 This procedure requires separate staging/provider/migration authority. Stop if
 any prerequisite is absent.
@@ -233,11 +240,106 @@ LF-normalised hashes remained exact. The primary workspace and every registered
 worktree were re-inspected; only the pre-existing detached `cc5f` worktree was
 dirty, and it remained untouched.
 
-Migration 041 and the provider contract are unexecuted. The exact create
-payload, test event-context representation, hosted flow, and Accounts v2
-recipient compatibility with the existing Express login-link call remain
-staging holds. Reconciliation scans recipient pages because no metadata filter
-is available. Evidence older than 15 minutes deliberately blocks. Production
-gates/secrets/destinations/flags/accounts/agreements/migrations remain unchanged
-and unapproved. Slice 5 and all money, activation, deployment, and merge work
-remain outside scope.
+At the original implementation review, migration 041 and the provider contract
+were unexecuted. The stopped staging attempt below later applied migration 041
+only to its disposable branch, but it did not execute any Stripe provider
+contract. The exact create payload, test event-context representation, hosted
+flow, and Accounts v2 recipient compatibility with the existing Express
+login-link call therefore remain staging holds. Reconciliation scans recipient
+pages because no metadata filter is available. Evidence older than 15 minutes
+deliberately blocks. CoachCarter production gates, secrets, destinations,
+flags, accounts, agreements, and migrations remain unchanged and unapproved.
+Slice 5 and all money activation remain outside scope.
+
+## Slice 4 staging acceptance attempt - stopped 9 August 2026
+
+This attempt used a fresh worktree at
+`C:\tmp\coachcarter-simon-slice4-staging-acceptance` and branch
+`codex/simon-slice4-staging-acceptance`. Before any provider or database write,
+`git ls-remote origin refs/heads/main` and the local fetched ref both resolved
+to exact commit `ccafbfc483937f2005f99f334134c92d46c8f28b`. The protected
+LF-normalised SHA-256 values were reverified as
+`79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+and `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+Every pre-existing worktree and user change remained untouched.
+
+The disposable database resource was Neon project
+`shiny-bonus-66942766` in isolated organisation
+`org-fancy-forest-47074420`, branch `br-dark-recipe-zarmjbix`, name
+`cc-simon-s4-acceptance-01-20260809`, database `neondb`. Neon reports branch
+creation at `2026-08-09T18:02:22Z`, parent
+`br-empty-cell-za5kh6nr`, `primary=false`, `default=false`, and
+`protected=false`. Read-only preflight proved the public schema and all actual
+prerequisite tables, migration 041 absent, zero duplicate instructor-owner
+mappings, zero duplicate school-owner mappings, no existing connected-account
+scope, the school v2 flag absent, payout engine `v1`, and the inherited Slice 3
+config still `shadow` and unactivated.
+
+The exact repository file
+`db/migrations/041_connect_v2_onboarding_readiness.sql` was applied as one
+transaction only to `br-dark-recipe-zarmjbix`. Postflight proved all three
+tables present and empty, the six reviewed indexes present, all three Slice 4
+append-only triggers present, and the existing
+`payout_agreements_write_guard` still calling the replaced
+`stripe_launch_guard_agreement_write` function. Migration 041 was not rolled
+back. Synthetic staging identities were instructor `2` (`Slice 4 Synthetic
+Fraser`), instructor `3` (`Slice 4 Synthetic Simon`), and superadmin `2`; all
+belong to school `1`, use `.invalid` email identities, and contain no real
+identity or bank data. A distinct random bcrypt value was used for the
+superadmin; existing authentication material was not copied.
+
+The isolated Vercel project is `prj_JfBT8mm5ob4CWwseF8Ym62fJ4wSk`, name
+`cc-simon-s4-staging-01`, team `team_DXEEAusHmjcfcr6auPjqloL0`, created
+`2026-08-09T18:12:11.593Z`. It initially had `live=false`, no deployment, and
+no domains. Only Preview variables were configured: disposable `POSTGRES_URL`,
+a local `sk_test_...` fallback because no retrievable least-privilege Accounts
+v2 restricted key was available, a staging-only JWT secret, staging
+`BASE_URL`, `STRIPE_MODE=test`, and the six reviewed operation/global gates.
+`STRIPE_CONNECT_V2_LIVE_ENABLED` was never added. No Production environment
+variable was added. No Stripe API call occurred, so the broader test key was
+never exercised.
+
+The exact command `npx.cmd --yes vercel@latest deploy --yes --scope
+coachcarteruk-2599s-projects` deliberately omitted `--prod`. Because this was
+the isolated project's first deployment, Vercel nevertheless returned target
+`production`, created deployment `dpl_2dvLLths8Xe4rPaTtLoyHLyWaQaW`, and
+assigned aliases `cc-simon-s4-staging-01.vercel.app` and
+`cc-simon-s4-staging-01-coachcarteruk-2599s-projects.vercel.app`. The deployment
+was created `2026-08-09T18:23:18.683Z`, became `READY` at
+`2026-08-09T18:24:06.466Z`, and reports Git SHA
+`ccafbfc483937f2005f99f334134c92d46c8f28b`. It also reports `gitDirty=1`
+because `vercel link` had temporarily appended one redundant `.env*` line to
+`.gitignore`; that line was removed immediately and the file's working hash is
+byte-identical to `HEAD`. This production-target classification was the hard
+stop condition. The deployment was inert because its Production environment
+has exactly zero variables, including no database, Stripe, JWT, mode, or Slice
+4 gate values. No CoachCarter production project, deployment, alias, domain,
+environment, or database was touched.
+
+Cleanup was limited to fail-closed state preservation. Preview operation gates
+were overwritten to `false` in order at `2026-08-09T18:24:38.946Z`,
+`18:24:42.646Z`, `18:24:46.349Z`, `18:24:50.105Z`, and
+`18:24:53.975Z`; the Preview global gate was overwritten to `false` at
+`18:24:57.703Z`. The live gate remains absent. School `1`'s JSON Boolean was
+set to `false` at `2026-08-09T18:25:08.282Z`. No Accounts v2 event destination
+existed, so there was no destination to disable. The deployment, branch,
+migration, and synthetic rows were retained as non-destructive evidence.
+
+Final database evidence shows zero creation intents, attempts, onboarding-link
+events, connected-account scopes, payout runs, refund intents/events, launch
+earnings, transfer intents, and payout transfers. Both synthetic instructors
+retain `stripe_account_id=NULL` and `payouts_paused=false`. Before/after hashes
+match exactly for legacy Connect state
+`7b1a79ae40ffd98871758eda5f46a220`, Slice 3 config
+`d7edd0928fd680cb66f3b155be666b09`, and lesson payment contracts
+`b6ec3337d53441f01ec5b39e780d029a`; every empty money ledger retained MD5
+`d41d8cd98f00b204e9800998ecf8427e`.
+
+Therefore the requested provider acceptance remains unexecuted: no Accounts v2
+account or stable identity was submitted, no ambiguous-result reconciliation,
+hosted onboarding, link-state rejection matrix, thin-event destination or
+delivery, agreement lifecycle, current-state retrieval, or post-exercise full
+regression matrix was performed. Slice 3 was not activated and Slice 5 was not
+started. Resumption requires a new isolated Vercel project that is proven able
+to accept a first deployment on a non-production target before source upload,
+or an explicitly approved alternative that cannot be auto-promoted.
