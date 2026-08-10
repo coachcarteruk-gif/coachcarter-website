@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; STAGING_ATTEMPT_3_STOPPED_RECONCILIATION_LIST_LIMIT_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; STAGING_RECONCILIATION_CHECKPOINT_STOPPED_DISABLED`
 Prepared: 9 August 2026; updated 10 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -28,6 +28,17 @@ failed because it requests `limit: 100` while Stripe permits at most `20`.
 All staging gates and the school flag are false, the destination is disabled,
 and no remaining acceptance case is approved until that code defect is fixed
 and the original Simon identity is reconciled without replacement.
+
+Reconciliation-only checkpoint: 10 August 2026 on
+`codex/simon-slice4-reconciliation-checkpoint`, exact source and current
+`origin/main` `019bfc13c6f19443398ab1293c0dd19b865553d1` (merged PR #363).
+The pagination repair passed local review and was deployed to the retained
+custom staging environment. The checkpoint stopped before the authorised
+application request because the retained Sensitive staging JWT cannot be read
+by either environment pull or the non-mutating environment runner. Rotating
+that authentication secret was not authorised and was not performed. No
+Stripe request or account action occurred. All gates and the school flag were
+restored false and an exact-SHA disabled deployment is current.
 
 ## Authority and non-actions
 
@@ -592,3 +603,85 @@ destination, production, Slice 3, Slice 5, or money action occurred. Status is
 `STAGING_ACCEPTANCE_STOPPED_REPAIR_REVIEWED_PENDING_MERGE`; merge and any later
 staging resumption require separate authority, and unresolved reconciliation
 must never create a replacement account.
+
+## Reconciliation-only checkpoint - 10 August 2026
+
+The checkpoint started from clean exact `origin/main`
+`019bfc13c6f19443398ab1293c0dd19b865553d1`, the merge of PR #363, in isolated
+worktree `C:\tmp\coachcarter-simon-slice4-reconciliation-checkpoint`. The
+protected LF-normalised hashes remained exact: product
+`79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4` and
+technical plan
+`64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+Pinned `stripe@22.4.0` exposed the reviewed public `rawRequest` pagination
+surface; focused pagination/state-machine tests passed `22/22`, installed
+Chrome UI tests passed `2/2`, canonical launch schema tests passed `14/14`,
+migration-035 guards passed `9/9` with original checkout bytes restored, and
+syntax/C1 checks passed `204/204` and `276/276`. No local test used a staging
+credential or contacted Stripe.
+
+Fresh connected metadata proved exact Neon organisation
+`org-fancy-forest-47074420`, project `shiny-bonus-66942766`, retained
+non-primary/non-default/unprotected branch `br-dark-recipe-zarmjbix`, database
+`neondb`, and compute `ep-wandering-field-zadlm6r7`. Read-only preflight
+retained migration 041, school gate false, payout engine `v1`, the two active
+unpaused synthetic instructors with null legacy mappings, one Fraser
+scope/observation, and Simon's original unmapped `reconciling` intent
+`3c2349a0-1696-4b57-b732-fc14bbde57df` with only attempt 1
+`provider_ambiguous`. Four lesson payment contracts and every inspected
+payout/refund/earning/transfer/cutover zero count and hash matched the retained
+baseline.
+
+Fresh Vercel metadata proved exact project
+`prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, team
+`team_DXEEAusHmjcfcr6auPjqloL0`, custom Preview-type environment `staging`
+`env_vvxYWVPTHOiutcFOPmeWw2kX08mA` with no domains, and zero Production
+variables. All five staging operation gates and the global gate began false;
+the live gate remained absent. Disabled preflight deployment
+`dpl_6kbDJnsTLqu3MYLPnEgyTrQhjHg9` was `READY`, exact source SHA,
+`gitDirty=NULL`, and carried only the automatic staging alias.
+
+Only `STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED` and
+`STRIPE_CONNECT_V2_ENABLED` were temporarily set true; all other operation
+gates remained false. Exact clean enabled deployment
+`dpl_7m4F1NH8Aqf3hTa4Bi7G97LVNq6c` was `READY` on custom environment
+`staging`, after which only school `1`'s
+`features.stripe_connect_accounts_v2` Boolean was temporarily set true under
+guards preserving payout engine `v1` and the null legacy school mapping.
+
+The existing Simon session could not be minted safely: `JWT_SECRET` remains a
+non-readable Sensitive staging variable, environment pull returned no usable
+value, and Vercel's non-mutating environment runner omitted it from the child
+process. A proposed persistent staging JWT rotation was rejected before
+execution because that additional authentication mutation was not explicitly
+authorised. Therefore the authenticated/CSRF-bound
+`POST /api/connect?action=v2-account` request count was exactly zero. Stripe
+was not contacted, Accounts v2 list or create was not called, and the retained
+disabled event destination was not read or changed.
+
+Mandatory shutdown then set the account-creation gate false, set the global
+gate false, and set the school Boolean false, in that order. A provider pull
+proved all six gates false, `STRIPE_MODE=test`, and the live gate absent. Final
+disabled deployment `dpl_2fiVKGXT8DnBLFZay3v96V37k1tV` is `READY`, exact
+source SHA, `gitDirty=NULL`, custom environment `staging`, and has only alias
+`cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+Production retained zero variables and was untouched.
+
+Read-only postflight matched preflight exactly. Simon remains on stable
+identity `cc:connect-v2:1:3:test:recipient`, original intent state
+`reconciling`, attempt count `1`, scope count `0`, and observation count `0`.
+Fraser remains one scope and one `api.account_created` observation. Both
+instructors remain active/unpaused with null legacy mappings; Slice 3 remains
+unactivated `shadow`; the payment-contract count remains `4`; all inspected
+payout, refund, earning, transfer, and cutover counts remain zero; and all
+recorded baseline hashes are unchanged.
+
+The final current 65-file non-integration Stripe/auth/tenant/booking/credit/
+refund/payout/webhook/Connect matrix passed `615/615` using installed system
+Chrome, with migration-035 checkout bytes restored exactly.
+
+Status is
+`STAGING_RECONCILIATION_CHECKPOINT_STOPPED_DISABLED`. Resumption requires a
+separately authorised way to supply a valid ephemeral Simon staging session or
+to rotate only the isolated staging JWT; the first Stripe action must still be
+the single reconciliation request and must never create a replacement account.
