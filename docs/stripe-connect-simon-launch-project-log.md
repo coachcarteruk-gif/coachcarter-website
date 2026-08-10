@@ -3951,3 +3951,61 @@ For every future session:
   run. Slice 3 was not activated and Slice 5 was not started. Slice 4 staging
   acceptance remains incomplete and requires new authority plus a Vercel path
   proven not to auto-classify its first deployment as production.
+
+### 9 August 2026 - Slice 4 staging acceptance attempt 2 stopped despite explicit Preview target
+
+- Resumed under fresh operator authority using worktree
+  `C:\tmp\coachcarter-simon-slice4-staging-acceptance-2`, branch
+  `codex/simon-slice4-staging-acceptance-2`, and exact merged `origin/main`
+  `90183a9889458581718fb3438403e703f36b8b9a` (PR #360). Remote, fetched ref,
+  worktree `HEAD`, and merge base agreed. Protected LF-normalised hashes again
+  matched product specification
+  `79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+  and technical plan
+  `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+- Read-only revalidation of retained Neon branch `br-dark-recipe-zarmjbix`
+  proved database `neondb`, non-default/unprotected branch identity, migration
+  041 still present, school gate `false`, zero conflicting owner mappings, and
+  zero Accounts v2 intent/attempt/link/scope/observation/synthetic-agreement
+  rows. Synthetic instructors `2` and `3` remained active, unpaused, and
+  without legacy Stripe mappings. Payout engine `v1`, inactive Slice 3 shadow
+  config, and all payout/refund/earning/transfer zero counts were unchanged.
+  Attempt 2 submitted no SQL write.
+- Created exact replacement Vercel project
+  `prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, name `cc-simon-s4-staging-02`, team
+  `team_DXEEAusHmjcfcr6auPjqloL0`, at `2026-08-09T20:01:24.142Z`. Initial
+  state was `live=false`, with no deployment, domain, or environment variable.
+- Exact no-upload command `vercel deploy --dry --target preview --skip-domain`
+  failed closed because the installed Vercel CLI permits `--skip-domain` only
+  with a production target. The operator then explicitly approved the supported
+  `--target preview` form, with a required provider target/alias check before
+  any secret, database URL, mode, gate, or Stripe call.
+- Vercel link created only ignored local metadata and a temporary redundant
+  `.env*` ignore line. The credential file was removed, the line reverted, the
+  `.gitignore` working hash equalled its `HEAD` blob, and the worktree was clean
+  before upload.
+- Submitted exact command `npx.cmd --yes vercel@latest deploy --target preview
+  --yes --scope coachcarteruk-2599s-projects --json` with zero project
+  environment variables. Vercel nevertheless classified the first deployment
+  as `production`, created `dpl_53R1HXZHMgYu7QpBSV2kNEVZzrFv`, and assigned
+  aliases `cc-simon-s4-staging-02.vercel.app` and
+  `cc-simon-s4-staging-02-coachcarteruk-2599s-projects.vercel.app`. Created at
+  `2026-08-09T20:05:43.527Z`, it became `READY` at
+  `2026-08-09T20:06:40.153Z` and reports exact Git SHA
+  `90183a9889458581718fb3438403e703f36b8b9a` with no dirty-source marker.
+- Stopped immediately on the production-target provider identity. Read-only
+  final metadata proves zero total environment variables, zero Production
+  variables, zero Preview variables, and zero `STRIPE_CONNECT_V2*` variables.
+  The deployment is inert: it has no Neon URL, Stripe credential or mode, JWT,
+  global/operation/live gate, or webhook secret. No manual staging alias was
+  created or moved, and no application or Stripe request was made.
+- No Accounts v2 account, stable identity, ambiguous reconciliation, hosted
+  onboarding link, event destination/delivery, agreement action, payment,
+  refund, earning, payout, transfer, Slice 3 activation, or Slice 5 work
+  occurred. With no gates or destination, no disable action was needed. The
+  project/deployment remain preserved as evidence. Full provider acceptance
+  and the post-exercise regression matrix remain unexecuted.
+- A further attempt must use a provider-side path that can be proven Preview
+  before source upload or a separately approved isolated non-production host;
+  Vercel CLI first-deployment target selection is now disproven twice and must
+  not be retried.
