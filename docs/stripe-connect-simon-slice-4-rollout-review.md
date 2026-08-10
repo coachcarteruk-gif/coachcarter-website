@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; STAGING_RECONCILIATION_CHECKPOINT_STOPPED_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; STAGING_RESUME_STOPPED_PROTECTED_PRODUCT_HASH_MISMATCH_DISABLED`
 Prepared: 9 August 2026; updated 10 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -745,3 +745,68 @@ Status is `STAGING_RECONCILIATION_CHECKPOINT_STOPPED_DISABLED`. No retry is
 authorised. Any later attempt needs separately scoped authority and a
 prevalidated Vercel-authenticated transport, while preserving the original
 Simon identity and the no-replacement-create rule.
+
+## Post-PR #365 protected-hash preflight stop — 10 August 2026
+
+The authorised reconciliation resume began from fresh remote `main`
+`a90acfd5243b1dc3501a0e86a79d9aa8dbbff8a6` on isolated branch
+`codex/simon-slice4-reconciliation-resume`. The source descends from merged PR
+#365 (`9ca1e5e6b34dda693298923e153433f98db2e994`), whose checks passed, and also
+contains later merged PRs #366 and #367.
+
+Mandatory document and source preflight found a hard integrity mismatch before
+any transport, application, provider, configuration, or database action. The
+current LF-normalised product-specification hash is
+`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585`,
+not the approved
+`79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`.
+The technical-plan hash remains the approved
+`64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+PR #366 changed the protected product document, but current source does not
+record the explicit product-document review and replacement approved hash
+required by the living log. The operator therefore stopped without
+improvising.
+
+Read-only Vercel metadata matched project
+`coachcarteruk-2599s-projects/cc-simon-s4-staging-02`, project ID
+`prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, custom staging environment
+`env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, and alias
+`cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+All six named staging operation/global gates are exactly `false`,
+`STRIPE_MODE=test`, live is absent, Production has zero environment variables,
+and school `1`'s Slice 4 Boolean is `false`. Retained disabled deployment
+`dpl_F657tCmJdCbfwsjbdEMmsQaf5fgy` is `READY`; it remains the prior
+checkpoint's exact-source shutdown deployment. A fresh current-source
+deployment was not produced after the integrity prerequisite failed.
+
+Read-only Neon state matched project `shiny-bonus-66942766`, branch
+`br-dark-recipe-zarmjbix`, database `neondb`, school `1`, and Simon instructor
+`3`. Simon retains intent `3c2349a0-1696-4b57-b732-fc14bbde57df` in
+`reconciling` for stable identity `cc:connect-v2:1:3:test:recipient`, with no
+provider mapping, scope, or observation. There is exactly one ambiguous attempt
+(`attempt_number=1`, `provider_ambiguous`, `network`). Fraser remains scope `1`
+and observation `1`. All financial, payout, transfer, cutover, Slice 3, and
+Slice 5 zero-state safeguards remain unchanged; `simon_launch_v1` remains
+inactive `shadow`.
+
+The current code path was reviewed and its focused tests confirm that a
+`reconciling` intent lists/reconciles and returns before Accounts v2 creation.
+The focused readiness suite passed `38/38`, syntax passed for `206` JavaScript
+files, and the C1 scan passed across `278` files. The previous checkpoint's
+`615/615` run remains the latest full regression evidence; the full matrix was
+not rerun after this earlier hard preflight stop.
+
+Exact reconciliation POST count was **zero**. No harmless transport GET was
+sent, no JWT was rotated or exposed, no HTTP/application reconciliation outcome
+exists, and Stripe actions performed were **none**. There was no Accounts v2
+list or create call and no account, user, payment, refund, earning, payout,
+transfer, cutover, Slice 3, Slice 5, Production, configuration, or database
+mutation. The disabled event destination was neither queried nor changed.
+Because every gate was already false and no state was enabled, final shutdown
+was proven without a configuration write or replacement deployment.
+
+Final status is
+`STAGING_RESUME_STOPPED_PROTECTED_PRODUCT_HASH_MISMATCH_DISABLED`. Any resume
+requires explicit owner review resolving the protected product-document hash;
+the existing no-retry, preserved-identity, and no-replacement-create controls
+remain binding.
