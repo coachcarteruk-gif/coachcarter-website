@@ -4,23 +4,25 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
-POST-MERGE INACTIVE VERIFIED — SLICE 4 MERGED AND DEPLOYED, POST-MERGE
-INACTIVE VERIFIED — PRODUCTION ACTIVATION NOT APPROVED — SLICE 5 NOT
-AUTHORISED**
+POST-MERGE INACTIVE VERIFIED — SLICE 4 STAGING ATTEMPT 3 STOPPED ON ACCOUNTS
+V2 RECONCILIATION LIST LIMIT AND DISABLED — PRODUCTION ACTIVATION NOT
+APPROVED — SLICE 5 NOT AUTHORISED**
 
-**Last updated:** 9 August 2026
+**Last updated:** 10 August 2026
 
 **Verified source baseline:** remote `main` at
-`be6f06dc619bb941078ab19e1a8814772fc5e993`
+`7bea1fbc3cd05b0fabadfed28956c7c83dbf2bbb`
 
-**Current blocker:** Slice 4 Accounts v2 readiness code is merged and deployed,
-but remains inactive. No school feature flag or Vercel global, operation,
-webhook, or live gate exists; migration 041 is unapplied; and no Accounts v2
-identity, onboarding link/session, dedicated event destination, agreement, or
-payout activation exists. Slice 3 production activation remains separately
-unapproved. Slice 5 and every provider, configuration, database, payment,
-refund, earning, payout, transfer, cutover, or money action require new,
-separately scoped authority.
+**Current blocker:** Slice 4's merged reconciliation path requests an Accounts
+v2 list page with `limit: 100`; Stripe test mode now rejects any value above
+`20`. Synthetic Simon therefore has exactly one test account under the original
+stable identity but its durable staging intent remains `reconciling`, unmapped,
+and unretried. Every staging operation/global/school gate is false, the test
+event destination is disabled, and the live gate is absent. Production remains
+unchanged and inactive. A separately scoped code repair must use the provider's
+supported pagination contract, then reconcile only the preserved original
+identity before any remaining Slice 4 acceptance. Slice 3 production activation
+remains unapproved and Slice 5 remains unauthorised.
 
 ## 1. Title and purpose
 
@@ -4007,5 +4009,172 @@ For every future session:
   and the post-exercise regression matrix remain unexecuted.
 - A further attempt must use a provider-side path that can be proven Preview
   before source upload or a separately approved isolated non-production host;
-  Vercel CLI first-deployment target selection is now disproven twice and must
-  not be retried.
+Vercel CLI first-deployment target selection is now disproven twice and must
+not be retried.
+
+### 10 August 2026 - Slice 4 staging acceptance attempt 3 stopped at reconciliation contract
+
+- Resumed under the approved non-production authority in fresh worktree
+  `C:\tmp\coachcarter-simon-slice4-staging-acceptance-3`, branch
+  `codex/simon-slice4-staging-acceptance-3`. `git ls-remote`, fetched
+  `origin/main`, worktree `HEAD`, and merge base all resolved to exact current
+  main `7bea1fbc3cd05b0fabadfed28956c7c83dbf2bbb`, which includes the merged
+  attempt-2 evidence PR #361. The required worker/project/Stripe documents,
+  complete living log, rollout review, protected product specification, and
+  technical plan were read in full before provider action. LF-normalised
+  SHA-256 values matched exactly before action and after shutdown: product
+  `79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4` and
+  technical plan
+  `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+- Revalidated only Neon project `shiny-bonus-66942766`, organisation
+  `org-fancy-forest-47074420`, database `neondb`, retained branch
+  `br-dark-recipe-zarmjbix` / `cc-simon-s4-acceptance-01-20260809`, and compute
+  `ep-wandering-field-zadlm6r7`. Provider metadata remained
+  `primary=false`, `default=false`, `protected=false`, parent
+  `br-empty-cell-za5kh6nr`; the exact pooled host was
+  `ep-wandering-field-zadlm6r7-pooler.c-2.eu-west-2.aws.neon.tech`. Read-only
+  preflight at `2026-08-10T05:38:20.250Z` proved database `neondb`, schema
+  `public`, PostgreSQL `18.4`, migration 041's three tables, six indexes and
+  four relevant trigger bindings intact, zero owner duplicates, zero v2
+  intents/attempts/links/scopes/synthetic observations/agreements, and the
+  reviewed synthetic instructor/superadmin identities. Migration 041 was
+  already applied by attempt 1 and was neither reapplied nor rolled back.
+- The same preflight proved school `1` gate `false`, payout engine `v1`, null
+  legacy school mapping, synthetic instructors `2` and `3` active/unpaused
+  with null legacy mappings, inherited Slice 3 config exactly `shadow` with
+  `activated_at=NULL`, four unchanged lesson payment contracts, and zero payout
+  runs, refund intents/events, launch earnings, launch transfer intents, payout
+  transfers, cutover configs/events/readiness snapshots, and shadow cycles.
+- Used isolated Vercel project `cc-simon-s4-staging-02`, ID
+  `prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, team
+  `team_DXEEAusHmjcfcr6auPjqloL0`. Custom environment `staging`, ID
+  `env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, created
+  `2026-08-10T05:27:07.679Z`, independently returned `type=preview` and
+  `domains=[]`. Its Production environment had zero variables throughout.
+  The provider supports `--skip-domain` only for Production, so attempt 3 used
+  the approved custom preview target command
+  `npx.cmd --yes vercel@latest deploy --target staging --yes --scope
+  coachcarteruk-2599s-projects --json`. The inert zero-variable canary
+  `dpl_H51GNhY6xRm7n12bnaqEbGnoVESo` became `READY`; OIDC bound it to exact
+  project/environment IDs and the only alias was the automatic staging-only
+  `cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+- Streamed the exact disposable Neon URL, a new random staging JWT, and the
+  approved local `sk_test_...` fallback directly into custom environment
+  `staging`; no value was printed. The first PowerShell JWT generator used an
+  unavailable static `Fill` method and was caught before deployment. Its
+  predictable placeholder was immediately replaced. A later controlled
+  readable capture rotated the secret once more, restored its Vercel type to
+  Sensitive before deployment, and enabled local synthetic cookie signing.
+  Only staging received `POSTGRES_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`,
+  `BASE_URL`, `STRIPE_MODE=test`, the global gate, and the five account-create,
+  account-link, dashboard-link, agreement, and webhook-processing gates.
+  `STRIPE_CONNECT_V2_LIVE_ENABLED` remained absent; Production still had zero
+  variables.
+- Configured deployment `dpl_3Vs1f5jX5oiV21RLYNb9AaGUbEXh` returned the
+  expected authenticated inactive model while the school flag was false:
+  `school_gate_inactive`, no mapping, no observation, and no agreement. The
+  guarded school update set only school `1`'s JSON Boolean true at
+  `2026-08-10T05:53:12.487Z`, retaining payout engine `v1` and null legacy
+  school mapping. This clone contains only school `1`, so a second-school
+  inactive assertion was not applicable and is an explicit limitation.
+- Before provider creation, Stripe test mode scanned one recipient account and
+  found zero matches for stable identities
+  `cc:connect-v2:1:2:test:recipient` and
+  `cc:connect-v2:1:3:test:recipient`. It scanned six pre-existing test event
+  destinations and found no name or URL collision. The temporary harness first
+  requested `limit: 100`; Stripe rejected it before mutation with `Limit cannot
+  be greater than 20`. After correcting that preflight-only harness to the
+  provider maximum, exactly one destination was created at
+  `2026-08-10T05:55:25.006Z`: test ID
+  `ed_test_61VCA8bFOvczEINoS16TV2QrP1E9xyoubgu5pnVoOD8a`, name
+  `cc-simon-s4-acceptance-3-20260810`, `livemode=false`, `status=enabled`,
+  `event_payload=thin`, `events_from=["@self"]`, staging webhook URL, and only
+  the eight event types in `SUPPORTED_ACCOUNT_EVENT_TYPES`. Its `whsec_...`
+  value was stored Sensitive only in staging.
+- One intermediate deployment, `dpl_7Jfin7m2FxdRbGcezyrwALYu8hfU`, uploaded
+  an untracked non-routed acceptance script and therefore had a dirty source
+  marker. The script contained no secret and no account/event action had run.
+  It was removed from the deployable worktree; the dirty deployment was
+  retained rather than deleted. Exact clean commit
+  `7bea1fbc3cd05b0fabadfed28956c7c83dbf2bbb` was then deployed as
+  `dpl_BroKjPNuJCCNss4fAiZ1MB9BBvyS`, `READY`, `gitDirty=NULL`, custom
+  environment `staging`, before account submission.
+- Through that clean staging deployment, exactly one authenticated/CSRF-bound
+  `POST /api/connect?action=v2-account` was made as synthetic instructor `2`.
+  It returned `{version:2,state:"created",has_account:true}`. Durable intent
+  `6a617fd1-e59e-461b-94cc-61428454cbad` preceded the provider call and reached
+  `succeeded`; attempt 1 was `provider_succeeded` at
+  `2026-08-10T05:59:17.869Z`, provider request
+  `req_v2OdAMYJPICVTmYnh`. Scope `1` maps exactly test account
+  `acct_1U2mEuEzBBwP0X12` to school `1` / instructor `2`. Read-only Stripe
+  retrieval proved exactly one stable match, `livemode=false`, object
+  `v2.core.account`, recipient applied, Express dashboard, GB identity,
+  application fee/loss responsibility, and transfer capability `restricted`
+  pending hosted onboarding. The local observation is singular
+  `api.account_created` at `2026-08-10T05:59:18.285Z`.
+- The Simon ambiguity harness ran outside the deployable worktree. It proved
+  zero prior stable matches/intents/scopes, called Accounts v2 create exactly
+  once, retained returned account ID `acct_1U2mHvIGQey1BnGx`, and injected a
+  timeout after provider acceptance. Durable intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df` moved to `reconciling`; attempt 1 is
+  `provider_ambiguous`, error class `network`, provider code `ETIMEDOUT`,
+  request `req_v2jEH4nkzkb9KTgyP`, at `2026-08-10T06:02:24.197Z`. Read-only
+  provider listing proved exactly one original stable identity and exact
+  recipient/Express/test/responsibility metadata.
+- The next command injected a client whose create method could only count and
+  throw; it recorded zero replacement-create calls and invoked the merged
+  reconciliation list path. That path returned `500` before recording a second
+  attempt or mapping a scope. Read-only isolation then proved the exact blocker:
+  `api/_connect-v2-routes.js` `findReconciliationMatches` calls
+  `accounts.list(... limit: 100)`, and Stripe rejects it with `Limit cannot be
+  greater than 20`. No retry, replacement, list-limit workaround, manual SQL
+  mapping, onboarding, link, dashboard, agreement, webhook-delivery, or money
+  action followed. Simon remains singular, unmapped, and `reconciling` under
+  the original identity as required.
+- Non-destructive shutdown overwrote the five staging operation gates to
+  literal `false`, then the global gate to `false`; set school `1`'s JSON flag
+  false at `2026-08-10T06:04:46.720Z`; and disabled, never deleted, the exact
+  test destination at `2026-08-10T06:05:04.127Z`. Final clean disabled
+  deployment `dpl_7GtYzEowSXzUVNddpf5VbMPEwJpu` is `READY`, exact Git SHA,
+  `gitDirty=NULL`, OIDC environment `staging`, and retains only the staging
+  alias. A provider pull proved all six gates literally false and the live gate
+  absent. Authenticated runtime status returned
+  `global_gate_inactive` and `school_gate_inactive`. Stripe postflight proved
+  both stable identities have exactly one test account and the destination is
+  `disabled` with its exact eight-type contract preserved.
+- Database postflight at `2026-08-10T06:08:03.657Z` retained migration 041,
+  zero owner duplicates, one Fraser scope/observation, zero link events and
+  agreements, and the singular Simon reconciling intent with no scope. Both
+  instructors remain active, unpaused, and without legacy `stripe_account_id`.
+  School payout engine is `v1`; Slice 3 remains unactivated `shadow`; four
+  payment contracts and every zero payout/refund/earning/transfer/cutover
+  count match preflight. No payout engine, pause state, legacy mapping,
+  payment, refund, earning, payout run, transfer, cutover, or production state
+  changed. Slice 3 was not activated and Slice 5 was not started.
+- Local verification passed syntax `204/204`, C1 `276/276`, focused Slice 4
+  `15/15` (including `2/2` installed-system-Chrome UI assertions), canonical
+  launch schema `14/14`, migration-035 byte guards `9/9` under temporary LF
+  normalisation with original checkout SHA
+  `f1297ae03e9329d986252a73f09889401a707b85c9ef68d60c97e1ed1e2c1709`
+  restored exactly, and a current broader affected superset `570/570` across
+  62 non-integration Stripe/auth/tenant/booking/credit/refund/payout/webhook/
+  Connect files. The first browser run failed before assertions because the
+  bundled browser was absent; installed Chrome then passed. No regression test
+  used the staging database or provider credentials.
+- Attempt 3 status is
+  `STAGING_ACCEPTANCE_STOPPED_RECONCILIATION_LIST_LIMIT_DISABLED`. Hosted
+  onboarding refresh/return/expiry/replay/tamper/wrong-tenant/wrong-instructor,
+  Express login-link use, signed thin-event delivery/replay/out-of-order/
+  regression/current-state checks, and agreement draft/accept/activate/
+  immutability/overlap/readiness cases remain unexecuted. Resume only after a
+  separately reviewed code repair accepts Stripe's supported list pagination;
+  the first permitted provider action must reconcile Simon's preserved intent
+  and `acct_1U2mHvIGQey1BnGx`, never create a replacement.
+- Final local cleanup removed only the two external, secret-free harness files,
+  the exact staging environment export, and the worktree `.env.local`; all four
+  paths were verified absent. No remote or database evidence was deleted. The
+  protected hashes were reverified unchanged after documentation edits. Of 25
+  registered worktrees, this attempt worktree had only these two documentation
+  changes and the pre-existing user worktree
+  `C:\Users\Fraser\.codex\worktrees\cc5f\coachcarter-website-main` retained
+  its 14 existing status entries; every other worktree was clean.
