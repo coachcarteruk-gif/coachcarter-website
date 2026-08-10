@@ -223,14 +223,14 @@ The instructor chooses exactly one outcome:
 - Within 48 hours, an instructor may record “Rescheduled by agreement” after an off-platform agreement with the learner.
 - Instructor-initiated rescheduling does not require a separate learner approval step.
 - A replacement date and time are mandatory.
-- The replacement remains with the same instructor.
-- Cross-instructor transfer is not supported.
+- Reserved Weekly Slot replacements remain with the same instructor.
+- An ordinary learner reschedule may switch to another active same-school instructor when the selected slot passes a fresh availability check. The already-paid entitlement moves without another charge, and the replacement instructor becomes the delivery and payout instructor.
 
 ### 8.2 Immutable commercial basis
 
 Rescheduling preserves:
 
-- the original instructor;
+- the original Stripe source and actual paid amount, while an explicit instructor-transfer ledger pair records any change of delivery instructor;
 - lesson duration;
 - actual amount paid;
 - Stripe PaymentIntent, Charge and balance-transaction evidence;

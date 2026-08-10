@@ -436,7 +436,7 @@
     if (note) {
       note.textContent = isReservedMove
         ? "You'll be taken to the booking page where you can pick an available replacement with the same instructor and duration."
-        : "To reschedule, you'll be taken to the booking page where you can pick a new time slot.";
+        : "To reschedule, you'll be taken to the booking page where you can choose an instructor and one of their available time slots.";
     }
     document.getElementById('rmCurrentDateTime').textContent = dateStr + ' at ' + start;
     document.getElementById('rmInstructor').textContent = instructorName;

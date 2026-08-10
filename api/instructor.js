@@ -72,7 +72,7 @@ const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-prod
 
 const TOKEN_EXPIRY_MINUTES = 30;
 const JWT_EXPIRY           = '180d';
-const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
+const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather', 'instructor_transfer_in'];
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 
 function isSelfServeFreeTrialBooking(booking) {

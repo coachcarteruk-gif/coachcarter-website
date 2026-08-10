@@ -229,6 +229,7 @@ async function loadPayoutV2ShadowInput({
       bcs.stripe_fee_pence AS bcs_stripe_fee_pence,
       bcs.absorbed_by,
       ct.type AS credit_transaction_type,
+      ct.transferred_from_credit_transaction_id,
       pfs.id AS funding_source_id,
       pfs.instructor_id AS source_instructor_id,
       pfs.funding_class,
@@ -248,8 +249,11 @@ async function loadPayoutV2ShadowInput({
     JOIN credit_transactions ct
       ON ct.id = bcs.credit_transaction_id
      AND ct.school_id = bcs.school_id
+    LEFT JOIN credit_transactions transferred_from_ct
+      ON transferred_from_ct.id = ct.transferred_from_credit_transaction_id
+     AND transferred_from_ct.school_id = ct.school_id
     LEFT JOIN payout_funding_sources pfs
-      ON pfs.credit_transaction_id = bcs.credit_transaction_id
+      ON pfs.credit_transaction_id = COALESCE(transferred_from_ct.id, bcs.credit_transaction_id)
      AND pfs.school_id = bcs.school_id
      AND (pfs.metadata->>'launch_accounting_version') IS DISTINCT FROM 'simon_launch_v1'
     LEFT JOIN LATERAL (
@@ -295,7 +299,12 @@ async function loadPayoutV2ShadowInput({
         fundingSourceId: Number(row.funding_source_id),
         bookingCreditSourceId: Number(row.booking_credit_source_id),
         schoolId: Number(row.school_id),
-        instructorId: Number(row.source_instructor_id),
+        // An explicit reschedule transfer preserves the immutable Stripe
+        // source while assigning the delivered lesson's earning to the new
+        // instructor. Ordinary sources must still match exactly.
+        instructorId: row.credit_transaction_type === 'instructor_transfer_in'
+          ? Number(row.booking_instructor_id)
+          : Number(row.source_instructor_id),
         fundingClass: row.funding_class,
         sourceStatus: row.source_status,
         sourceFingerprint: row.source_fingerprint,
@@ -303,7 +312,13 @@ async function loadPayoutV2ShadowInput({
         stripeFeeContributionPence: integer(row.bcs_stripe_fee_pence),
         payablePoolPence: integer(row.payable_pool_pence),
         alreadyAllocatedPence: integer(row.already_allocated_pence),
-        evidence: evidenceFromSource(row),
+        evidence: {
+          ...evidenceFromSource(row),
+          instructor_switch_transfer: row.credit_transaction_type === 'instructor_transfer_in',
+          transferred_from_credit_transaction_id: row.transferred_from_credit_transaction_id
+            ? Number(row.transferred_from_credit_transaction_id)
+            : null,
+        },
       };
     }
     if (!sourcesByBooking.has(Number(row.booking_id))) {

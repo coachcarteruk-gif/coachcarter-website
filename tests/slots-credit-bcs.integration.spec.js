@@ -137,7 +137,7 @@ test.describe('slots.js credit-funded BCS writer - integration', () => {
 
     sql = neon(process.env.POSTGRES_URL_TEST);
 
-    expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual(['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather']);
+    expect(CREDIT_BOOKING_SOURCE_TYPES).toEqual(['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather', 'instructor_transfer_in']);
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('admin_remove');
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('free_trial');
 
