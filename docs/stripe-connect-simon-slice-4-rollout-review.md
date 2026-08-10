@@ -841,3 +841,63 @@ Status is now
 A future resume requires newly explicit operational authority and must retain
 all preflight, preserved-identity, one-request, no-retry, shutdown, and
 no-replacement-create controls.
+
+## Authenticated transport passed; HTTP reconciliation not sent — 10 August 2026
+
+The owner-authorised reconciliation resume used fresh merged `main`
+`f3c21d9bd75e4de4a4143ca243b4d06d0880865e` (PR #369). Both protected hashes
+matched their approved values. Vercel and Neon preflight matched the retained
+isolated project/environment/branch exactly. The staging controls evaluated
+false, `STRIPE_MODE=test`, live was absent, Production had zero variables, and
+school `1`'s Slice 4 feature was exact Boolean false. Simon retained the
+original unmapped `reconciling` intent and singular ambiguous/network attempt;
+Fraser remained scope `1`/observation `1`. Focused no-replacement/readiness
+tests passed `38/38`.
+
+Fresh exact-source disabled deployment `dpl_GuyP2bCMXJSPYa2pxRrKahqtKkkM`
+became `READY`. Exactly one Vercel-authenticated harmless `GET /api/status`
+reached the application and returned its non-mutating JSON status at
+`2026-08-10T21:50:02.393Z`; redirects and client retries were disabled. The
+harmless transport-test request count is **one**, and the endpoint has no
+database or Stripe path.
+
+The unreadable Sensitive staging JWT required the one authorised staging-only
+rotation. It was generated and retained only in memory. Rotated-disabled
+deployment `dpl_ELA5ofzPgDZFp8uou1v5zd5g22QB` and minimally enabled deployment
+`dpl_BvwtMjKexqtgYDHMHj21PWT5Niaw` both passed the exact-source, clean,
+custom-environment, and alias-only guards. Only global and account-creation
+were enabled, then a guarded Neon update changed only school `1`'s Slice 4
+Boolean to true.
+
+The controller reached its one guarded local dispatch invocation, but supplied
+a deployment verification marker together with the deployment ID. The local
+command parser rejected the malformed argument with exit `255` before
+`vercel curl` issued an HTTP request. Exact Simon reconciliation HTTP POST
+count is therefore **zero**, with no HTTP/application response and no retry.
+The enabled deployment has zero recorded runtime request paths. Stripe was not
+contacted: there was no Accounts v2 list, create, replacement account, or event
+destination action.
+
+Mandatory shutdown completed despite the local dispatch failure. The two
+temporary gates were restored false, school `1`'s Boolean was guarded back to
+false, and all in-memory JWT/session/CSRF material was cleared. Final disabled
+deployment `dpl_J3FB1xBf9CJAaLRxbqhXkARUzkc2` is `READY`, exact commit
+`f3c21d9bd75e4de4a4143ca243b4d06d0880865e`, `gitDirty=NULL`, custom
+`staging`, and carries only the expected staging alias. All six Slice 4 gates
+fail closed; present controls are exact false, live remains absent,
+`STRIPE_MODE=test`, and Production remains zero-variable.
+
+Postflight preserves Simon's exact `reconciling` intent and first
+`provider_ambiguous`/`network` attempt with mapping/scope/observation all zero.
+Fraser remains scope `1`/observation `1`; Slice 3 remains inactive `shadow`;
+all inspected account-link, payout, refund, earning, transfer, cutover, Slice 5,
+and Production counts remain unchanged or zero. The disabled Stripe event
+destination was neither queried nor modified. Final regression passed focused
+`38/38` and the current 65-file non-integration matrix `612/612` after the
+documented temporary migration-035 LF checkout normalization was restored.
+
+Status is
+`STAGING_RECONCILIATION_DISPATCH_NOT_SENT_CONTROLLER_ARGUMENT_ERROR_DISABLED`.
+The one authorised JWT rotation has been consumed. The no-retry rule prohibits
+another dispatch under this authority; any correction requires explicit owner
+approval.
