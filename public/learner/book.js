@@ -1082,6 +1082,22 @@ async function onFilterChange() {
   // back only when the kept date has no slots under the new filter.
   clearSelectedSlot();
   await loadLessonTypes();
+  if (pendingReschedule && !pendingReschedule.isReservedMove) {
+    const originalType = availableLessonTypes.find(lt => (
+      String(lt.id || lt.lesson_type_id) === String(pendingReschedule.lessonTypeId)
+      || Number(lt.duration_minutes) === Number(pendingReschedule.durationMinutes)
+    ));
+    if (!originalType) {
+      const filter = document.getElementById('instructorFilter');
+      showToast('That instructor does not offer this lesson length. Please choose another instructor.', 'error');
+      filter.value = String(pendingReschedule.instructorId);
+      await loadLessonTypes();
+    } else {
+      selectedLessonType = normaliseLessonType(originalType);
+      slotFeedDuration = selectedLessonType.duration_minutes;
+      slotFeedLessonTypeId = selectedLessonType.id;
+    }
+  }
   if (auth) await loadTestDateAvailability();
   initFeed();
 }
@@ -1772,6 +1788,7 @@ function openBookModal(el) {
     if (isGuest) { if (window.ccAuth) window.ccAuth.requireAuth(); return; }
     openRescheduleConfirm({
       instructor_id: el.dataset.instructorId,
+      instructor_name: el.dataset.instructorName,
       date:          el.dataset.date,
       start_time:    el.dataset.start,
       end_time:      el.dataset.end
@@ -3341,6 +3358,8 @@ function startRescheduleMode(bookingId, date, start, end, instructorName, instru
     instructorName,
     instructorId,
     isReservedMove: !!isReservedMove,
+    lessonTypeId: selectedLessonType && selectedLessonType.id,
+    durationMinutes: selectedLessonType && selectedLessonType.duration_minutes,
     pickupAddress: pickupAddress || '',
     dropoffAddress: dropoffAddress || ''
   };
@@ -3348,15 +3367,19 @@ function startRescheduleMode(bookingId, date, start, end, instructorName, instru
     .toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone:'UTC' });
   document.getElementById('rescheduleBannerText').textContent = `${dateStr} at ${start} with ${instructorName}`;
   document.getElementById('rescheduleBanner').style.display = 'flex';
+  const instructorFilter = document.getElementById('instructorFilter');
+  if (instructorFilter) instructorFilter.disabled = !!isReservedMove;
   renderLessonLengthControls();
   renderSelectedSlotSummary();
-  showToast(isReservedMove ? 'Select an available replacement for your reserved lesson' : 'Select a new time slot below to reschedule your lesson', '');
+  showToast(isReservedMove ? 'Select an available replacement for your reserved lesson' : 'Choose an instructor, then select one of their available times', '');
 }
 window.startRescheduleMode = startRescheduleMode;
 
 function cancelRescheduleMode() {
   pendingReschedule = null;
   document.getElementById('rescheduleBanner').style.display = 'none';
+  const instructorFilter = document.getElementById('instructorFilter');
+  if (instructorFilter) instructorFilter.disabled = false;
   renderLessonLengthControls();
   renderSelectedSlotSummary();
 }
@@ -3371,14 +3394,24 @@ function openRescheduleConfirm(newSlot) {
 
   document.getElementById('rmOldDateTime').textContent = `${oldDateStr} at ${pendingReschedule.start}`;
   document.getElementById('rmNewDateTime').textContent = `${newDateStr} at ${newSlot.start_time}`;
-  document.getElementById('rmInstructor').textContent = pendingReschedule.instructorName;
+  const replacementInstructor = instructors.find(i => String(i.id) === String(newSlot.instructor_id));
+  const replacementInstructorName = replacementInstructor
+    ? replacementInstructor.name
+    : (newSlot.instructor_name || pendingReschedule.instructorName);
+  const instructorChanged = String(newSlot.instructor_id) !== String(pendingReschedule.instructorId);
+  document.getElementById('rmInstructor').textContent = instructorChanged
+    ? `${pendingReschedule.instructorName} → ${replacementInstructorName}`
+    : replacementInstructorName;
+  document.getElementById('rmDuration').textContent = formatHours(pendingReschedule.durationMinutes || slotFeedDuration);
   const title = document.querySelector('#rescheduleModal h2');
   const note = document.querySelector('#rescheduleModal .modal-credit-note');
   if (title) title.textContent = pendingReschedule.isReservedMove ? 'Move reserved lesson?' : 'Reschedule lesson?';
   if (note) {
     note.textContent = pendingReschedule.isReservedMove
       ? 'No balance change. This moves one Reserved Weekly Slot occurrence and releases the old weekly slot.'
-      : 'No balance change - your lesson is simply being moved to the new time.';
+      : instructorChanged
+        ? `No extra charge. Your paid lesson will move to ${replacementInstructorName}, who will receive it in their payout after delivery.`
+        : 'No balance change - your lesson is simply being moved to the new time.';
   }
   const locationFields = document.getElementById('rescheduleLocationFields');
   if (locationFields) locationFields.style.display = pendingReschedule.isReservedMove ? 'none' : 'block';
@@ -3411,7 +3444,8 @@ async function confirmReschedule(newSlot) {
     const body = {
       booking_id: pendingReschedule.bookingId,
       new_date: newSlot.date,
-      new_start_time: newSlot.start_time
+      new_start_time: newSlot.start_time,
+      new_instructor_id: newSlot.instructor_id
     };
     if (!isReservedMove) {
       const pickupAddress = resolveReschedulePickupAddress();

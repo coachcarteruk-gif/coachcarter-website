@@ -15,6 +15,7 @@ test.describe('slots.js credit-funded BCS writer policy', () => {
       'referral_bonus',
       'referral_reward',
       'legacy_grandfather',
+      'instructor_transfer_in',
     ]);
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('admin_remove');
     expect(CREDIT_BOOKING_SOURCE_TYPES).not.toContain('free_trial');

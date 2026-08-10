@@ -102,7 +102,7 @@ const {
 const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']);
 const BROADCAST_MAX_RECIPIENTS = 200;
 const INSTRUCTOR_ACCESS_MAX_AGE_SEC = 60 * 60 * 2;
-const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather'];
+const CREDIT_BOOKING_SOURCE_TYPES = ['purchase', 'slot_purchase', 'admin_add', 'referral_bonus', 'referral_reward', 'legacy_grandfather', 'instructor_transfer_in'];
 
 class AdminRetrospectiveBookingAbort extends Error {
   constructor(result) {
