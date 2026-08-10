@@ -20,6 +20,10 @@ const V2_ACTIONS = new Set([
   'v2-admin-agreement-draft', 'v2-admin-agreement-activate',
 ]);
 
+const CONNECT_V2_RECONCILIATION_PAGE_LIMIT = 20;
+const CONNECT_V2_RECONCILIATION_MAX_PAGES = 500;
+const CONNECT_V2_ACCOUNTS_LIST_PATH = '/v2/core/accounts';
+
 class ConnectV2Error extends Error {
   constructor(status, code, message) {
     super(message);
@@ -117,22 +121,74 @@ function validateProviderAccount(account, { schoolId, instructorId, intentId, ex
   return account;
 }
 
+function reconciliationIncomplete() {
+  refuse(409, 'CONNECT_V2_RECONCILIATION_INCOMPLETE', 'Account reconciliation requires operator review');
+}
+
+function validateReconciliationPage(page) {
+  if (!page || !Array.isArray(page.data) || page.data.length > CONNECT_V2_RECONCILIATION_PAGE_LIMIT || !Object.prototype.hasOwnProperty.call(page, 'next_page_url')) {
+    reconciliationIncomplete();
+  }
+  if (page.next_page_url !== null && typeof page.next_page_url !== 'string') reconciliationIncomplete();
+  return page;
+}
+
+function validateNextReconciliationPageUrl(value, seenPageTokens) {
+  if (!value || value.length > 4096 || !value.startsWith('/')) reconciliationIncomplete();
+  let parsed;
+  try {
+    parsed = new URL(value, 'https://api.stripe.com');
+  } catch {
+    reconciliationIncomplete();
+  }
+  if (parsed.origin !== 'https://api.stripe.com' || parsed.pathname !== CONNECT_V2_ACCOUNTS_LIST_PATH || parsed.hash) reconciliationIncomplete();
+
+  const allowedKeys = new Set(['page', 'limit', 'applied_configurations']);
+  const values = {};
+  for (const [key, item] of parsed.searchParams.entries()) {
+    const normalizedKey = /^applied_configurations\[\d+\]$/.test(key) ? 'applied_configurations' : key;
+    if (!allowedKeys.has(normalizedKey)) reconciliationIncomplete();
+    values[normalizedKey] = values[normalizedKey] || [];
+    values[normalizedKey].push(item);
+  }
+  const pageTokens = values.page || [];
+  const limits = values.limit || [];
+  const configurations = values.applied_configurations || [];
+  const limit = Number(limits[0]);
+  if (pageTokens.length !== 1 || !pageTokens[0] || limits.length !== 1 || !Number.isSafeInteger(limit) || limit <= 0 || limit > CONNECT_V2_RECONCILIATION_PAGE_LIMIT) reconciliationIncomplete();
+  if (configurations.length !== 1 || configurations[0] !== 'recipient') reconciliationIncomplete();
+  if (seenPageTokens.has(pageTokens[0])) reconciliationIncomplete();
+  seenPageTokens.add(pageTokens[0]);
+  return `${parsed.pathname}${parsed.search}`;
+}
+
 async function findReconciliationMatches(stripe, intent) {
   const matches = [];
-  const page = stripe.v2.core.accounts.list({ applied_configurations: ['recipient'], limit: 100 });
-  if (page && typeof page[Symbol.asyncIterator] === 'function') {
-    for await (const account of page) {
-      if (account?.metadata?.cc_stable_identity === intent.stable_identity) matches.push(account);
-      if (matches.length > 1) break;
+  const seenAccountIds = new Set();
+  const seenPageTokens = new Set();
+  let pageUrl = null;
+
+  for (let pageNumber = 1; pageNumber <= CONNECT_V2_RECONCILIATION_MAX_PAGES; pageNumber += 1) {
+    const page = validateReconciliationPage(pageUrl
+      ? await stripe.rawRequest('GET', pageUrl)
+      : await stripe.v2.core.accounts.list({ applied_configurations: ['recipient'], limit: CONNECT_V2_RECONCILIATION_PAGE_LIMIT }));
+
+    for (const account of page.data) {
+      if (!account || account.object !== 'v2.core.account' || !/^acct_[A-Za-z0-9]+$/.test(account.id || '') || !account.metadata || typeof account.metadata !== 'object' || Array.isArray(account.metadata)) {
+        reconciliationIncomplete();
+      }
+      if (seenAccountIds.has(account.id)) reconciliationIncomplete();
+      seenAccountIds.add(account.id);
+      if (account.metadata.cc_stable_identity === intent.stable_identity) matches.push(account);
+      if (matches.length > 1) return matches;
     }
-  } else {
-    const resolved = await page;
-    for (const account of resolved?.data || []) {
-      if (account?.metadata?.cc_stable_identity === intent.stable_identity) matches.push(account);
-    }
-    if (resolved?.next_page_url) refuse(409, 'CONNECT_V2_RECONCILIATION_INCOMPLETE', 'Account reconciliation requires operator review');
+
+    if (page.next_page_url === null) return matches;
+    if (typeof stripe.rawRequest !== 'function') reconciliationIncomplete();
+    pageUrl = validateNextReconciliationPageUrl(page.next_page_url, seenPageTokens);
   }
-  return matches;
+
+  reconciliationIncomplete();
 }
 
 async function observeAccount(sql, scope, account, options = {}) {

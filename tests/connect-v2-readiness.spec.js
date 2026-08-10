@@ -76,6 +76,104 @@ function responseRecorder() {
   };
 }
 
+function reconciliationPage(data, nextPageUrl = null) {
+  return { data, next_page_url: nextPageUrl, previous_page_url: null };
+}
+
+function paginatedAccountsClient(firstPage, subsequentPages = {}) {
+  const calls = { create: 0, list: [], rawRequest: [] };
+  return {
+    calls,
+    v2: { core: { accounts: {
+      create: async () => { calls.create += 1; throw new Error('reconciliation must not create an account'); },
+      list: async (params) => {
+        calls.list.push(params);
+        if (firstPage instanceof Error) throw firstPage;
+        return firstPage;
+      },
+    } } },
+    rawRequest: async (method, pageUrl) => {
+      calls.rawRequest.push({ method, pageUrl });
+      const result = subsequentPages[pageUrl];
+      if (result instanceof Error) throw result;
+      if (result === undefined) throw new Error(`Unexpected page URL: ${pageUrl}`);
+      return result;
+    },
+  };
+}
+
+async function runActiveAccountRoute({ intentState, stripeClient }) {
+  const intentId = '11111111-1111-4111-8111-111111111111';
+  const command = core.makeCreationCommand({ schoolId: 1, instructorId: 11, mode: 'test', intentId });
+  const intent = {
+    id: intentId,
+    school_id: 1,
+    instructor_id: 11,
+    stripe_mode: 'test',
+    state: intentState,
+    stable_identity: command.stableIdentity,
+    idempotency_key: command.idempotencyKey,
+    request_fingerprint: command.requestFingerprint,
+  };
+  const originals = {};
+  const replacements = {
+    loadSchoolAndInstructor: async () => ({ id: 11, school_id: 1, email: 'instructor@example.test', name: 'Test Instructor' }),
+    loadSchoolConfig: async () => ({ id: 1, config: { features: { stripe_connect_accounts_v2: true } } }),
+    loadInstructorScope: async () => null,
+    ensureCreationIntent: async () => intent,
+    claimCreationIntent: async () => intent,
+    recordCreationAttempt: async (_sql, value) => { replacements.attempts.push(value); },
+    setCreationIntentState: async (_sql, value) => { replacements.states.push(value); return intent; },
+    registerAccountScope: async (_sql, value) => {
+      replacements.scopes.push(value);
+      return scope({ stripe_account_id: value.accountId, evidence_json: { ...scope().evidence_json, creation_intent_id: value.intentId } });
+    },
+    insertObservation: async (_sql, value) => { replacements.observations.push(value); return value; },
+    attempts: [],
+    states: [],
+    scopes: [],
+    observations: [],
+  };
+  for (const [name, replacement] of Object.entries(replacements)) {
+    if (typeof replacement !== 'function') continue;
+    originals[name] = store[name];
+    store[name] = replacement;
+  }
+
+  const originalJwtSecret = process.env.JWT_SECRET;
+  const secret = 'slice4-route-repair-test-secret';
+  process.env.JWT_SECRET = secret;
+  const token = jwt.sign({ id: 11, email: 'instructor@example.test', school_id: 1, role: 'instructor' }, secret);
+  const csrf = 'b'.repeat(64);
+  const req = {
+    method: 'POST',
+    url: '/api/connect?action=v2-account',
+    query: { action: 'v2-account' },
+    body: {},
+    headers: { cookie: `cc_instructor=${token}; cc_csrf=${csrf}`, 'x-csrf-token': csrf },
+  };
+  const res = responseRecorder();
+  const sql = async () => [];
+  try {
+    const handler = routes.createConnectV2Handler({
+      env: {
+        JWT_SECRET: secret,
+        STRIPE_MODE: 'test',
+        STRIPE_CONNECT_V2_ENABLED: 'true',
+        STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED: 'true',
+      },
+      sql,
+      createAccountsClient: () => stripeClient,
+    });
+    await handler(req, res);
+    return { res, replacements, intent };
+  } finally {
+    Object.assign(store, originals);
+    if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalJwtSecret;
+  }
+}
+
 test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
   test.describe.configure({ mode: 'serial' });
   test('Connect v2 module import and route factory defer database client construction', () => {
@@ -116,23 +214,98 @@ test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
     expect(params.metadata).not.toHaveProperty('email');
   });
 
-  test('ambiguous creation is reconciled by stable identity and never creates a replacement', async () => {
-    expect(core.classifyCreationOutcome({ retryable: true })).toBe('provider_ambiguous');
-    expect(core.classifyCreationOutcome({ retryable: false })).toBe('provider_failed_confirmed');
-    let createCalls = 0;
+  test('first-page reconciliation uses the Accounts v2 maximum page size and never creates', async () => {
     const matching = account({ metadata: { cc_stable_identity: 'cc:connect-v2:1:11:test:recipient' } });
-    const fake = {
-      v2: { core: { accounts: {
-        create: async () => { createCalls += 1; },
-        list: () => ({ async *[Symbol.asyncIterator]() { yield account({ id: 'acct_other' }); yield matching; } }),
-      } } },
-    };
-    const matches = await routes.findReconciliationMatches(fake, { stable_identity: 'cc:connect-v2:1:11:test:recipient' });
+    const stripe = paginatedAccountsClient(reconciliationPage([matching]));
+    const matches = await routes.findReconciliationMatches(stripe, { stable_identity: 'cc:connect-v2:1:11:test:recipient' });
     expect(matches.map((item) => item.id)).toEqual(['acct_slice4one']);
-    expect(createCalls).toBe(0);
+    expect(stripe.calls.list).toEqual([{ applied_configurations: ['recipient'], limit: 20 }]);
+    expect(stripe.calls.rawRequest).toEqual([]);
+    expect(stripe.calls.create).toBe(0);
   });
 
-  test('mapped provider identity must retain exact school, instructor, intent, mode and stable metadata', () => {
+  test('later-page reconciliation follows Stripe next_page_url and no request exceeds 20', async () => {
+    const next = '/v2/core/accounts?page=page_second&limit=20&applied_configurations=recipient';
+    const matching = account({ metadata: { cc_stable_identity: 'cc:connect-v2:1:11:test:recipient' } });
+    const stripe = paginatedAccountsClient(
+      reconciliationPage([account({ id: 'acct_other' })], next),
+      { [next]: reconciliationPage([matching]) },
+    );
+    const matches = await routes.findReconciliationMatches(stripe, { stable_identity: 'cc:connect-v2:1:11:test:recipient' });
+    expect(matches.map((item) => item.id)).toEqual(['acct_slice4one']);
+    expect(stripe.calls.list[0].limit).toBeLessThanOrEqual(20);
+    expect(stripe.calls.rawRequest).toEqual([{ method: 'GET', pageUrl: next }]);
+    for (const call of stripe.calls.rawRequest) {
+      expect(Number(new URL(call.pageUrl, 'https://api.stripe.com').searchParams.get('limit'))).toBeLessThanOrEqual(20);
+    }
+    expect(stripe.calls.create).toBe(0);
+  });
+
+  test('pagination terminates when next_page_url is null', async () => {
+    const stripe = paginatedAccountsClient(reconciliationPage([account({ id: 'acct_unmatched' })]));
+    await expect(routes.findReconciliationMatches(stripe, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).resolves.toEqual([]);
+    expect(stripe.calls.list).toHaveLength(1);
+    expect(stripe.calls.rawRequest).toHaveLength(0);
+    expect(stripe.calls.create).toBe(0);
+  });
+
+  test('provider list and later-page failures remain fail-closed without creation', async () => {
+    const listFailure = paginatedAccountsClient(new Error('provider list unavailable'));
+    await expect(routes.findReconciliationMatches(listFailure, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toThrow('provider list unavailable');
+    expect(listFailure.calls.create).toBe(0);
+
+    const next = '/v2/core/accounts?page=page_failure&limit=20&applied_configurations=recipient';
+    const pageFailure = paginatedAccountsClient(reconciliationPage([], next), { [next]: new Error('provider page unavailable') });
+    await expect(routes.findReconciliationMatches(pageFailure, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toThrow('provider page unavailable');
+    expect(pageFailure.calls.rawRequest).toHaveLength(1);
+    expect(pageFailure.calls.create).toBe(0);
+  });
+
+  test('malformed, oversized, and cyclic pagination fail promptly without creation', async () => {
+    const malformed = paginatedAccountsClient(reconciliationPage([], '/v2/core/accounts?limit=20&applied_configurations=recipient'));
+    await expect(routes.findReconciliationMatches(malformed, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toMatchObject({ code: 'CONNECT_V2_RECONCILIATION_INCOMPLETE' });
+    expect(malformed.calls.rawRequest).toHaveLength(0);
+
+    const oversizedUrl = '/v2/core/accounts?page=page_oversized&limit=21&applied_configurations=recipient';
+    const oversized = paginatedAccountsClient(reconciliationPage([], oversizedUrl));
+    await expect(routes.findReconciliationMatches(oversized, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toMatchObject({ code: 'CONNECT_V2_RECONCILIATION_INCOMPLETE' });
+    expect(oversized.calls.rawRequest).toHaveLength(0);
+
+    const cycleUrl = '/v2/core/accounts?page=page_cycle&limit=20&applied_configurations=recipient';
+    const cyclic = paginatedAccountsClient(reconciliationPage([], cycleUrl), { [cycleUrl]: reconciliationPage([], cycleUrl) });
+    await expect(routes.findReconciliationMatches(cyclic, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toMatchObject({ code: 'CONNECT_V2_RECONCILIATION_INCOMPLETE' });
+    expect(cyclic.calls.rawRequest).toHaveLength(1);
+    expect(cyclic.calls.create).toBe(0);
+  });
+
+  test('unexpected list objects fail closed and repeated account objects cannot cycle', async () => {
+    const unexpected = paginatedAccountsClient(reconciliationPage([{ id: 'acct_wrongtype', object: 'account', metadata: {} }]));
+    await expect(routes.findReconciliationMatches(unexpected, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toMatchObject({ code: 'CONNECT_V2_RECONCILIATION_INCOMPLETE' });
+
+    const next = '/v2/core/accounts?page=page_duplicate&limit=20&applied_configurations=recipient';
+    const repeated = account({ id: 'acct_repeated' });
+    const duplicate = paginatedAccountsClient(reconciliationPage([repeated], next), { [next]: reconciliationPage([repeated]) });
+    await expect(routes.findReconciliationMatches(duplicate, { stable_identity: 'cc:connect-v2:1:11:test:recipient' })).rejects.toMatchObject({ code: 'CONNECT_V2_RECONCILIATION_INCOMPLETE' });
+    expect(duplicate.calls.create).toBe(0);
+  });
+
+  test('multiple stable-identity matches enter manual review without selecting or creating', async () => {
+    const stableIdentity = 'cc:connect-v2:1:11:test:recipient';
+    const stripe = paginatedAccountsClient(reconciliationPage([
+      account({ id: 'acct_duplicateone', metadata: { cc_stable_identity: stableIdentity } }),
+      account({ id: 'acct_duplicatetwo', metadata: { cc_stable_identity: stableIdentity } }),
+    ]));
+    const { res, replacements } = await runActiveAccountRoute({ intentState: 'reconciling', stripeClient: stripe });
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ state: 'manual_review', has_account: false });
+    expect(replacements.attempts).toHaveLength(1);
+    expect(replacements.attempts[0]).toMatchObject({ outcome: 'reconcile_multiple_matches', providerAccountId: 'acct_duplicateone', evidence: { match_count: 2 } });
+    expect(replacements.states).toContainEqual(expect.objectContaining({ state: 'manual_review' }));
+    expect(replacements.scopes).toHaveLength(0);
+    expect(stripe.calls.create).toBe(0);
+  });
+
+  test('mapped provider identity rejects wrong tenant, instructor, mode, type, configuration, and stable identity', () => {
     const exact = account({ metadata: {
       cc_connect_intent_id: '11111111-1111-4111-8111-111111111111',
       cc_school_id: '1', cc_instructor_id: '11',
@@ -140,6 +313,45 @@ test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
     } });
     expect(routes.validateProviderAccount(exact, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toBe(exact);
     expect(() => routes.validateProviderAccount({ ...exact, metadata: { ...exact.metadata, cc_school_id: '2' } }, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toThrow('Stripe account ownership metadata does not match');
+    expect(() => routes.validateProviderAccount({ ...exact, metadata: { ...exact.metadata, cc_instructor_id: '12' } }, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toThrow('Stripe account ownership metadata does not match');
+    expect(() => routes.validateProviderAccount({ ...exact, metadata: { ...exact.metadata, cc_stable_identity: 'cc:connect-v2:1:12:test:recipient' } }, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toThrow('Stripe account ownership metadata does not match');
+    expect(() => routes.validateProviderAccount({ ...exact, livemode: true }, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toThrow('Stripe account mode does not match');
+    expect(() => routes.validateProviderAccount({ ...exact, object: 'account' }, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toThrow('Stripe returned an invalid account response');
+    expect(() => routes.validateProviderAccount({ ...exact, applied_configurations: ['customer'] }, { schoolId: 1, instructorId: 11, mode: 'test', expectedAccountId: exact.id, expectedIntentId: '11111111-1111-4111-8111-111111111111' })).toThrow('Stripe account is not a recipient with Express dashboard access');
+  });
+
+  test('ambiguous intent remains reconciling and cannot create a replacement when no match exists', async () => {
+    expect(core.classifyCreationOutcome({ retryable: true })).toBe('provider_ambiguous');
+    expect(core.classifyCreationOutcome({ retryable: false })).toBe('provider_failed_confirmed');
+    const stripe = paginatedAccountsClient(reconciliationPage([]));
+    const { res, replacements } = await runActiveAccountRoute({ intentState: 'reconciling', stripeClient: stripe });
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ state: 'reconciling', has_account: false });
+    expect(replacements.attempts[0]).toMatchObject({ outcome: 'reconcile_no_match', evidence: { match_count: 0 } });
+    expect(replacements.scopes).toHaveLength(0);
+    expect(stripe.calls.create).toBe(0);
+  });
+
+  test('planned intent still creates once when there was no ambiguous provider result', async () => {
+    let createCalls = 0;
+    let listCalls = 0;
+    const stripe = {
+      v2: { core: { accounts: {
+        list: async () => { listCalls += 1; throw new Error('planned creation must not reconcile'); },
+        create: async (params, options) => {
+          createCalls += 1;
+          expect(options.idempotencyKey).toBe(core.makeCreationCommand({ schoolId: 1, instructorId: 11, mode: 'test', intentId: '11111111-1111-4111-8111-111111111111' }).idempotencyKey);
+          return account({ id: 'acct_freshcreation', metadata: params.metadata });
+        },
+      } } },
+    };
+    const { res, replacements } = await runActiveAccountRoute({ intentState: 'planned', stripeClient: stripe });
+    expect(res.statusCode).toBe(201);
+    expect(res.body).toMatchObject({ state: 'created', has_account: true });
+    expect(createCalls).toBe(1);
+    expect(listCalls).toBe(0);
+    expect(replacements.attempts[0]).toMatchObject({ outcome: 'provider_succeeded', providerAccountId: 'acct_freshcreation' });
+    expect(replacements.states).toContainEqual(expect.objectContaining({ state: 'succeeded', providerAccountId: 'acct_freshcreation' }));
   });
 
   test('readiness rejects tenant, owner, identity, configuration, dashboard, mode, agreement and stale evidence mismatches', () => {

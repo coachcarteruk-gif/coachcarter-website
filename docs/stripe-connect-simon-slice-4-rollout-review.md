@@ -548,3 +548,47 @@ LF-normalised hashes remained exact. A read-only status pass found 25
 registered worktrees: this attempt contained only the two documentation edits,
 the pre-existing `C:\Users\Fraser\.codex\worktrees\cc5f\coachcarter-website-main`
 retained 14 existing status entries, and every other worktree was clean.
+
+## Accounts v2 reconciliation pagination repair review - 10 August 2026
+
+The reviewed repair starts from exact `origin/main`
+`8feeac6f0bed30015a0cd4685b95eb2f076f4dc8`. Before code work, the protected
+LF-normalised hashes remained exact before code work and before publication:
+product
+`79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+and technical plan
+`64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+
+Stripe's current Accounts v2 response supplies nullable `next_page_url` and
+opaque `page` tokens. With pinned `stripe@22.4.0`, reconciliation now requests
+`limit: 20` and uses the SDK's public `rawRequest` interface for each validated
+provider-returned next URL. Every URL must remain the Accounts v2 list path,
+retain only the recipient filter, carry one non-empty opaque page token, and
+request a positive limit no greater than 20. Response pages, Accounts v2
+objects, IDs, and metadata shape are checked; repeated page tokens or account
+IDs, unexpected parameters/objects, oversized pages, provider errors, and a
+500-page safety ceiling all fail closed as incomplete reconciliation.
+
+The durable intent state machine is unchanged. `submitting`/`reconciling`
+requests scan only and cannot create; zero matches remain `reconciling`; one
+match must still satisfy exact stable identity, intent, school, instructor,
+mode, recipient configuration, and Express dashboard validation; and multiple
+matches enter `manual_review` without arbitrary selection. Only a genuinely
+`planned` intent retains the existing one-time idempotent create path.
+
+Local evidence passed focused route/state-machine tests `22/22`, focused
+installed-Chrome UI tests `2/2`, syntax `204/204`, C1 `276/276`, canonical
+launch schema `14/14`, migration-035 guards `9/9` under temporary LF
+normalisation with original checkout SHA
+`f1297ae03e9329d986252a73f09889401a707b85c9ef68d60c97e1ed1e2c1709`
+restored exactly, and the broader affected non-integration superset `608/608`
+across 65 Stripe/auth/tenant/booking/credit/refund/payout/webhook/Connect
+files. Tests used mocks and local browser execution only, with no staging,
+database, or provider credentials.
+
+No schema defect was demonstrated, so migration 041 and the aggregate remain
+unchanged. No provider, Neon, Vercel, staging, retained-account, gate,
+destination, production, Slice 3, Slice 5, or money action occurred. Status is
+`STAGING_ACCEPTANCE_STOPPED_REPAIR_REVIEWED_PENDING_MERGE`; merge and any later
+staging resumption require separate authority, and unresolved reconciliation
+must never create a replacement account.
