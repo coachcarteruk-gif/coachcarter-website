@@ -4,29 +4,33 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
-POST-MERGE INACTIVE VERIFIED — SLICE 4 RECONCILIATION CHECKPOINT STOPPED BY
-STAGING DEPLOYMENT PROTECTION AND DISABLED — PRODUCTION
-ACTIVATION NOT APPROVED — SLICE 5 NOT AUTHORISED**
+POST-MERGE INACTIVE VERIFIED — SLICE 4 RESUME STOPPED AT PROTECTED
+PRODUCT-SPECIFICATION HASH MISMATCH AND DISABLED — PRODUCTION ACTIVATION NOT
+APPROVED — SLICE 5 NOT AUTHORISED**
 
 **Last updated:** 10 August 2026
 
 **Verified source baseline:** remote `main` at
-`e0acd83ba1fcf8bcfc2516359dd42d72b546115d`
+`a90acfd5243b1dc3501a0e86a79d9aa8dbbff8a6`
 
-**Current blocker:** The owner explicitly authorised rotation of only the
-isolated staging JWT and one no-retry Simon reconciliation request. The JWT was
-rotated successfully and retained Sensitive, but the sole request returned
-Vercel HTTP `401` `Protected deployment` before the CoachCarter application or
-Stripe ran. No second request is authorised. Synthetic Simon still has exactly
-one retained test account under the original stable identity while its durable
-staging intent remains `reconciling`, unmapped, and unretried. Every staging
-operation/global/school gate is false, the retained test event destination
-remains disabled, and the live gate is absent. Production remains unchanged
-and inactive. A later attempt needs separate explicit authority and an
-authenticated Vercel transport such as a prevalidated `vercel curl` path; its
-first Stripe action must reconcile only the preserved original identity and
-must never create a replacement. Slice 3 production activation remains
-unapproved and Slice 5 remains unauthorised.
+**Current blocker:** The post-PR #365 resume stopped during read-only source
+preflight because the protected product specification's current LF-normalised
+SHA-256 is
+`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585`,
+not the living log's approved
+`79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`.
+The protected technical plan still matches its approved hash. PR #366 changed
+the protected product document, but the current source and handover do not
+contain the explicit product-document review and replacement approved hash
+required by this log. The operator therefore stopped before transport testing,
+JWT rotation, gate enablement, the Simon POST, or any Stripe action. Synthetic
+Simon remains `reconciling`, unmapped, and unretried under the original stable
+identity. Every staging operation/global/school gate is false, the retained
+test event destination remains untouched and disabled, and the live gate is
+absent. Production remains unchanged and inactive. Resumption requires an
+explicit product-document review that resolves the protected hash mismatch;
+the no-retry and no-replacement constraints continue to apply. Slice 3
+production activation remains unapproved and Slice 5 remains unauthorised.
 
 ## 1. Title and purpose
 
@@ -4401,3 +4405,76 @@ not be retried.
   retry is authorised. A later attempt requires separate explicit authority
   and a prevalidated Vercel-authenticated transport; it must still submit only
   one reconciliation request and never create a replacement Simon account.
+
+## 10 August 2026 — post-PR #365 resume stopped at protected product hash
+
+- Started from fresh remote `main`
+  `a90acfd5243b1dc3501a0e86a79d9aa8dbbff8a6` in isolated worktree
+  `C:\tmp\coachcarter-simon-slice4-reconciliation-resume` on branch
+  `codex/simon-slice4-reconciliation-resume`. This source descends from merged
+  PR #365 (`9ca1e5e6b34dda693298923e153433f98db2e994`); PR #365's recorded checks
+  passed. Current `main` also includes later merged PRs #366 and #367.
+- Read every mandated repository and launch document before provider or
+  application action. The current source's LF-normalised protected hashes are:
+  product specification
+  `B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585`;
+  technical implementation plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+  The product hash does not match this log's approved
+  `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`.
+  Repository history attributes the protected product-document change to PR
+  #366. No replacement approved hash or explicit product-document review was
+  found in the current source. The living log explicitly requires a stop on
+  either protected-document hash changing, so this was a hard preflight stop.
+- Static code review confirmed that a `submitting` or `reconciling` intent
+  enters reconciliation/listing and returns before the Accounts v2 create
+  branch. Focused readiness tests pin the no-replacement contract and passed
+  `38/38`. Syntax checks passed for `206` JavaScript files, and the C1 scan
+  passed across `278` files. The prior checkpoint's full `615/615` regression
+  remains the latest full-suite evidence; this stopped resume did not rerun the
+  full matrix after the protected-document mismatch was found.
+- Vercel preflight matched the isolated staging project
+  `coachcarteruk-2599s-projects/cc-simon-s4-staging-02`, project ID
+  `prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, custom staging environment ID
+  `env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, and alias
+  `cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+  Retained disabled deployment `dpl_F657tCmJdCbfwsjbdEMmsQaf5fgy` is `READY`.
+  It remains the previous checkpoint's exact-source disabled deployment; no
+  fresh current-source deployment was produced because the source-integrity
+  prerequisite failed first.
+- Read-only named-variable verification against only the non-secret controls
+  proved all six staging operation/global gates exactly `false`,
+  `STRIPE_MODE=test`, and the live gate absent. Production has zero environment
+  variables. The broad environment pull was not used because it could expose
+  unrelated secrets. The school `1` Slice 4 Boolean is `false`. No gate or
+  environment value was changed, so shutdown was already in its required
+  disabled state and no shutdown deployment was necessary or authorised after
+  the preflight stop.
+- Read-only Neon postflight matched project `shiny-bonus-66942766`, branch
+  `br-dark-recipe-zarmjbix`, database `neondb`, school `1` CoachCarter Driving
+  School (`coachcarter`), and synthetic Simon instructor `3`. Simon's intent is
+  `3c2349a0-1696-4b57-b732-fc14bbde57df`, state `reconciling`, stable identity
+  `cc:connect-v2:1:3:test:recipient`, mode `test`, with no provider mapping or
+  scope. Exactly one retained attempt exists: attempt `1`, outcome
+  `provider_ambiguous`, error class `network`; Simon has scope `0` and
+  observations `0`. Fraser remains scope `1` and observation `1`.
+- Final database counts remain: intents `2`, attempts `2`, link events `0`,
+  scopes `1`, observations `1`, agreements `1`, lesson payment contracts `4`,
+  payout runs `0`, refund intents `0`, refund events `0`, launch earnings `0`,
+  launch transfer intents `0`, payout transfers `0`, payout transfer attempts
+  `0`, cutover configs `0`, cutover shadow cycles `0`, cutover readiness rows
+  `0`, and cutover events `0`. Slice 3 `simon_launch_v1` remains `shadow`, not
+  activated, and not paused. Because no write or operational request occurred,
+  database before/after state is unchanged and there was no account, user,
+  payment, refund, earning, payout, transfer, cutover, Slice 3, Slice 5, or
+  Production mutation.
+- Exact Simon reconciliation request count in this resume: **zero**. HTTP and
+  application outcome: **not attempted**, because the protected-hash guard
+  failed before the harmless transport GET. Stripe actions performed: **none**;
+  there was no list/reconciliation call and no Accounts v2 create call. The
+  staging JWT was not rotated, generated, read, printed, or persisted. The
+  retained disabled Stripe event destination was not queried or changed.
+- Final status:
+  `STAGING_RESUME_STOPPED_PROTECTED_PRODUCT_HASH_MISMATCH_DISABLED`. Resumption
+  requires explicit owner review of the protected product-document change and
+  approved integrity evidence. No retry or workaround was attempted.
