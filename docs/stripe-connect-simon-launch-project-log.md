@@ -4,33 +4,30 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
-POST-MERGE INACTIVE VERIFIED — SLICE 4 RESUME STOPPED AT PROTECTED
-PRODUCT-SPECIFICATION HASH MISMATCH AND DISABLED — PRODUCTION ACTIVATION NOT
-APPROVED — SLICE 5 NOT AUTHORISED**
+POST-MERGE INACTIVE VERIFIED — SLICE 4 PRODUCT-SPECIFICATION HASH REVIEWED AND
+REBASELINED, RECONCILIATION REMAINS STOPPED AND DISABLED — PRODUCTION
+ACTIVATION NOT APPROVED — SLICE 5 NOT AUTHORISED**
 
 **Last updated:** 10 August 2026
 
 **Verified source baseline:** remote `main` at
-`a90acfd5243b1dc3501a0e86a79d9aa8dbbff8a6`
+`5014d73f1a6776fb0735a57b2fdb840df8123649`
 
-**Current blocker:** The post-PR #365 resume stopped during read-only source
-preflight because the protected product specification's current LF-normalised
-SHA-256 is
-`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585`,
-not the living log's approved
-`79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4`.
-The protected technical plan still matches its approved hash. PR #366 changed
-the protected product document, but the current source and handover do not
-contain the explicit product-document review and replacement approved hash
-required by this log. The operator therefore stopped before transport testing,
-JWT rotation, gate enablement, the Simon POST, or any Stripe action. Synthetic
-Simon remains `reconciling`, unmapped, and unretried under the original stable
-identity. Every staging operation/global/school gate is false, the retained
-test event destination remains untouched and disabled, and the live gate is
-absent. Production remains unchanged and inactive. Resumption requires an
-explicit product-document review that resolves the protected hash mismatch;
-the no-retry and no-replacement constraints continue to apply. Slice 3
-production activation remains unapproved and Slice 5 remains unauthorised.
+**Current hold:** On 10 August 2026 the owner explicitly confirmed that the PR
+#366 product-specification changes had been reviewed and approved, including
+the cross-instructor rescheduling policy, and approved LF-normalised SHA-256
+`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` as the
+new protected product-specification baseline. The technical-plan hash remains
+unchanged and approved. This resolves the protected-document integrity blocker
+recorded by merged PR #368; it does not itself authorise a staging resume.
+Synthetic Simon remains `reconciling`, unmapped, and unretried under the
+original stable identity. Every staging operation/global/school gate remains
+false, the retained test event destination remains untouched and disabled, and
+the live gate remains absent. Production remains unchanged and inactive. A
+freshly scoped operational authorisation is required before transport testing,
+JWT rotation, gate enablement, or the single Simon reconciliation request. The
+no-retry and no-replacement constraints continue to apply. Slice 3 production
+activation remains unapproved and Slice 5 remains unauthorised.
 
 ## 1. Title and purpose
 
@@ -89,13 +86,15 @@ The source hierarchy is:
 
 ### Protected-document integrity
 
-Both protected documents were reverified on 3 August 2026 using UTF-8 bytes
-after normalising CRLF and lone CR line endings to LF. They matched the supplied
-SHA-256 values exactly:
+The protected documents are verified using UTF-8 bytes after normalising CRLF
+and lone CR line endings to LF. The technical implementation plan retained its
+3 August 2026 approved hash. On 10 August 2026 the owner explicitly reviewed
+and approved the PR #366 product-specification changes and adopted the current
+product hash as the replacement protected baseline:
 
 | Protected document | LF-normalised SHA-256 |
 |---|---|
-| Product specification | `79778382071613EFBB9DEC4E17F135A63C9F8D8B3010D921882D7ED631530DD4` |
+| Product specification | `B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` |
 | Technical implementation plan | `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916` |
 
 Do not modify either protected document during repair or shadow-exercise work.
@@ -4478,3 +4477,30 @@ not be retried.
   `STAGING_RESUME_STOPPED_PROTECTED_PRODUCT_HASH_MISMATCH_DISABLED`. Resumption
   requires explicit owner review of the protected product-document change and
   approved integrity evidence. No retry or workaround was attempted.
+
+## 10 August 2026 — owner-approved protected product hash rebaseline
+
+- After PR #368 merged as
+  `5014d73f1a6776fb0735a57b2fdb840df8123649`, the owner explicitly confirmed
+  that the PR #366 protected product-specification changes had been reviewed
+  and approved, including the cross-instructor rescheduling policy.
+- The owner explicitly approved LF-normalised SHA-256
+  `B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` as the
+  replacement protected baseline. A fresh byte-level verification on exact
+  merged `main` reproduced that value. The protected technical implementation
+  plan independently reproduced its unchanged approved hash
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- This rebaseline resolves only the product-document integrity stop. It does
+  not retrospectively turn the stopped resume into an attempted reconciliation
+  and does not grant new operational authority. Historical entries retain the
+  old hash and the exact reason that the earlier session stopped.
+- No Vercel, Neon, application, Stripe, authentication, configuration, gate,
+  school, account, user, payment, refund, earning, payout, transfer, cutover,
+  Slice 3, Slice 5, or Production action was performed for this docs-only
+  rebaseline. The last verified disabled staging and database state recorded by
+  PR #368 remains the operational handover state.
+- Current status:
+  `PRODUCT_SPEC_HASH_APPROVED_REBASELINED_RECONCILIATION_STOPPED_DISABLED`.
+  Any future resume requires newly explicit operational authority and must
+  begin from fresh `main`, repeat every preflight guard, preserve the original
+  Simon identity, and retain the one-request/no-retry/no-replacement controls.
