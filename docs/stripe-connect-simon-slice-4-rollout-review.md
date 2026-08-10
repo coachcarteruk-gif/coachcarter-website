@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; STAGING_RESUME_STOPPED_PROTECTED_PRODUCT_HASH_MISMATCH_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; PRODUCT_SPEC_HASH_APPROVED_REBASELINED; RECONCILIATION_STOPPED_DISABLED`
 Prepared: 9 August 2026; updated 10 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -810,3 +810,34 @@ Final status is
 requires explicit owner review resolving the protected product-document hash;
 the existing no-retry, preserved-identity, and no-replacement-create controls
 remain binding.
+
+## Owner-approved protected hash rebaseline — 10 August 2026
+
+After docs-only PR #368 merged as
+`5014d73f1a6776fb0735a57b2fdb840df8123649`, the owner explicitly confirmed
+that the protected product-specification changes from PR #366 had been reviewed
+and approved, including the cross-instructor rescheduling policy. The owner
+approved LF-normalised SHA-256
+`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` as the
+replacement protected product-specification baseline.
+
+Fresh byte-level verification on merged `main` reproduced that product hash.
+The protected technical implementation plan remains unchanged at its approved
+LF-normalised SHA-256
+`64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+Historical entries retain the former product hash and the earlier hard stop;
+this entry supersedes only the current integrity blocker.
+
+This approval does not authorise or imply an operational retry. No harmless
+transport GET, JWT rotation, gate or school-flag change, authenticated Simon
+POST, application request, Stripe action, Vercel deployment, database write,
+account/user action, payment, refund, earning, payout, transfer, cutover, Slice
+3, Slice 5, or Production action occurred during this docs-only rebaseline. The
+last verified disabled staging and database state recorded by PR #368 remains
+current.
+
+Status is now
+`PRODUCT_SPEC_HASH_APPROVED_REBASELINED_RECONCILIATION_STOPPED_DISABLED`.
+A future resume requires newly explicit operational authority and must retain
+all preflight, preserved-identity, one-request, no-retry, shutdown, and
+no-replacement-create controls.
