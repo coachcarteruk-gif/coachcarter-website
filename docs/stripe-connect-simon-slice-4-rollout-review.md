@@ -1,7 +1,7 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; STAGING_ACCEPTANCE_STOPPED`
-Prepared: 9 August 2026
+Status: `MERGED_DEPLOYED_INACTIVE; STAGING_ATTEMPT_3_STOPPED_RECONCILIATION_LIST_LIMIT_DISABLED`
+Prepared: 9 August 2026; updated 10 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
 
@@ -17,6 +17,17 @@ Staging acceptance attempt 2: 9 August 2026 on
 This attempt also stopped before configuration or Accounts v2 provider use:
 Vercel classified an explicitly requested `--target preview` first deployment
 as `production` and assigned project aliases.
+
+Staging acceptance attempt 3: 10 August 2026 on
+`codex/simon-slice4-staging-acceptance-3`, exact source and then-current
+`origin/main` `7bea1fbc3cd05b0fabadfed28956c7c83dbf2bbb` (merged PR #361).
+The custom Vercel environment was proven Preview and enabled a partial real
+Stripe test exercise. Fraser creation succeeded singularly; Simon's injected
+ambiguous result produced one singular account, but merged reconciliation
+failed because it requests `limit: 100` while Stripe permits at most `20`.
+All staging gates and the school flag are false, the destination is disabled,
+and no remaining acceptance case is approved until that code defect is fixed
+and the original Simon identity is reconciled without replacement.
 
 ## Authority and non-actions
 
@@ -415,3 +426,125 @@ selection. It requires either a provider-side project/environment setup that
 can be read-only proven Preview before source upload, or a different explicitly
 approved isolated non-production host. Production, Slice 3 activation, and
 Slice 5 remain outside authority.
+
+## Slice 4 staging acceptance attempt 3 - stopped 10 August 2026
+
+Attempt 3 used fresh worktree
+`C:\tmp\coachcarter-simon-slice4-staging-acceptance-3` and branch
+`codex/simon-slice4-staging-acceptance-3`. Fetched `origin/main`, worktree
+`HEAD`, and the requested source all resolved to
+`7bea1fbc3cd05b0fabadfed28956c7c83dbf2bbb` before action. The protected
+LF-normalised SHA-256 values were reverified as
+`79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+and `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+
+Read-only Neon preflight at `2026-08-10T05:38:20.250Z` proved retained branch
+`br-dark-recipe-zarmjbix` belongs to project `shiny-bonus-66942766`, database
+`neondb`, compute `ep-wandering-field-zadlm6r7`; it is non-primary,
+non-default, unprotected, and migration 041 was already present. Public-schema
+prerequisites and zero conflicting owner mappings passed. Synthetic Fraser
+instructor `2`, Simon instructor `3`, and superadmin `2` were the only exercise
+identities. Both instructors were active, unpaused, and had no legacy Connect
+mapping. School `1` had the Slice 4 gate false and payout engine `v1`; Slice 3
+was unactivated `shadow`; all inspected payout, refund, earning, transfer, and
+cutover ledgers were empty. Migration 041 was neither reapplied nor rolled
+back.
+
+The isolated Vercel resource was project
+`prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, name `cc-simon-s4-staging-02`, team
+`team_DXEEAusHmjcfcr6auPjqloL0`. Custom environment `staging`, ID
+`env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, was provider-proven type `preview` with no
+domains. Vercel does not accept `--skip-domain` with preview/custom targets;
+the approved supported command was `npx.cmd --yes vercel@latest deploy
+--target staging --yes --scope coachcarteruk-2599s-projects --json`. Only the
+automatic staging alias
+`cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`
+was used. Production retained zero variables, the live gate stayed absent,
+and no production alias or domain was used.
+
+Configuration was limited to the disposable Neon URL, a staging JWT secret,
+`STRIPE_MODE=test`, staging base URL, the six reviewed Slice 4 gates, a test
+webhook secret, and the approved `sk_test_...` fallback because no restricted
+test key was available. The first generated JWT value was detected as an
+unavailable placeholder and replaced before any deployment. A later exact
+capture briefly made the replacement non-sensitive and immediately restored
+it to Sensitive before deployment; it was never printed. The final clean
+provider-action deployment was `dpl_BroKjPNuJCCNss4fAiZ1MB9BBvyS`, `READY`,
+exact source SHA, `gitDirty=NULL`, custom environment `staging`. Retained
+deployment `dpl_7Jfin7m2FxdRbGcezyrwALYu8hfU` contains an untracked,
+non-routed, secret-free harness and has a dirty source marker; no provider
+account or event action occurred until the harness was removed and the clean
+deployment was ready.
+
+Dedicated Stripe test thin-event destination
+`ed_test_61VCA8bFOvczEINoS16TV2QrP1E9xyoubgu5pnVoOD8a`, name
+`cc-simon-s4-acceptance-3-20260810`, was created at
+`2026-08-10T05:55:25.006Z`, `livemode=false`, `events_from=["@self"]`, with
+only the reviewed eight Accounts v2 event types and the staging webhook URL.
+It received no exercised delivery before the hard stop. It was disabled, not
+deleted, at `2026-08-10T06:05:04.127Z`; final retrieval preserved its exact
+test-mode event contract.
+
+Fraser's one authenticated creation produced durable intent
+`6a617fd1-e59e-461b-94cc-61428454cbad`, stable identity
+`cc:connect-v2:1:2:test:recipient`, and exactly one test account
+`acct_1U2mEuEzBBwP0X12`. Attempt 1 was provider-succeeded under request
+`req_v2OdAMYJPICVTmYnh` at `2026-08-10T05:59:17.869Z`. Scope `1` and the
+single `api.account_created` observation were persisted. Provider retrieval
+proved Accounts v2 recipient, Express dashboard, GB identity, application
+fee/loss responsibility, `livemode=false`, and transfer capability restricted
+pending onboarding.
+
+Simon's ambiguity harness proved zero prior matches, submitted Accounts v2
+creation exactly once, retained provider account `acct_1U2mHvIGQey1BnGx`,
+then injected a timeout after provider success. Intent
+`3c2349a0-1696-4b57-b732-fc14bbde57df`, stable identity
+`cc:connect-v2:1:3:test:recipient`, remains `reconciling`; attempt 1 is
+`provider_ambiguous`, code `ETIMEDOUT`, request
+`req_v2jEH4nkzkb9KTgyP`, at `2026-08-10T06:02:24.197Z`. The next handler call
+used a create method that could only count and throw and recorded zero
+replacement-create calls. Reconciliation then failed before a second attempt
+or scope because merged `findReconciliationMatches` requests
+`accounts.list({limit:100})`; direct read-only reproduction returned `Limit
+cannot be greater than 20`. Final provider listing proves exactly one Simon
+stable-identity account. The mandatory hard stop fired: no retry, workaround,
+manual mapping, onboarding, agreement, event delivery, or money action
+followed.
+
+Shutdown set all five staging operation gates false, then the staging global
+gate false; set school `1`'s gate false at `2026-08-10T06:04:46.720Z`; and
+disabled the dedicated destination. Final clean disabled deployment
+`dpl_7GtYzEowSXzUVNddpf5VbMPEwJpu` is `READY`, exact source SHA,
+`gitDirty=NULL`, environment `staging`, and only the staging alias. Pulled
+configuration proved every reviewed gate literally false and the live gate
+absent. Authenticated runtime status returned `global_gate_inactive` and
+`school_gate_inactive`.
+
+Database postflight at `2026-08-10T06:08:03.657Z` proved zero duplicate
+owners, one Fraser scope/observation, no onboarding links or synthetic
+agreements, and Simon's singular unmapped reconciling identity. Instructors
+remain active, unpaused, and without legacy mappings. Payout engine `v1`,
+Slice 3 unactivated `shadow`, four lesson payment contracts, and all inspected
+zero money/cutover counts match preflight. Syntax passed `204/204`, C1
+`276/276`, focused Slice 4 passed `15/15`, canonical schema passed `14/14`,
+migration-035 guards passed `9/9` with checkout bytes restored exactly, and
+the broader current affected superset passed `570/570` across 62 files. No
+test used staging provider or database credentials.
+
+Attempt 3 status is
+`STAGING_ACCEPTANCE_STOPPED_RECONCILIATION_LIST_LIMIT_DISABLED`. Hosted
+onboarding/link rejection, Express dashboard, signed-event delivery and
+ordering/regression/current-state, and agreement lifecycle/readiness cases
+remain unexecuted. Resume requires a separately reviewed code fix for supported
+Accounts v2 list pagination. Its first provider action must reconcile the
+preserved Simon intent and `acct_1U2mHvIGQey1BnGx`; it must never create a
+replacement. Production was not touched, Slice 3 was not activated, and Slice
+5 was not started.
+
+Final local cleanup removed only the two external, secret-free harness files,
+the exact staging environment export, and the worktree `.env.local`; all were
+verified absent and no provider/database evidence was deleted. Protected
+LF-normalised hashes remained exact. A read-only status pass found 25
+registered worktrees: this attempt contained only the two documentation edits,
+the pre-existing `C:\Users\Fraser\.codex\worktrees\cc5f\coachcarter-website-main`
+retained 14 existing status entries, and every other worktree was clean.
