@@ -4178,3 +4178,54 @@ not be retried.
   changes and the pre-existing user worktree
   `C:\Users\Fraser\.codex\worktrees\cc5f\coachcarter-website-main` retained
   its 14 existing status entries; every other worktree was clean.
+
+### 10 August 2026 - Slice 4 Accounts v2 reconciliation pagination repair reviewed
+
+- Verified fetched `origin/main` was still exact required commit
+  `8feeac6f0bed30015a0cd4685b95eb2f076f4dc8`, including merged PR #362,
+  before creating isolated branch
+  `codex/slice4-accounts-v2-pagination-repair` in a fresh worktree. Every
+  pre-existing worktree and user change remained untouched.
+- Reverified the protected LF-normalised SHA-256 values before code work and
+  again before publication:
+  product specification
+  `79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+  and technical plan
+  `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+- Reviewed Stripe's current Accounts v2 list contract and pinned
+  `stripe@22.4.0`. The repair requests recipient pages at `limit: 20`, then
+  follows Stripe's opaque `next_page_url` through the SDK's public
+  `rawRequest` interface. It validates the exact Accounts v2 path, recipient
+  filter, positive limit no greater than 20, singular opaque page token,
+  response shape, account object/ID/metadata shape, and non-repeated page
+  tokens/account IDs. A 500-page traversal ceiling prevents unbounded unique
+  malformed pagination; reaching it remains unresolved and fails closed.
+- Existing reconciliation and creation semantics remain intact. Zero matches
+  keeps the durable intent `reconciling`; one stable-identity match still must
+  pass the existing account-object, intent, school, instructor, mode,
+  recipient, and Express validation before mapping; multiple matches retain
+  the existing `manual_review` stop. Provider failures, malformed or cyclic
+  pagination, changed filters, oversized pages, duplicate accounts, and
+  unexpected objects cannot select or create an account. A `planned` intent
+  retains its original single idempotent create behavior; `submitting` or
+  `reconciling` never enters that create path.
+- Deterministic local verification passed focused route/state-machine tests
+  `22/22`, focused installed-Chrome UI tests `2/2`, syntax `204/204`, C1
+  `276/276`, canonical launch schema `14/14`, and migration-035 byte/rollout
+  guards `9/9` under temporary LF normalisation. The original migration
+  checkout SHA
+  `f1297ae03e9329d986252a73f09889401a707b85c9ef68d60c97e1ed1e2c1709`
+  was restored exactly. The broader non-integration Stripe/auth/tenant/
+  booking/credit/refund/payout/webhook/Connect superset passed `608/608`
+  across 65 files. No test used staging/provider/database credentials.
+- No schema contradiction was found. Migration 041, the aggregate migration,
+  account creation/onboarding/agreement/webhook/payout/refund/payment/earnings/
+  transfer/cutover behavior, gates, destinations, retained accounts, staging
+  database, and production resources were not changed or accessed. Slice 3
+  remains inactive and Slice 5 was not started.
+- Status remains
+  `STAGING_ACCEPTANCE_STOPPED_REPAIR_REVIEWED_PENDING_MERGE`. This code-and-test
+  repair does not resume acceptance. After merge, any staging resumption and
+  first provider reconciliation require separate explicit authority; the
+  preserved ambiguous intent must never create a replacement account while
+  reconciliation is unresolved.
