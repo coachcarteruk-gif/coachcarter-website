@@ -72,11 +72,13 @@ test('social video discount is instructor opt-in and booking-snapshotted', () =>
 
   expect(profile).toContain('COALESCE(social_video_opt_in, false) AS social_video_opt_in');
   expect(profile).toContain('social_video_opt_in = COALESCE(${socialVideoVal}, social_video_opt_in)');
+  const instructorRescheduleRead = functionBody(profile, 'loadManagedInstructorRescheduleBooking');
+  expect(instructorRescheduleRead).toContain('COALESCE(lb.social_video_consent, false) AS social_video_consent');
+  expect(instructorRescheduleRead).toContain('COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed');
   const instructorReschedule = functionBody(profile, 'handleRescheduleBooking');
-  expect(instructorReschedule).toContain('COALESCE(lb.social_video_consent, false) AS social_video_consent');
-  expect(instructorReschedule).toContain('COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed');
-  expect(instructorReschedule).toContain('${!!booking.social_video_consent}');
-  expect(instructorReschedule).toContain('${!!booking.social_video_age_confirmed}');
+  expect(instructorReschedule).toContain('social_video_consent, social_video_age_confirmed, social_video_discount_pct');
+  expect(instructorReschedule).toContain('!!booking.social_video_consent');
+  expect(instructorReschedule).toContain('!!booking.social_video_age_confirmed');
 });
 
 test('learner modal exposes social video consent without sending prices', () => {

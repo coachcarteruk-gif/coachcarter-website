@@ -25,6 +25,7 @@
   let cancelBookingId = null;
   let notDeliveredBooking = null;
   let rescheduleBooking = null;
+  let rescheduleValidationSeq = 0;
   let addLessonLearners = [];
   let addLessonSelectedId = null;
   let addLessonSelectedBalanceMinutes = 0;
@@ -106,6 +107,11 @@
             <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:var(--muted)">Learner</span><span style="font-size:0.85rem;font-weight:600" id="ba-resch-learner"> - </span></div>
             <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:var(--muted)">Current</span><span style="font-size:0.85rem;text-decoration:line-through;color:var(--muted)" id="ba-resch-current"> - </span></div>
             <div style="margin-top:16px">
+              <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">Instructor</div>
+              <select id="ba-resch-instructor" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:var(--font-body);margin-bottom:8px;background:var(--white);color:var(--primary)" disabled>
+                <option>Loading instructors...</option>
+              </select>
+              <div id="ba-resch-transfer-note" style="font-size:0.78rem;color:var(--muted);margin:-2px 0 10px"></div>
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">New date</div>
               <input type="date" id="ba-resch-date" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:16px;margin-bottom:8px;background:var(--white);color:var(--primary)">
               <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px">New start time</div>
@@ -220,8 +226,10 @@
     // Reschedule: show end time and check conflicts on date/time change
     const rDate = document.getElementById('ba-resch-date');
     const rTime = document.getElementById('ba-resch-time');
+    const rInstructor = document.getElementById('ba-resch-instructor');
     if (rDate) rDate.addEventListener('change', _checkRescheduleConflict);
     if (rTime) rTime.addEventListener('change', _checkRescheduleConflict);
+    if (rInstructor) rInstructor.addEventListener('change', _checkRescheduleConflict);
   }
 
   // ─── Cancel ─────────────────────────────────────────────────────────────────
@@ -318,6 +326,7 @@
 
   function openReschedule(booking) {
     rescheduleBooking = booking;
+    rescheduleValidationSeq += 1;
     document.getElementById('ba-resch-learner').textContent = booking.learner_name || ' - ';
     const dateStr = new Date(booking.scheduled_date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
     document.getElementById('ba-resch-current').textContent = dateStr + ' ' + (booking.start_time || '').slice(0, 5) + '–' + (booking.end_time || '').slice(0, 5);
@@ -330,59 +339,112 @@
     document.getElementById('ba-resch-time').value = (booking.start_time || '09:00').slice(0, 5);
 
     document.getElementById('ba-resch-end').textContent = '';
-    document.getElementById('ba-resch-conflict').style.display = 'none';
-    document.getElementById('ba-reschedule-btn').disabled = false;
+    document.getElementById('ba-resch-conflict').textContent = 'Loading eligible instructors...';
+    document.getElementById('ba-resch-conflict').style.display = 'block';
+    document.getElementById('ba-resch-transfer-note').textContent = 'The learner keeps the same payment or credit entitlement and will not be charged again.';
+    const instructorSelect = document.getElementById('ba-resch-instructor');
+    instructorSelect.disabled = true;
+    instructorSelect.innerHTML = '<option>Loading instructors...</option>';
+    document.getElementById('ba-reschedule-btn').disabled = true;
     document.getElementById('ba-reschedule-btn').textContent = 'Move lesson';
     document.getElementById('ba-reschedule-modal').classList.add('open');
-    _checkRescheduleConflict();
+    _loadRescheduleInstructors();
+  }
+
+  async function _loadRescheduleInstructors() {
+    if (!rescheduleBooking) return;
+    const bookingId = rescheduleBooking.id;
+    const select = document.getElementById('ba-resch-instructor');
+    const conflictEl = document.getElementById('ba-resch-conflict');
+    try {
+      const res = await ccAuth.fetchAuthed('/api/instructor?action=reschedule-options&booking_id=' + encodeURIComponent(bookingId));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load instructors');
+      if (!rescheduleBooking || rescheduleBooking.id !== bookingId) return;
+
+      select.innerHTML = '';
+      (data.instructors || []).forEach(function (candidate) {
+        const option = document.createElement('option');
+        option.value = String(candidate.id);
+        option.textContent = candidate.name;
+        select.appendChild(option);
+      });
+      if (!select.options.length) throw new Error('No eligible instructors are available for this lesson type and transmission.');
+
+      rescheduleBooking.currentInstructorId = Number(data.current_instructor_id);
+      select.value = String(data.current_instructor_id);
+      if (!select.value) throw new Error('The current instructor is no longer active.');
+      select.disabled = !!data.is_reserved_weekly_slot;
+      if (data.is_reserved_weekly_slot) {
+        document.getElementById('ba-resch-transfer-note').textContent = 'Reserved Weekly Slot lessons stay with their current instructor under the existing move policy.';
+      }
+      await _checkRescheduleConflict();
+    } catch (err) {
+      if (!rescheduleBooking || rescheduleBooking.id !== bookingId) return;
+      select.disabled = true;
+      conflictEl.textContent = err.message || 'Failed to load instructors';
+      conflictEl.style.display = 'block';
+      document.getElementById('ba-reschedule-btn').disabled = true;
+    }
   }
 
   function closeReschedule() {
+    rescheduleValidationSeq += 1;
     document.getElementById('ba-reschedule-modal').classList.remove('open');
     rescheduleBooking = null;
   }
 
   async function _checkRescheduleConflict() {
     if (!rescheduleBooking) return;
+    const bookingId = rescheduleBooking.id;
     const newDate = document.getElementById('ba-resch-date').value;
     const newTime = document.getElementById('ba-resch-time').value;
+    const instructorId = Number(document.getElementById('ba-resch-instructor').value);
     const endEl = document.getElementById('ba-resch-end');
     const conflictEl = document.getElementById('ba-resch-conflict');
     const btn = document.getElementById('ba-reschedule-btn');
+    const note = document.getElementById('ba-resch-transfer-note');
+    const sequence = ++rescheduleValidationSeq;
 
-    if (!newDate || !newTime) { endEl.textContent = ''; conflictEl.style.display = 'none'; return; }
+    btn.disabled = true;
+    if (!newDate || !newTime || !Number.isInteger(instructorId) || instructorId <= 0) {
+      endEl.textContent = '';
+      conflictEl.textContent = 'Choose an instructor, date, and time.';
+      conflictEl.style.display = 'block';
+      return;
+    }
 
-    // Calculate and show end time
-    const durMins = rescheduleBooking.duration_minutes || 60;
-    const [h, m] = newTime.split(':').map(Number);
-    const endMins = h * 60 + m + durMins;
-    const endStr = String(Math.floor(endMins / 60)).padStart(2, '0') + ':' + String(endMins % 60).padStart(2, '0');
-    endEl.textContent = 'New time: ' + newTime + ' – ' + endStr;
-
-    // Check conflicts
+    conflictEl.textContent = 'Checking availability...';
+    conflictEl.style.color = 'var(--muted)';
+    conflictEl.style.display = 'block';
     try {
-      const res = await ccAuth.fetchAuthed('/api/instructor?action=schedule&start=' + newDate + '&end=' + newDate);
-      const data = await res.json();
-      const bookings = data.bookings || [];
-      const conflict = bookings.find(function (b) {
-        if (b.id === rescheduleBooking.id) return false;
-        if (b.status === 'refunded') return false;
-        const bStart = b.start_time.slice(0, 5);
-        const bEnd = b.end_time.slice(0, 5);
-        return newTime < bEnd && endStr > bStart;
+      const query = new URLSearchParams({
+        action: 'reschedule-availability',
+        booking_id: String(bookingId),
+        new_instructor_id: String(instructorId),
+        new_date: newDate,
+        new_start_time: newTime
       });
-      if (conflict) {
-        conflictEl.textContent = 'Conflicts with ' + (conflict.learner_name || 'a lesson') + ' at ' + conflict.start_time.slice(0, 5) + '–' + conflict.end_time.slice(0, 5);
-        conflictEl.style.display = 'block';
-        btn.disabled = true;
-      } else {
-        conflictEl.style.display = 'none';
-        btn.disabled = false;
-      }
-    } catch (e) {
-      // Silently fail conflict check - don't block reschedule
-      conflictEl.style.display = 'none';
+      const res = await ccAuth.fetchAuthed('/api/instructor?' + query.toString());
+      const data = await res.json();
+      if (sequence !== rescheduleValidationSeq || !rescheduleBooking || rescheduleBooking.id !== bookingId) return;
+      if (!res.ok || !data.available) throw new Error(data.error || 'That slot is not available.');
+
+      endEl.textContent = 'New time: ' + newTime + ' - ' + String(data.new_end_time || '').slice(0, 5);
+      conflictEl.textContent = 'Available - this will be checked again when you confirm.';
+      conflictEl.style.color = 'var(--green, #218739)';
       btn.disabled = false;
+      const changed = instructorId !== Number(rescheduleBooking.currentInstructorId);
+      note.textContent = changed
+        ? 'The learner will not be charged again. Their entitlement and the eventual payout will move to ' + data.instructor.name + '.'
+        : 'The learner keeps the same payment or credit entitlement and will not be charged again.';
+    } catch (err) {
+      if (sequence !== rescheduleValidationSeq || !rescheduleBooking || rescheduleBooking.id !== bookingId) return;
+      endEl.textContent = '';
+      conflictEl.textContent = err.message || 'Could not verify that slot.';
+      conflictEl.style.color = 'var(--red)';
+      conflictEl.style.display = 'block';
+      btn.disabled = true;
     }
   }
 
@@ -390,7 +452,8 @@
     if (!rescheduleBooking) return;
     const newDate = document.getElementById('ba-resch-date').value;
     const newTime = document.getElementById('ba-resch-time').value;
-    if (!newDate || !newTime) { _showToast('Please select a date and time', 'error'); return; }
+    const newInstructorId = Number(document.getElementById('ba-resch-instructor').value);
+    if (!newDate || !newTime || !Number.isInteger(newInstructorId)) { _showToast('Please select an instructor, date and time', 'error'); return; }
 
     const btn = document.getElementById('ba-reschedule-btn');
     btn.disabled = true;
@@ -399,13 +462,13 @@
       const res = await ccAuth.fetchAuthed('/api/instructor?action=reschedule-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ booking_id: rescheduleBooking.id, new_date: newDate, new_start_time: newTime })
+        body: JSON.stringify({ booking_id: rescheduleBooking.id, new_date: newDate, new_start_time: newTime, new_instructor_id: newInstructorId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reschedule');
       if (_onCacheUpdate) _onCacheUpdate(rescheduleBooking.id, 'status', 'refunded');
       closeReschedule();
-      _showToast('Lesson rescheduled - learner notified', 'success');
+      _showToast(data.message || 'Lesson rescheduled - learner notified', 'success');
       _onRefresh();
     } catch (err) {
       _showToast(err.message || 'Failed to reschedule', 'error');

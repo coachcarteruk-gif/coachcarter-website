@@ -74,7 +74,7 @@ const ENABLED = process.env.CC_TEST_DB === '1' && !!process.env.POSTGRES_URL_TES
 test.describe.configure({ mode: 'serial' });
 
 const SCHOOL_ID = 1;
-const TARGET_INSTRUCTOR_ID = 4;
+const TARGET_INSTRUCTOR_ID = parseInt(process.env.CC_TEST_INSTRUCTOR_ID || '4', 10);
 
 let sql;
 let retroHandler;
