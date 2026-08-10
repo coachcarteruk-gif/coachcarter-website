@@ -1811,6 +1811,18 @@ async function confirmCancel() {
 let rescheduleBookingId = null;
 
 function openRescheduleModal(bookingId, date, start, end, learnerName) {
+  let booking = selectedBooking && selectedBooking.id === bookingId ? selectedBooking : null;
+  if (!booking) {
+    for (const dateKey in bookingCache) {
+      booking = bookingCache[dateKey].find(function (item) { return item.id === bookingId; });
+      if (booking) break;
+    }
+  }
+  if (window.BookingActions && booking) {
+    closeBookingModal();
+    BookingActions.openReschedule(booking);
+    return;
+  }
   rescheduleBookingId = bookingId;
   closeBookingModal();
   const dateDisplay = new Date(date + 'T00:00:00Z')

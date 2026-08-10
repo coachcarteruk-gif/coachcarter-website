@@ -68,6 +68,12 @@ const {
   copyRefundedBookingCreditSources,
 } = require('./_bcs-refund-marker');
 const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
+const { transferBookingFunding } = require('./_instructor-switch-transfer');
+const {
+  InstructorRescheduleSlotError,
+  listEligibleRescheduleInstructors,
+  validateInstructorRescheduleSlot,
+} = require('./_instructor-reschedule-slot');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -225,6 +231,8 @@ module.exports = async (req, res) => {
   if (action === 'learner-history')    return handleLearnerHistory(req, res);
   if (action === 'cancel-booking')     return handleCancelBooking(req, res);
   if (action === 'mark-not-delivered') return handleMarkNotDelivered(req, res);
+  if (action === 'reschedule-options') return handleRescheduleOptions(req, res);
+  if (action === 'reschedule-availability') return handleRescheduleAvailability(req, res);
   if (action === 'reschedule-booking') return handleRescheduleBooking(req, res);
   if (action === 'edit-booking')       return handleEditBooking(req, res);
   if (action === 'create-booking')     return handleCreateBooking(req, res);
@@ -2096,166 +2104,403 @@ async function handleMarkNotDelivered(req, res) {
 }
 
 // ── POST /api/instructor?action=reschedule-booking ─────────────────────────
-// Body: { booking_id, new_date, new_start_time }
-// Instructor-initiated reschedule: no 48hr restriction, no reschedule count limit.
+// POST body: { booking_id, new_date, new_start_time, new_instructor_id }
+// Instructor-initiated reschedule: no 48hr restriction and no reschedule-count limit.
 async function handleRescheduleBooking(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
 
-  const { booking_id, new_date, new_start_time } = req.body;
-  if (!booking_id || !new_date || !new_start_time)
+  const bookingId = parseInt(req.body.booking_id, 10);
+  const targetInstructorId = req.body.new_instructor_id == null || req.body.new_instructor_id === ''
+    ? Number(instructor.id)
+    : parseInt(req.body.new_instructor_id, 10);
+  const newDate = String(req.body.new_date || '').trim();
+  const newStartTime = String(req.body.new_start_time || '').trim().slice(0, 5);
+  if (!Number.isInteger(bookingId) || bookingId <= 0 || !newDate || !newStartTime) {
     return res.status(400).json({ error: 'booking_id, new_date and new_start_time are required' });
+  }
+  if (!Number.isInteger(targetInstructorId) || targetInstructorId <= 0) {
+    return res.status(400).json({ error: 'new_instructor_id must be a positive integer' });
+  }
 
+  const schoolId = instructor.school_id || 1;
   try {
-    const sql = neon(process.env.POSTGRES_URL);
-
-    const schoolId = instructor.school_id || 1;
-
-    // Load booking — must belong to this instructor
-    const [booking] = await sql`
-      SELECT lb.id, lb.status, lb.learner_id, lb.scheduled_date, lb.start_time, lb.end_time,
-             lb.instructor_id, lb.school_id, COALESCE(lb.reschedule_count, 0) AS reschedule_count,
-             lb.lesson_type_id, lb.minutes_deducted, lb.pickup_address, lb.dropoff_address,
-             COALESCE(lb.social_video_consent, false) AS social_video_consent,
-             COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
-             COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
-             lu.name AS learner_name, lu.email AS learner_email,
-             i.name AS instructor_name,
-             COALESCE(lt.duration_minutes, 90) AS type_duration_minutes
-      FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      JOIN instructors i ON i.id = lb.instructor_id
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
-        AND COALESCE(lb.school_id, 1) = ${schoolId}
-    `;
-
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== SCHEDULED)
-      return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
-
-    // Calculate new end time using booking's lesson type duration
-    const bookingDuration = parseInt(booking.type_duration_minutes) || 90;
-    const startParts = new_start_time.split(':').map(Number);
-    const startMins  = startParts[0] * 60 + startParts[1];
-    const endMins    = startMins + bookingDuration;
-    const new_end_time = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
-
-    // Check new slot is available
-    const [existingBooking] = await sql`
-      SELECT id FROM lesson_bookings
-      WHERE instructor_id = ${booking.instructor_id}
-        AND scheduled_date = ${new_date}
-        AND start_time = ${new_start_time}::time
-        AND status = ANY(${BLOCKING_STATUSES}::text[])
-        AND COALESCE(school_id, 1) = ${schoolId}
-    `;
-    if (existingBooking)
-      return res.status(409).json({ error: 'That slot is already booked.' });
-
-    // Mark old booking as rescheduled. credit_returned = TRUE prevents the
-    // divergence cron from double-counting the deduction: the credit was
-    // debited once on the original booking, the new booking carries the
-    // same minutes_deducted forward, and the old row is no longer an
-    // active draw. Without this, the cron's booking_draws CTE counts both
-    // rows and reports +minutes_deducted of drift per reschedule (see
-    // memory/project_step_4_5_shipped.md chip #3 entry for the three
-    // historical bookings affected: #117, #133, #214).
-    await sql`
-      UPDATE lesson_bookings
-      SET status = ${REFUNDED}, credit_returned = TRUE, cancelled_at = NOW()
-      WHERE id = ${booking_id}
-    `;
-    const refundedBcsIds = await markBookingCreditSourcesRefunded(sql, { bookingId: booking_id, schoolId });
-
-    // Create new booking
-    let newBooking;
-    try {
-      const [b] = await sql`
-        INSERT INTO lesson_bookings
-          (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           rescheduled_from, reschedule_count, lesson_type_id, minutes_deducted,
-           pickup_address, dropoff_address, school_id, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
-        VALUES
-          (${booking.learner_id}, ${booking.instructor_id}, ${new_date}, ${new_start_time},
-           ${new_end_time}, ${SCHEDULED}, ${booking_id}, ${booking.reschedule_count + 1},
-           ${booking.lesson_type_id || null}, ${booking.minutes_deducted != null ? booking.minutes_deducted : null},
-           ${booking.pickup_address || null}, ${booking.dropoff_address || null}, ${schoolId},
-           ${!!booking.social_video_consent}, ${!!booking.social_video_age_confirmed}, ${booking.social_video_discount_pct || 0})
-        RETURNING id, scheduled_date, start_time::text, end_time::text, reschedule_count
-      `;
-      newBooking = b;
-    } catch (insertErr) {
-      // Rollback: restore old booking. credit_returned must flip back to
-      // FALSE in lockstep — leaving it TRUE while status returns to
-      // SCHEDULED would silently exclude the booking from the cron's
-      // booking_draws CTE, manufacturing -minutes_deducted of drift.
-      await sql`
-        UPDATE lesson_bookings
-        SET status = ${SCHEDULED}, credit_returned = FALSE, cancelled_at = NULL
-        WHERE id = ${booking_id}
-      `;
-      await restoreBookingCreditSourcesActive(sql, { bcsIds: refundedBcsIds, schoolId });
-      if (insertErr.message?.includes('uq_booking_slot') || insertErr.code === '23505') {
-        return res.status(409).json({ error: 'That slot was just taken. Please choose another.' });
+    const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const locked = await client.query(
+        `SELECT id
+           FROM lesson_bookings
+          WHERE id = $1
+            AND instructor_id = $2
+            AND school_id = $3
+            AND status = $4
+          FOR UPDATE`,
+        [bookingId, instructor.id, schoolId, SCHEDULED]
+      );
+      if (locked.rowCount === 0) {
+        throw new InstructorRescheduleSlotError(
+          'BOOKING_NOT_MANAGEABLE',
+          'Booking not found or no longer available to reschedule.',
+          404
+        );
       }
-      throw insertErr;
-    }
-    await copyRefundedBookingCreditSources(sql, {
-      bcsIds: refundedBcsIds,
-      newBookingId: newBooking.id,
-      schoolId,
+
+      await client.query(
+        'SELECT pg_advisory_xact_lock($1::integer, hashtext($2)::integer)',
+        [schoolId, `instructor-reschedule:${targetInstructorId}:${newDate}`]
+      );
+      const txSql = clientSqlTag(client);
+      const booking = await loadManagedInstructorRescheduleBooking(txSql, {
+        bookingId,
+        instructorId: instructor.id,
+        schoolId,
+      });
+      if (!booking) {
+        throw new InstructorRescheduleSlotError('BOOKING_NOT_MANAGEABLE', 'Booking not found.', 404);
+      }
+
+      // This is the confirmation authority. It deliberately re-runs every
+      // read-only preview rule while the original booking row is locked.
+      const availability = await validateInstructorRescheduleSlot(txSql, {
+        schoolId,
+        booking,
+        targetInstructorId,
+        newDate,
+        newStartTime,
+      });
+      const instructorChanged = Number(targetInstructorId) !== Number(booking.instructor_id);
+
+      const oldUpdated = await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1, credit_returned = TRUE, cancelled_at = NOW()
+          WHERE id = $2
+            AND instructor_id = $3
+            AND school_id = $4
+            AND status = $5`,
+        [REFUNDED, bookingId, instructor.id, schoolId, SCHEDULED]
+      );
+      if (oldUpdated.rowCount !== 1) {
+        throw new InstructorRescheduleSlotError('BOOKING_CHANGED', 'This booking changed while it was being rescheduled.');
+      }
+
+      const inserted = await client.query(
+        `INSERT INTO lesson_bookings
+           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+            rescheduled_from, reschedule_count, lesson_type_id, minutes_deducted,
+            pickup_address, dropoff_address, school_id, created_by, payment_method,
+            stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source,
+            transmission_type, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
+         VALUES
+           ($1, $2, $3::date, $4::time, $5::time, $6,
+            $7, $8, $9, $10,
+            $11, $12, $13, $14, $15,
+            $16, $17, $18, $19,
+            $20, $21, $22, $23)
+         RETURNING id, scheduled_date::text, start_time::text, end_time::text, reschedule_count`,
+        [
+          booking.learner_id, targetInstructorId, newDate, newStartTime, availability.newEndTime, SCHEDULED,
+          bookingId, booking.reschedule_count + 1, booking.lesson_type_id || null,
+          booking.minutes_deducted != null ? booking.minutes_deducted : null,
+          booking.pickup_address || null, booking.dropoff_address || null, schoolId,
+          booking.created_by || 'instructor', booking.payment_method || null,
+          booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null,
+          booking.stripe_fee_source || null,
+          booking.list_price_pence != null ? booking.list_price_pence : null,
+          booking.list_price_source || null,
+          booking.transmission_type || 'manual', !!booking.social_video_consent,
+          !!booking.social_video_age_confirmed, booking.social_video_discount_pct || 0,
+        ]
+      );
+      const newBooking = inserted.rows[0];
+
+      if (instructorChanged) {
+        const fundingTransfer = await transferBookingFunding(client, {
+          oldBookingId: bookingId,
+          newBookingId: newBooking.id,
+          learnerId: booking.learner_id,
+          oldInstructorId: booking.instructor_id,
+          newInstructorId: targetInstructorId,
+          schoolId,
+        });
+        const expectedMinutes = Number(booking.minutes_deducted || 0);
+        if (expectedMinutes > 0 && fundingTransfer.transferredMinutes !== expectedMinutes) {
+          throw new InstructorRescheduleSlotError(
+            'INSTRUCTOR_SWITCH_FUNDING_REVIEW',
+            'This older booking needs an admin funding review before its instructor can be changed.'
+          );
+        }
+      } else {
+        const refundedBcsIds = await markBookingCreditSourcesRefunded(txSql, { bookingId, schoolId });
+        await copyRefundedBookingCreditSources(txSql, {
+          bcsIds: refundedBcsIds,
+          newBookingId: newBooking.id,
+          schoolId,
+        });
+      }
+
+      return {
+        booking,
+        targetInstructor: availability.targetInstructor,
+        newBooking,
+        newEndTime: availability.newEndTime,
+        instructorChanged,
+      };
     });
 
-    // Email the learner
-    try {
-      const mailer = createTransporter();
-      const isoOldDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
-      const oldDate = new Date(isoOldDate + 'T00:00:00Z')
-        .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-      const newDateStr = new Date(new_date + 'T00:00:00Z')
-        .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-      const oldTime = String(booking.start_time).slice(0, 5);
-      const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
-
-      await mailer.sendMail({
-        from: 'CoachCarter <system@coachcarter.uk>',
-        to: booking.learner_email,
-        subject: `Lesson rescheduled to ${newDateStr} at ${new_start_time}`,
-        html: `
-          <h2>Hi ${firstName},</h2>
-          <p>Your instructor ${booking.instructor_name} has rescheduled your lesson:</p>
-          <table>
-            <tr><td><strong>Was:</strong></td><td><s>${oldDate} at ${oldTime}</s></td></tr>
-            <tr><td><strong>Now:</strong></td><td>${newDateStr} at ${new_start_time}</td></tr>
-            <tr><td><strong>Duration:</strong></td><td>${bookingDuration >= 60 ? (bookingDuration % 60 === 0 ? (bookingDuration/60) + ' hour' + (bookingDuration/60 !== 1 ? 's' : '') : (bookingDuration/60).toFixed(1) + ' hours') : bookingDuration + ' mins'}</td></tr>
-          </table>
-          <p style="margin:28px 0">
-            <a href="https://coachcarter.uk/learner/book.html"
-               style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;
-                      border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem;">
-              View my bookings →
-            </a>
-          </p>
-        `
-      });
-    } catch (emailErr) {
-      console.error('Failed to send reschedule email:', emailErr);
-    }
+    await notifyInstructorReschedule({
+      booking: result.booking,
+      targetInstructor: result.targetInstructor,
+      newBooking: result.newBooking,
+      newDate,
+      newStartTime,
+    });
 
     return res.json({
       ok: true,
-      old_booking_id: booking_id,
-      new_booking_id: newBooking.id,
-      new_date,
-      new_start_time,
-      new_end_time
+      old_booking_id: bookingId,
+      new_booking_id: result.newBooking.id,
+      old_instructor_id: Number(result.booking.instructor_id),
+      new_instructor_id: Number(result.targetInstructor.id),
+      instructor_changed: result.instructorChanged,
+      new_date: newDate,
+      new_start_time: newStartTime,
+      new_end_time: result.newEndTime,
+      message: result.instructorChanged
+        ? `Lesson transferred from ${result.booking.old_instructor_name} to ${result.targetInstructor.name}. The learner was not charged again.`
+        : 'Lesson rescheduled. The learner was notified.',
     });
   } catch (err) {
+    if (err instanceof InstructorRescheduleSlotError) {
+      return res.status(err.status).json({ error: err.message, code: err.code, conflict: err.conflict || undefined });
+    }
+    if (err?.code === '23505' || err?.message?.includes('uq_booking_slot')) {
+      return res.status(409).json({ error: 'That slot was just taken. Please choose another.', code: 'SLOT_UNAVAILABLE' });
+    }
     console.error('instructor reschedule-booking error:', err);
-    reportError('/api/instructor', err);
+    reportError('/api/instructor?action=reschedule-booking', err);
     return res.status(500).json({ error: 'Failed to reschedule booking' });
+  }
+}
+
+function instructorRescheduleDateLabel(value) {
+  return new Date(`${String(value).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+}
+
+async function notifyInstructorReschedule({ booking, targetInstructor, newBooking, newDate, newStartTime }) {
+  const oldDate = instructorRescheduleDateLabel(booking.scheduled_date);
+  const newDateLabel = instructorRescheduleDateLabel(newDate);
+  const oldTime = String(booking.start_time).slice(0, 5);
+  const newTime = String(newStartTime).slice(0, 5);
+  const instructorChanged = Number(booking.instructor_id) !== Number(targetInstructor.id);
+  const details = `
+    <table>
+      <tr><td><strong>Was:</strong></td><td>${oldDate} at ${oldTime} with ${booking.old_instructor_name}</td></tr>
+      <tr><td><strong>Now:</strong></td><td>${newDateLabel} at ${newTime} with ${targetInstructor.name}</td></tr>
+    </table>`;
+  const mailer = createTransporter();
+  const tasks = [];
+
+  if (booking.learner_email) {
+    const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+    tasks.push(mailer.sendMail({
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: booking.learner_email,
+      subject: `Lesson moved to ${newDateLabel} at ${newTime}`,
+      html: `<h2>Hi ${firstName},</h2><p>Your driving lesson has been rescheduled.</p>${details}<p>Your existing payment or lesson credit still covers this lesson. You have not been charged again.</p>`,
+    }));
+  }
+  if (booking.old_instructor_email && booking.old_instructor_email !== 'demo@coachcarter.uk') {
+    tasks.push(mailer.sendMail({
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: booking.old_instructor_email,
+      subject: `${instructorChanged ? 'Lesson transferred' : 'Lesson rescheduled'} - ${booking.learner_name}`,
+      html: `<h2>${instructorChanged ? 'Lesson transferred' : 'Lesson rescheduled'}</h2><p>${booking.learner_name}'s lesson has changed.</p>${details}`,
+    }));
+  }
+  if (instructorChanged && targetInstructor.email && targetInstructor.email !== 'demo@coachcarter.uk') {
+    tasks.push(mailer.sendMail({
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: targetInstructor.email,
+      subject: `Lesson transferred to you - ${booking.learner_name}`,
+      html: `<h2>Lesson transferred to you</h2><p>${booking.learner_name}'s lesson has been assigned to you.</p>${details}<p>After delivery, booking #${newBooking.id} will be included in your normal Friday payout.</p>`,
+    }));
+  }
+
+  const textDetails = `Was: ${oldDate} at ${oldTime} with ${booking.old_instructor_name}\nNow: ${newDateLabel} at ${newTime} with ${targetInstructor.name}`;
+  if (booking.learner_phone) {
+    tasks.push(sendWhatsApp(booking.learner_phone, `Lesson rescheduled\n\n${textDetails}\n\nYour existing payment or credit still covers it; there is no new charge.`));
+  }
+  if (booking.old_instructor_phone) {
+    tasks.push(sendWhatsApp(booking.old_instructor_phone, `${instructorChanged ? 'Lesson transferred' : 'Lesson rescheduled'}: ${booking.learner_name}\n\n${textDetails}`));
+  }
+  if (instructorChanged && targetInstructor.phone) {
+    tasks.push(sendWhatsApp(targetInstructor.phone, `Lesson transferred to you: ${booking.learner_name}\n\n${textDetails}\n\nThis will follow the normal Friday payout after delivery.`));
+  }
+
+  const results = await Promise.allSettled(tasks);
+  for (const result of results) {
+    if (result.status === 'rejected') console.warn('Instructor reschedule notification failed:', result.reason?.message || result.reason);
+  }
+}
+
+async function loadManagedInstructorRescheduleBooking(sql, { bookingId, instructorId, schoolId }) {
+  const [booking] = await sql`
+    SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
+           lb.scheduled_date::text AS scheduled_date,
+           lb.start_time::text AS start_time,
+           lb.end_time::text AS end_time,
+           COALESCE(lb.reschedule_count, 0)::int AS reschedule_count,
+           lb.lesson_type_id, lb.minutes_deducted, lb.pickup_address, lb.dropoff_address,
+           lb.created_by, lb.payment_method, lb.stripe_fee_pence, lb.stripe_fee_source,
+           lb.list_price_pence, lb.list_price_source,
+           COALESCE(lb.transmission_type, 'manual') AS transmission_type,
+           COALESCE(lb.social_video_consent, false) AS social_video_consent,
+           COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
+           COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
+           lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+           COALESCE(lb.pickup_address, lu.pickup_address) AS effective_pickup_address,
+           old_i.name AS old_instructor_name,
+           old_i.email AS old_instructor_email,
+           old_i.phone AS old_instructor_phone,
+           lt.name AS lesson_type_name,
+           lt.slug AS lesson_type_slug,
+           COALESCE(
+             lt.duration_minutes,
+             CASE WHEN lb.end_time > lb.start_time
+               THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+               ELSE NULL
+             END,
+             90
+           )::int AS duration_minutes,
+           EXISTS (
+             SELECT 1
+               FROM recurring_slot_block_items rsbi
+               JOIN recurring_slot_blocks rsb
+                 ON rsb.id = rsbi.block_id
+                AND rsb.school_id = lb.school_id
+                AND rsb.instructor_id = lb.instructor_id
+                AND rsb.learner_id = lb.learner_id
+                AND rsb.status = 'confirmed'
+              WHERE rsbi.lesson_booking_id = lb.id
+                AND rsbi.school_id = lb.school_id
+                AND rsbi.instructor_id = lb.instructor_id
+                AND rsbi.status = 'booked'
+           ) AS is_reserved_weekly_slot
+      FROM lesson_bookings lb
+      JOIN learner_users lu
+        ON lu.id = lb.learner_id
+       AND lu.school_id = lb.school_id
+      JOIN instructors old_i
+        ON old_i.id = lb.instructor_id
+       AND old_i.school_id = lb.school_id
+      LEFT JOIN lesson_types lt
+        ON lt.id = lb.lesson_type_id
+       AND lt.school_id = lb.school_id
+     WHERE lb.id = ${bookingId}
+       AND lb.instructor_id = ${instructorId}
+       AND lb.school_id = ${schoolId}
+  `;
+  if (booking) booking.pickup_address = booking.effective_pickup_address || null;
+  return booking || null;
+}
+
+async function handleRescheduleOptions(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const bookingId = parseInt(req.query.booking_id, 10);
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    return res.status(400).json({ error: 'booking_id must be a positive integer' });
+  }
+
+  try {
+    const schoolId = instructor.school_id || 1;
+    const sql = neon(process.env.POSTGRES_URL);
+    const booking = await loadManagedInstructorRescheduleBooking(sql, {
+      bookingId,
+      instructorId: instructor.id,
+      schoolId,
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== SCHEDULED) {
+      return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
+    }
+
+    let instructors = await listEligibleRescheduleInstructors(sql, { schoolId, booking });
+    if (booking.is_reserved_weekly_slot) {
+      instructors = instructors.filter(candidate => Number(candidate.id) === Number(booking.instructor_id));
+    }
+    return res.json({
+      ok: true,
+      booking_id: booking.id,
+      current_instructor_id: Number(booking.instructor_id),
+      reserved_transfer_allowed: false,
+      is_reserved_weekly_slot: !!booking.is_reserved_weekly_slot,
+      instructors: instructors.map(candidate => ({
+        id: Number(candidate.id),
+        name: candidate.name,
+        transmission_type: candidate.transmission_type,
+        min_booking_notice_hours: Number(candidate.min_booking_notice_hours),
+        max_booking_days_ahead: Number(candidate.max_booking_days_ahead),
+      })),
+    });
+  } catch (err) {
+    console.error('instructor reschedule-options error:', err);
+    reportError('/api/instructor?action=reschedule-options', err);
+    return res.status(500).json({ error: 'Failed to load instructor options' });
+  }
+}
+
+async function handleRescheduleAvailability(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const bookingId = parseInt(req.query.booking_id, 10);
+  const targetInstructorId = parseInt(req.query.new_instructor_id, 10);
+  const newDate = String(req.query.new_date || '').trim();
+  const newStartTime = String(req.query.new_start_time || '').trim().slice(0, 5);
+  if (!Number.isInteger(bookingId) || bookingId <= 0 || !Number.isInteger(targetInstructorId) || targetInstructorId <= 0) {
+    return res.status(400).json({ error: 'booking_id and new_instructor_id must be positive integers' });
+  }
+
+  try {
+    const schoolId = instructor.school_id || 1;
+    const sql = neon(process.env.POSTGRES_URL);
+    const booking = await loadManagedInstructorRescheduleBooking(sql, {
+      bookingId,
+      instructorId: instructor.id,
+      schoolId,
+    });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== SCHEDULED) return res.status(409).json({ error: 'This booking is no longer available to reschedule.' });
+
+    const availability = await validateInstructorRescheduleSlot(sql, {
+      schoolId,
+      booking,
+      targetInstructorId,
+      newDate,
+      newStartTime,
+    });
+    return res.json({
+      ok: true,
+      available: true,
+      new_end_time: availability.newEndTime,
+      instructor: { id: Number(availability.targetInstructor.id), name: availability.targetInstructor.name },
+    });
+  } catch (err) {
+    if (err instanceof InstructorRescheduleSlotError) {
+      return res.status(err.status).json({
+        error: err.message,
+        code: err.code,
+        available: false,
+        conflict: err.conflict || undefined,
+      });
+    }
+    console.error('instructor reschedule-availability error:', err);
+    reportError('/api/instructor?action=reschedule-availability', err);
+    return res.status(500).json({ error: 'Could not verify that slot', available: false });
   }
 }
 

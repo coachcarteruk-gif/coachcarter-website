@@ -77,6 +77,8 @@ Why not just set `chargeable` immediately on the late-cancel? Because the calend
 
 **Reschedule `credit_returned` invariant:** every code path that flips `status → refunded` as part of a reschedule MUST also flip `credit_returned = TRUE` on the same row. The new booking carries `minutes_deducted` forward, so without the flag the divergence cron's `booking_draws` CTE counts BOTH rows and reports `+minutes_deducted` of drift per reschedule. Both `cancelled_at` and `credit_returned` must lockstep on the rollback path too (back to `NULL` / `FALSE`). See `api/migrate-credit-returned-retro-fix.js` for the historical fixup pattern.
 
+For instructor-managed cross-instructor reschedules, the old-row transition, replacement booking, and migration 042 funding/BCS transfer are one transaction. The old booking is terminal and cannot become payable; the replacement booking's `instructor_id` identifies the delivering instructor and therefore owns normal Friday payout eligibility after it becomes `chargeable`.
+
 **`credit_forfeited = TRUE` (writes):**
 - `api/slots.js` — learner cancel <48h (only writer)
 
