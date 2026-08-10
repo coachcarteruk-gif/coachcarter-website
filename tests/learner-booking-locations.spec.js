@@ -71,7 +71,7 @@ test.describe('learner per-booking pickup and drop-off locations', () => {
     expect(functionBody(api, 'handleCheckoutSlot')).toContain('dropoff_address: checkoutDropoffAddress');
     expect(functionBody(api, 'handleCheckoutSlotGuest')).toContain('pickup_address:  cleanAddr');
     expect(functionBody(api, 'handleCheckoutSlotGuest')).toContain('dropoff_address: cleanDropoff');
-    expect(functionBody(api, 'handleReschedule')).toContain('const { booking_id, new_date, new_start_time, pickup_address, dropoff_address } = req.body;');
+    expect(functionBody(api, 'handleReschedule')).toContain('const { booking_id, new_date, new_start_time, new_instructor_id, pickup_address, dropoff_address } = req.body;');
     expect(functionBody(api, 'handleReschedule')).toContain('excludeBookingId: booking_id');
   });
 
