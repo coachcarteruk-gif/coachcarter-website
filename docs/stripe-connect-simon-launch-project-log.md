@@ -4,29 +4,29 @@
 payment-contract, refund, and instructor-payout launch.
 
 **Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
-POST-MERGE INACTIVE VERIFIED — SLICE 4 RECONCILIATION CHECKPOINT STOPPED ON
-UNAVAILABLE RETAINED STAGING AUTHENTICATION AND DISABLED — PRODUCTION
+POST-MERGE INACTIVE VERIFIED — SLICE 4 RECONCILIATION CHECKPOINT STOPPED BY
+STAGING DEPLOYMENT PROTECTION AND DISABLED — PRODUCTION
 ACTIVATION NOT APPROVED — SLICE 5 NOT AUTHORISED**
 
 **Last updated:** 10 August 2026
 
 **Verified source baseline:** remote `main` at
-`019bfc13c6f19443398ab1293c0dd19b865553d1`
+`e0acd83ba1fcf8bcfc2516359dd42d72b546115d`
 
-**Current blocker:** PR #363 merged the reviewed Accounts v2 pagination repair,
-but the retained custom staging environment stores `JWT_SECRET` as non-readable
-Sensitive data and Vercel's non-mutating environment runner does not inject it.
-No valid Simon staging session can therefore be minted without a separately
-authorised credential rotation or owner-supplied ephemeral session. The
-reconciliation request was not sent and Stripe was not contacted. Synthetic
-Simon still has exactly one retained test account under the original stable
-identity while its durable staging intent remains `reconciling`, unmapped, and
-unretried. Every staging operation/global/school gate is false, the retained
-test event destination remains disabled, and the live gate is absent.
-Production remains unchanged and inactive. The first later Stripe action must
-reconcile only the preserved original identity and must never create a
-replacement. Slice 3 production activation remains unapproved and Slice 5
-remains unauthorised.
+**Current blocker:** The owner explicitly authorised rotation of only the
+isolated staging JWT and one no-retry Simon reconciliation request. The JWT was
+rotated successfully and retained Sensitive, but the sole request returned
+Vercel HTTP `401` `Protected deployment` before the CoachCarter application or
+Stripe ran. No second request is authorised. Synthetic Simon still has exactly
+one retained test account under the original stable identity while its durable
+staging intent remains `reconciling`, unmapped, and unretried. Every staging
+operation/global/school gate is false, the retained test event destination
+remains disabled, and the live gate is absent. Production remains unchanged
+and inactive. A later attempt needs separate explicit authority and an
+authenticated Vercel transport such as a prevalidated `vercel curl` path; its
+first Stripe action must reconcile only the preserved original identity and
+must never create a replacement. Slice 3 production activation remains
+unapproved and Slice 5 remains unauthorised.
 
 ## 1. Title and purpose
 
@@ -4320,3 +4320,84 @@ not be retried.
   action must still be the single reconciliation request for the preserved
   Simon identity and must never create a replacement account. Slice 3 was not
   activated and Slice 5 was not started.
+
+### 10 August 2026 - Slice 4 JWT-authorised reconciliation checkpoint stopped at Vercel protection and disabled
+
+- Resumed from fresh worktree
+  `C:\tmp\coachcarter-simon-slice4-reconciliation-completion`, branch
+  `codex/simon-slice4-reconciliation-completion`, after PR #364 merged. Fetched
+  `origin/main`, worktree `HEAD`, and merge base were exact merge commit
+  `e0acd83ba1fcf8bcfc2516359dd42d72b546115d`; exact merge CI run
+  `31398122278` had completed successfully. All other worktrees and user changes
+  were preserved.
+- Reconfirmed protected LF-normalised hashes exactly: product specification
+  `79778382071613efbb9dec4e17f135a63c9f8d8b3010d921882d7ed631530dd4`
+  and technical plan
+  `64bc84e3ce8303e8cbe1c7fa0e8adeb221e7f4ad3294c5871417e06f0eeaf916`.
+  Pinned `stripe@22.4.0` remained exact. Credential-free preflight passed
+  Accounts v2 route/state-machine `22/22`, installed-Chrome UI `2/2`, canonical
+  launch schema `14/14`, migration-035 guards `9/9` with original checkout
+  bytes restored, syntax `204/204`, and C1 `276/276`.
+- Fresh provider and database preflight reconfirmed exact isolated Vercel
+  project `prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, custom Preview environment
+  `staging` `env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, zero custom domains, and zero
+  Production variables; and exact Neon organisation
+  `org-fancy-forest-47074420`, project `shiny-bonus-66942766`, retained ready
+  non-primary/non-default/unprotected branch `br-dark-recipe-zarmjbix`, database
+  `neondb`, and compute `ep-wandering-field-zadlm6r7`. All six staging gates
+  and school `1`'s Boolean were false; the live gate was absent.
+- Database preflight retained Simon intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df` in `reconciling`, stable identity
+  `cc:connect-v2:1:3:test:recipient`, only attempt 1
+  `provider_ambiguous`, no provider ID/scope/observation, one unchanged Fraser
+  scope/observation, active unpaused synthetic instructors with null legacy
+  mappings, payout engine `v1`, unactivated Slice 3 `shadow`, four lesson
+  payment contracts, and all inspected payout/refund/earning/transfer/cutover
+  counts zero. Retained hashes matched the preceding checkpoint exactly.
+- Disabled exact-source preflight deployment
+  `dpl_GzohgMe4w5MUCEuwf7X6dYUvRjH2` was `READY`, `gitDirty=NULL`, custom
+  environment `staging`, and carried only the staging alias. Under the owner's
+  explicit authority, a fresh 64-character random JWT was generated in memory,
+  never persisted to disk or printed, and used to update only staging
+  `JWT_SECRET` as Sensitive. Rotated-JWT disabled deployment
+  `dpl_4fyPzrPub3YsH5uJLcUppWpiGTmE` passed the same exact deployment guard;
+  all operation/global/school gates remained false.
+- Temporarily enabled only staging
+  `STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED=true` and
+  `STRIPE_CONNECT_V2_ENABLED=true`. Link, dashboard-link, agreement, webhook-
+  processing, live, Slice 3, and money-operation gates remained false. Exact
+  clean enabled deployment `dpl_8Z18XLDBALyrF7iMEkzfaqVFV474` was `READY`,
+  exact source SHA, `gitDirty=NULL`, and staging-only. Only then did a guarded
+  Neon update set school `1`'s feature Boolean true while preserving payout
+  engine `v1` and null legacy school mapping.
+- Exactly one authenticated/CSRF-bound `POST /api/connect?action=v2-account`
+  was dispatched to the custom staging alias with redirects disabled and no
+  client retry. Vercel deployment protection returned HTTP `401` with code
+  `Protected deployment`, `vercel_auth_enabled=true`, before the CoachCarter
+  function executed. The response was not retried or redirected. The
+  application therefore made no Accounts v2 list or create call, Stripe was
+  not contacted, and no account, scope, observation, intent attempt, audit row,
+  provider object, event, payment, refund, earning, payout, transfer, cutover,
+  Slice 3, Slice 5, or production mutation resulted.
+- Mandatory shutdown set the staging account-creation gate false, then the
+  staging global gate false, then the school Boolean false. The ephemeral local
+  JWT copy was cleared. A fresh pull proved all six gates false,
+  `STRIPE_MODE=test`, and live absent. Final disabled deployment
+  `dpl_F657tCmJdCbfwsjbdEMmsQaf5fgy` is `READY`, exact source SHA,
+  `gitDirty=NULL`, custom environment `staging`, and has only alias
+  `cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+  The rotated JWT remains Sensitive only in staging; Production still has zero
+  variables.
+- Read-only database postflight matched preflight exactly: Simon remains
+  `reconciling` with attempt count `1`, scope `0`, observation `0`, and no
+  provider ID; Fraser remains scope `1` and observation `1`; all Slice 4 row
+  counts, instructor/payout/Slice 3 state, financial counts, and recorded hashes
+  are unchanged. The retained disabled Stripe event destination was neither
+  queried nor changed because the first Stripe action never occurred.
+- Final current non-integration regression passed `615/615` across the 65-file
+  Stripe/auth/tenant/booking/credit/refund/payout/webhook/Connect matrix using
+  installed system Chrome. Migration-035 checkout bytes were restored exactly.
+- Status remains `STAGING_RECONCILIATION_CHECKPOINT_STOPPED_DISABLED`. No
+  retry is authorised. A later attempt requires separate explicit authority
+  and a prevalidated Vercel-authenticated transport; it must still submit only
+  one reconciliation request and never create a replacement Simon account.

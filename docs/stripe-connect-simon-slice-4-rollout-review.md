@@ -40,6 +40,15 @@ that authentication secret was not authorised and was not performed. No
 Stripe request or account action occurred. All gates and the school flag were
 restored false and an exact-SHA disabled deployment is current.
 
+JWT-rotation reconciliation checkpoint: 10 August 2026 on
+`codex/simon-slice4-reconciliation-completion`, exact source and current
+`origin/main` `e0acd83ba1fcf8bcfc2516359dd42d72b546115d` (merged PR #364).
+The owner explicitly authorised rotation of only the isolated staging JWT and
+one authenticated no-retry Simon request. Rotation and exact-SHA deployment
+succeeded, but Vercel deployment protection returned HTTP `401` before the
+application or Stripe. No retry occurred. Mandatory shutdown restored every
+operation/global/school gate false and deployed the disabled configuration.
+
 ## Authority and non-actions
 
 This slice implements only the Accounts v2 onboarding and agreement-readiness
@@ -685,3 +694,54 @@ Status is
 separately authorised way to supply a valid ephemeral Simon staging session or
 to rotate only the isolated staging JWT; the first Stripe action must still be
 the single reconciliation request and must never create a replacement account.
+
+## JWT-authorised checkpoint stopped at Vercel protection - 10 August 2026
+
+The checkpoint started from clean merged `origin/main`
+`e0acd83ba1fcf8bcfc2516359dd42d72b546115d` in isolated worktree
+`C:\tmp\coachcarter-simon-slice4-reconciliation-completion`. Protected hashes,
+pinned `stripe@22.4.0`, focused `38/38` Accounts v2/UI/schema tests,
+migration-035 guards `9/9`, syntax `204/204`, and C1 `276/276` all passed
+without provider or database credentials.
+
+Fresh Vercel, Neon, and school-scoped database preflight matched the preceding
+checkpoint exactly. All six staging gates and the school Boolean were false;
+live was absent; Production had zero variables. Simon retained the original
+unmapped `reconciling` intent and one ambiguous attempt, Fraser retained one
+scope/observation, and every inspected financial/Slice 3 count and hash was
+unchanged. Exact disabled preflight deployment
+`dpl_GzohgMe4w5MUCEuwf7X6dYUvRjH2` was `READY`, clean, and staging-only.
+
+Under explicit owner authority, a fresh random JWT was generated only in
+memory and staging `JWT_SECRET` alone was rotated as Sensitive. It was never
+printed or persisted locally. Exact disabled deployment
+`dpl_4fyPzrPub3YsH5uJLcUppWpiGTmE` verified the rotation while every gate
+remained false. Only the account-creation and global staging gates were then
+set true; every other operation/live gate stayed false. Exact clean enabled
+deployment `dpl_8Z18XLDBALyrF7iMEkzfaqVFV474` passed its source, environment,
+and alias guards before a guarded update enabled only school `1`'s Boolean.
+
+The one permitted authenticated/CSRF-bound Simon POST was dispatched exactly
+once with no redirect and no retry. Vercel returned HTTP `401` `Protected
+deployment` with Vercel authentication enabled before the CoachCarter function
+ran. No application or Stripe API call occurred, so no reconciliation list,
+replacement create, provider object, local intent/attempt/scope/observation,
+event, or money state changed.
+
+Mandatory shutdown restored the account-creation gate false, then global false,
+then the school Boolean false. The ephemeral JWT copy was cleared. Final
+disabled deployment `dpl_F657tCmJdCbfwsjbdEMmsQaf5fgy` is `READY`, exact
+source SHA, `gitDirty=NULL`, custom environment `staging`, and staging-only.
+Fresh configuration proves all six gates false, `STRIPE_MODE=test`, live
+absent, and zero Production variables. Database postflight and every retained
+hash match preflight exactly; the disabled event destination was not contacted
+or changed.
+
+Final current non-integration regression passed `615/615` across the 65-file
+Stripe/auth/tenant/booking/credit/refund/payout/webhook/Connect matrix using
+installed system Chrome. Migration-035 checkout bytes were restored exactly.
+
+Status is `STAGING_RECONCILIATION_CHECKPOINT_STOPPED_DISABLED`. No retry is
+authorised. Any later attempt needs separately scoped authority and a
+prevalidated Vercel-authenticated transport, while preserving the original
+Simon identity and the no-replacement-create rule.
