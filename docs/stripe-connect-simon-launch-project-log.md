@@ -4504,3 +4504,86 @@ not be retried.
   Any future resume requires newly explicit operational authority and must
   begin from fresh `main`, repeat every preflight guard, preserve the original
   Simon identity, and retain the one-request/no-retry/no-replacement controls.
+
+## 10 August 2026 — authenticated transport passed; reconciliation dispatch not sent; disabled
+
+- Resumed under the owner's narrowly scoped reconciliation authority from
+  fresh `origin/main` commit
+  `f3c21d9bd75e4de4a4143ca243b4d06d0880865e`, the merge commit for PR #369,
+  in isolated branch `codex/simon-s4-reconciliation-20260810`. PR #369 was
+  merged with every required check successful. The LF-normalised protected
+  hashes reproduced the approved product specification
+  `B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585`
+  and technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Read-only preflight matched isolated Vercel project
+  `prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, custom Preview environment `staging`
+  (`env_vvxYWVPTHOiutcFOPmeWw2kX08mA`), zero custom-environment domains, and
+  zero Production variables. Global, account-creation, and webhook-processing
+  controls were exact string `false`; account-link, dashboard-link, agreement,
+  and live controls were absent and therefore fail closed under the exact-true
+  gate contract. `STRIPE_MODE=test`. School `1`'s feature value was exact JSON
+  Boolean `false`.
+- Neon preflight on retained branch `br-dark-recipe-zarmjbix` matched Simon
+  instructor `3`, intent `3c2349a0-1696-4b57-b732-fc14bbde57df` in
+  `reconciling`, stable identity `cc:connect-v2:1:3:test:recipient`, and its
+  singular attempt `1` (`provider_ambiguous`, `network`). Simon had no provider
+  mapping, scope, or observation; Fraser remained scope `1`/observation `1`.
+  Instructors `2` and `3` were active and unpaused with no legacy mapping,
+  payout engine remained `v1`, and `simon_launch_v1` remained inactive
+  `shadow`.
+- Static review and focused Accounts v2/UI/schema tests (`38/38`) reconfirmed
+  that a `reconciling` intent lists/reconciles and returns before the Accounts
+  v2 creation branch. A replacement account was not reachable from Simon's
+  retained state.
+- Fresh disabled deployment `dpl_GuyP2bCMXJSPYa2pxRrKahqtKkkM` was `READY`,
+  exact source, clean, custom `staging`, and carried only the expected staging
+  alias. Exactly one harmless Vercel-authenticated `GET /api/status` was sent
+  with redirects and client retries disabled. It reached CoachCarter and
+  returned the non-mutating JSON status at `2026-08-10T21:50:02.393Z`; the
+  handler has no database or Stripe access. Harmless transport-test request
+  count is **one**.
+- Because the retained Sensitive staging JWT was unreadable, the one authorised
+  staging-only `JWT_SECRET` rotation was performed from a memory-only
+  controller. The value was never printed or written to disk. Rotated-disabled
+  deployment `dpl_ELA5ofzPgDZFp8uou1v5zd5g22QB` and enabled deployment
+  `dpl_BvwtMjKexqtgYDHMHj21PWT5Niaw` were each `READY`, exact source, clean,
+  custom `staging`, and alias-only. Only account creation and the global gate
+  were made true; every other operation/live gate remained false. A guarded
+  Neon update then changed only school `1`'s existing Slice 4 Boolean to true.
+- The local dispatch controller incremented its dispatch-attempt guard once,
+  but a controller output-composition defect supplied its deployment
+  verification marker alongside the deployment ID. The local command parser
+  rejected that malformed argument (`exit 255`, `'id' is not recognized`)
+  before `vercel curl` could issue an HTTP request. The exact Simon
+  reconciliation HTTP POST count is therefore **zero**; there is no HTTP or
+  application response. Enabled-deployment runtime request counts were empty.
+  This was not retried or worked around. Stripe was not contacted, so neither
+  Accounts v2 list nor create ran and no replacement account was created.
+- Mandatory shutdown still ran immediately: account-creation false, global
+  false, then a guarded school-Boolean update back to false. The memory-only
+  JWT/session/CSRF values were cleared and the external controller/signals were
+  removed. Final deployment `dpl_J3FB1xBf9CJAaLRxbqhXkARUzkc2` is `READY`,
+  exact commit `f3c21d9bd75e4de4a4143ca243b4d06d0880865e`, `gitDirty=NULL`, custom
+  `staging`, and bound only to
+  `cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+  Postflight proves all six gates fail closed, the three present Slice 4
+  controls exact `false`, the school Boolean exact false, live absent,
+  `STRIPE_MODE=test`, and Production still at zero variables.
+- Database postflight exactly retained intents `2`, attempts `2`, link events
+  `0`, scopes `1` (Simon `0`, Fraser `1`), observations `1` (Simon `0`, Fraser
+  `1`), agreements `1`, and lesson payment contracts `4`. Payout runs, refund
+  intents/events, launch earnings/transfer intents, payout transfers/attempts,
+  cutover configs/shadow cycles/readiness/events all remain `0`. Simon's exact
+  intent and attempt are unchanged. Slice 3 remains inactive shadow; no Slice 5
+  or Production state changed. The retained disabled Stripe event destination
+  was neither queried nor modified.
+- Final validation passed the focused `38/38` suite and the current 65-file
+  non-integration Stripe/auth/tenant/booking/credit/refund/payout/webhook/
+  Connect matrix `612/612`. Migration 035 was temporarily LF-normalised for
+  its reviewed-byte verifier and restored to its original checkout hash.
+- Final status is
+  `STAGING_RECONCILIATION_DISPATCH_NOT_SENT_CONTROLLER_ARGUMENT_ERROR_DISABLED`.
+  The authorised JWT rotation has been consumed and the no-retry rule remains
+  binding. Any new attempt requires explicit owner approval; this audit does
+  not authorise a correction or another dispatch.
