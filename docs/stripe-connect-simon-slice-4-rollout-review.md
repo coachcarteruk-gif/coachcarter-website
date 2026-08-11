@@ -901,3 +901,76 @@ Status is
 The one authorised JWT rotation has been consumed. The no-retry rule prohibits
 another dispatch under this authority; any correction requires explicit owner
 approval.
+
+## Post-PR #370 deployment-output checkpoint stop - 11 August 2026
+
+The owner-authorised reconciliation resume began from fresh merged `main`
+`91752b16deb704e1a9b69451d73689f7bcb84a2f`, the merge commit for PR #370,
+on isolated branch `codex/simon-s4-reconciliation-20260811`. PR #370 was
+merged with all required checks successful. The approved LF-normalised hashes
+reproduced exactly: product specification
+`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` and
+technical plan
+`64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+
+Read-only Vercel and Neon preflight matched the retained isolated staging
+scope. Global, account-creation, and webhook-processing controls were exact
+`false`; account-link, dashboard-link, agreement, and live controls were
+absent and therefore failed closed. `STRIPE_MODE=test`, Production had zero
+variables, and school `1`'s Slice 4 value was exact JSON Boolean `false`.
+Simon instructor `3` retained intent
+`3c2349a0-1696-4b57-b732-fc14bbde57df` in `reconciling`, stable identity
+`cc:connect-v2:1:3:test:recipient`, its singular
+`provider_ambiguous`/`network` attempt, and no provider mapping, scope, or
+observation. The focused no-replacement/readiness suite passed `38/38`.
+
+Before any enablement, the revised external controller passed offline tests
+that selected one scalar deployment ID and rejected both ID arrays and the
+prior log-plus-ID success-stream pollution. It then created a fresh disabled
+deployment, but stopped during its live-shape validation because the parsed
+`vercel deploy --json` success value did not contain the assumed scalar `.id`.
+No fallback lookup, redeploy, transport probe, or operational retry was made.
+Read-only post-stop inspection identified the already-created deployment as
+`dpl_EbTnh5cMqNiKZcayPRSUw68Nynih`: `READY`, exact PR #370 source,
+`gitDirty=NULL`, custom environment `staging`, and bound only to the expected
+staging alias.
+
+Vercel's deploy stdout contract is the deployment URL. After the operational
+stop, the external controller parser was corrected locally to require exactly
+one HTTPS `*.vercel.app` URL, resolve that URL through the read-only deployment
+API, and only then select and validate the returned metadata `.id`. Offline
+plain-URL and JSON-string-URL tests passed, and one read-only validation of the
+existing disabled URL resolved exactly to
+`dpl_EbTnh5cMqNiKZcayPRSUw68Nynih`. The correction was not used to deploy,
+enable, probe, rotate, or dispatch under this authority.
+
+Exact harmless transport GET count is **zero**. Exact authenticated Simon
+reconciliation POST count is **zero**. The newly authorised staging JWT
+rotation was not performed and remains unconsumed. No environment variable or
+database write occurred; global, account-creation, and school gates were never
+enabled. Stripe was not contacted, so there was no Accounts v2 list or create,
+no replacement account, and no event-destination action.
+
+Read-only postflight retained all preflight state. The school Boolean is false;
+Simon remains the same unmapped `reconciling` intent and attempt. Counts remain
+intents `2`, attempts `2`, link events `0`, scopes `1` (Simon `0`),
+observations `1` (Simon `0`), agreements `1`, and lesson payment contracts
+`4`. All inspected payout, refund, earning, transfer, and cutover counts remain
+`0`. The staging gates fail closed, live remains absent, `STRIPE_MODE=test`,
+Production remains zero-variable, and the exact-source deployment above is the
+latest disabled deployment.
+
+Final validation passed focused `38/38`, the current 65-file non-integration
+matrix `612/612`, syntax across `206` JavaScript files, and the C1 scan across
+`278` files. Migration 035 was temporarily LF-normalised for its reviewed-byte
+verifier and restored to its original checkout SHA-256
+`f1297ae03e9329d986252a73f09889401a707b85c9ef68d60c97e1ed1e2c1709`.
+The two protected LF-normalised hashes remained exact after these documentation
+edits.
+
+Status is
+`STAGING_RECONCILIATION_STOPPED_DEPLOY_STDOUT_SHAPE_MISMATCH_DISABLED`.
+No reconciliation retry is authorised. A future operational attempt requires
+new explicit owner authority and must begin from fresh `main` with the same
+identity-preservation, no-replacement, one-request, no-retry, shutdown, and
+postflight controls.
