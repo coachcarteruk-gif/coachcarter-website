@@ -1176,3 +1176,48 @@ diagnosis and repair made no Vercel, Neon, Stripe, environment, deployment,
 JWT, gate, school-feature, database, reconciliation, account, replacement,
 onboarding or Production request or mutation. Repository status is
 `MVP_A2_CONTROLLER_DEPLOY_AGENT_OUTPUT_CORRECTION_PREPARED_NOT_OPERATED`.
+
+## MVP A3 post-merge clean-source evidence stop - 11 August 2026
+
+Fraser authorised one attempt from merged PR #375 commit
+`63c4b86f83104062cbeca7be34878d0cba024e0e`. The merged controller and focused
+Accounts v2/UI/schema suite passed `50/50`; both protected hashes remained
+exact. Fresh read-only preflight matched the isolated Vercel project, team,
+custom `staging` environment, all-six-false/test/live-absent gate shape, sole
+staging-only Sensitive JWT record and zero Production variables. Explicit
+retained Neon branch `br-dark-recipe-zarmjbix` matched school `1`, Simon
+instructor `3`, original intent `3c2349a0-1696-4b57-b732-fc14bbde57df`, stable
+identity `cc:connect-v2:1:3:test:recipient`, unmapped `reconciling` state, one
+ambiguous/network attempt, zero Simon scope/observation and zero replacement.
+
+The single controller invocation created disabled deployment
+`dpl_EvZU97KjnvH89EbK2LkisB9j47oj`. The PR #375 correction succeeded in
+extracting the agent-envelope URL and reached `deployment_verified`. Exact v13
+metadata then showed READY, exact project/environment/commit, one staging-only
+alias/domain and non-production, but `meta.gitCommitRef` was `HEAD` and the
+`meta.gitDirty` property was absent. Because clean-source proof requires that
+property present and exact `null`, the controller stopped before enablement,
+JWT rotation, authentication material, reconciliation POST or Stripe.
+
+Mandatory shutdown set the two gates false and executed the corrected bridge's
+guarded, idempotent school-false update. The row returned exact Boolean false
+while payout engine `v1` and the null legacy mapping remained unchanged. Final
+disabled deployment `dpl_FSgamEDDPXYRUqNhA6HCbpQuNxBg` matched every reviewed
+deployment field except the same absent `meta.gitDirty` property, so the
+controller conservatively reported `MANDATORY_SHUTDOWN_FAILED`. Independent
+postflight proved the actual shutdown complete: all six gates false, live
+absent, test mode, school false, Production untouched and the final deployment
+READY on the expected staging alias.
+
+Neon postflight matched the retained baseline: intents `2`, attempts `2`, link
+events `0`, scopes `1` (Simon `0`), observations `1` (Simon `0`), agreements
+`1`, lesson payment contracts `4`, and all inspected payout/refund/earning/
+transfer counts `0`. JWT rotations, reconciliation POSTs, redirects, retries,
+Accounts v2 list/create calls, direct creates, replacement accounts and
+onboarding calls were all **zero**.
+
+Status is
+`MVP_A3_STAGING_RECONCILIATION_NOT_DISPATCHED_DEPLOYMENT_GIT_DIRTY_EVIDENCE_ABSENT_DISABLED`.
+This attempt is stopped without retry. Simon remains unresolved and onboarding
+is not authorised; any later attempt needs fresh owner authority after a
+reviewed clean-source evidence correction.
