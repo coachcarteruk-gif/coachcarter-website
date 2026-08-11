@@ -3,31 +3,26 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SLICE 2 ACCEPTED — SLICE 3 MERGED AND DEPLOYED,
-POST-MERGE INACTIVE VERIFIED — SLICE 4 PRODUCT-SPECIFICATION HASH REVIEWED AND
-REBASELINED, RECONCILIATION REMAINS STOPPED AND DISABLED — PRODUCTION
-ACTIVATION NOT APPROVED — SLICE 5 NOT AUTHORISED**
+**Current status:** **APPROVAL-CONTROLLED MVP REBASELINED — NOT IMPLEMENTED OR
+DEPLOYED — SLICE 4 RECONCILIATION REMAINS STOPPED AND DISABLED — PRODUCTION
+ACTIVATION NOT APPROVED**
 
-**Last updated:** 10 August 2026
+**Last updated:** 11 August 2026
 
 **Verified source baseline:** remote `main` at
-`5014d73f1a6776fb0735a57b2fdb840df8123649`
+`52ff27aad0e0edc4619da80648c779b35f39f023` (merged PR #372)
 
-**Current hold:** On 10 August 2026 the owner explicitly confirmed that the PR
-#366 product-specification changes had been reviewed and approved, including
-the cross-instructor rescheduling policy, and approved LF-normalised SHA-256
-`B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` as the
-new protected product-specification baseline. The technical-plan hash remains
-unchanged and approved. This resolves the protected-document integrity blocker
-recorded by merged PR #368; it does not itself authorise a staging resume.
-Synthetic Simon remains `reconciling`, unmapped, and unretried under the
-original stable identity. Every staging operation/global/school gate remains
-false, the retained test event destination remains untouched and disabled, and
-the live gate remains absent. Production remains unchanged and inactive. A
-freshly scoped operational authorisation is required before transport testing,
-JWT rotation, gate enablement, or the single Simon reconciliation request. The
-no-retry and no-replacement constraints continue to apply. Slice 3 production
-activation remains unapproved and Slice 5 remains unauthorised.
+**Current hold:** Fraser approved the narrower approval-controlled MVP policy on
+11 August 2026. That decision changes planning only; it does not activate or
+authorise staging/production operations. The last read-only operational
+evidence from PR #372 says the isolated staging controls are fully disabled,
+with the six present operation/global gates exact `false`, the live gate
+absent, and the school Boolean false. Synthetic Simon remains `reconciling`,
+unmapped and unretried under the original stable identity. Those external facts
+were not reverified by the docs-only MVP rebaseline. Any further reconciliation
+requires separately scoped authority, fresh preflight, the corrected
+version-controlled controller, no replacement account, one request, no retry
+and mandatory shutdown. Production activation remains unapproved.
 
 ## 1. Title and purpose
 
@@ -61,7 +56,8 @@ the journey from chat history or provider dashboards.
 The source hierarchy is:
 
 1. [`stripe-connect-simon-launch-product-spec.md`](stripe-connect-simon-launch-product-spec.md)
-   — owner-agreed target product and accounting policy, dated 1 August 2026.
+   — owner-agreed full target dated 1 August 2026 with the controlling
+   approval-controlled MVP boundary agreed 11 August 2026.
 2. [`stripe-connect-simon-launch-technical-implementation-plan.md`](stripe-connect-simon-launch-technical-implementation-plan.md)
    — implementation sequence, slice gates, tests, and acceptance criteria.
 3. `AGENTS.md` and `CLAUDE.md` — repository, tenancy, auth, money, and safety
@@ -87,15 +83,13 @@ The source hierarchy is:
 ### Protected-document integrity
 
 The protected documents are verified using UTF-8 bytes after normalising CRLF
-and lone CR line endings to LF. The technical implementation plan retained its
-3 August 2026 approved hash. On 10 August 2026 the owner explicitly reviewed
-and approved the PR #366 product-specification changes and adopted the current
-product hash as the replacement protected baseline:
+and lone CR line endings to LF. On 11 August 2026 the owner approved the MVP
+scope change and both protected documents were deliberately rebaselined:
 
 | Protected document | LF-normalised SHA-256 |
 |---|---|
-| Product specification | `B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` |
-| Technical implementation plan | `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916` |
+| Product specification | `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B` |
+| Technical implementation plan | `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58` |
 
 Do not modify either protected document during repair or shadow-exercise work.
 If either hash changes, stop and obtain an explicit product-document review.
@@ -126,7 +120,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | `origin/main` resolves to PR #356 merge `ea3a65cb3871924025f2355f388b98488bd71219`. Exact post-merge Actions run `31299415244` completed successfully, including syntax/encoding and Playwright jobs. |
+| Latest baseline | Verified | Work began from clean `origin/main` at merged PR #372, `52ff27aad0e0edc4619da80648c779b35f39f023`. The MVP rebaseline is docs-only and remains unmerged at this entry. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Formally accepted for completed shadow evidence | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Step 17 independently accepted the complete shadow-05 Slice 2 record on 8 August 2026. Production rollout remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
@@ -134,10 +128,10 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Deployment/database identity | Step 17 reverified read-only | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, default/primary branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe remained Sandbox/Test account `acct_1QUSsNIqhTSdZedS` with exact active eight-event webhook `we_1U0qdyIqhTSdZedS2h8O3RxW` and no live shadow-05 binding. |
 | Shadow Checkout return URLs | Merged; accepted shadow evidence | PR #342 merged fail-closed URL binding for all approved producers. All four approved shadow-05 origins are singular and complete; Step 17 accepted the Slice 2 evidence. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
-| Money movement | Not performed | The Slice 3 post-merge review performed no payment, refund, earning, payout, transfer, Connect, webhook replay, reconciliation, or other money/provider mutation. |
+| Money movement | Not performed | The MVP rebaseline performed no Vercel, Neon, Stripe, environment, database, account, payment, refund, earning, payout, transfer, cutover or production operation. |
 | Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
 | Slice 3: retired new products | Merged, deployed, production inactive verified | PR #356 merged as `ea3a65cb…`; exact CI and four Vercel deployments are successful/READY. A serializable read-only production query proved school `1` is CoachCarter and the nested retirement value/type are absent. Supported one-off and grandfathered contracts remain; activation is a separate approval. |
-| Next implementation | Activation and Slice 4 hold | The exact activation/rollback runbook is prepared but unexecuted. Production activation and Slice 4 are not authorised. |
+| Next implementation | MVP A | Version-control and test the corrected staging controller, then complete Simon's retained Slice 4 reconciliation/onboarding under separately scoped authority. After acceptance, proceed to direct-slot outcome eligibility; automatic refunds/issues/disputes/multi-origin/scheduling remain deferred. |
 
 ## 6. Chronological project journey
 
@@ -4712,3 +4706,57 @@ not be retried.
   action and consumed no JWT rotation, but the no-retry stop remains binding;
   any future attempt requires fresh owner direction after reviewing the exact
   present-false gate shape.
+
+## 11 August 2026 - owner-approved approval-controlled MVP rebaseline
+
+- Fraser chose to keep and launch toward the new Accounts v2/source-backed
+  system rather than place Simon on the legacy payout regime. The product and
+  technical plans now define an approval-controlled beta as the immediate
+  launch boundary while retaining the fuller automation design as post-MVP
+  scope.
+- The MVP automates only post-cutover direct single-slot payments with exact
+  one-payment/one-lesson evidence, an explicit instructor outcome, immutable
+  agreement economics, Simon's £90 weekly obligation/carry-forward, Fraser's
+  £0 weekly fee, protected cash, immutable statements, deterministic transfer
+  idempotency and reconciliation. Tenancy, auth, audit, restricted authority,
+  school-wide engine isolation and no-replacement-account controls remain
+  non-negotiable.
+- Automatic refunds, learner issue automation, outcome reminders, automated
+  dispute lifecycle/recovery, unattended Friday scheduling, automatic
+  statement delivery, bank-arrival correlation, and practical-test/offer/
+  captured-request automated origins are deferred. During the beta, reviewed
+  operator refund procedures and audited issue/dispute/payment holds apply;
+  affected lessons cannot be waived into earnings.
+- Two accepted shadow Fridays remain required. Each of the first four live
+  Friday runs requires Fraser's exact approval, immediate reconciliation and a
+  signed review. A successful first run does not enable unattended operation;
+  that requires a separate owner decision and reviewed code/config change.
+- The MVP delivery sequence is now: complete Simon's retained Slice 4
+  reconciliation/onboarding using a version-controlled controller; implement
+  direct-slot contract/outcome eligibility and manual holds; reconcile the
+  planner/fee/statement/approval model; adapt durable transfers and school-wide
+  routing; then shadow and perform a controlled cutover. Completed inactive
+  ledger, transfer, webhook, protected-balance and cutover foundations are
+  reused rather than rebuilt.
+- This documentation rebaseline began from clean merged `main`
+  `52ff27aad0e0edc4619da80648c779b35f39f023` (PR #372) on branch
+  `codex/simon-launch-mvp-rebaseline`. It deliberately changes both protected
+  documents under the owner's new scope decision. The replacement
+  LF-normalised SHA-256 values are product
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+- No Vercel, Neon, Stripe, environment, authentication, gate, school,
+  database, account, payment, refund, earning, payout, transfer, cutover,
+  deployment or production action was performed. Simon's last verified
+  retained staging identity/state and the fully disabled gates recorded by PR
+  #372 are not changed or assumed reverified by this docs-only decision.
+- Local verification passed the focused Accounts v2/UI/schema suite `38/38`,
+  syntax `206/206`, C1 `278/278`, `git diff --check`, and the complete
+  Playwright regression discovery of `1321` tests with exit code `0`. No
+  database integration gate was enabled and no external service was contacted.
+- Current status:
+  `APPROVAL_CONTROLLED_MVP_REBASELINED_NOT_IMPLEMENTED_NOT_DEPLOYED`.
+  The next implementation work is MVP A's reviewed controller and Connect
+  completion. Any operational reconciliation still requires separately scoped
+  authority and a new full preflight; this rebaseline grants none.

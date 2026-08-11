@@ -1,8 +1,8 @@
 # Stripe Connect Simon Launch — Technical Implementation Plan
 
-**Status:** implementation-ready planning document; no production behaviour is activated by this document  
-**Product authority:** `docs/stripe-connect-simon-launch-product-spec.md`, agreed 1 August 2026  
-**Prepared against:** repository state and Stripe documentation reviewed 1 August 2026  
+**Status:** approval-controlled MVP implementation plan; no production behaviour is activated by this document
+**Product authority:** `docs/stripe-connect-simon-launch-product-spec.md`, full target agreed 1 August 2026 and MVP boundary agreed 11 August 2026
+**Prepared against:** repository state through merged PR #372 (`52ff27a`) and the Slice 4 rollout evidence reviewed 11 August 2026
 **Scope:** post-cutover lesson payments, lesson outcomes, refunds, disputes, instructor obligations, weekly statements, and Stripe Connect transfers for Fraser and Simon  
 
 ## 0. Purpose, authority, and non-goals
@@ -38,6 +38,24 @@ This plan does **not** authorize migrations, production code changes, Stripe obj
 - Represent franchise fees and lost-dispute recovery as append-only instructor obligations with append-only applications. Do not import the historic £414 figure or reuse legacy recovery records.
 - Materialize one instructor statement batch per active agreement, including £0 batches. Create source-linked Stripe transfer intents per payment charge inside that statement because Stripe requires an immutable `source_transaction` per transfer.
 - Run financial schedules from an hourly dispatcher plus database occurrence/lease rows. Derive Friday noon, Friday 14:00, and daily 21:00 in `Europe/London`; never hardcode UTC hours through daylight-saving changes.
+
+### 0.3 Approval-controlled MVP implementation boundary
+
+The product-specification MVP overlay controls launch scope. The fuller architecture below remains the target backlog, but the following capabilities are the only beta blockers:
+
+| MVP capability | Required implementation | Explicitly deferred |
+|---|---|---|
+| Connect completion | Finish the existing Slice 4 staging reconciliation for Simon's retained intent; hosted onboarding; current readiness; immutable agreement | Account replacement, approximate matching, direct provider creation outside the application route |
+| Eligible lesson | Direct single-slot post-cutover payment contract, exact fee/availability, explicit instructor outcome, same-contract reschedule, manual hold flags | Practical-test, offer and captured-request origins; learner issue portal; automated notifications/reminders |
+| Weekly accounting | Pure plan, post-fee split, Simon £90/Fraser £0 obligations, carry-forward, £0/held statements, protected balance | Automated refund/dispute obligations; polished statement delivery and bank correlation |
+| Approval and movement | Privileged manual materialization, exact Fraser approval, durable source-linked transfer, same-identity reconciliation, engine isolation | Hourly dispatcher, automatic Friday lock/transfer, automatic catch-up, ordinary-admin mutation |
+| Rollout | Two shadow Fridays, controlled cutover, first four live runs manually approved/reconciled/reviewed | Unattended operation until a separate reviewed activation |
+
+Automatic refund submission is not part of the MVP. The existing reviewed operator refund path remains the execution mechanism; launch code needs only to classify the affected contract safely, block earning/transfer, preserve append-only audit evidence and expose the hold to Fraser. The same fail-closed manual-hold rule applies to learner complaints, disputes and ambiguous payment evidence. A post-transfer incident pauses further affected-instructor runs until reviewed resolution/adjustment evidence exists.
+
+The MVP still requires the hard contracts that make later automation safe: authenticated `school_id`, append-only financial identity, exact source evidence, immutable cutover/agreement/statement facts, protected cash, deterministic idempotency, ambiguity reconciliation, restricted mutation authority, and school-wide v1/v2 routing. No per-instructor mixed engine or legacy fallback is permitted.
+
+Runtime gates must be canonical exact-true controls with an exact-false disabled baseline. The reviewed staging controller logic should be version-controlled and tested, including Vercel deployment URL-to-ID resolution and present-false gate inventory, before any further operational run. Temporary external controllers are not the long-term activation mechanism.
 
 ## 1. Current-state architecture map
 
@@ -859,6 +877,18 @@ All endpoints verify signatures on raw bodies before parsing, record idempotent 
 
 Every slice below has an explicit inactive state and rollback. Do not merge multiple money-mutating slices merely to shorten the rollout. Each PR updates this plan's traceability/checklists and any affected runbook.
 
+### 9.0 MVP delivery sequence (controls beta launch)
+
+The original Slices 0–13 remain the full-target backlog and historical traceability structure. For the approval-controlled MVP, use the following narrower sequence and do not treat deferred Slice 5/6/10/11 automation as launch blockers.
+
+1. **MVP A — Connect completion and repeatable staging control.** Complete Simon's retained Accounts v2 reconciliation/onboarding/agreement work without replacement creation. Move the corrected deployment-URL-to-ID and present-false gate logic into a reviewed, locally self-tested operator controller. Keep all money, link, dashboard, agreement, webhook-processing and live gates disabled except for each separately approved minimal operation window.
+2. **MVP B — Direct-slot contract and outcome eligibility.** Enable only direct single-slot contract evidence, explicit instructor outcomes, immutable same-contract rescheduling, and audited admin-visible manual holds. Other origins are deterministic manual/£0. No automatic refund, issue, reminder or dispute mutation is reachable.
+3. **MVP C — Planner, obligations, statements and approval.** Implement/reconcile the launch planner around exact direct-slot evidence, post-fee split, Simon £90/Fraser £0 weekly obligations, carry-forward, protected cash, immutable statements and exact Fraser approval. Provide the minimum admin/instructor read surfaces needed to inspect evidence and blockers.
+4. **MVP D — Durable movement and school-wide routing.** Adapt the existing durable transfer/reconciler to the MVP statements, use source-linked stable identities, add the privileged manual commands, and prove v1 hard-refusal for the cut-over school. No automatic scheduler invokes money mutation.
+5. **MVP E — Shadow and controlled cutover.** Run and sign off two distinct shadow Fridays, rehearse pause/rollback and ambiguous outcomes, then conduct the cutover. Require Fraser approval and exact reconciliation on each of the first four live Friday runs. A separate docs/code/config review is required before unattended execution.
+
+Each MVP item should remain one or more small PRs with its own inactive gate, focused database and fault-injection tests, rollback boundary and living-log handover. “MVP” changes scope, not review quality or mutation safety.
+
 ### Slice 0 — Stripe dependency and client boundary
 
 **Scope:** pin/test a current Stripe SDK/API version; add `_stripe-clients.js`; preserve existing behaviour.  
@@ -919,6 +949,8 @@ Every slice below has an explicit inactive state and rollback. Do not merge mult
 **Inactive:** collect only in shadow for post-cutover test contracts; legacy payout engine ignores outcomes.  
 **Rollback:** hide outcome UI/disable write feature; retained revisions remain audit-only; legacy booking state is not rewritten.
 
+**MVP disposition:** implement outcome revisions and same-contract rescheduling; replace issue-report and reminder automation with audited manual holds and defer their UI/delivery work.
+
 ### Slice 6 — Durable automatic refunds
 
 **Scope:** exact refund planner, transactional cancellation/intent, Stripe executor, reconciliation, post-payout obligation hook, learner/admin UX.  
@@ -928,6 +960,8 @@ Every slice below has an explicit inactive state and rollback. Do not merge mult
 **Acceptance:** no external call precedes the durable intent; an ambiguous call cannot create a second identity; exact existing ledgers close once on success; failure does not reopen the slot.  
 **Inactive:** executor `shadow` writes previews/intents only with a fake/test Stripe adapter; production automatic submission is separately gated.  
 **Rollback:** disable submission; preserve/reconcile all existing intents manually with same identities; never delete them or fall back to a second refund.
+
+**MVP disposition:** deferred. Add only the classification/hold integration needed to prevent a refunded, refund-pending or ambiguous lesson from entering a batch. Continue using the existing reviewed operator refund procedure.
 
 ### Slice 7 — Launch earning, fee/debt, statement planner
 
@@ -968,6 +1002,8 @@ Every slice below has an explicit inactive state and rollback. Do not merge mult
 **Acceptance:** opening affects only an unlocked related lesson; terminal loss creates exactly one bounded obligation; locked statements never change; no automatic Stripe evidence submission.  
 **Inactive:** event ingestion/evidence display may run in shadow; obligation creation gated until formula decision and launch mode.  
 **Rollback:** disable derived action/notifications while preserving receipts; manually review any already-created obligation rather than delete it.
+
+**MVP disposition:** deferred. Use a privileged manual hold/freeze and reviewed append-only correction process; no automated dispute obligation or reminder is required for beta launch.
 
 ### Slice 11 — Complete production UX, operations, and legacy separation
 
@@ -1089,9 +1125,18 @@ Conflicting tests must be renamed/replaced with an explicit reference to the new
 
 ## 11. Rollout plan for Fraser and Simon
 
+For the approval-controlled MVP, the phase plan below is read with these overrides:
+
+- test and shadow only the direct single-slot origin; other origins remain manual/£0;
+- rehearse manual refund/issue/dispute holds rather than their deferred automatic executors;
+- use privileged manual commands for the Friday-noon plan and intended 14:00 transfer window; do not enable the hourly financial mutation dispatcher;
+- retain two independently accepted shadow Fridays;
+- require Fraser's exact approval, post-transfer reconciliation and signed review for each of the first four live Fridays; and
+- do not enter Phase E automatic execution without a separate owner decision, implementation review, regression run and gate change.
+
 ### Phase A — Foundation and test-mode evidence
 
-1. Merge Slices 0–2 with all modes disabled or shadow-only.
+1. Treat the merged inactive foundation through Slice 4 as the baseline; do not replay or replace completed schema/client/Accounts v2 work.
 2. Rehearse additive migrations and verify existing accounting hashes/row counts.
 3. Configure test-mode Accounts v2 recipients and agreement versions for Fraser and Simon. Confirm dashboard decision and hosted onboarding.
 4. Exercise one supported direct payment per origin and every ineligible source shape. Verify exact fee and availability evidence.
@@ -1127,7 +1172,7 @@ Conflicting tests must be renamed/replaced with an explicit reference to the new
 
 ### Phase E — Post-first-run automation
 
-After the first run is fully transferred/reconciled and the signed review has no unresolved financial discrepancy, record the transition to future automatic Friday runs. Continue daily alerts for pending evidence, refund/transfer reconciliation, current Connect regressions, protected-balance breaches, issues, and dispute deadlines. Review the first four live statements manually even though approval is no longer required.
+Phase E is deferred from the MVP. Success of the first run does not enable automatic Friday execution. Complete four Fraser-approved, exactly reconciled live Fridays first. A later PR and operational approval must demonstrate the scheduler, alert coverage, deferred incident automation and gate transition before unattended execution can be enabled.
 
 ### Pause and rollback principles
 
@@ -1175,9 +1220,9 @@ After the first run is fully transferred/reconciled and the signed review has no
 | Two shadow Fridays | shadow runs/readiness record | signed rehearsal evidence |
 | No historic debt/import/cap | inactive legacy modules/new cutover | zero-import diagnostic/target tests |
 
-## 13. Owner decisions resolved on 1 August 2026
+## 13. Owner decisions
 
-The four implementation-planning questions are settled and must not be reopened by later slices unless Fraser explicitly changes the product policy.
+The first four implementation-planning questions were settled on 1 August 2026. The MVP launch decision was settled on 11 August 2026. They must not be reopened by later slices unless Fraser explicitly changes the product policy.
 
 ### Decision 1 — Partial dispute-loss recovery: proportional
 
@@ -1206,8 +1251,12 @@ At Friday lock, an otherwise valid earning is calculated and locked even if that
 
 The held amount remains a protected platform liability. Once readiness is proven, a later run releases the original locked amount without repricing, mutating the locked statement or requiring lesson reconfirmation. It is never treated as franchise debt, platform revenue or forfeited earnings.
 
+### Decision 5 — Approval-controlled MVP before full automation
+
+Keep the new Accounts v2/source-backed system and launch a narrow beta rather than putting Simon onto the legacy engine. The beta supports only direct single-slot automated earnings, manual reviewed refunds/issues/disputes, operator-initiated Friday processing, two shadow Fridays and Fraser approval/reconciliation for the first four live Fridays. All other origins and unattended automation remain deferred until separately approved.
+
 ## 14. Recommended starting point
 
-Start with **Slice 0 — Stripe dependency and client boundary**, then Slice 1. Accounts v2 and current webhook semantics should not be built on the repository's old floating `stripe:^14.0.0` client, and the client-boundary PR is reversible, behaviour-preserving, and gives every later slice one explicit API/security contract. Do not start with payout formula edits or production onboarding: neither can be safely reviewed until exact payment/contract/intent schemas and Stripe version behaviour are fixed.
+Start from merged PR #372 and **MVP A — Connect completion and repeatable staging control**. The dependency/client boundary, inert launch schema and Accounts v2 Slice 4 groundwork now exist; do not restart those completed foundations. First version-control and test the corrected controller contract, then complete Simon's original retained reconciliation/onboarding path under separately scoped operational authority.
 
-The first implementation PR should include no schema, UI, feature flag activation, Stripe account creation, refunds, or transfers. Its acceptance is a fully green existing Stripe/payment suite and a recorded official-version compatibility decision.
+After Connect acceptance, proceed to MVP B's direct-slot outcome eligibility. Do not start automatic refunds, learner issue automation, dispute automation, multi-origin support or the hourly money scheduler. Every PR remains inactive by default, and no production deployment, account creation, refund, transfer or cutover follows from this planning document alone.
