@@ -4970,3 +4970,52 @@ not be retried.
   unresolved and onboarding remains prohibited. Any future operational
   attempt requires fresh owner authority after a reviewed correction to the
   clean-source deployment-evidence path.
+
+## 11 August 2026 - MVP A4 clean-source controller correction prepared; not operated
+
+- Preparation began from freshly updated merged `main` at
+  `6744ec0f6189b119a23c81b1a75044e36a82d030` on branch
+  `codex/simon-staging-reconciliation-mvp-a4`. Retained evidence for
+  deployments `dpl_EvZU97KjnvH89EbK2LkisB9j47oj` and
+  `dpl_FSgamEDDPXYRUqNhA6HCbpQuNxBg` was used without another deployment or
+  staging attempt. Both records matched the exact isolated project, custom
+  `staging` environment, authorised commit, staging-only alias/domain and
+  non-production target, but carried `meta.gitCommitRef = "HEAD"` and omitted
+  `meta.gitDirty`. The controller's requirement that `meta.gitDirty` be present
+  and exact `null` remains unchanged.
+- The diagnosis is a deployment-source procedure gap. The controller previously
+  learned that source proof was ambiguous only after a deployment existed; its
+  sealed adapter did not have to prove a named branch/worktree before calling
+  Vercel. Controller version 2 now requires `readDeploymentSource` before every
+  deployment. The proof must state an actual worktree, non-detached HEAD, the
+  exact `refs/heads/<expected branch>` symbolic ref, matching named branch,
+  `HEAD` commit and branch-tip commit both equal to the exact authorised merged
+  commit, explicit clean state, and empty porcelain status including untracked
+  files. Missing or contradictory proof fails before deployment and before any
+  enablement.
+- A future separately authorised adapter must therefore deploy from a fresh
+  named branch/worktree pinned to that attempt's exact authorised merged commit,
+  set the same branch and commit in `expectedDeployment`, and derive the source
+  proof immediately before each deployment. Deployment metadata must then
+  reproduce the exact named `meta.gitCommitRef`, exact commit and the existing
+  explicit `meta.gitDirty === null` proof. Detached `HEAD`, absent symbolic-ref
+  evidence, dirty/untracked status, branch/HEAD/tip mismatch, `HEAD` metadata,
+  or absent/ambiguous `gitDirty` all fail closed.
+- Focused controller tests passed `15/15`; detached/missing named-branch proof,
+  dirty/untracked and mismatched source, and absent deployment `meta.gitDirty`
+  fault injections each retained POST count `0` and exercised ordered shutdown.
+  Exact named clean source plus exact commit and explicit `gitDirty: null`
+  reached deployment validation only with POST count `0`. The unchanged
+  Accounts v2/UI/schema suite passed `38/38` (`53/53` combined), and
+  `git diff --check` passed. Protected LF-normalised hashes remained exact:
+  product `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+- This was repository preparation only. Vercel, Neon and Stripe were not
+  contacted; no deployment, gate or school flag change, JWT rotation,
+  authenticated reconciliation POST, database write, Accounts v2 list/create,
+  direct provider create, replacement account, onboarding action or Production
+  action occurred. Status is
+  `MVP_A4_CLEAN_SOURCE_CONTROLLER_CORRECTION_PREPARED_NOT_OPERATED`. Simon's
+  retained intent, stable identity and no-replacement controls remain unchanged;
+  a future attempt still requires fresh explicit owner authority.

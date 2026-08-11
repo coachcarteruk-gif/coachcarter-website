@@ -3,7 +3,7 @@
 
 const path = require('path');
 
-const CONTROLLER_VERSION = 1;
+const CONTROLLER_VERSION = 2;
 const OPERATIONAL_APPROVAL = 'SIMON_STAGING_RECONCILIATION_APPROVED';
 const RECONCILIATION_ROUTE = '/api/connect?action=v2-account';
 const EXPECTED_IDENTITY = Object.freeze({
@@ -38,6 +38,7 @@ const REQUIRED_ADAPTER_METHODS = Object.freeze([
   'readGateState',
   'readSchoolFeature',
   'readRetainedIntent',
+  'readDeploymentSource',
   'deploy',
   'resolveDeploymentUrl',
   'setStagingGate',
@@ -140,6 +141,22 @@ function selectDeploymentId(metadata) {
   return exactString(metadata.id, /^dpl_[A-Za-z0-9]+$/, 'DEPLOYMENT_ID_NOT_SCALAR');
 }
 
+function exactNamedBranch(value, failureCode) {
+  const branch = exactString(value, /^[A-Za-z0-9][A-Za-z0-9._/-]*$/, failureCode);
+  if (
+    branch === 'HEAD'
+    || /^[a-f0-9]{40}$/i.test(branch)
+    || branch.endsWith('.')
+    || branch.endsWith('/')
+    || branch.includes('..')
+    || branch.includes('//')
+    || branch.includes('@{')
+  ) {
+    fail(failureCode);
+  }
+  return branch;
+}
+
 function validateExpectedDeployment(expected) {
   if (!isPlainObject(expected)) fail('EXPECTED_DEPLOYMENT_MISSING');
   const normalized = {
@@ -147,6 +164,7 @@ function validateExpectedDeployment(expected) {
     customEnvironmentId: exactString(expected.customEnvironmentId, /^env_[A-Za-z0-9]+$/, 'EXPECTED_ENVIRONMENT_INVALID'),
     customEnvironmentSlug: exactString(expected.customEnvironmentSlug, /^staging$/, 'EXPECTED_ENVIRONMENT_INVALID'),
     commitSha: exactString(expected.commitSha, /^[a-f0-9]{40}$/, 'EXPECTED_COMMIT_INVALID'),
+    branch: exactNamedBranch(expected.branch, 'EXPECTED_BRANCH_INVALID'),
     alias: exactString(expected.alias, /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.vercel\.app$/i, 'EXPECTED_ALIAS_INVALID'),
     target: Object.prototype.hasOwnProperty.call(expected, 'target') ? expected.target : null,
   };
@@ -157,6 +175,32 @@ function validateExpectedDeployment(expected) {
   return Object.freeze(normalized);
 }
 
+function validateDeploymentSource(source, expectedInput) {
+  const expected = validateExpectedDeployment(expectedInput);
+  if (!isPlainObject(source)) fail('DEPLOYMENT_SOURCE_PROOF_MALFORMED');
+  if (source.insideWorkTree !== true) fail('DEPLOYMENT_SOURCE_WORKTREE_AMBIGUOUS');
+  if (source.detached !== false || source.symbolicRef !== `refs/heads/${expected.branch}`) {
+    fail('DEPLOYMENT_SOURCE_DETACHED_OR_AMBIGUOUS');
+  }
+  if (exactNamedBranch(source.branch, 'DEPLOYMENT_SOURCE_BRANCH_AMBIGUOUS') !== expected.branch) {
+    fail('DEPLOYMENT_SOURCE_BRANCH_MISMATCH');
+  }
+  if (source.headCommitSha !== expected.commitSha || source.branchCommitSha !== expected.commitSha) {
+    fail('DEPLOYMENT_SOURCE_COMMIT_MISMATCH');
+  }
+  if (source.clean !== true || source.statusPorcelain !== '') fail('DEPLOYMENT_SOURCE_DIRTY_OR_AMBIGUOUS');
+  return Object.freeze({
+    branch: expected.branch,
+    symbolicRef: `refs/heads/${expected.branch}`,
+    headCommitSha: expected.commitSha,
+    branchCommitSha: expected.commitSha,
+    insideWorkTree: true,
+    detached: false,
+    clean: true,
+    statusPorcelain: '',
+  });
+}
+
 function validateDeploymentMetadata(metadata, expectedInput, deploymentUrl) {
   const expected = validateExpectedDeployment(expectedInput);
   const id = selectDeploymentId(metadata);
@@ -164,6 +208,7 @@ function validateDeploymentMetadata(metadata, expectedInput, deploymentUrl) {
   if (metadata.projectId !== expected.projectId) fail('DEPLOYMENT_PROJECT_MISMATCH');
   if (metadata.target !== expected.target || metadata.target === 'production') fail('DEPLOYMENT_TARGET_MISMATCH');
   if (!isPlainObject(metadata.meta) || metadata.meta.gitCommitSha !== expected.commitSha) fail('DEPLOYMENT_COMMIT_MISMATCH');
+  if (metadata.meta.gitCommitRef !== expected.branch) fail('DEPLOYMENT_BRANCH_MISMATCH');
   if (!Object.prototype.hasOwnProperty.call(metadata.meta, 'gitDirty') || metadata.meta.gitDirty !== null) {
     fail('DEPLOYMENT_DIRTY_OR_AMBIGUOUS');
   }
@@ -270,7 +315,11 @@ async function callAdapter(adapter, method, args, failureCode) {
 }
 
 async function deployAndValidate(adapter, phase) {
-  const output = await callAdapter(adapter, 'deploy', { environment: 'staging', phase }, 'DEPLOYMENT_FAILED');
+  const source = validateDeploymentSource(
+    await callAdapter(adapter, 'readDeploymentSource', {}, 'DEPLOYMENT_SOURCE_READ_FAILED'),
+    adapter.expectedDeployment
+  );
+  const output = await callAdapter(adapter, 'deploy', { environment: 'staging', phase, source }, 'DEPLOYMENT_FAILED');
   const url = parseDeploymentUrlOutput(output);
   const metadata = await callAdapter(
     adapter,
@@ -504,6 +553,7 @@ module.exports = {
   runOperationalController,
   selectDeploymentId,
   validateDeploymentMetadata,
+  validateDeploymentSource,
   validateGateState,
   validatePostflight,
   validateReconciliationResult,
