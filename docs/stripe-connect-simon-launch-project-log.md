@@ -4640,3 +4640,75 @@ not be retried.
   No retry is authorised. Any future attempt requires new explicit owner
   authority and every existing identity, no-replacement, one-request,
   no-retry, shutdown, and postflight control.
+
+## 11 August 2026 - PR #371 reconciliation stopped on retained gate-shape mismatch; disabled
+
+- Continued from fresh merged `main`
+  `a6adc9d01904c59ce4b5e8df8cdb1a4e3e749f78`, the merge commit for PR #371,
+  on branch `codex/simon-stripe-connect-slice4-reconciliation`. `HEAD` and
+  `origin/main` were identical before work and the worktree was clean. The
+  protected LF-normalised hashes reproduced exactly: product specification
+  `B925C1500E7E775DC2A91AABDFA348BEB78045826875599E8EAACC7D54291585` and
+  technical plan
+  `64BC84E3CE8303E8CBE1C7FA0E8ADEB221E7F4AD3294C5871417E06F0EEAF916`.
+- Static source review reconfirmed that Simon's `reconciling` intent enters
+  Accounts v2 listing and returns before the `planned`-intent account-create
+  branch. The temporary external controller was pinned to the PR #371 commit,
+  isolated to fresh state paths, and corrected to inspect the application's
+  plural account-link, dashboard-link, and agreement gate names. Its offline
+  scalar-ID, array-rejection, success-stream-pollution, plain-URL, and
+  JSON-string URL tests passed. The controller file SHA-256 was
+  `9A278BD6901CCABE614983B21825554A36703F3A0429D05E4204BE06F9321084`.
+- Read-only preflight matched exact Neon project `shiny-bonus-66942766`,
+  database `neondb`, and retained temporary branch
+  `br-dark-recipe-zarmjbix`, which remained ready,
+  non-primary/non-default/unprotected. School `1` retained exact JSON Boolean
+  `false` for `features.stripe_connect_accounts_v2`, payout engine `v1`, and
+  null legacy school mapping. Simon instructor `3` remained active, unpaused,
+  and unmapped with intent `3c2349a0-1696-4b57-b732-fc14bbde57df`, stable
+  identity `cc:connect-v2:1:3:test:recipient`, state `reconciling`, and only
+  attempt 1 `provider_ambiguous`/`network` with provider code `ETIMEDOUT`.
+  Simon scope and observation counts remained zero; Fraser remained the one
+  retained scope and observation.
+- The corrected controller's initial disabled-gate assertion then stopped
+  before deployment. Contrary to the retained handover's absent-gate shape,
+  `STRIPE_CONNECT_V2_ACCOUNT_LINKS_ENABLED` was present. Sanitised read-only
+  inventory established the complete actual shape: global, account creation,
+  account links, dashboard links, agreements, and webhook processing were all
+  present and exact `false`; live remained absent and `STRIPE_MODE=test`.
+  This is fully disabled behavior, but it does not satisfy the reviewed
+  controller's exact absent-gate invariant. Per the mismatch/controller-error
+  stop rule, there was no correction, deployment, URL-to-ID live-shape
+  validation, enablement, transport probe, dispatch, or operational retry.
+- Exact staging-only JWT rotation count is **zero**. Exact harmless transport
+  GET count is **zero**. Exact authenticated, CSRF-bound Simon reconciliation
+  POST count is **zero**. No Vercel environment or Neon row was written and no
+  controller state/signal/result file was created. The existing staging
+  `JWT_SECRET` remains one Sensitive record; Production remains at zero
+  variables. The first permitted Stripe action was never reached, so Accounts
+  v2 list/create, replacement-account, direct provider-create, and disabled
+  event-destination action counts are all zero.
+- Read-only Vercel postflight retained latest deployment
+  `dpl_EbTnh5cMqNiKZcayPRSUw68Nynih`, READY from exact PR #370 source; no
+  PR #371 deployment exists. Deployment-scoped runtime request-path and status
+  counts remain empty. Read-only Neon postflight matched preflight exactly:
+  intents `2`, attempts `2`, link events `0`, scopes `1` (Simon `0`),
+  observations `1` (Simon `0`), agreements `1`, lesson payment contracts `4`,
+  and all inspected payout/refund/earning/transfer/cutover counts `0`. The
+  ledger-state fingerprint remained
+  `c308d045ffd57a922d40cb17d2b2d918`; Slice 3 remains inactive `shadow`.
+- Regression evidence passed focused Accounts v2/UI/schema tests `38/38`,
+  syntax `206/206`, and C1 `278/278`. The current 65-file non-integration
+  matrix ran once: `602/612` passed and ten browser-backed UI cases failed only
+  because Chromium launch returned operating-system `spawn EPERM` (eight
+  refund UI cases and two Connect UI cases). No assertion failed and the suite
+  was not retried or moved to another browser. Migration 035 was already pure
+  LF and exact to the tracked HEAD blob, SHA-256
+  `7ac172db071fdbc86ff43e98f2e31eb2c03eb5295ba704a52fafec2865a92749`;
+  it was not rewritten.
+- Final status is
+  `STAGING_RECONCILIATION_STOPPED_GATE_SHAPE_MISMATCH_DISABLED`. Mandatory
+  disabled-state postflight is complete. This attempt performed no Stripe
+  action and consumed no JWT rotation, but the no-retry stop remains binding;
+  any future attempt requires fresh owner direction after reviewing the exact
+  present-false gate shape.

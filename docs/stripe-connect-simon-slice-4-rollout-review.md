@@ -974,3 +974,70 @@ No reconciliation retry is authorised. A future operational attempt requires
 new explicit owner authority and must begin from fresh `main` with the same
 identity-preservation, no-replacement, one-request, no-retry, shutdown, and
 postflight controls.
+
+## PR #371 retained-gate-shape checkpoint stop - 11 August 2026
+
+The owner-authorised continuation began from fresh merged `main`
+`a6adc9d01904c59ce4b5e8df8cdb1a4e3e749f78`, the merge commit for PR #371,
+on branch `codex/simon-stripe-connect-slice4-reconciliation`. The protected
+LF-normalised product and technical hashes remained exact. Static review and
+focused Accounts v2/UI/schema tests (`38/38`) reconfirmed that Simon's retained
+`reconciling` state lists/reconciles and returns before the account-creation
+branch, preserving instructor `3`, intent
+`3c2349a0-1696-4b57-b732-fc14bbde57df`, and stable identity
+`cc:connect-v2:1:3:test:recipient` without a replacement path.
+
+The external controller was updated before use to the PR #371 source, fresh
+state paths, the corrected Vercel deployment-URL-to-ID resolution, and the
+application's plural link/dashboard/agreement environment names. Offline tests
+passed scalar-ID selection, array and success-stream-pollution rejection, and
+plain/JSON-string deployment URL parsing. Read-only Neon preflight on explicit
+temporary branch `br-dark-recipe-zarmjbix` matched retained state: school `1`'s
+gate was exact JSON Boolean `false`, payout engine `v1`, Simon's intent was
+unmapped `reconciling` with only its singular
+`provider_ambiguous`/`network` attempt, and the ledger fingerprint was
+`c308d045ffd57a922d40cb17d2b2d918`.
+
+The controller then failed closed in its initial disabled-state assertion,
+before deployment or any operational mutation. The retained handover said the
+link, dashboard-link, and agreement gates were absent, but read-only Vercel
+inventory proved their plural production names are present and exact `false`.
+Global, account creation, webhook processing, account links, dashboard links,
+and agreements are all exact `false`; live is absent and `STRIPE_MODE=test`.
+Although this is fully disabled behavior, the reviewed controller required the
+three gates to be absent. The mandatory mismatch/controller-error stop was
+therefore applied without changing the invariant or attempting a correction.
+
+No fresh deployment was created, so the corrected deployment URL-to-ID path
+was not live-shape validated in this attempt. The latest deployment remains
+`dpl_EbTnh5cMqNiKZcayPRSUw68Nynih` from PR #370 and its runtime request-path
+and status counts remain empty. JWT rotation count is **zero**, harmless
+transport GET count is **zero**, authenticated CSRF-bound reconciliation POST
+count is **zero**, and Vercel/Neon write counts are **zero**. No controller
+state file exists. Stripe was not contacted: Accounts v2 list/create,
+replacement-account, direct provider creation, and event-destination actions
+are all zero. Production retains zero variables and the staging JWT remains a
+single Sensitive record.
+
+Read-only mandatory postflight matched preflight exactly. The school Boolean
+remains false; Simon remains the same unmapped intent and attempt. Counts remain
+intents `2`, attempts `2`, link events `0`, scopes `1` (Simon `0`),
+observations `1` (Simon `0`), agreements `1`, and lesson payment contracts `4`.
+All inspected payout, refund, earning, transfer, and cutover counts remain `0`;
+the ledger fingerprint is unchanged and `simon_launch_v1` remains inactive
+`shadow`.
+
+Final local validation passed focused `38/38`, syntax across `206` JavaScript
+files, and C1 across `278` files. The 65-file non-integration matrix ran once
+and finished `602/612`; the ten failures were exclusively Chromium process
+launch `spawn EPERM` errors across eight refund UI cases and two Connect UI
+cases, with no assertion failure. It was not retried or moved to another
+browser. Migration 035 was already the tracked pure-LF blob, SHA-256
+`7ac172db071fdbc86ff43e98f2e31eb2c03eb5295ba704a52fafec2865a92749`, and
+was not changed.
+
+Status is `STAGING_RECONCILIATION_STOPPED_GATE_SHAPE_MISMATCH_DISABLED`.
+The authorised JWT rotation was not consumed, but the no-retry stop remains
+binding. Any future attempt requires fresh owner direction after review of the
+actual present-false gate shape and must preserve every identity, no-create,
+single-request, shutdown, and postflight control.
