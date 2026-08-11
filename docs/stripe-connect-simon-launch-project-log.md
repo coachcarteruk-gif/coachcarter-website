@@ -3,26 +3,26 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **APPROVAL-CONTROLLED MVP REBASELINED — NOT IMPLEMENTED OR
-DEPLOYED — SLICE 4 RECONCILIATION REMAINS STOPPED AND DISABLED — PRODUCTION
-ACTIVATION NOT APPROVED**
+**Current status:** **MVP A1 STAGING CONTROLLER PREPARED FOR REVIEW — NOT
+OPERATED OR DEPLOYED — SLICE 4 RECONCILIATION REMAINS STOPPED AND DISABLED —
+PRODUCTION ACTIVATION NOT APPROVED**
 
 **Last updated:** 11 August 2026
 
 **Verified source baseline:** remote `main` at
-`52ff27aad0e0edc4619da80648c779b35f39f023` (merged PR #372)
+`c85381e53d2c4e9754e80c093d60b0fac10061b0` (merged PR #373)
 
-**Current hold:** Fraser approved the narrower approval-controlled MVP policy on
-11 August 2026. That decision changes planning only; it does not activate or
-authorise staging/production operations. The last read-only operational
-evidence from PR #372 says the isolated staging controls are fully disabled,
-with the six present operation/global gates exact `false`, the live gate
-absent, and the school Boolean false. Synthetic Simon remains `reconciling`,
-unmapped and unretried under the original stable identity. Those external facts
-were not reverified by the docs-only MVP rebaseline. Any further reconciliation
-requires separately scoped authority, fresh preflight, the corrected
-version-controlled controller, no replacement account, one request, no retry
-and mandatory shutdown. Production activation remains unapproved.
+**Current hold:** MVP A1 now versions and locally tests the corrected staging
+controller contract, but this preparation does not activate or authorise a
+staging operation. The last read-only operational evidence from PR #372 says
+the isolated staging controls are fully disabled, with the six present
+operation/global gates exact `false`, the live gate absent, and the school
+Boolean false. Synthetic Simon remains `reconciling`, unmapped and unretried
+under the original stable identity. This controller-preparation session did not
+operationally reverify those external facts. Any reconciliation still requires
+the controller change to be reviewed and merged, new explicit authority, fresh
+preflight, no replacement account, one request, no retry and mandatory
+shutdown. Production activation remains unapproved.
 
 ## 1. Title and purpose
 
@@ -120,7 +120,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Latest baseline | Verified | Work began from clean `origin/main` at merged PR #372, `52ff27aad0e0edc4619da80648c779b35f39f023`. The MVP rebaseline is docs-only and remains unmerged at this entry. |
+| Latest baseline | Verified | MVP A1 began from clean `origin/main` at merged PR #373, `c85381e53d2c4e9754e80c093d60b0fac10061b0`; PR #373 was independently confirmed merged before branching. |
 | Slice 0: Stripe client boundary | Merged | PR #333, merge `5a59db1…`; Stripe `22.4.0`, API `2026-07-29.dahlia`, central client boundary. |
 | Slice 1: inert schema | Applied, inactive | PRs #334–#335; migration 039 applied schema-only; production school remained on payout engine v1. |
 | Slice 2: payment contracts | Formally accepted for completed shadow evidence | PRs #336–#337 prepared and repaired shadow-gated payment evidence/contracts. Step 17 independently accepted the complete shadow-05 Slice 2 record on 8 August 2026. Production rollout remains `PREPARED_NOT_APPROVED_NOT_DEPLOYED`. |
@@ -131,7 +131,7 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Money movement | Not performed | The MVP rebaseline performed no Vercel, Neon, Stripe, environment, database, account, payment, refund, earning, payout, transfer, cutover or production operation. |
 | Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
 | Slice 3: retired new products | Merged, deployed, production inactive verified | PR #356 merged as `ea3a65cb…`; exact CI and four Vercel deployments are successful/READY. A serializable read-only production query proved school `1` is CoachCarter and the nested retirement value/type are absent. Supported one-off and grandfathered contracts remain; activation is a separate approval. |
-| Next implementation | MVP A | Version-control and test the corrected staging controller, then complete Simon's retained Slice 4 reconciliation/onboarding under separately scoped authority. After acceptance, proceed to direct-slot outcome eligibility; automatic refunds/issues/disputes/multi-origin/scheduling remain deferred. |
+| Next implementation | MVP A | Review and merge the prepared repository controller, then complete Simon's retained Slice 4 reconciliation/onboarding only under new separately scoped operational authority. After acceptance, proceed to direct-slot outcome eligibility; automatic refunds/issues/disputes/multi-origin/scheduling remain deferred. |
 
 ## 6. Chronological project journey
 
@@ -4760,3 +4760,62 @@ not be retried.
   The next implementation work is MVP A's reviewed controller and Connect
   completion. Any operational reconciliation still requires separately scoped
   authority and a new full preflight; this rebaseline grants none.
+
+## 11 August 2026 - MVP A1 staging reconciliation controller prepared locally only
+
+- Began from clean, freshly updated `origin/main`
+  `c85381e53d2c4e9754e80c093d60b0fac10061b0`, the merge commit for PR #373,
+  on branch `codex/simon-staging-reconciliation-controller`. GitHub confirmed
+  PR #373 was merged before the branch was created.
+- Reproduced the approved LF-normalised protected hashes before editing:
+  product specification
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical implementation plan
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+  Neither protected document was modified.
+- Added the repository-owned, dependency-injected Node controller
+  `scripts/stripe-connect-simon-staging-controller.js`. Its no-argument mode is
+  offline/dry-run with a zero request budget. Operational mode requires an
+  explicit approval phrase and an absolute external adapter outside the
+  repository; the adapter surface is sealed and exposes no direct provider
+  account-creation operation.
+- The controller pins Simon instructor `3`, intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df`, and stable identity
+  `cc:connect-v2:1:3:test:recipient`. It requires retained state
+  `reconciling`, forbids replacement/direct creation, permits exactly one
+  authenticated and CSRF-bound POST only to
+  `/api/connect?action=v2-account`, and requires listing to be the first Stripe
+  action with zero account-create calls. Redirects, retries, alternate routes,
+  ambiguous transport, zero/multiple matches, mismatches and improvised retries
+  fail closed.
+- The corrected deployment contract accepts only one plain or JSON-string HTTPS
+  `*.vercel.app` URL, rejects arrays/multiple values/pollution, resolves the URL
+  read-only, requires one scalar `dpl_...` ID, and validates exact project,
+  custom `staging` environment, clean commit, staging-only alias/domain and
+  non-production target before enablement.
+- Disabled preflight and shutdown require all six named Slice 4 gates present
+  and exact `false`, live absent or exact `false`, `STRIPE_MODE=test`, Production
+  proven untouched, and the guarded school value exact JSON Boolean false.
+  Minimal enablement is structurally limited to global true, account creation
+  true solely for the existing route, and the school Boolean true. Shutdown
+  always attempts account creation false, global false and school false in that
+  order, then proves the complete disabled state and validates a final disabled
+  deployment.
+- Offline fault-injection tests passed `11/11`; the existing Accounts
+  v2/UI/schema suite passed `38/38`; syntax passed `206/206`; C1 passed
+  `278/278`; the full local Playwright regression passed all `1332` discovered
+  tests; and `git diff --check` passed. The default repository controller command
+  returned offline mode with POST count `0`.
+- This was controller preparation only. No Vercel or Neon metadata request,
+  harmless GET, deployment, environment read/write, JWT rotation, gate change,
+  school-Boolean read/write, database query/write, authenticated reconciliation
+  POST, Stripe list/create, account, event-destination, payment, refund, earning,
+  payout, transfer, cutover, Slice 3, Slice 5 or Production action occurred.
+  Sensitive provider output and authentication material were neither printed
+  nor persisted. Retained external state was not operationally reverified and
+  is not claimed changed.
+- Current status is
+  `MVP_A1_STAGING_CONTROLLER_PREPARED_FOR_REVIEW_NOT_OPERATED`. Stop after the
+  draft controller PR. Simon reconciliation remains prohibited until this
+  controller PR is reviewed and merged and Fraser provides new explicit
+  operational authority.

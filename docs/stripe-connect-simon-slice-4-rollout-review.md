@@ -1,7 +1,7 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; PRODUCT_SPEC_HASH_APPROVED_REBASELINED; RECONCILIATION_STOPPED_DISABLED`
-Prepared: 9 August 2026; updated 10 August 2026
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A1_CONTROLLER_PREPARED_FOR_REVIEW; RECONCILIATION_STOPPED_DISABLED`
+Prepared: 9 August 2026; updated 11 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
 
@@ -1041,3 +1041,67 @@ The authorised JWT rotation was not consumed, but the no-retry stop remains
 binding. Any future attempt requires fresh owner direction after review of the
 actual present-false gate shape and must preserve every identity, no-create,
 single-request, shutdown, and postflight control.
+
+## MVP A1 repository controller preparation - 11 August 2026
+
+This preparation began from clean merged PR #373 at
+`c85381e53d2c4e9754e80c093d60b0fac10061b0` on branch
+`codex/simon-staging-reconciliation-controller`. The approved LF-normalised
+product and technical hashes reproduced exactly as
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B` and
+`C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+Neither protected document was changed.
+
+The repository now contains a dependency-injected Node operator controller and
+focused offline tests. Default execution is offline/dry-run. Operational mode
+requires a separate explicit approval phrase and an external adapter outside
+the repository; it neither embeds nor persists credentials, environment
+values, authentication material, connection strings or provider payloads. The
+sealed adapter exposes only staging/deployment/state reads, the three reviewed
+gate mutations, the one existing application-route reconciliation POST and
+sanitised postflight evidence. It exposes no direct Accounts v2 creation call.
+
+The controller requires exact retained Simon identity: instructor `3`, intent
+`3c2349a0-1696-4b57-b732-fc14bbde57df`, stable identity
+`cc:connect-v2:1:3:test:recipient`, test mode, state `reconciling`, no mapping,
+no scope and no replacement. The only request budget is one authenticated,
+CSRF-bound POST to `/api/connect?action=v2-account`, with redirects and retries
+disabled. A successful result must prove listing/reconciliation was the first
+Stripe action, exactly one match was found, the original intent became
+`succeeded`, one scope exists and account-create/direct-create/replacement
+counts all remain zero. Any mismatch, duplicate, zero match, application
+ambiguity, transport uncertainty or controller error stops without retry.
+
+Deployment handling now enforces the corrected URL-to-ID contract: one plain or
+JSON-string HTTPS `*.vercel.app` URL only; arrays, multiple values, missing or
+polluted output, malformed URLs and non-Vercel hosts are rejected; URL
+resolution is read-only; metadata must contain one scalar `dpl_...` ID and
+match the isolated project, exact commit, clean `gitDirty=NULL`, custom
+`staging` environment, staging-only alias/domain and non-production target.
+
+Disabled preflight requires the actual retained PR #372 shape: global, account
+creation, account links, dashboard links, agreements and webhook processing
+are all present exact `false`; live is absent or exact `false`;
+`STRIPE_MODE=test`; Production is proven untouched; and the guarded school
+feature is exact JSON Boolean false. Minimal enablement is limited to global
+true, account creation true solely because the existing route requires it, and
+the school Boolean true. Account links, dashboard links, agreements, webhook
+processing and live remain disabled. A finally-equivalent path always attempts
+shutdown in order: account creation false, global false, school false; it then
+proves the complete disabled state and validates a final disabled deployment.
+
+Local evidence passed the new offline/fault-injection controller tests `11/11`,
+the existing Accounts v2/UI/schema suite `38/38`, syntax `206/206`, C1
+`278/278`, the complete local Playwright regression `1332/1332`, and
+`git diff --check`. The no-argument controller command reported offline mode and
+POST count `0`.
+
+This session performed controller preparation only. It sent no harmless GET and
+no reconciliation POST. It made no Vercel, Neon, environment, deployment, JWT,
+gate, school-Boolean, database, Stripe, provider, event-destination, account,
+payment, refund, earning, payout, transfer, cutover, Slice 3, Slice 5 or
+Production request or mutation. Retained external state was not operationally
+reverified or changed. Status is
+`MVP_A1_STAGING_CONTROLLER_PREPARED_FOR_REVIEW_NOT_OPERATED`; operational
+reconciliation remains prohibited until the controller PR is reviewed and
+merged and Fraser provides new explicit authority.
