@@ -1105,3 +1105,74 @@ reverified or changed. Status is
 `MVP_A1_STAGING_CONTROLLER_PREPARED_FOR_REVIEW_NOT_OPERATED`; operational
 reconciliation remains prohibited until the controller PR is reviewed and
 merged and Fraser provides new explicit authority.
+
+## MVP A2 post-merge controller stop - 11 August 2026
+
+Fresh merged PR #374 source
+`d4a6c2dfd934499b3454fd27aaf8a5d871a3fed4` passed the controller and focused
+Accounts v2/UI/schema suite `49/49`. Read-only preflight proved the reviewed
+custom staging gate inventory fully disabled, live absent, test mode,
+Production zero-variable, one staging-only Sensitive JWT record, and the exact
+retained Neon identity: Simon instructor `3`, original intent
+`3c2349a0-1696-4b57-b732-fc14bbde57df`, stable identity
+`cc:connect-v2:1:3:test:recipient`, state `reconciling`, one
+`provider_ambiguous`/`network` attempt, and no provider mapping, scope,
+observation, reconciled success, or replacement.
+
+The merged controller created disabled deployment
+`dpl_3hf2XmZNRnbcNjK81tyMbPfmcky1` and then entered its fail-closed path before
+minimal enablement. The adapter logged deployment creation but not deployment
+verification, localising the stop before its URL-resolution checkpoint.
+Independent metadata inspection proved that deployment READY, clean, exact
+source, custom staging, non-production, and carrying only the expected staging
+alias. The raw stdout bytes were not retained, but read-only inspection of the
+exact cached package used by the adapter established the structural contract
+without another deployment: `vercel@latest` resolved to CLI `58.9.1`; the
+inherited Codex marker and non-TTY stdin selected agent/non-interactive mode;
+and that success path writes a JSON object with `status: "ok"` and the scalar
+deployment URL at `deployment.url`. The merged plain/JSON-string-only parser
+therefore rejected the object before calling `resolveDeploymentUrl`. No
+historic stdout value is reconstructed or assumed.
+
+The Neon bridge then incorrectly rejected the idempotent `set_school_false`
+shutdown checkpoint as if it were enablement, so the controller reported
+`MANDATORY_SHUTDOWN_FAILED`. No SQL ran at that checkpoint and the school value
+never left false. The controller still applied both gate-off shutdown steps and
+created final disabled deployment `dpl_AdnxVB9VGnFmtJYt6Z7Mnh2EjVWU`.
+Independent postflight proved that final deployment READY, clean, exact source,
+custom staging, non-production and bound only to the expected alias; all six
+gates exact false, live absent, test mode, school exact JSON Boolean false, and
+Production untouched at zero variables.
+
+JWT rotation count is **zero** and authenticated reconciliation POST count is
+**zero**. Redirect, retry, harmless probe, Stripe Accounts v2 list/create,
+direct-create, replacement-account and onboarding counts are all **zero**.
+Neon counts remain intents `2`, attempts `2`, link events `0`, scopes `1`
+(Simon `0`), observations `1` (Simon `0`), agreements `1`, and lesson payment
+contracts `4`; inspected payout, refund, earning, transfer and cutover counts
+remain `0`. Simon remains the unchanged unmapped `reconciling` intent.
+
+Status is
+`MVP_A2_STAGING_RECONCILIATION_NOT_DISPATCHED_CONTROLLER_DEPLOY_OUTPUT_STOP_DISABLED`.
+The run is stopped without retry and onboarding is not authorised. A future
+attempt requires fresh owner authority after the deployment-output evidence
+path is corrected and reviewed.
+
+The version-controlled correction accepts that exact agent success envelope
+and extracts only its scalar `deployment.url`. Error-status, malformed or
+missing deployment objects, arrays, polluted output, non-HTTPS/non-Vercel
+hosts, paths and multiple values remain rejected. The subsequent read-only
+resolution and exact project, custom environment, source commit, clean-source,
+staging-only alias/domain and non-production checks are unchanged. Fault
+injection proves a rejected envelope stops before either enable gate, the
+school Boolean and the POST, while the ordered mandatory shutdown and final
+disabled-deployment proof still run. This repository correction is not an
+operational retry or authorisation.
+
+Final local verification passed corrected controller tests `12/12` and the
+unchanged Accounts v2/UI/schema tests `38/38` (`50/50` combined), plus
+`git diff --check`. Both protected LF-normalised hashes remained exact. This
+diagnosis and repair made no Vercel, Neon, Stripe, environment, deployment,
+JWT, gate, school-feature, database, reconciliation, account, replacement,
+onboarding or Production request or mutation. Repository status is
+`MVP_A2_CONTROLLER_DEPLOY_AGENT_OUTPUT_CORRECTION_PREPARED_NOT_OPERATED`.

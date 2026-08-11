@@ -84,13 +84,27 @@ function parseDeploymentUrlOutput(output) {
   if (!trimmed) fail('DEPLOY_OUTPUT_MISSING');
 
   let candidate = trimmed;
-  if (trimmed.startsWith('"')) {
+  if (/^["[{]/.test(trimmed)) {
+    let parsedOutput;
     try {
-      candidate = JSON.parse(trimmed);
+      parsedOutput = JSON.parse(trimmed);
     } catch {
       fail('DEPLOY_OUTPUT_MALFORMED');
     }
-    if (typeof candidate !== 'string') fail('DEPLOY_OUTPUT_NOT_SCALAR');
+    if (typeof parsedOutput === 'string') {
+      candidate = parsedOutput;
+    } else if (isPlainObject(parsedOutput)) {
+      if (
+        parsedOutput.status !== 'ok'
+        || !isPlainObject(parsedOutput.deployment)
+        || typeof parsedOutput.deployment.url !== 'string'
+      ) {
+        fail('DEPLOY_OUTPUT_AGENT_ENVELOPE_INVALID');
+      }
+      candidate = parsedOutput.deployment.url;
+    } else {
+      fail('DEPLOY_OUTPUT_NOT_SCALAR');
+    }
   }
 
   if (!candidate || /[\r\n]/.test(candidate)) fail('DEPLOY_OUTPUT_POLLUTED');
