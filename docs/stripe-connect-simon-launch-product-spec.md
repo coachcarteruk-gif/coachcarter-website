@@ -1,7 +1,7 @@
 # Stripe Connect, Refund and Instructor Payout Product Specification
 
-**Status:** Owner-agreed product specification; not yet implemented  
-**Decision date:** 1 August 2026  
+**Status:** Owner-agreed product specification; approval-controlled MVP boundary agreed; not yet launched
+**Decision dates:** full target 1 August 2026; approval-controlled MVP rebaseline 11 August 2026
 **Owner:** Fraser Carter  
 **Initial live instructors:** Fraser and Simon  
 **Scope:** Direct lesson payments, Stripe Connect onboarding and transfers, instructor confirmation, cancellations, refunds, disputes, learner issue reports, weekly franchise fees, statements, legacy credits and controlled cutover
@@ -38,7 +38,35 @@ Historical financial rows must remain immutable. Superseding a policy does not a
 7. Friday noon is a hard, immutable weekly batch boundary.
 8. Stripe transfers are idempotent and reconciled. An ambiguous Stripe response must never be treated as permission to retry with a new identity.
 9. All money records are school-scoped, append-only and auditable.
-10. The first production run is deliberately controlled; later runs may automate only after the first run succeeds and Fraser approves that progression.
+10. Production starts approval-controlled. The first four live Friday runs require Fraser approval and exact review; later automation requires a separate explicit decision.
+
+### 2.1 Approval-controlled MVP launch boundary
+
+Fraser approved a narrower first launch on 11 August 2026. This subsection is the controlling launch boundary wherever the fuller target in later sections would otherwise require more automation. The deferred behaviour remains the intended later product, but it is not an MVP launch blocker and must not be partially enabled by inference.
+
+The MVP keeps the new source-backed architecture and its safety model. It is not a return to the legacy payout engine.
+
+The MVP includes:
+
+- Accounts v2 recipient onboarding and exact reconciliation for Fraser and Simon, using hosted onboarding, Express access, stable identity, current capability/requirements evidence, immutable agreements and restricted keys where supported;
+- one immutable school-wide cutover and engine boundary, with version-one payout mutation disabled before version-two money movement;
+- only the standard direct single-slot CoachCarter Stripe checkout as an automated payment origin;
+- exact one-payment/one-lesson evidence, actual amount and Stripe fee, funds availability, school scope, explicit instructor outcome and immutable reschedule continuity;
+- the agreed post-fee percentage split, Simon's £90 weekly obligation and carry-forward, Fraser's £0 weekly fee, append-only statements and protected-cash checks;
+- durable source-linked transfer intents, stable Stripe idempotency, ambiguity reconciliation and accurate “Transferred to Stripe” wording;
+- two accepted shadow Fridays before cutover; and
+- explicit Fraser approval for every live Friday run during the beta, with the first four live runs each receiving a manual reconciliation and signed review before any move toward unattended operation.
+
+For the MVP:
+
+- Friday noon remains the immutable economic cutoff and Friday 14:00 remains the intended transfer window, but a privileged operator initiates the reviewed commands; no automatic catch-up, cron-created batch or unattended transfer is enabled;
+- automatic refund submission is disabled. Existing school-scoped operator refund procedures handle supported cases after review, and a refund, pending refund or ambiguous refund blocks the affected lesson from a new earning/transfer;
+- automated learner issue reporting, outcome-notification emails, daily outcome reminders, dispute ingestion/actions, deadline reminders and post-loss recovery are deferred. Any reported issue, chargeback or unclear payment state is handled as a manual hold; it cannot be waived into eligibility by an ordinary admin;
+- an issue or dispute discovered before lock blocks the affected lesson. If discovered after transfer, new Simon runs pause until Fraser records the reviewed resolution or append-only correction; locked history is never edited;
+- statement generation and storage are required, but automatic email delivery and bank-arrival correlation may remain manual/read-only during the beta; and
+- practical-test-date, instructor-offer and captured request-to-book origins remain manual/£0 automated until each is separately implemented, tested and activated.
+
+The MVP does not weaken tenancy, auth, audit, agreement, source evidence, protected-balance, idempotency, reconciliation, cutover isolation or no-replacement-account controls. A blocker produces a pause or £0/held disposition, never an estimate, alternate account, legacy payout fallback or improvised manual eligibility override.
 
 ## 3. Current-state audit that prompted the redesign
 
@@ -115,7 +143,7 @@ The new system uses one immutable deployment cutover timestamp.
 - The first live new-engine batch includes both Fraser and Simon.
 - The previous inactive-plan concept of a Fraser-only £10 first-live cap is superseded. The reviewed first batch contains the complete eligible post-cutover Fraser-and-Simon calculation and is never silently truncated.
 - The first batch creates a final preview for Fraser's explicit approval before any Stripe transfer.
-- After that batch transfers and reconciles successfully, future weekly batches may run automatically.
+- During the approval-controlled MVP, the first four live Friday runs each require Fraser's explicit approval, exact post-transfer reconciliation and signed review. Automatic weekly execution is a separately approved post-MVP change, not an automatic consequence of the first success.
 - Simon receives his Stripe onboarding invitation only when the new system is ready.
 - Simon remains payout-paused until onboarding is complete, his commercial agreement is activated and Fraser approves the first batch.
 - Fraser will handle every pre-cutover Simon payment manually.
@@ -133,7 +161,7 @@ The future learner payment model is one successful Stripe payment tied to one ex
 - A payment must be succeeded and its funds available before its lesson can enter a transfer batch.
 - Discounts and promotions use the actual amount paid, never the undiscounted list price.
 
-Supported one-lesson Stripe entry points include direct slot checkout, practical driving-test-date checkout, a single-lesson instructor offer and a captured request-to-book payment. The test-date path counts as a direct lesson only when it proves the same one-payment-to-one-lesson contract. Every entry point must produce the same source evidence and none weakens any eligibility rule.
+The full target supports direct slot checkout, practical driving-test-date checkout, a single-lesson instructor offer and a captured request-to-book payment. The approval-controlled MVP enables only direct single-slot checkout. The other origins remain manual/£0 automated until separately implemented, tested and activated. When later activated, every entry point must produce the same one-payment-to-one-lesson evidence and none weakens any eligibility rule.
 
 ### 5.2 Removed payment and booking surfaces
 
@@ -844,6 +872,23 @@ Required invariants:
 
 ## 25. Acceptance criteria
 
+### 25.0 Approval-controlled MVP acceptance
+
+The MVP may enter the controlled beta only when all of the following are true:
+
+- Fraser and Simon each have one exact, school-scoped Accounts v2 recipient identity with current readiness evidence and an immutable active agreement; ambiguity never creates a replacement account.
+- Only post-cutover direct single-slot payments can produce a positive automated earning. Every other source or origin is deterministically £0/manual or blocked.
+- An explicit eligible instructor outcome, exact payment/fee/availability evidence and all normal tenancy/auth predicates are required before lock.
+- The split, Simon £90 weekly fee, Fraser £0 fee, carry-forward, £0/held statements and protected-cash calculation reconcile in integer pence.
+- Refunds, issues, disputes and ambiguous money states cannot be auto-executed or waived into eligibility; the affected lesson/run follows the documented manual hold and review procedure.
+- A privileged operator can generate the Friday-noon plan, Fraser can approve its exact fingerprint, and the same locked plan can be submitted at the intended Friday transfer window without recalculation.
+- Transfer intent, claim and idempotency evidence exists before Stripe; definite failure and ambiguity retain the original identity and cannot cause a duplicate.
+- Version-one mutation hard-refuses for the cut-over school while version-two is active.
+- Two distinct shadow Fridays are accepted before cutover, and the first four live Friday runs require explicit Fraser approval, exact reconciliation and signed review.
+- Focused money/auth/tenancy/browser tests, full regression, migration diagnostics, pause/rollback rehearsal and staging test-mode end-to-end evidence are green with no unresolved mismatch.
+
+Sections 25.1–25.8 describe the full target acceptance. Criteria relating only to deferred origins, automatic refund submission, learner issue automation, automated dispute lifecycle, automatic reminders/delivery, bank-arrival correlation or unattended scheduling are post-MVP acceptance criteria.
+
 ### 25.1 Payment and source safety
 
 - A post-cutover £55 payment with a £1.03 fee and 90% instructor share produces £48.57 instructor share and £5.40 CoachCarter share.
@@ -930,6 +975,15 @@ Required invariants:
 
 Before enabling the new system:
 
+- [ ] The approval-controlled MVP boundary in section 2.1 is reflected in runtime gates and operator runbooks; every deferred mutation path is disabled.
+- [ ] Only direct single-slot payment origins are allowed into automated MVP earnings.
+- [ ] Automatic refund, issue, dispute, reminder, statement-delivery, bank-correlation and unattended scheduling gates are disabled or absent.
+- [ ] A manual hold procedure exists for refunds, issues, disputes and ambiguous payment/transfer evidence, with no ordinary-admin eligibility override.
+- [ ] Fraser approval is required for every beta run and cannot be bypassed by cron or a generic admin action.
+- [ ] The first four live-run review records and the separate post-MVP automation decision are represented explicitly; success of one run does not enable automation.
+
+For the beta, unchecked items below that relate solely to a capability explicitly deferred in section 2.1 do not block launch. They become mandatory before that capability is later enabled; all shared safety, accounting, Connect, transfer, cutover and regression items remain mandatory.
+
 - [ ] Latest `main` and production schema have been inspected.
 - [ ] This product specification and the technical Payout v2 plan agree.
 - [ ] All conflicting old rules are explicitly migrated or disabled.
@@ -978,6 +1032,18 @@ The following are deliberately deferred:
 - cross-instructor rescheduling;
 - bank-paid status without exact Stripe payout evidence;
 - retrospective automation of pre-cutover, manually paid or legacy-credit lessons.
+
+The following full-target capabilities are additionally deferred from the approval-controlled MVP, while their design remains in this specification:
+
+- automatic original-method refund submission and refund reconciliation;
+- learner self-service issue reporting and automated outcome notifications;
+- daily unresolved-outcome reminders;
+- automated dispute ingestion, deadline reminders, evidence workflow and final-loss recovery;
+- unattended Friday lock/transfer cron and automatic catch-up;
+- automatic statement email delivery and connected-bank-arrival correlation;
+- practical-test-date, single-offer and captured-request automated earning origins;
+- polished end-user operational dashboards beyond the minimum safe readiness, outcome, statement, approval and reconciliation surfaces; and
+- any automatic weekly execution after the four-run approval-controlled beta.
 
 ## 28. Reference documents
 
