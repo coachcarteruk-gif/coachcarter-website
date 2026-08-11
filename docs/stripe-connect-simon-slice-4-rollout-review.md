@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A5_EXTERNAL_SOURCE_PROOF_COMPARISON_STOPPED_DISABLED_NO_DEPLOYMENT; RECONCILIATION_STOPPED_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A6_DEPLOYMENT_GIT_DIRTY_EVIDENCE_ABSENT_STOPPED_DISABLED; RECONCILIATION_STOPPED_DISABLED`
 Prepared: 9 August 2026; updated 11 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -1337,3 +1337,77 @@ and onboarding calls were all zero. Status is
 The authorised attempt is consumed. Simon remains unresolved and onboarding is
 prohibited pending fresh owner authority after review of the external adapter;
 the repository controller and protected specifications were not changed.
+
+## MVP A6 absent deployment `meta.gitDirty` stop - 11 August 2026
+
+Fraser authorised exactly one no-retry staging reconciliation attempt from
+merged commit `bd016d914e080cbcb1e4b6c1930ab6612d005f21` on fresh named
+branch `codex/simon-staging-reconciliation-mvp-a6` in worktree
+`C:\tmp\coachcarter-simon-mvp-a6-bd016d9`. Source proof before operation and
+after postflight was inside a worktree, non-detached, exact symbolic ref and
+branch, exact `HEAD` and branch-tip commit, clean true, and empty tracked/
+untracked porcelain. Product and technical LF-normalised hashes remained the
+approved
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+and `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+
+The corrected external adapter used an explicit sealed eight-field structural
+comparison. Different property insertion order was accepted; one mutation to
+each field, every missing field, and an additional field were rejected. The
+live read matched the exact A6 contract. These local checks performed no
+deployment, environment mutation, database write, authentication request, POST
+or Stripe call. The controller plus Accounts v2/UI/schema selection passed
+`55/55`; offline controller execution returned POST count `0`.
+
+Fresh Vercel preflight matched isolated project
+`prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, team
+`team_DXEEAusHmjcfcr6auPjqloL0`, custom Preview environment `staging`
+`env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, the retained staging-only alias, all six
+gates exact false, live absent, test mode, one staging-only Sensitive JWT
+record, and zero Production variables. Retained Neon branch
+`br-dark-recipe-zarmjbix` in project `shiny-bonus-66942766`, database
+`neondb`, was ready, non-primary, non-default and unprotected. School `1` was
+exact Boolean false on payout engine `v1`. Simon instructor `3` retained
+original intent `3c2349a0-1696-4b57-b732-fc14bbde57df`, stable identity
+`cc:connect-v2:1:3:test:recipient`, unmapped `reconciling` state, one
+`provider_ambiguous` / `network` attempt, and zero Simon scope, observation or
+replacement.
+
+Controller v2 ran exactly once with the approved phrase. The A5 source-proof
+defect was closed: structural comparison passed. Disabled-preflight deployment
+`dpl_EAWbQDKkK9Yxd9PnzkbpR2PcbXSg` became `READY` and v13 metadata proved
+the exact project, non-production target, named A6 branch, authorised commit,
+custom staging environment, deployment domain and single staging alias.
+Vercel omitted the own `meta.gitDirty` property. The controller preserved the
+strict requirement that it be present and exact `null`, so it stopped before
+enablement, JWT rotation, authentication, reconciliation POST or Stripe.
+
+Mandatory shutdown applied account-creation false, global false, then one
+guarded school-false update. Final-disabled deployment
+`dpl_4EQQn2vmaXbxkcqM1iXwiW9bHqw8` became `READY` with the same exact source,
+project, custom environment, alias and non-production evidence, but again no
+own `meta.gitDirty` property. The controller correctly returned
+`MANDATORY_SHUTDOWN_FAILED`. No alternate deployment procedure, retry or
+reconstructed output was used. The final deployment is disabled and
+exact-source but the absent property remains the explicit unresolved shutdown
+proof.
+
+Independent postflight proved all six gates false, live absent, test mode,
+school Boolean false, payout engine `v1`, one staging-only Sensitive JWT record
+and Production zero-variable/untouched. Both A6 deployments had zero runtime
+logs or requests. Database counts remained intents `2`, attempts `2`, link
+events `0`, scopes `1` with Simon `0`, observations `1` with Simon `0`,
+agreements `1`, lesson payment contracts `4`, and zero payout runs, refund
+intents/attempts/events, booking earnings, payout transfers/attempts, cutover
+config/shadow/readiness/events and launch events. Launch state remains inactive
+`shadow`.
+
+Exact controller calls were one and exact disabled A6 deployments were two.
+JWT rotations, authentication requests, authenticated reconciliation POSTs,
+redirects, retries, Accounts v2 list/create calls, direct creates,
+replacements, onboarding and every money/Production action were all zero.
+Status is
+`MVP_A6_STAGING_RECONCILIATION_NOT_DISPATCHED_DEPLOYMENT_GIT_DIRTY_EVIDENCE_ABSENT_DISABLED`.
+The authorised attempt is consumed. Simon remains unresolved and onboarding is
+prohibited pending fresh owner authority; the protected specifications were not
+changed.
