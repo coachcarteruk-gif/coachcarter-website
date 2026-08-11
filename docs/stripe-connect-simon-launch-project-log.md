@@ -5019,3 +5019,86 @@ not be retried.
   `MVP_A4_CLEAN_SOURCE_CONTROLLER_CORRECTION_PREPARED_NOT_OPERATED`. Simon's
   retained intent, stable identity and no-replacement controls remain unchanged;
   a future attempt still requires fresh explicit owner authority.
+
+## 11 August 2026 - MVP A5 stopped on external source-proof comparison; disabled with no deployment
+
+- Fraser authorised exactly one no-retry Simon staging reconciliation attempt
+  from freshly merged `main` commit
+  `eebf15e44cf7359585be62e6fc9d2162261e802b`. The attempt used fresh named
+  branch `codex/simon-staging-reconciliation-mvp-a5` and worktree
+  `C:\tmp\coachcarter-simon-mvp-a5-eebf15e`. Immediately before operation,
+  source proof was `insideWorkTree=true`, `detached=false`, symbolic ref
+  `refs/heads/codex/simon-staging-reconciliation-mvp-a5`, matching named
+  branch, `HEAD` and branch tip both the exact authorised commit, clean true,
+  and empty tracked/untracked porcelain status. The protected LF-normalised
+  hashes matched exactly: product
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+- Pre-operation local evidence passed all `55/55` selected tests: controller
+  `15/15`, Accounts v2 `22/22`, Accounts v2 UI `2/2`, and payout v2 schema
+  `16/16`. The no-argument controller returned version `2`, offline dry-run,
+  completed true, POST count `0`, and shutdown complete false.
+- Fresh read-only Vercel preflight proved isolated project
+  `cc-simon-s4-staging-02` / `prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, team
+  `team_DXEEAusHmjcfcr6auPjqloL0`, custom Preview environment `staging` /
+  `env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, and staging-only alias
+  `cc-simon-s4-staging-02-env-staging-coachcarteruk-2599s-projects.vercel.app`.
+  All six staging gates were exact `false`, live was absent,
+  `STRIPE_MODE=test`, exactly one staging-only Sensitive `JWT_SECRET` record
+  existed, and Production had zero environment records.
+- Fresh read-only Neon preflight explicitly used retained ready branch
+  `br-dark-recipe-zarmjbix` in project `shiny-bonus-66942766`, database
+  `neondb`. The branch remained non-primary, non-default and unprotected.
+  School `1` retained exact JSON Boolean false and payout engine `v1`; Simon
+  instructor `3` was active with no legacy mapping. Original intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df` remained unmapped `reconciling`, test
+  recipient/Express identity `cc:connect-v2:1:3:test:recipient`, with exactly
+  one attempt `1` at `provider_ambiguous` / `network`, zero Simon scope,
+  observation or replacement account, and no conflicting financial or cutover
+  activity.
+- Controller v2 was invoked exactly once with approval
+  `SIMON_STAGING_RECONCILIATION_APPROVED` and the external adapter at
+  `C:\tmp\cc-simon-mvp-a5-adapter.js`. The adapter returned every required
+  source fact correctly. Before invoking Vercel, however, its extra defensive
+  check compared the controller-normalised source object and its fresh source
+  object with `JSON.stringify`. The objects had identical keys and values but
+  different property insertion order, so the adapter raised
+  `DEPLOYMENT_SOURCE_CHANGED`. This stopped the attempt before the disabled
+  deployment, any enablement, JWT rotation, authentication material,
+  reconciliation POST or Stripe request. Read-only Vercel deployment listing
+  found exactly zero deployments carrying the A5 branch or authorised commit.
+- The controller entered its mandatory finally path without retry. It applied
+  the required idempotent staging updates in order: account-creation false,
+  global false, then one guarded school-1 Boolean-false update on the retained
+  Neon branch. Disabled state reads passed. The same external adapter comparison
+  defect then stopped the final-disabled deployment before Vercel was called,
+  so the controller correctly returned `MANDATORY_SHUTDOWN_FAILED`. No alternate
+  deployment-source procedure was used and no deployment was reconstructed.
+- Independent postflight proved actual runtime shutdown: all six staging gates
+  exact `false`, live absent, `STRIPE_MODE=test`, one staging-only Sensitive
+  JWT record, school Boolean exact false, payout engine `v1`, and Production
+  untouched with zero variables. The staging alias still targets retained
+  disabled A3 deployment `dpl_FSgamEDDPXYRUqNhA6HCbpQuNxBg`; no exact-source
+  A5 final-disabled deployment exists, which remains the explicit shutdown
+  evidence blocker.
+- Neon postflight matched preflight: intents `2`, attempts `2`, link events
+  `0`, scopes `1` with Simon `0`, observations `1` with Simon `0`, agreements
+  `1`, lesson payment contracts `4`, payout runs `0`, refund intents/attempts/
+  events `0`, booking earnings `0`, payout transfers/attempts `0`, and cutover
+  configs/shadow cycles/readiness/events `0`. Launch config remains inactive
+  `shadow`, not activated and not paused. Simon's retained intent, stable
+  identity, ambiguous attempt and unmapped state are unchanged.
+- Exact controller invocations: **one**. Exact A5 deployments, JWT rotations,
+  authenticated reconciliation POSTs, redirects, retries, Accounts v2 list
+  calls, Accounts v2 account creates, direct provider creates, replacement
+  accounts and onboarding calls: **zero**. No Stripe, account-link, dashboard,
+  agreement, webhook-processing, payment, refund, earning, payout, transfer,
+  cutover or Production action occurred.
+- Final status is
+  `MVP_A5_STAGING_RECONCILIATION_NOT_DISPATCHED_EXTERNAL_SOURCE_PROOF_COMPARISON_STOP_DISABLED_NO_DEPLOYMENT`.
+  The authorised attempt is consumed and stopped without retry. Simon remains
+  unresolved and onboarding remains prohibited. Any later attempt requires
+  fresh owner authority after review of the external adapter's order-sensitive
+  equality check; the repository controller and protected specifications were
+  not changed by the operational stop.

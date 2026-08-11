@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A4_CLEAN_SOURCE_CORRECTION_PREPARED_FOR_REVIEW; RECONCILIATION_STOPPED_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A5_EXTERNAL_SOURCE_PROOF_COMPARISON_STOPPED_DISABLED_NO_DEPLOYMENT; RECONCILIATION_STOPPED_DISABLED`
 Prepared: 9 August 2026; updated 11 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -1275,3 +1275,65 @@ Simon intent `3c2349a0-1696-4b57-b732-fc14bbde57df`, stable identity
 `cc:connect-v2:1:3:test:recipient`, Accounts v2 reconciliation-first path,
 single-POST/no-retry boundary and mandatory shutdown remain unchanged. A future
 operational attempt requires fresh explicit owner authority.
+
+## MVP A5 external source-proof comparison stop - 11 August 2026
+
+Fraser authorised exactly one no-retry staging reconciliation attempt from
+merged commit `eebf15e44cf7359585be62e6fc9d2162261e802b` on fresh named branch
+`codex/simon-staging-reconciliation-mvp-a5` in worktree
+`C:\tmp\coachcarter-simon-mvp-a5-eebf15e`. Pre-operation source proof was
+fully compliant: inside a worktree, non-detached, exact symbolic ref and branch,
+exact `HEAD` and branch-tip commit, clean true, and empty tracked/untracked
+porcelain. Product and technical LF-normalised hashes remained the approved
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+and `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+The controller plus Accounts v2/UI/schema selection passed `55/55`; offline
+controller execution returned POST count `0`.
+
+Fresh Vercel preflight matched isolated project
+`prj_drQlkxVnFwSGW86fdpEpHxdYYeY2`, team
+`team_DXEEAusHmjcfcr6auPjqloL0`, custom `staging` environment
+`env_vvxYWVPTHOiutcFOPmeWw2kX08mA`, the retained staging-only alias, all six
+gates exact false, live absent, test mode, one staging-only Sensitive JWT
+record, and zero Production variables. Retained Neon branch
+`br-dark-recipe-zarmjbix` was ready, non-primary, non-default and unprotected.
+School `1` was exact Boolean false on payout engine `v1`. Simon instructor `3`
+retained original intent `3c2349a0-1696-4b57-b732-fc14bbde57df`, stable
+identity `cc:connect-v2:1:3:test:recipient`, unmapped `reconciling` state, one
+`provider_ambiguous` / `network` attempt, and zero Simon scope, observation or
+replacement.
+
+Controller v2 ran exactly once with the approved phrase and external adapter
+`C:\tmp\cc-simon-mvp-a5-adapter.js`. The controller-normalised source proof and
+the adapter's immediate source proof contained identical facts, but the external
+adapter compared their JSON serialisations. Different property insertion order
+made that comparison false, producing `DEPLOYMENT_SOURCE_CHANGED` before
+Vercel deployment. The attempt therefore never enabled either gate or the
+school feature, never rotated JWT, never minted authentication material, never
+sent a POST, and never contacted Stripe. Read-only Vercel postflight found zero
+A5 deployments for the exact branch or commit.
+
+The mandatory finally path set account creation false, then global false, then
+performed one guarded school-false update. Disabled state reads passed. The same
+adapter defect prevented the final-disabled deployment before Vercel was called,
+and the controller correctly returned `MANDATORY_SHUTDOWN_FAILED`. No retry,
+alternate deployment-source procedure or reconstructed deployment evidence was
+used. Independent postflight proved all six gates false, live absent, test mode,
+school Boolean false, payout engine `v1`, one retained staging-only Sensitive
+JWT record and Production zero-variable/untouched. The staging alias remains on
+prior disabled deployment `dpl_FSgamEDDPXYRUqNhA6HCbpQuNxBg`; the missing
+exact-source A5 final-disabled deployment is the explicit unresolved shutdown
+proof.
+
+Database counts remained intents `2`, attempts `2`, link events `0`, scopes
+`1` with Simon `0`, observations `1` with Simon `0`, agreements `1`, lesson
+payment contracts `4`, and zero payout runs, refund intents/attempts/events,
+booking earnings, payout transfers/attempts and cutover config/shadow/readiness/
+event rows. Launch state remains inactive `shadow`. Exact controller calls were
+one; A5 deployments, JWT rotations, authenticated reconciliation POSTs,
+redirects, retries, Accounts v2 list/create calls, direct creates, replacements
+and onboarding calls were all zero. Status is
+`MVP_A5_STAGING_RECONCILIATION_NOT_DISPATCHED_EXTERNAL_SOURCE_PROOF_COMPARISON_STOP_DISABLED_NO_DEPLOYMENT`.
+The authorised attempt is consumed. Simon remains unresolved and onboarding is
+prohibited pending fresh owner authority after review of the external adapter;
+the repository controller and protected specifications were not changed.
