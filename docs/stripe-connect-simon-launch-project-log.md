@@ -4819,3 +4819,90 @@ not be retried.
   draft controller PR. Simon reconciliation remains prohibited until this
   controller PR is reviewed and merged and Fraser provides new explicit
   operational authority.
+
+## 11 August 2026 - MVP A2 controller stopped before dispatch; disabled postflight
+
+- Began from freshly updated merged PR #374 at
+  `d4a6c2dfd934499b3454fd27aaf8a5d871a3fed4` on isolated branch
+  `codex/simon-staging-reconciliation-mvp-a2`. The protected LF-normalised
+  product and technical hashes remained exact at
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+  The merged controller and focused Accounts v2/UI/schema suite passed
+  `49/49` before operation.
+- Read-only Vercel preflight proved all six reviewed staging gates exact
+  `false`, live absent, `STRIPE_MODE=test`, Production at zero environment
+  records, and exactly one staging-only Sensitive `JWT_SECRET` record.
+  Read-only Neon preflight used explicit retained non-primary branch
+  `br-dark-recipe-zarmjbix` and proved school `1`'s feature exact JSON Boolean
+  false, Simon instructor `3` active, the original intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df` still `reconciling`, its stable
+  identity unchanged, its sole attempt still `provider_ambiguous`/`network`,
+  and no provider mapping, intent scope, Simon scope, observation, successful
+  attempt, reconciled attempt, or replacement.
+- The merged controller created disabled deployment
+  `dpl_3hf2XmZNRnbcNjK81tyMbPfmcky1`, but stopped before minimal enablement.
+  Its adapter emitted `staging_deployment_created` without the subsequent
+  `deployment_verified` marker, so the fail-closed path was entered before
+  either enable gate, the school Boolean, or authentication material changed.
+  Independent read-only metadata inspection proved the already-created
+  deployment READY, non-production, clean `gitDirty=NULL`, exact merged source,
+  exact custom staging environment, and the one expected staging alias.
+  Although the raw stdout bytes were not retained, read-only inspection of the
+  exact cached package used by the adapter established the structural contract
+  without another deployment: `vercel@latest` resolved to CLI `58.9.1`, the
+  inherited Codex marker plus non-TTY stdin selected agent/non-interactive
+  mode, and that success path writes a JSON object with `status: "ok"` and the
+  scalar deployment URL at `deployment.url`. The merged parser accepted only a
+  plain URL or JSON-string URL, so it deterministically rejected this object
+  before calling `resolveDeploymentUrl`. No historic stdout value is
+  reconstructed or assumed.
+- During shutdown, the external Neon bridge checkpoint was mistakenly treated
+  as an enable request even though it was the idempotent `set_school_false`
+  shutdown proof. The bridge returned failure without executing SQL, causing
+  the controller to report `MANDATORY_SHUTDOWN_FAILED`. No school write was
+  needed or made because the value remained false. The controller still wrote
+  both staging gates false and created its final disabled deployment.
+- Independent mandatory postflight proved the real shutdown state complete.
+  Final deployment `dpl_AdnxVB9VGnFmtJYt6Z7Mnh2EjVWU` is READY,
+  non-production, clean, from exact merged commit `d4a6c2d`, in custom
+  `staging`, and bound only to the expected staging alias. All six staging
+  gates are exact `false`, live is absent, `STRIPE_MODE=test`, school `1` is
+  exact JSON Boolean false, and Production remains untouched at zero variables.
+- Exact staging JWT rotations: **zero**. Exact reconciliation POSTs: **zero**.
+  Exact redirects, retries, harmless probes, Accounts v2 list calls, account
+  creates, direct provider creates, replacement accounts, and onboarding calls:
+  **zero**. No Stripe request was dispatched and no authentication secret,
+  provider payload, or connection string was printed or persisted.
+- Neon postflight matched preflight: intents `2`, attempts `2`, link events
+  `0`, scopes `1` (Simon `0`), observations `1` (Simon `0`), agreements `1`,
+  and lesson payment contracts `4`. Simon's intent, stable identity, state,
+  sole attempt, and unmapped status are unchanged. Payout runs, refund intents/
+  attempts, launch earnings/transfer intents/attempts, payout transfers/
+  attempts, and all inspected cutover config/shadow/readiness/event counts
+  remain `0`.
+- Final status is
+  `MVP_A2_STAGING_RECONCILIATION_NOT_DISPATCHED_CONTROLLER_DEPLOY_OUTPUT_STOP_DISABLED`.
+  This operational run is stopped without retry despite the unused POST and JWT
+  budgets. Simon remains unresolved and onboarding remains prohibited. Any
+  future operational attempt requires fresh owner authority after a reviewed
+  correction to the retained deployment-output evidence path.
+
+- The repository correction is deliberately limited to recognising the exact
+  agent success envelope and extracting only its scalar `deployment.url`.
+  Error-status, missing/malformed deployment objects, arrays, polluted output,
+  non-HTTPS, non-Vercel hosts, paths and multiple values still fail closed. URL
+  resolution remains read-only, and the independent exact project, custom
+  environment, commit, clean-source, alias/domain and non-production metadata
+  checks are unchanged. Focused fault injection also proves a rejected agent
+  envelope reaches ordered mandatory shutdown with zero enablement and zero
+  reconciliation POSTs. This correction is repository preparation only and
+  does not authorise or retry the stopped operation.
+- Final local verification passed the corrected controller tests `12/12` and
+  the unchanged Accounts v2/UI/schema tests `38/38` (`50/50` combined), plus
+  `git diff --check`. The protected LF-normalised product and technical hashes
+  remained exact at the approved values above. This diagnosis and repair made
+  no Vercel, Neon, Stripe, environment, deployment, JWT, gate, school-feature,
+  database, reconciliation, account, replacement, onboarding or Production
+  request or mutation. Repository status is
+  `MVP_A2_CONTROLLER_DEPLOY_AGENT_OUTPUT_CORRECTION_PREPARED_NOT_OPERATED`.

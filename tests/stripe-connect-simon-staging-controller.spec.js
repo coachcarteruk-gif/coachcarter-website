@@ -32,6 +32,26 @@ function metadata(overrides = {}) {
   };
 }
 
+function agentDeploymentOutput(overrides = {}) {
+  const deployment = {
+    id: 'dpl_ExactScalar123',
+    url: 'https://fresh-deployment.vercel.app',
+    inspectorUrl: 'https://vercel.com/isolated/deployment/dpl_ExactScalar123',
+    readyState: 'READY',
+    target: null,
+    deploymentApiUrl: 'https://api.vercel.com/v13/deployments/dpl_ExactScalar123',
+    ...(overrides.deployment || {}),
+  };
+  return `${JSON.stringify({
+    status: 'ok',
+    deployment,
+    message: 'Deployment fresh-deployment.vercel.app ready.',
+    next: [],
+    ...overrides,
+    deployment,
+  }, null, 2)}\n`;
+}
+
 function disabledValues(overrides = {}) {
   return {
     STRIPE_CONNECT_V2_ENABLED: 'false',
@@ -104,7 +124,7 @@ function postflight() {
   };
 }
 
-function fakeAdapter({ post = successResult(), postError = null, failMethod = null } = {}) {
+function fakeAdapter({ post = successResult(), postError = null, failMethod = null, deployOutputs = null } = {}) {
   const state = {
     gates: disabledValues(),
     school: false,
@@ -134,9 +154,10 @@ function fakeAdapter({ post = successResult(), postError = null, failMethod = nu
       maybeFail('deploy');
       state.deployCalls += 1;
       state.events.push(`deploy:${phase}`);
+      if (deployOutputs) return deployOutputs[state.deployCalls - 1];
       return state.deployCalls % 2 === 0
         ? '"https://fresh-deployment.vercel.app"\n'
-        : 'https://fresh-deployment.vercel.app\n';
+        : agentDeploymentOutput();
     },
     async resolveDeploymentUrl({ url, readOnly }) {
       maybeFail('resolveDeploymentUrl');
@@ -180,14 +201,19 @@ test.describe('Simon staging reconciliation controller', () => {
     expect(controller.parseArguments([])).toEqual({ operational: false, adapterPath: null, approval: null });
   });
 
-  test('accepts only plain or JSON-string scalar Vercel deployment URLs', () => {
+  test('accepts only scalar URLs or the exact Vercel agent success envelope', () => {
     expect(controller.parseDeploymentUrlOutput('https://fresh-deployment.vercel.app\n')).toBe('https://fresh-deployment.vercel.app');
     expect(controller.parseDeploymentUrlOutput('"https://fresh-deployment.vercel.app"\n')).toBe('https://fresh-deployment.vercel.app');
+    expect(controller.parseDeploymentUrlOutput(agentDeploymentOutput())).toBe('https://fresh-deployment.vercel.app');
 
     const rejected = [
       '',
       '[]',
       '["https://fresh-deployment.vercel.app"]',
+      JSON.stringify({ url: 'https://fresh-deployment.vercel.app' }),
+      agentDeploymentOutput({ status: 'error' }),
+      agentDeploymentOutput({ deployment: { url: ['https://fresh-deployment.vercel.app'] } }),
+      `${agentDeploymentOutput()}log line`,
       'https://example.com',
       'http://fresh-deployment.vercel.app',
       'not-a-url',
@@ -199,6 +225,29 @@ test.describe('Simon staging reconciliation controller', () => {
       expect(() => controller.parseDeploymentUrlOutput(value)).toThrow(controller.ControllerError);
     }
     expect(() => controller.parseDeploymentUrlOutput(['https://fresh-deployment.vercel.app'])).toThrow('DEPLOY_OUTPUT_NOT_SCALAR');
+  });
+
+  test('fault-injected agent output stops before enablement and POST while mandatory shutdown still runs', async () => {
+    const { adapter, state } = fakeAdapter({
+      deployOutputs: [
+        agentDeploymentOutput({ status: 'error' }),
+        agentDeploymentOutput(),
+      ],
+    });
+
+    await expect(controller.runOperationalController({ adapter })).rejects.toThrow('DEPLOY_OUTPUT_AGENT_ENVELOPE_INVALID');
+    expect(state.postCalls).toBe(0);
+    expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ENABLED:true');
+    expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED:true');
+    expect(state.events).not.toContain('school:true:true');
+    expect(state.events.filter((event) => event.includes(':false')).slice(-3)).toEqual([
+      'gate:STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED:false',
+      'gate:STRIPE_CONNECT_V2_ENABLED:false',
+      'school:false:true',
+    ]);
+    expect(state.events).toContain('deploy:final-disabled');
+    expect(state.gates).toEqual(disabledValues());
+    expect(state.school).toBe(false);
   });
 
   test('selects exactly one scalar deployment ID and rejects arrays or polluted values', () => {
