@@ -13,6 +13,7 @@ function expectedDeployment() {
     customEnvironmentId: 'env_CustomStaging123',
     customEnvironmentSlug: 'staging',
     commitSha: 'a'.repeat(40),
+    branch: 'codex/simon-staging-reconciliation-mvp-a4',
     alias: 'coachcarter-simon-staging.vercel.app',
     target: null,
   };
@@ -24,10 +25,28 @@ function metadata(overrides = {}) {
     readyState: 'READY',
     projectId: 'prj_IsolatedProject123',
     target: null,
-    meta: { gitCommitSha: 'a'.repeat(40), gitDirty: null },
+    meta: {
+      gitCommitSha: 'a'.repeat(40),
+      gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+      gitDirty: null,
+    },
     customEnvironment: { id: 'env_CustomStaging123', slug: 'staging' },
     alias: ['coachcarter-simon-staging.vercel.app'],
     url: 'fresh-deployment.vercel.app',
+    ...overrides,
+  };
+}
+
+function deploymentSource(overrides = {}) {
+  return {
+    branch: 'codex/simon-staging-reconciliation-mvp-a4',
+    symbolicRef: 'refs/heads/codex/simon-staging-reconciliation-mvp-a4',
+    headCommitSha: 'a'.repeat(40),
+    branchCommitSha: 'a'.repeat(40),
+    insideWorkTree: true,
+    detached: false,
+    clean: true,
+    statusPorcelain: '',
     ...overrides,
   };
 }
@@ -124,13 +143,23 @@ function postflight() {
   };
 }
 
-function fakeAdapter({ post = successResult(), postError = null, failMethod = null, deployOutputs = null } = {}) {
+function fakeAdapter({
+  post = successResult(),
+  postError = null,
+  failMethod = null,
+  deployOutputs = null,
+  sourceProofs = null,
+  deploymentMetadata = null,
+} = {}) {
   const state = {
     gates: disabledValues(),
     school: false,
     events: [],
     postCalls: 0,
     deployCalls: 0,
+    deploySources: [],
+    sourceReads: 0,
+    metadataReads: 0,
   };
   const maybeFail = (name) => {
     if (failMethod === name) throw new Error('SENSITIVE_SENTINEL_DO_NOT_LEAK');
@@ -150,9 +179,17 @@ function fakeAdapter({ post = successResult(), postError = null, failMethod = nu
       state.events.push('intent:reconciling');
       return retainedIntent();
     },
-    async deploy({ phase }) {
+    async readDeploymentSource() {
+      maybeFail('readDeploymentSource');
+      state.sourceReads += 1;
+      state.events.push('source:read');
+      if (sourceProofs) return sourceProofs[state.sourceReads - 1] || deploymentSource();
+      return deploymentSource();
+    },
+    async deploy({ phase, source }) {
       maybeFail('deploy');
       state.deployCalls += 1;
+      state.deploySources.push(source);
       state.events.push(`deploy:${phase}`);
       if (deployOutputs) return deployOutputs[state.deployCalls - 1];
       return state.deployCalls % 2 === 0
@@ -162,6 +199,8 @@ function fakeAdapter({ post = successResult(), postError = null, failMethod = nu
     async resolveDeploymentUrl({ url, readOnly }) {
       maybeFail('resolveDeploymentUrl');
       state.events.push(`resolve:${url}:${readOnly}`);
+      state.metadataReads += 1;
+      if (deploymentMetadata) return deploymentMetadata[state.metadataReads - 1] || metadata();
       return metadata();
     },
     async setStagingGate({ name, value }) {
@@ -189,10 +228,20 @@ function fakeAdapter({ post = successResult(), postError = null, failMethod = nu
   return { adapter, state };
 }
 
+function expectOrderedShutdown(state) {
+  expect(state.events.filter((event) => event.includes(':false')).slice(-3)).toEqual([
+    'gate:STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED:false',
+    'gate:STRIPE_CONNECT_V2_ENABLED:false',
+    'school:false:true',
+  ]);
+  expect(state.gates).toEqual(disabledValues());
+  expect(state.school).toBe(false);
+}
+
 test.describe('Simon staging reconciliation controller', () => {
   test('defaults to an offline dry-run with no operational request budget', () => {
     expect(controller.offlinePlan()).toEqual({
-      controllerVersion: 1,
+      controllerVersion: 2,
       mode: 'offline-dry-run',
       completed: true,
       postCount: 0,
@@ -240,14 +289,46 @@ test.describe('Simon staging reconciliation controller', () => {
     expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ENABLED:true');
     expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED:true');
     expect(state.events).not.toContain('school:true:true');
-    expect(state.events.filter((event) => event.includes(':false')).slice(-3)).toEqual([
-      'gate:STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED:false',
-      'gate:STRIPE_CONNECT_V2_ENABLED:false',
-      'school:false:true',
-    ]);
+    expectOrderedShutdown(state);
     expect(state.events).toContain('deploy:final-disabled');
-    expect(state.gates).toEqual(disabledValues());
-    expect(state.school).toBe(false);
+  });
+
+  test('detached HEAD or missing named-branch proof fails before deployment and POST', async () => {
+    const cases = [
+      [deploymentSource({ insideWorkTree: false }), 'DEPLOYMENT_SOURCE_WORKTREE_AMBIGUOUS'],
+      [deploymentSource({ detached: true }), 'DEPLOYMENT_SOURCE_DETACHED_OR_AMBIGUOUS'],
+      [deploymentSource({ symbolicRef: undefined }), 'DEPLOYMENT_SOURCE_DETACHED_OR_AMBIGUOUS'],
+      [{ ...deploymentSource(), branch: undefined }, 'DEPLOYMENT_SOURCE_BRANCH_AMBIGUOUS'],
+    ];
+
+    for (const [invalidSource, code] of cases) {
+      const { adapter, state } = fakeAdapter({ sourceProofs: [invalidSource, deploymentSource()] });
+      await expect(controller.runOperationalController({ adapter })).rejects.toThrow(code);
+      expect(state.postCalls).toBe(0);
+      expect(state.deployCalls).toBe(1);
+      expect(state.events).not.toContain('deploy:disabled-preflight');
+      expect(state.events).toContain('deploy:final-disabled');
+      expectOrderedShutdown(state);
+    }
+  });
+
+  test('dirty or mismatched source proof fails closed before deployment and POST', async () => {
+    const cases = [
+      [deploymentSource({ clean: false }), 'DEPLOYMENT_SOURCE_DIRTY_OR_AMBIGUOUS'],
+      [deploymentSource({ statusPorcelain: '?? untracked.txt' }), 'DEPLOYMENT_SOURCE_DIRTY_OR_AMBIGUOUS'],
+      [deploymentSource({ headCommitSha: 'b'.repeat(40) }), 'DEPLOYMENT_SOURCE_COMMIT_MISMATCH'],
+      [deploymentSource({ branchCommitSha: 'b'.repeat(40) }), 'DEPLOYMENT_SOURCE_COMMIT_MISMATCH'],
+      [deploymentSource({ branch: 'codex/wrong-source' }), 'DEPLOYMENT_SOURCE_BRANCH_MISMATCH'],
+    ];
+
+    for (const [invalidSource, code] of cases) {
+      const { adapter, state } = fakeAdapter({ sourceProofs: [invalidSource, deploymentSource()] });
+      await expect(controller.runOperationalController({ adapter })).rejects.toThrow(code);
+      expect(state.postCalls).toBe(0);
+      expect(state.deployCalls).toBe(1);
+      expect(state.events).not.toContain('deploy:disabled-preflight');
+      expectOrderedShutdown(state);
+    }
   });
 
   test('selects exactly one scalar deployment ID and rejects arrays or polluted values', () => {
@@ -257,16 +338,20 @@ test.describe('Simon staging reconciliation controller', () => {
     expect(() => controller.selectDeploymentId({})).toThrow('DEPLOYMENT_ID_NOT_SCALAR');
   });
 
-  test('resolves URL read-only and validates exact isolated non-production metadata', async () => {
+  test('exact named clean source, commit, and explicit gitDirty null can proceed to deployment validation only', async () => {
     const { adapter, state } = fakeAdapter();
     const selected = await controller.deployAndValidate(adapter, 'contract-test');
     expect(selected).toEqual({ id: 'dpl_ExactScalar123', url: 'https://fresh-deployment.vercel.app' });
+    expect(state.postCalls).toBe(0);
+    expect(state.deployCalls).toBe(1);
+    expect(state.deploySources).toEqual([deploymentSource()]);
     expect(state.events).toContain('resolve:https://fresh-deployment.vercel.app:true');
 
     const mutations = [
       { projectId: 'prj_WrongProject' },
       { target: 'production' },
       { meta: { gitCommitSha: 'b'.repeat(40), gitDirty: null } },
+      { meta: { gitCommitSha: 'a'.repeat(40), gitCommitRef: 'HEAD', gitDirty: null } },
       { meta: { gitCommitSha: 'a'.repeat(40), gitDirty: false } },
       { customEnvironment: { id: 'env_Wrong', slug: 'staging' } },
       { customEnvironment: { id: 'env_CustomStaging123', slug: 'preview' } },
@@ -280,6 +365,23 @@ test.describe('Simon staging reconciliation controller', () => {
         'https://fresh-deployment.vercel.app'
       )).toThrow(controller.ControllerError);
     }
+  });
+
+  test('absent meta.gitDirty remains rejected before enablement and POST with ordered shutdown', async () => {
+    const absentGitDirty = metadata({
+      meta: {
+        gitCommitSha: 'a'.repeat(40),
+        gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+      },
+    });
+    const { adapter, state } = fakeAdapter({ deploymentMetadata: [absentGitDirty, metadata()] });
+
+    await expect(controller.runOperationalController({ adapter })).rejects.toThrow('DEPLOYMENT_DIRTY_OR_AMBIGUOUS');
+    expect(state.postCalls).toBe(0);
+    expect(state.deployCalls).toBe(2);
+    expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ENABLED:true');
+    expect(state.events).not.toContain('school:true:true');
+    expectOrderedShutdown(state);
   });
 
   test('requires all six named gates present and exact false in disabled state', () => {
@@ -364,14 +466,7 @@ test.describe('Simon staging reconciliation controller', () => {
       const { adapter, state } = cases[index];
       if (index === 0) await controller.runOperationalController({ adapter });
       else await expect(controller.runOperationalController({ adapter })).rejects.toThrow(controller.ControllerError);
-      const shutdown = state.events.filter((event) => event.includes(':false')).slice(-3);
-      expect(shutdown).toEqual([
-        'gate:STRIPE_CONNECT_V2_ACCOUNT_CREATION_ENABLED:false',
-        'gate:STRIPE_CONNECT_V2_ENABLED:false',
-        'school:false:true',
-      ]);
-      expect(state.gates).toEqual(disabledValues());
-      expect(state.school).toBe(false);
+      expectOrderedShutdown(state);
       expect(state.deployCalls).toBeGreaterThanOrEqual(2);
     }
   });

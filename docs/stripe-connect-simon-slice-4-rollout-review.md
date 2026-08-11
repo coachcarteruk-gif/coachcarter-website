@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A1_CONTROLLER_PREPARED_FOR_REVIEW; RECONCILIATION_STOPPED_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A4_CLEAN_SOURCE_CORRECTION_PREPARED_FOR_REVIEW; RECONCILIATION_STOPPED_DISABLED`
 Prepared: 9 August 2026; updated 11 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -1221,3 +1221,57 @@ Status is
 This attempt is stopped without retry. Simon remains unresolved and onboarding
 is not authorised; any later attempt needs fresh owner authority after a
 reviewed clean-source evidence correction.
+
+## MVP A4 clean-source controller correction - 11 August 2026
+
+Preparation started from clean merged `main`
+`6744ec0f6189b119a23c81b1a75044e36a82d030` on
+`codex/simon-staging-reconciliation-mvp-a4`. It used only the retained A3
+evidence. No deployment or staging attempt was made. Deployments
+`dpl_EvZU97KjnvH89EbK2LkisB9j47oj` and
+`dpl_FSgamEDDPXYRUqNhA6HCbpQuNxBg` already proved the exact isolated project,
+custom environment, commit, alias/domain and non-production target; their
+`meta.gitCommitRef = "HEAD"` plus absent `meta.gitDirty` localised the stop to
+the detached deployment-source procedure. The strict requirement for an own
+`meta.gitDirty` property whose value is exactly `null` is preserved.
+
+Controller version 2 adds a mandatory source proof before every deployment.
+The sealed adapter must prove it is inside a worktree, HEAD is not detached,
+the symbolic ref and named branch equal the configured expected branch, HEAD
+and that branch tip both equal the exact authorised merged commit, and status
+is explicitly clean with empty porcelain output including untracked files.
+That frozen proof is passed into the deployment call. Any absent, malformed,
+dirty, detached or mismatched fact stops before deployment and enablement. The
+resolved Vercel metadata must additionally report the same exact named
+`meta.gitCommitRef`; exact commit, explicit `meta.gitDirty === null`, isolated
+project, custom `staging` environment, single staging alias/domain and
+non-production target checks remain mandatory.
+
+The corrected future procedure is to create a fresh named branch/worktree at
+the separately authorised merged commit, verify its symbolic ref, HEAD,
+branch-tip and fully clean tracked/untracked status immediately before each
+deployment, and configure that exact branch/commit as expected metadata. A
+detached checkout or an attempt to infer cleanliness after deployment is not
+acceptable. Source-proof failures still enter the controller's finally path:
+account creation false, global false and school false in that order, followed
+by disabled-state proof and a source-validated final disabled deployment where
+the source remains valid.
+
+Focused controller tests passed `15/15` and the unchanged Accounts v2/UI/schema
+suite passed `38/38` (`53/53` combined). Fault injection covers detached or
+missing named-branch proof, dirty/untracked or mismatched source, absent
+deployment `meta.gitDirty`, the exact named-clean success boundary, ordered
+mandatory shutdown and zero reconciliation POSTs throughout preparation cases.
+`git diff --check` passed, and the protected LF-normalised product and technical
+hashes remained exact at
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B` and
+`C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+
+This correction did not contact Vercel, Neon or Stripe and made no deployment,
+gate, school-feature, JWT, database, reconciliation, account, replacement,
+onboarding or Production mutation. Status is
+`MVP_A4_CLEAN_SOURCE_CONTROLLER_CORRECTION_PREPARED_NOT_OPERATED`. The original
+Simon intent `3c2349a0-1696-4b57-b732-fc14bbde57df`, stable identity
+`cc:connect-v2:1:3:test:recipient`, Accounts v2 reconciliation-first path,
+single-POST/no-retry boundary and mandatory shutdown remain unchanged. A future
+operational attempt requires fresh explicit owner authority.
