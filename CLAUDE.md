@@ -192,6 +192,10 @@ Hard rules:
 6. **Year-one franchise relationships are human, not automated.** Negative-payout weeks are personally handled by Fraser, not auto-invoiced via Bacs DD. This is deliberate.
 7. **Configurability discipline**: don't add columns "for future flexibility" if no active code path reads them. Exception is justified only when the user has a specific commercial reason to set the value at onboarding.
 
+### Simon interim payout direction (13 August 2026)
+
+Simon does **not** need Accounts v2 or payout v2 before initial onboarding/payment. CoachCarter remains school-wide on v1 while a focused, human-controlled Express/v1 path is hardened: durable ambiguity-safe account creation, exact tenant/audit scope, deliberate `payouts_start_date`, `payouts_paused=true`, exact approved CoachCarter Stripe funding in addition to `chargeable`, an itemised Fraser preview, and explicit first-run approval. The weekly fee comes from `weekly_franchise_fee_pence`; negative/insufficient weeks stay human-handled. Do not add routine lesson-outcome confirmation—the three-state/48-hour calendar rule and `mark-not-delivered` exception remain authoritative. Preserve all Accounts v2 test/A8 evidence as inactive long-term work; never reuse it as the Production v1 identity. Onboarding, first payout and unattended later payouts require separate authority.
+
 ## Payout v2 controlled-cutover safety (inactive)
 
 Migration 035 was applied schema-only on 26 July 2026 and remains inactive.
