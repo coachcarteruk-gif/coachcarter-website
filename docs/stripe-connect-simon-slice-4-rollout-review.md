@@ -1532,3 +1532,80 @@ A6/A7 evidence remains disabled staging and Simon's original unmapped
 `reconciling` identity with no Simon scope, observation, mapping or replacement.
 Status is
 `MVP_A8_NOT_OPERATED_SOURCE_ANCESTRY_AND_ADAPTER_COMPATIBILITY_STOP`.
+
+## MVP A8.1 controller-v3 external adapter preparation - 12 August 2026
+
+A8.1 is repository-only preparation from frozen `origin/main`
+`d2f5330fd9bdd1afafb93e9b1ac3daa11a9dbc1e` on fresh branch
+`codex/simon-staging-reconciliation-mvp-a8-1-adapter-preparation` in isolated
+worktree
+`C:\Users\Fraser\AppData\Local\Temp\coachcarter-a8-1-adapter-preparation`.
+PR #381 and PR #380 merge commits are both ancestors. A7's exact commit is not
+an ancestor of PR #380 because the PR was squash-merged, but both commits have
+the identical tree `78597d0b02c4ff9053a0676b383ce5999190c6c6`; tree equivalence,
+not obsolete feature-commit ancestry, is the reviewed proof.
+
+The correction adds a repository-side, credential-free external-adapter
+generator and byte-exact conformance validator. The future operational session
+must bind generation to that session's freshly frozen named branch, exact final
+merged commit and outside-repository worktree. Output must remain outside the
+repository under the gitignored `.generated-operator-adapter.js` suffix. No
+operational adapter for this preparation branch is committed.
+
+The frozen generated object contains only `expectedDeployment` and the ten
+controller methods: gate/school/intent/source reads, deploy and read-only URL
+resolution, two exact staging controls, guarded school control, the one
+authenticated CSRF reconciliation POST, and postflight. There is no Stripe,
+Accounts v2 create or provider-create method. The application request remains
+fixed to `/api/connect?action=v2-account`, at most one POST, zero followed
+redirects and zero retries. Authentication material is in memory only, is not
+logged or written, and is cleared in `finally` and at process exit.
+
+For every deployment phase the adapter accepts controller v3's frozen
+`sourceAttestation` and exact frozen `sourceAttestationMetaArgs`. It validates
+the exact typed eight-field source, sealed attestation field set/digest/phase,
+fresh nonce and every ordered `--meta`, `KEY=value` pair. It then immediately
+re-reads the worktree source and appends that same metadata array unchanged as
+the command tail after fixed `deploy --target=staging`. Any removal, addition,
+reorder, reconstruction, normalisation, supplementation, mutation or nonce
+reuse stops before the deploy process. Unexpected project, environment, alias,
+branch, commit or Production target also stops. Controller v3's post-deploy
+READY, project, custom-environment, single-alias, deployment-domain, native
+commit/ref and namespaced-attestation validation remains unchanged, including
+the exact native `gitDirty` rule.
+
+Official Vercel references reviewed on 12 August 2026 were
+[`vercel deploy --meta`](https://vercel.com/docs/cli/deploy#meta), custom
+[`--target=staging`](https://vercel.com/docs/cli/target), the primary CLI
+[`deploy` option definition](https://github.com/vercel/vercel/blob/main/packages/cli/src/commands/deploy/command.ts),
+[`parse-meta`](https://github.com/vercel/vercel/blob/main/packages/cli/src/util/parse-meta.ts),
+and the primary
+[`deploy` implementation](https://github.com/vercel/vercel/blob/main/packages/cli/src/commands/deploy/index.ts).
+They confirm repeated metadata input and show that custom `meta` is parsed and
+passed separately from native `gitMetadata`; the exact adapter checks prevent
+the duplicate-key last-write behaviour in the CLI parser from weakening the
+attestation.
+
+Offline fault-injection replaces every process/external boundary and proves no
+real external call can occur. It covers sealed surface, no provider bypass,
+exact immutable metadata forwarding, staging-only target, exact configuration,
+structured URL/ID/API parsing, ambiguity/pollution rejection, one POST, zero
+redirects/retries and secret clearing. Selected validation passes `63/63`:
+controller `17`, adapter `6`, Accounts v2 `22`, Connect UI `2`, and payout-v2
+schema `16`. No-argument controller v3 remains offline with POST count `0`;
+syntax passes `206/206`, C1 passes `278/278`, new-file syntax and
+`git diff --check` pass. The protected LF-normalised hashes remain product
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+and technical
+`C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+
+A8 authority remains unconsumed but is not reusable for the later generated
+adapter or changed source instructions. No external preflight or postflight
+was performed. Operational controller calls, deployments, Vercel/Neon/Stripe
+reads or writes, authentication, JWT rotation, reconciliation POSTs,
+redirects/retries, account list/create/map/replace/onboard actions, gate/school
+changes, payment/refund/earning/payout/transfer/cutover, Production and A9
+effects are all exactly `0`. The last trusted disabled-staging and original
+unmapped Simon `reconciling` intent evidence remains historical, not freshly
+reasserted. Status is
+`MVP_A8_1_CONTROLLER_V3_EXTERNAL_ADAPTER_PREPARED_NOT_OPERATED`.
