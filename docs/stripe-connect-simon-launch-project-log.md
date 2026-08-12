@@ -5351,3 +5351,100 @@ not be retried.
   `MVP_A8_NOT_OPERATED_SOURCE_ANCESTRY_AND_ADAPTER_COMPATIBILITY_STOP`.
   A8 authority remains unconsumed, but it must not be treated as authority to
   operate from changed instructions or a new adapter. No A9 action occurred.
+
+## 12 August 2026 - MVP A8.1 controller-v3 external adapter preparation
+
+- A8.1 is repository-only preparation. It began after `git fetch origin
+  --prune` from exact `origin/main`
+  `d2f5330fd9bdd1afafb93e9b1ac3daa11a9dbc1e`, PR #381's merge commit. Fresh
+  branch `codex/simon-staging-reconciliation-mvp-a8-1-adapter-preparation`
+  was created in isolated worktree
+  `C:\Users\Fraser\AppData\Local\Temp\coachcarter-a8-1-adapter-preparation`.
+  The starting worktree was non-detached, exact at the frozen commit and clean.
+- PR #381 commit `d2f5330fd9bdd1afafb93e9b1ac3daa11a9dbc1e` and PR #380 commit
+  `27e94651369594a02791adbb178b9309c09d2f3b` were both proved ancestors of the
+  frozen source. A7 commit `a5287d7296f84c150d0b469f666daa59996f5c56`
+  was not required to be an ancestor of PR #380's squash merge. Their exact
+  Git tree ID is the same:
+  `78597d0b02c4ff9053a0676b383ce5999190c6c6`.
+- The A6 external adapter and source-proof dependency were read completely and
+  reproduced their reviewed SHA-256 values:
+  `899B004186B0AADA52C2CBDBBFE62D908D7D48369D52D3A888C2BCA4004CD86E`
+  and
+  `45B5BECF6C12399B2766D3FFBA358B428360C121DB229EAA77314D0780260DBA`.
+  They were not changed or operated.
+- Repository support is a narrow generator plus byte-exact conformance
+  validator in `scripts/stripe-connect-simon-staging-adapter-tool.js`. A
+  future separately authorised session must provide a fresh exact worktree,
+  named branch and final merged commit in a non-secret JSON configuration. The
+  tool refuses a generated operational path inside the repository and requires
+  the gitignored suffix `.generated-operator-adapter.js`. The final adapter is
+  self-contained, credential-free, generated outside the repository and
+  validated byte-for-byte before loading; it is not bound to this preparation
+  branch's pre-merge commit.
+- The generated adapter is frozen and exposes exactly
+  `expectedDeployment` plus the controller's sealed ten-method surface:
+  `readGateState`, `readSchoolFeature`, `readRetainedIntent`,
+  `readDeploymentSource`, `deploy`, `resolveDeploymentUrl`,
+  `setStagingGate`, `setSchoolFeature`,
+  `postAuthenticatedCsrfReconciliation`, and `readPostflight`. It has no
+  direct Stripe, Accounts v2 account-create or provider-create method. The only
+  reconciliation request is the authenticated, CSRF-bound application route
+  `/api/connect?action=v2-account`, with one-attempt budget, manual redirects,
+  zero followed redirects and zero retries.
+- Controller v3 remains unchanged. Before each deployment it still creates the
+  fresh nonce-bound `sourceAttestation` from the exact typed eight-field source
+  proof and supplies the frozen `sourceAttestationMetaArgs`. The adapter
+  requires exactly those five `deploy` input fields, validates the frozen
+  attestation and frozen argument array pair-by-pair in controller order,
+  rejects reused nonces, immediately re-reads the exact source, and appends the
+  original array as the final Vercel arguments after fixed
+  `deploy --target=staging --force --yes --scope <exact-scope>`. It cannot add,
+  remove, reorder, reconstruct, normalise or supplement the attestation
+  arguments. The controller's independent post-deploy project, custom
+  environment, alias, READY, non-production, native commit/ref and custom
+  attestation proofs are not weakened. Missing native `gitDirty` therefore
+  remains acceptable only after the complete custom proof passes, while any
+  present non-null value remains rejected.
+- Current official Vercel documentation confirms repeated
+  [`--meta KEY=value`](https://vercel.com/docs/cli/deploy#meta) deployment
+  metadata and custom [`--target=staging`](https://vercel.com/docs/cli/target).
+  Current primary CLI source defines `meta` as a repeated string option in the
+  [`deploy` command](https://github.com/vercel/vercel/blob/main/packages/cli/src/commands/deploy/command.ts),
+  parses each `KEY=value` item in order with the
+  [`parse-meta` helper](https://github.com/vercel/vercel/blob/main/packages/cli/src/util/parse-meta.ts),
+  and passes the resulting custom `meta` separately from `gitMetadata` in the
+  [`deploy` implementation](https://github.com/vercel/vercel/blob/main/packages/cli/src/commands/deploy/index.ts).
+  Because the CLI parser would otherwise allow a later duplicate key to win,
+  the adapter's exact unique ordered-array validation is load-bearing.
+- Offline conformance tests inject every Git, Vercel CLI/API, bridge and HTTP
+  process result; no real external call is available to the tests. Coverage
+  rejects missing, extra, reordered, altered, reconstructed or mutable
+  attestation input; wrong project, environment, alias, branch or commit;
+  Production targets; polluted/multi-value/reconstructed URLs and deployment
+  IDs; provider-create surfaces; second POSTs; redirects/retries; and secret
+  printing/persistence. It also proves exact metadata-array tail equality,
+  structural command/API parsing and authentication clearing in `finally`.
+- Selected offline validation passes `63/63`: controller `17/17`, new adapter
+  generator/conformance `6/6`, existing Accounts v2 `22/22`, Connect UI `2/2`
+  and payout-v2 schema `16/16`. The no-argument controller reports version
+  `3`, offline dry-run, completed true, POST count `0` and shutdown complete
+  false. Syntax passes `206/206`, C1 passes `278/278`, direct syntax checks for
+  the new script/test pass, and `git diff --check` passes.
+- A8 authority was not consumed and cannot authorise the later adapter or
+  changed instructions. No fresh external preflight or postflight occurred.
+  Exact A8.1 external-effect counts are: operational controller invocations
+  `0`; Vercel deployments `0`; Vercel configuration/environment/gate reads or
+  mutations `0`; Neon contacts or database reads/writes `0`; authentication
+  requests `0`; JWT rotations `0`; reconciliation POSTs `0`; redirects `0`;
+  retries `0`; Stripe API requests/list pages/account creates/direct creates
+  `0`; account mapping/replacement/onboarding `0`; school changes `0`;
+  payments/refunds/earnings/payouts/transfers/cutovers `0`; Production actions
+  `0`; and A9 actions `0`. The last trusted A6/A7 disabled staging and Simon
+  retained-intent evidence is not reasserted as fresh evidence.
+- Both protected LF-normalised hashes remained exact: product
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+  Neither protected document was modified. Status is
+  `MVP_A8_1_CONTROLLER_V3_EXTERNAL_ADAPTER_PREPARED_NOT_OPERATED`.
