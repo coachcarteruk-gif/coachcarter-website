@@ -3,26 +3,24 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **MVP A8 RETRY-01 OPERATED ONCE — ONE RETAINED
-STABLE-IDENTITY MATCH FOUND — PROVIDER-ACCOUNT VALIDATION RETURNED HTTP 409 —
-NO MAPPING OR ONBOARDING — MANDATORY SHUTDOWN COMPLETE — STAGING DISABLED —
-PRODUCTION ACTIVATION NOT APPROVED**
+**Current status:** **OWNER REBASELINED SIMON TO HARDENED, HUMAN-CONTROLLED
+INTERIM V1 — HARDENING NOT YET IMPLEMENTED — SIMON NOT ONBOARDED OR PAID —
+ACCOUNTS V2/A8 EVIDENCE PRESERVED AND DEFERRED — PRODUCTION ACTION NOT APPROVED**
 
-**Last updated:** 12 August 2026
+**Last updated:** 13 August 2026
 
 **Verified source baseline:** frozen remote `main` at
-`7fe8c3ff93dcce20cf65c255f3a90f32192196c0`
+`4a6ba4fafbebe167b113e61e80b0c0a711da3ccf` (PR #387 merge)
 
-**Current hold:** The separately authorised A8 retry-01 controller-v3 process
-ran exactly once. Accounts v2 listing reconciled exactly one retained
-stable-identity match, then application validation of that provider account
-returned HTTP `409`. The exact 409 subtype was not persisted, so the controller
-hard-stopped without retry, mapping, replacement, creation or onboarding.
-Mandatory shutdown restored the school Boolean and every staging gate to exact
-false and produced a source-attested final-disabled staging deployment.
-Authority is consumed and must not be reused. A new diagnosis and separately
-authorised plan are required before any further provider request. Production
-activation remains unapproved.
+**Current hold:** Do not operate the existing v1 invite/payout route for Simon
+until the focused interim hardening is reviewed and merged. Do not resume A8,
+A9, Slice 4 reconciliation or Accounts v2 onboarding as the immediate launch
+path. Simon must remain without a new Production account/invite and must remain
+paused until later, separate operational authority. The A8 retry-01 retained
+test-mode shell, stable identity, intents, attempts and one-match/HTTP-409
+evidence remain immutable historical records; they are deferred, not resolved,
+and must not be deleted, replaced, mapped to Production or reused as the v1
+identity.
 
 ## 1. Title and purpose
 
@@ -56,8 +54,8 @@ the journey from chat history or provider dashboards.
 The source hierarchy is:
 
 1. [`stripe-connect-simon-launch-product-spec.md`](stripe-connect-simon-launch-product-spec.md)
-   — owner-agreed full target dated 1 August 2026 with the controlling
-   approval-controlled MVP boundary agreed 11 August 2026.
+   — owner-agreed interim-v1 launch boundary dated 13 August 2026, with the
+   Accounts v2/payout-v2 target preserved as deferred long-term work.
 2. [`stripe-connect-simon-launch-technical-implementation-plan.md`](stripe-connect-simon-launch-technical-implementation-plan.md)
    — implementation sequence, slice gates, tests, and acceptance criteria.
 3. `AGENTS.md` and `CLAUDE.md` — repository, tenancy, auth, money, and safety
@@ -83,16 +81,24 @@ The source hierarchy is:
 ### Protected-document integrity
 
 The protected documents are verified using UTF-8 bytes after normalising CRLF
-and lone CR line endings to LF. On 11 August 2026 the owner approved the MVP
-scope change and both protected documents were deliberately rebaselined:
+and lone CR line endings to LF. The table preserves the 11 August 2026 baseline
+and records the owner-authorised 13 August 2026 interim-v1 rebaseline:
 
-| Protected document | LF-normalised SHA-256 |
-|---|---|
-| Product specification | `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B` |
-| Technical implementation plan | `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58` |
+| Protected document | Prior LF-normalised SHA-256 | 13 August 2026 LF-normalised SHA-256 |
+|---|---|---|
+| Product specification | `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B` | `5D2E956C94A88D496265DCBDDBC85BC2E5F92FFCE262463C978081805302BED3` |
+| Technical implementation plan | `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58` | `C1C76E9DB3450D22C83B0CE3D9D47D835244CF9F51A73B120B3E3E7344851A2A` |
 
-Do not modify either protected document during repair or shadow-exercise work.
-If either hash changes, stop and obtain an explicit product-document review.
+Reason for the owner-authorised rebaseline: Simon's account onboarding had
+become incorrectly coupled to replacing the entire payout architecture. The
+immediate direction is now a hardened, human-controlled v1 route, while the
+Accounts v2/payout-v2 target and all historical evidence remain preserved and
+inactive.
+
+Do not modify either protected document during repair or operational work
+without explicit owner authority. The 13 August 2026 owner direction supplied
+that authority for this docs-only rebaseline; later hash changes still require
+a new explicit product-document review.
 
 ## 4. Safety and scope boundaries
 
@@ -112,6 +118,9 @@ If either hash changes, stop and obtain an explicit product-document review.
 - No production retirement activation, payout, transfer, refund, Connect
   onboarding, live payment, payout-engine transition, or Slice 4 operation is
   authorised by this log.
+- The interim-v1 decision does not authorise the existing v1 account/invite or
+  payout code to be operated unchanged. Account/onboarding and first-payout
+  authority are separate future decisions after hardening is reviewed/merged.
 - Slice 3 is merged and deployed inactive. Do not activate it until a separate
   approved change satisfies the runbook and stop conditions in the Slice 3
   rollout review.
@@ -128,10 +137,10 @@ If either hash changes, stop and obtain an explicit product-document review.
 | Deployment/database identity | Step 17 reverified read-only | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, default/primary branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe remained Sandbox/Test account `acct_1QUSsNIqhTSdZedS` with exact active eight-event webhook `we_1U0qdyIqhTSdZedS2h8O3RxW` and no live shadow-05 binding. |
 | Shadow Checkout return URLs | Merged; accepted shadow evidence | PR #342 merged fail-closed URL binding for all approved producers. All four approved shadow-05 origins are singular and complete; Step 17 accepted the Slice 2 evidence. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
-| Money movement | Not performed | The MVP rebaseline performed no Vercel, Neon, Stripe, environment, database, account, payment, refund, earning, payout, transfer, cutover or production operation. |
+| Money movement | Not performed | The 13 August docs-only rebaseline performed no Vercel, Neon, Stripe, environment, database, account, payment, refund, earning, payout, transfer, cutover or production operation. |
 | Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
 | Slice 3: retired new products | Merged, deployed, production inactive verified | PR #356 merged as `ea3a65cb…`; exact CI and four Vercel deployments are successful/READY. A serializable read-only production query proved school `1` is CoachCarter and the nested retirement value/type are absent. Supported one-off and grandfathered contracts remain; activation is a separate approval. |
-| Next implementation | MVP A | Review and merge the prepared repository controller, then complete Simon's retained Slice 4 reconciliation/onboarding only under new separately scoped operational authority. After acceptance, proceed to direct-slot outcome eligibility; automatic refunds/issues/disputes/multi-origin/scheduling remain deferred. |
+| Next implementation | Simon interim v1 hardening | Harden Express/v1 account identity and ambiguity recovery, tenant/audit scope, deliberate `payouts_start_date`, paused-by-default onboarding, exact approved Stripe-funded eligibility, the itemised Fraser preview and first-run authority boundary. Keep Accounts v2/A8/A9 deferred and unoperated. |
 
 ## 6. Chronological project journey
 
@@ -5609,3 +5618,48 @@ not be retried.
 - The consumed one-shot authority cannot be reused. Status is
   `MVP_A8_RETRY_01_ONE_MATCH_PROVIDER_VALIDATION_HTTP_409_STOPPED_CLOSED_DISABLED`.
   No onboarding or A9 occurred.
+
+## 13 August 2026 - owner rebaselined Simon launch to hardened interim v1
+
+- Owner authority explicitly superseded the 11 August sequencing decision that
+  Simon had to wait for Accounts v2/source-backed payout v2 rather than use the
+  legacy engine. The reason is that creating and initially paying instructor
+  number two had become incorrectly coupled to replacement of the complete
+  payout architecture.
+- CoachCarter remains school-wide on payout engine v1 for the interim period.
+  The next implementation is the focused **Simon interim v1 hardening**:
+  ambiguity-safe account identity, complete tenant/audit scope, deliberate
+  `payouts_start_date`, `payouts_paused=true`, exact approved CoachCarter
+  Stripe-funded eligibility in addition to `chargeable`, an itemised Fraser
+  preview, configuration-driven `weekly_franchise_fee_pence`, human handling
+  of insufficient weeks and a distinct first-run approval boundary.
+- The three-state lifecycle and 48-hour/calendar payout rule remain
+  authoritative. No routine instructor-outcome or dual-confirmation workflow
+  is an interim prerequisite; the existing pre-payout `mark-not-delivered`
+  exception remains available.
+- Account onboarding, the first reviewed payout and any later unattended Simon
+  payouts are separate future authority boundaries. The current v1 routes are
+  not represented as safe before the hardening is reviewed and merged.
+- Accounts v2/payout v2, further Slice 4 reconciliation, two v2 shadow Fridays,
+  v2 cutover, four v2 live approvals and A8/A9/controller work are deferred.
+  The complete A8 retry-01 record and retained test-mode Simon shell, stable
+  identity, intent, attempts, one-match evidence and HTTP-409 stop remain
+  preserved. They were not deleted, replaced, completed, mapped to Production
+  or reinterpreted as a v1 identity.
+- Work started from frozen `origin/main`
+  `4a6ba4fafbebe167b113e61e80b0c0a711da3ccf`, the merge commit for PR #387,
+  which was verified merged and an ancestor of the frozen baseline. The prior
+  protected LF-normalised hashes matched exactly before editing: product
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+- The owner-authorised protected rebaseline produced product
+  `5D2E956C94A88D496265DCBDDBC85BC2E5F92FFCE262463C978081805302BED3`
+  and technical
+  `C1C76E9DB3450D22C83B0CE3D9D47D835244CF9F51A73B120B3E3E7344851A2A`
+  after LF normalisation.
+- This was documentation-only. Stripe, Neon and Vercel requests were `0`;
+  database/deployment/environment/gate/account/mapping/onboarding/invite,
+  payment/refund/payout/transfer/cutover, Production, controller, A8 and A9
+  actions were all `0`. No Stripe, Neon or Vercel credentials were requested or
+  used.

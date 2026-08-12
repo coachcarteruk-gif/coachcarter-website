@@ -1,13 +1,13 @@
 # Stripe Connect Simon Launch — Technical Implementation Plan
 
-**Status:** approval-controlled MVP implementation plan; no production behaviour is activated by this document
-**Product authority:** `docs/stripe-connect-simon-launch-product-spec.md`, full target agreed 1 August 2026 and MVP boundary agreed 11 August 2026
-**Prepared against:** repository state through merged PR #372 (`52ff27a`) and the Slice 4 rollout evidence reviewed 11 August 2026
-**Scope:** post-cutover lesson payments, lesson outcomes, refunds, disputes, instructor obligations, weekly statements, and Stripe Connect transfers for Fraser and Simon  
+**Status:** interim v1 hardening implementation plan; no production behaviour is activated by this document
+**Product authority:** `docs/stripe-connect-simon-launch-product-spec.md`, interim v1 rebaseline approved 13 August 2026; long-term payout-v2 target preserved
+**Prepared against:** frozen `origin/main` `4a6ba4fafbebe167b113e61e80b0c0a711da3ccf` (merged PR #387) and the preserved Slice 4/A8 retry-01 evidence
+**Scope:** immediate Simon Express/v1 hardening and reviewed first payout; deferred Accounts v2/payout-v2 architecture
 
 ## 0. Purpose, authority, and non-goals
 
-This plan translates the launch product specification into a code-level, reviewable implementation sequence. It deliberately supersedes incompatible implementation details in the older Payout v2 plan and runbooks; it does not silently reinterpret the agreed product rules.
+This plan translates the launch product specification into a code-level, reviewable implementation sequence. The immediate milestone is a hardened, human-controlled use of the existing Express/v1 path. It explicitly supersedes the former requirement to finish Accounts v2 and payout v2 before Simon can be onboarded or initially paid, while preserving that architecture and all evidence as inactive long-term work.
 
 The governing order is:
 
@@ -19,7 +19,23 @@ The governing order is:
 
 This plan does **not** authorize migrations, production code changes, Stripe object creation, live refunds, transfers, data backfills, or cutover. Each implementation slice below remains inert until its explicit activation gate is approved.
 
-### 0.1 Fixed launch rules
+### 0.1 Controlling interim v1 launch rules
+
+- CoachCarter remains school-wide on `payout_engine_version='v1'` during the interim period.
+- The current `api/connect.js` and `api/_payout-helpers.js` paths are evidence of the starting point, not proof that Simon can safely use them unchanged.
+- Account/invite operations must be school-scoped and audit-logged, and account creation must persist a durable identity before Stripe so ambiguous success is reconciled without duplicate creation.
+- Simon's onboarding state must establish a deliberate `payouts_start_date` and `payouts_paused=true`; historical `chargeable` rows must not enter his first calculation.
+- Interim positive eligibility requires `chargeable` plus an approved, exact CoachCarter Stripe-funded source after the start boundary. Cash, Setmore/external, historic credit, pre-start, ambiguous and test-account sources are manual or £0.
+- The read-only Fraser preview must show exact lessons, funding evidence, Stripe fees, the current `weekly_franchise_fee_pence` value and proposed transfer.
+- Negative/insufficient weeks remain human-handled. Do not add automatic invoicing, Bacs collection or deferred franchise debt automation.
+- Simon remains paused until Fraser separately approves the first eligible run. Onboarding, the first reviewed payout and later unattended operation are separate authority boundaries.
+- The retained Accounts v2 test account shell, intents, attempts, A8 retry-01 evidence and related observations remain immutable historical evidence. They are not deleted, replaced, Production-mapped or reused as the v1 identity.
+- Two payout-v2 shadow Fridays, school-wide v2 cutover and four v2 live-run approvals are not interim prerequisites.
+- The authoritative lesson rule remains the three-state lifecycle: instructors are paid for calendar lessons unless the learner gave at least 48 hours' notice. No routine outcome-confirmation ledger or prompt is introduced for interim v1.
+
+### 0.1a Superseded payout-v2 launch rules (deferred historical target)
+
+The following rules governed the 1/11 August payout-v2 launch sequence. They remain long-term design context but no longer control the immediate Simon milestone.
 
 - One immutable, school-scoped cutover timestamp separates legacy and launch accounting. The Stripe payment creation timestamp—not the booking date, reschedule date, webhook receipt time, or later data repair—selects the regime forever.
 - Pre-cutover payments remain manual forever. Simon's existing £55 Laura payment, its £1.03 Stripe fee, and the associated September reserved lessons therefore cannot enter automated earnings or transfers.
@@ -30,7 +46,9 @@ This plan does **not** authorize migrations, production code changes, Stripe obj
 - Weekly lock is Friday 12:00 Europe/London; transfer submission is Friday 14:00 Europe/London. Locked batches are immutable.
 - The first live batch includes both Fraser and Simon, has no artificial amount cap, and requires Fraser's named approval.
 
-### 0.2 Technical decisions recommended by this plan
+### 0.2 Deferred payout-v2 technical decisions
+
+These decisions describe the preserved long-term architecture. They are not requirements for the interim v1 hardening and must not reintroduce routine outcome confirmation into that milestone.
 
 - Preserve the existing three booking states (`scheduled`, `chargeable`, `refunded`) for calendar compatibility, but stop using `chargeable` alone as evidence that money may be paid. A separate append-only lesson-outcome ledger becomes the payout gate.
 - Introduce an immutable `lesson_payment_contract` linking exactly one eligible Stripe payment source to exactly one economic lesson across reschedules. A replacement booking carries the same contract; it does not create a second earning.
@@ -39,7 +57,22 @@ This plan does **not** authorize migrations, production code changes, Stripe obj
 - Materialize one instructor statement batch per active agreement, including £0 batches. Create source-linked Stripe transfer intents per payment charge inside that statement because Stripe requires an immutable `source_transaction` per transfer.
 - Run financial schedules from an hourly dispatcher plus database occurrence/lease rows. Derive Friday noon, Friday 14:00, and daily 21:00 in `Europe/London`; never hardcode UTC hours through daylight-saving changes.
 
-### 0.3 Approval-controlled MVP implementation boundary
+### 0.3 Immediate implementation boundary — Simon interim v1 hardening
+
+This docs-only rebaseline authorises no runtime change. The next code milestone is limited to:
+
+1. a durable, school-scoped Express/v1 account-creation command that records intent before Stripe, uses stable idempotency/reconciliation semantics, and audit-logs account creation and invitation;
+2. atomic onboarding safeguards that set Simon's deliberate `payouts_start_date` and `payouts_paused=true` before eligibility can be reached;
+3. a Simon-specific v1 eligibility/read-model boundary that requires both `chargeable` and exact approved CoachCarter Stripe funding after the start date, with deterministic manual/£0 dispositions for cash, external/Setmore, historic credit, pre-start, ambiguous and test sources;
+4. a read-only Fraser preview derived from the same trusted calculation, itemising lesson/source identity, gross, Stripe fee, configured `weekly_franchise_fee_pence` and proposed transfer;
+5. a first-run approval guard that cannot be satisfied by onboarding completion or preview generation and that leaves Simon paused when evidence is incomplete; and
+6. focused fault-injection, tenant, audit, start-boundary, funding-origin, preview and authority tests.
+
+The milestone does not create or send an account invitation, unpause Simon, run production eligibility, submit a transfer, activate a controller, operate A8/A9, switch engines or modify v2 evidence. Ongoing unattended Simon payouts are explicitly outside this milestone.
+
+### 0.3a Superseded payout-v2 MVP implementation boundary (deferred)
+
+The table and controls below preserve the prior payout-v2 beta plan. They no longer block the interim v1 milestone.
 
 The product-specification MVP overlay controls launch scope. The fuller architecture below remains the target backlog, but the following capabilities are the only beta blockers:
 
@@ -61,8 +94,8 @@ Runtime gates must be canonical exact-true controls with an exact-false disabled
 
 | Concern | Current implementation | Safe to reuse | Must change or retire |
 |---|---|---|---|
-| Connect onboarding | `api/connect.js` creates legacy Accounts v1 Express accounts, Account Links, status, dashboard links, and admin invites | Existing authenticated instructor/admin route shapes and UI entry points | Accounts v2 recipient configuration, deterministic creation, current capability/requirements state, strict school scope, cutover gates, and wording |
-| Legacy payouts | `api/cron-payouts.js` and `api/_payout-helpers.js` compute from `chargeable` bookings and live pricing; Friday 09:00 UTC; delete claims on errors | None of the money mutation path after launch | Disable school-wide at cutover; preserve read-only legacy history and manual pre-cutover operations |
+| Connect onboarding | `api/connect.js` creates v1 Express accounts, Account Links, status, dashboard links, and admin invites; the account call precedes durable local identity and onboarding does not establish Simon's start/pause boundary | Authenticated instructor/admin route shapes, hosted onboarding, existing school-scoped lookups and audit vocabulary | Immediate: durable ambiguity recovery, complete school scope/audit, deliberate `payouts_start_date`, paused-by-default Simon onboarding. Long term: Accounts v2 remains deferred. |
+| Legacy payouts | `api/cron-payouts.js` and `api/_payout-helpers.js` compute from `chargeable` bookings; they honour `payouts_start_date`, `payouts_paused` and `weekly_franchise_fee_pence`, but do not require exact approved funding evidence and delete claims on transfer error | Interim calculation structure and admin-editable fee only after focused hardening; existing pre-payout `mark-not-delivered` exception | Immediate: exact approved-source filter, itemised read-only preview and first-run human approval. Long term: durable source-linked payout v2 remains deferred. |
 | Payout v2 source ingestion | `api/_payout-v2-source-writer.js`, Stripe event receipts, canonical fingerprints, and migration 035 funding-source tables | Exact PaymentIntent/Charge/balance-transaction capture, idempotent event receipt, immutable evidence patterns | Require payment creation/availability times and a one-payment/one-lesson contract; reject goodwill, cash, credits, recurring, flexible, and multi-booking sources |
 | Payout v2 earnings | `api/_payout-v2-earning-planner.js` supports commission **or** franchise, `chargeable` state, goodwill/external sources, and historic recovery | Deterministic planning/fingerprinting approach | Formula, eligibility, agreement model, outcome requirement, obligation ordering, source eligibility, and zero-statement behaviour |
 | Payout v2 materialization | `api/_payout-v2-materializer.js` locks, writes immutable rows, and protects against concurrent claims | Transactional locking, canonical plan verification, append-only materialization | New run/batch/earning/obligation schema and Friday window semantics |
@@ -70,7 +103,7 @@ Runtime gates must be canonical exact-true controls with an exact-false disabled
 | Stripe webhooks | `api/webhook.js` validates the platform signature and records supported payment evidence; `api/_payout-v2-webhook.js` models connected events | Signature-first processing, event receipts, replay/out-of-order patterns | Split platform, Accounts v2 thin-event, and connected-account endpoints; dispatch refunds, disputes, transfers, capability state, and bank-payout evidence |
 | Booking/payment entry points | `api/slots.js`, `api/offers.js`, `api/webhook.js` support direct bookings, practical test-date bookings, repeating bookings, flexible offers, reserved/repeating flows, and credits | Direct single-slot, practical test-date checkout, one-off one-lesson offer, and captured one-lesson request | Stop new repeats/reserved/flexible-credit products; require atomic one-payment/one-lesson contract creation; reject ambiguous shapes |
 | Learner credits | `api/credits.js`, `learner_credit_balances`, `booking_credit_sources`, and adjustment ledgers | Existing-credit spend/return and immutable credit accounting | Keep self-serve purchases retired; mark all credit-funded lessons as £0 automated payout; remove purchase and repeat/reserved invitations |
-| Booking lifecycle | `api/_booking-status.js` and booking APIs use scheduled/chargeable/refunded; post-end can become chargeable automatically | Calendar and payout-v1 compatibility until cutover | Add explicit outcome revisions and lock; automatic state may not imply an earning |
+| Booking lifecycle | `api/_booking-status.js` and booking APIs use `scheduled`/`chargeable`/`refunded`; post-end becomes `chargeable` automatically and instructors can mark an unpaid lesson not delivered | Authoritative interim lifecycle and 48-hour rule | Do not add routine outcome confirmation for interim v1. An outcome ledger remains deferred payout-v2 work. |
 | Rescheduling | `api/instructor.js` and `api/slots.js` create replacement rows and copy financial/credit fields | Same-instructor availability and replacement-booking mechanics | Preserve the immutable payment contract, send immediate email/SMS, require a real replacement, and prevent duplicate earnings |
 | Refund planning | `api/_refund-planner.js` identifies credit/repeat/direct/offer cases and can resolve exact fee evidence | Source-resolution helpers, preview formatting, exact fee lookup | Remove paid-out blanket block for target payments, use exact contract economics, calculate policy-specific original-method refunds, and reject legacy/ambiguous sources |
 | Refund execution | `api/_refund-executor.js` calls Stripe before a durable operational intent and treats errors as definite failures | Existing authorization, operator audit vocabulary, final ledger helpers | Durable intent/attempt/reconcile states, stable identity, automatic eligible flows, and post-payout recovery accounting |
@@ -90,8 +123,8 @@ The final column identifies the concrete code/schema, whether it is reused, chan
 
 | Topic | Current behaviour | New agreed rule | Required target behaviour | Components, reuse/retire decision, and compatibility risk |
 |---|---|---|---|---|
-| Payout eligibility | `chargeable` booking is sufficient | Instructor explicitly confirms an eligible outcome before lock | Outcome ledger is mandatory; booking status alone never plans a launch earning | Change `api/_payout-v2-earning-planner.js`, `api/_booking-status.js` consumers, and booking schema; reuse calendar states only. Risk: automatic legacy transitions accidentally paying launch lessons. |
-| Automatic completion | Ended scheduled bookings can flow toward payment | Ended lessons require instructor confirmation | Keep calendar automation only; do not emit an outcome or earning automatically | Change `api/_payout-helpers.js`/planner routing; retire launch use of status-only selection. Compatibility: v1 remains active only pre-cutover. |
+| Payout eligibility | `chargeable` booking is sufficient | Interim v1 keeps `chargeable` required but adds exact approved CoachCarter Stripe funding after `payouts_start_date` | Status plus trusted funding evidence; excluded sources are manual/£0 | Harden the v1 eligibility query/read model without changing the three-state lifecycle. Preserve the outcome-ledger design only for deferred payout v2. |
+| Automatic completion | Ended scheduled bookings can flow toward payment | Calendar lessons remain payable under the 48-hour rule; no routine confirmation | Keep the existing `scheduled` to `chargeable` transition and `mark-not-delivered` exception; funding evidence is the additional Simon gate | Do not build `_lesson-outcomes.js` for the interim milestone. Risk is confusing source eligibility with delivery confirmation. |
 | Learner confirmation | Older removed flows considered dual confirmation | No learner approval or dual confirmation | Do not restore prompts, votes, or confirmation states | No schema/UI resurrection. Risk is opportunistic reuse of removed confirmation concepts; enforce by API/UI tests. |
 | Admin override | Admin can manually process or influence old payout state | No admin payout-eligibility override | Admin impersonation invokes the same instructor endpoint and is attributed; no direct eligibility mutation | Change `api/admin.js`, `api/instructor.js`, admin UI/authority. Retire launch `process-payout` and generic eligibility controls. |
 | Outcome revision | No durable revision sequence | Instructor may revise until batch lock, then immutable | Append superseding revisions; DB transaction rejects changes once locked | New outcome table/module; reuse booking ownership. Migration risk is race with Friday materialization, addressed by shared locks. |
@@ -483,7 +516,16 @@ At planning time, Stripe's official `stripe-node` changelog lists `22.4.0` with 
 
 ### 5.2 Connect onboarding and readiness
 
-#### Refactor `api/connect.js`
+#### Immediate interim v1 hardening in `api/connect.js`
+
+- Introduce one durable, school-scoped account-creation intent keyed to Simon's instructor/school/mode and persist it before calling Stripe Accounts v1. Use one stable Stripe idempotency key where supported and reconcile the stored identity after timeouts or ambiguous responses; never treat a blank instructor mapping as permission to create again.
+- Keep `type: 'express'` only as the explicitly owner-approved interim compatibility path. This is not a recommendation to use Accounts v1 for new platforms generally and must not replace the preserved Accounts v2 target.
+- Require authenticated same-school instructor/admin scope on every read and update. Audit account creation, reconciliation, invitation, start-date selection and pause state without exposing provider secrets.
+- Establish the deliberate `payouts_start_date` and `payouts_paused=true` state transactionally before returning or sending an onboarding link for Simon. A provider account must not make him eligible by itself.
+- Keep onboarding invitation and account creation separable so implementation/testing cannot accidentally email Simon. Sending the invitation requires later operational authority.
+- Preserve the retained test-mode Accounts v2 shell and its intent/attempt evidence without mapping, deletion, replacement or Production reuse.
+
+#### Deferred payout-v2 refactor of `api/connect.js`
 
 Retain authenticated routes but version their response contract. Proposed endpoints:
 
@@ -555,7 +597,23 @@ Retain the route only as a compatibility wrapper to the financial dispatcher. Ne
 - paginate with checkpoints and bounded work;
 - alert stale pending sources and never make an ambiguous source eligible.
 
-### 5.4 Outcomes, rescheduling, cancellation, and issues
+### 5.3a Interim v1 payout selection and preview
+
+Harden `api/_payout-helpers.js` and the narrow admin read surface without changing other instructors' economics:
+
+- keep `CHARGEABLE`, unpaid-line-item, non-test-account and `payouts_start_date` predicates;
+- add a fail-closed Simon funding classifier that accepts only explicitly approved exact Stripe-funded source shapes proving CoachCarter receipt, exact gross and attributed Stripe fee;
+- produce reason-coded manual/£0 exclusions for cash, Setmore/external, historic credit, pre-start, ambiguous/contradictory evidence and test accounts;
+- remove all list-price or zero-fee fallbacks from positive Simon lines when exact funding evidence is absent;
+- calculate the weekly deduction from the loaded `weekly_franchise_fee_pence`, never a Simon-specific constant;
+- expose a read-only, school-scoped Fraser preview that lists included/excluded lessons, evidence identities, gross, fees, weekly fee and proposed transfer; and
+- add an explicit first-run approval/paused guard around any later Simon mutation path. Preview generation and onboarding completion cannot clear the guard.
+
+Implementation must decide and test how the existing payout claim/transfer ambiguity weakness is contained for the reviewed first run. It may reuse a durable intent/reconciliation primitive, but it must not broaden the task into school-wide payout v2 or claim that current delete-on-error behaviour is safe.
+
+### 5.4 Deferred payout-v2 outcomes, rescheduling, cancellation, and issues
+
+This section is not part of the interim v1 milestone. Interim v1 uses the existing three-state lifecycle and `mark-not-delivered` exception; it does not add a routine outcome prompt or ledger.
 
 #### New `api/_lesson-outcomes.js`
 
@@ -877,7 +935,21 @@ All endpoints verify signatures on raw bodies before parsing, record idempotent 
 
 Every slice below has an explicit inactive state and rollback. Do not merge multiple money-mutating slices merely to shorten the rollout. Each PR updates this plan's traceability/checklists and any affected runbook.
 
-### 9.0 MVP delivery sequence (controls beta launch)
+### 9.0 Immediate delivery sequence — Simon interim v1 hardening
+
+Deliver one tightly scoped implementation PR (or a small dependency chain if review requires separation) covering:
+
+1. **Account identity and onboarding safety:** durable intent before provider creation, stable ambiguity reconciliation, exact tenant/audit checks, deliberate `payouts_start_date`, paused-by-default state, and invitation separation.
+2. **Funding-backed eligibility:** a reviewed source allowlist tied to exact CoachCarter Stripe receipt; reason-coded manual/£0 handling for every prohibited source class; no fallback estimates.
+3. **Read-only Fraser preview:** exact lesson/source lines, gross, Stripe fees, current `weekly_franchise_fee_pence`, exclusions and proposed transfer from the same calculation used by the guarded path.
+4. **Human-control boundary:** first-run approval distinct from onboarding and preview, safe pause on incomplete evidence, no unattended continuation, and documented manual handling for negative/insufficient weeks.
+5. **Verification:** fault-injection around ambiguous account/transfer outcomes, tenant/auth/audit tests, start-date and pause tests, funding-origin truth table, preview conservation and explicit proof that v2 evidence is untouched.
+
+All code remains unoperated until a later authority explicitly names the account/onboarding or payout action. The implementation PR must not create/match/map an account, send Simon an invite, unpause him, query production payout candidates, move money, run A8/A9 or change an engine/gate.
+
+### 9.0a Superseded payout-v2 MVP delivery sequence (deferred)
+
+The original MVP A-E sequence below is preserved as long-term history. It is no longer the immediate launch sequence.
 
 The original Slices 0–13 remain the full-target backlog and historical traceability structure. For the approval-controlled MVP, use the following narrower sequence and do not treat deferred Slice 5/6/10/11 automation as launch blockers.
 
@@ -938,6 +1010,8 @@ Each MVP item should remain one or more small PRs with its own inactive gate, fo
 **Acceptance:** Fraser and Simon each have one correctly scoped test/staging account, current blockers are explainable, and no boolean can falsely preserve readiness.  
 **Inactive:** production account creation behind named enablement; agreement/status cannot activate payouts.  
 **Rollback:** disable v2 create/link routes and return to legacy onboarding UI; retain account/evidence rows; do not delete Stripe accounts.
+
+**Interim disposition:** deferred. Preserve the retained test-mode Simon shell and all reconciliation evidence exactly; do not complete, replace, map or reuse it for the Production v1 identity. Slice 4 acceptance is not a prerequisite for the interim v1 account or first reviewed v1 payout.
 
 ### Slice 5 — Outcomes, rescheduling, issue reports, and reminders
 
@@ -1125,7 +1199,17 @@ Conflicting tests must be renamed/replaced with an explicit reference to the new
 
 ## 11. Rollout plan for Fraser and Simon
 
-For the approval-controlled MVP, the phase plan below is read with these overrides:
+The immediate rollout is deliberately smaller than the payout-v2 phases below:
+
+1. Merge and review the Simon interim v1 hardening with all external operations disabled.
+2. Under later account/onboarding authority, create or reconcile one Production Express/v1 identity through the hardened route, set the deliberate start date, keep Simon paused and send an invitation only if that authority explicitly includes it.
+3. Under separate payout-review authority, generate the read-only funding-backed preview while Simon remains paused. Fraser reviews every included/excluded lesson, exact Stripe evidence, fee, configured weekly fee and proposed transfer.
+4. Only a further exact first-run approval may temporarily permit the reviewed transfer path. Missing or changed evidence stops and leaves Simon paused.
+5. After reconciliation, return to or keep the paused human-controlled state. One success does not schedule or authorise another run.
+
+Accounts v2 completion, the two shadow Fridays, controlled v2 cutover and first four v2 live-Friday approvals remain deferred long-term phases. The detailed phases below are preserved for that later work and do not govern the interim v1 rollout.
+
+For the superseded approval-controlled payout-v2 MVP, the phase plan below was read with these overrides:
 
 - test and shadow only the direct single-slot origin; other origins remain manual/£0;
 - rehearse manual refund/issue/dispute holds rather than their deferred automatic executors;
@@ -1183,6 +1267,21 @@ Phase E is deferred from the MVP. Success of the first run does not enable autom
 - If Connect capability regresses, stop affected new transfers, retain claims/statements, and reconcile capability. Do not redirect to a different account without a new approved agreement/account mapping.
 
 ## 12. Product-rule traceability checklist
+
+Immediate interim-v1 traceability:
+
+| Product rule | Implementation location | Primary acceptance evidence |
+|---|---|---|
+| One recoverable v1 identity, no duplicate after ambiguity | hardened `api/connect.js` command/intent/reconciler | timeout/crash/retry fault-injection and one-identity assertion |
+| Tenant scope and complete audit | Connect account/invite/start/pause commands | cross-school rejection and audit contract tests |
+| Deliberate start date and paused default | onboarding transaction/readiness guard | historic-backlog exclusion and `payouts_paused=true` tests |
+| `chargeable` plus exact approved funding | hardened v1 eligibility classifier | source-origin truth table and missing/contradictory evidence tests |
+| £90 comes from configuration, not code | `weekly_franchise_fee_pence` read | changed-config preview/calculation test and no Simon constant |
+| Fraser read-only preview and first-run approval | admin preview plus guarded mutation boundary | exact-line conservation, stale-fingerprint and no-unattended-run tests |
+| Three-state/48-hour rule, no routine confirmation | existing booking lifecycle and `mark-not-delivered` | regression proving no new outcome prompt/ledger dependency |
+| Preserve v2 shell/A8 evidence | no writes to v2 identity/evidence tables | zero-delta assertion in focused tests and rollout review |
+
+The table below is the preserved long-term payout-v2 traceability matrix.
 
 | Product rule | Implementation location | Primary acceptance evidence |
 |---|---|---|
@@ -1251,12 +1350,16 @@ At Friday lock, an otherwise valid earning is calculated and locked even if that
 
 The held amount remains a protected platform liability. Once readiness is proven, a later run releases the original locked amount without repricing, mutating the locked statement or requiring lesson reconfirmation. It is never treated as franchise debt, platform revenue or forfeited earnings.
 
-### Decision 5 — Approval-controlled MVP before full automation
+### Decision 5 — Superseded payout-v2 MVP before full automation
 
-Keep the new Accounts v2/source-backed system and launch a narrow beta rather than putting Simon onto the legacy engine. The beta supports only direct single-slot automated earnings, manual reviewed refunds/issues/disputes, operator-initiated Friday processing, two shadow Fridays and Fraser approval/reconciliation for the first four live Fridays. All other origins and unattended automation remain deferred until separately approved.
+On 11 August 2026 the direction was to keep the new Accounts v2/source-backed system and launch a narrow beta rather than putting Simon onto the legacy engine. That sequencing decision is preserved historically but was explicitly superseded on 13 August 2026 by Decision 6. Its architecture remains the long-term target.
+
+### Decision 6 — Hardened interim v1 for Simon
+
+Keep CoachCarter school-wide on v1 and make the next implementation a focused Simon interim-v1 hardening. Simon may be onboarded through one recoverable, tenant-scoped, audit-logged Express/v1 identity and initially paid only through a paused-by-default, exact-funding, Fraser-reviewed path. Accounts v2/payout v2, A8/A9, two shadow Fridays, v2 cutover and four v2 live approvals remain deferred and are not interim prerequisites. The retained v2 test identity/evidence is preserved and cannot become the Production v1 identity. Account onboarding, first reviewed payout and unattended future payouts require separate authority.
 
 ## 14. Recommended starting point
 
-Start from merged PR #372 and **MVP A — Connect completion and repeatable staging control**. The dependency/client boundary, inert launch schema and Accounts v2 Slice 4 groundwork now exist; do not restart those completed foundations. First version-control and test the corrected controller contract, then complete Simon's original retained reconciliation/onboarding path under separately scoped operational authority.
+Start from frozen merged PR #387 at `4a6ba4fafbebe167b113e61e80b0c0a711da3ccf` and implement **Simon interim v1 hardening**. Do not resume MVP A, A8, A9, Accounts v2 reconciliation or onboarding as the next milestone.
 
-After Connect acceptance, proceed to MVP B's direct-slot outcome eligibility. Do not start automatic refunds, learner issue automation, dispute automation, multi-origin support or the hourly money scheduler. Every PR remains inactive by default, and no production deployment, account creation, refund, transfer or cutover follows from this planning document alone.
+The first PR should harden account identity/ambiguity recovery, tenant/audit controls, deliberate start/pause state, exact Stripe-funded v1 eligibility, the itemised Fraser preview and the first-run authority boundary. It must include focused tests and remain unoperated. Do not create an account, send an invite, inspect production candidates, unpause Simon, transfer money, change an engine/gate or modify the retained v2 evidence under this plan.

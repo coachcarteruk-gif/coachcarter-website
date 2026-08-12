@@ -1,9 +1,17 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A8_RETRY_01_ONE_MATCH_PROVIDER_VALIDATION_HTTP_409_STOPPED_CLOSED_DISABLED; RECONCILIATION_STOPPED`
-Prepared: 9 August 2026; updated 12 August 2026
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A8_RETRY_01_EVIDENCE_PRESERVED; FURTHER_SLICE4_RECONCILIATION_AND_ONBOARDING_DEFERRED`
+Prepared: 9 August 2026; updated 13 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
+
+## Interim disposition — 13 August 2026
+
+The owner has moved Simon's immediate launch path to a hardened, human-controlled Express/v1 route while CoachCarter remains school-wide on payout engine v1. Further Slice 4 reconciliation, Accounts v2 onboarding, two payout-v2 shadow Fridays and v2 cutover are deferred long-term work, not immediate blockers for Simon's interim v1 account or a separately approved reviewed v1 payout. The interim hardening has not yet been implemented.
+
+This changes sequencing only. Every historical staging attempt and the complete A8 retry-01 record below remains valid evidence and must not be erased or rewritten. The retained test-mode Simon account shell, stable identity, intent, attempts and one-match evidence must not be deleted, replaced, completed by inference, mapped to Production or reused as the Production v1 identity. No operation in the interim v1 path may mutate or reinterpret those records.
+
+This docs-only rebaseline performed no Stripe, Neon, Vercel, database, deployment, environment, gate, account, mapping, onboarding, payout, transfer, Production, controller, A8 or A9 operation.
 
 Staging acceptance attempt: 9 August 2026 on
 `codex/simon-slice4-staging-acceptance`, exact source and then-current
