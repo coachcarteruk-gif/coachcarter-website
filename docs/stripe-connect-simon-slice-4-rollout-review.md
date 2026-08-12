@@ -1,7 +1,7 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A6_DEPLOYMENT_GIT_DIRTY_EVIDENCE_ABSENT_STOPPED_DISABLED; RECONCILIATION_STOPPED_DISABLED`
-Prepared: 9 August 2026; updated 11 August 2026
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A7_DEPLOYMENT_SOURCE_ATTESTATION_PREPARED_NOT_OPERATED; RECONCILIATION_STOPPED_DISABLED`
+Prepared: 9 August 2026; updated 12 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
 
@@ -1411,3 +1411,75 @@ Status is
 The authorised attempt is consumed. Simon remains unresolved and onboarding is
 prohibited pending fresh owner authority; the protected specifications were not
 changed.
+
+## MVP A7 deployment-source attestation correction - 12 August 2026
+
+A7 is repository-only preparation from fresh named branch
+`codex/simon-staging-reconciliation-mvp-a7` at current `origin/main`
+`591a6996497c939435977b7f244a7c834fe73de3`, the merge commit for PR #379.
+That merge was explicitly proved an ancestor before implementation. Protected
+LF-normalised hashes reproduced exactly as product
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+and technical
+`C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+Neither protected document changed.
+
+Controller version 3 keeps the strict local proof before each deployment:
+inside a Git worktree, non-detached `HEAD`, exact expected named branch and
+`refs/heads/<branch>` symbolic ref, `HEAD` and named branch tip both the exact
+expected commit, explicit clean state, and empty porcelain including untracked
+files. Only after that proof passes, the controller builds a sealed custom
+Vercel metadata attestation with a fresh 256-bit nonce. The `ccSource*`
+namespace carries proof version and deployment phase, all eight source facts,
+the SHA-256 of the empty porcelain value, and a canonical SHA-256 covering the
+complete unsigned attestation.
+
+The external adapter receives the immutable attestation plus the exact
+repeated `--meta KEY=value` CLI argument array. Returned read-only deployment
+metadata must reproduce every expected namespaced property exactly and may not
+add another `ccSource*` property. Exact native `gitCommitSha` and named
+`gitCommitRef` remain independent requirements alongside exact project,
+non-production target, custom `staging` environment, one staging alias and
+deployment domain. Vercel's omission of native `meta.gitDirty` no longer
+blocks an otherwise exact custom attestation. If native `gitDirty` is present,
+only `null` is non-contradictory; any other value stops closed.
+
+This uses Vercel's documented custom deployment metadata contract rather than
+assuming an undocumented response shape. Reviewed sources were the current
+[Vercel deploy `--meta` documentation](https://vercel.com/docs/cli/deploy#meta),
+the primary CLI
+[`deploy` implementation](https://github.com/vercel/vercel/blob/main/packages/cli/src/commands/deploy/index.ts),
+its [`parse-meta` helper](https://github.com/vercel/vercel/blob/main/packages/cli/src/util/parse-meta.ts),
+and its best-effort
+[`create-git-meta` helper](https://github.com/vercel/vercel/blob/main/packages/cli/src/util/create-git-meta.ts).
+The CLI source passes custom `meta` separately from `gitMetadata`; the latter's
+local `dirty` Boolean does not establish that the deployment API will return an
+own `meta.gitDirty` property when clean.
+
+Focused offline controller verification passes `17/17`; the controller plus
+unchanged Accounts v2, Accounts v2 UI and payout-v2 schema selection passes
+`57/57` (`17` controller, `22` Accounts v2, `2` Connect UI and `16` payout-v2
+schema tests). Syntax passes `206/206` files and C1 passes `278/278`. The no-argument
+controller reports version `3`, offline dry-run, completed true, POST count `0`
+and shutdown complete false. Coverage includes every missing/altered
+attestation property, wrong digest, malformed proof, unknown namespaced
+property, the exact typed local source field set, missing/additional source
+fields, reordered property insertion, detached/dirty source, branch/commit
+mismatch, Production/alias mismatch, absent native dirty evidence,
+contradictory native dirty evidence, fresh nonces, exact `--meta` arguments,
+zero-POST early stops and mandatory shutdown. No
+operational controller invocation, Vercel/Neon/Stripe call,
+deployment, environment or database mutation, JWT rotation, authentication
+request, reconciliation POST, account create/map/replace, onboarding, money
+operation, cutover or Production action occurred. A6 was not rerun and its
+authority remains consumed. Simon remains the original unmapped `reconciling`
+intent with no replacement. Status is
+`MVP_A7_DEPLOYMENT_SOURCE_ATTESTATION_PREPARED_NOT_OPERATED`.
+
+Exact A7 external-effect counts are: operational controller invocations `0`,
+Vercel deployments `0`, Vercel/environment/gate mutations `0`, JWT rotations
+`0`, Neon/database writes `0`, school-feature mutations `0`, authentication
+requests `0`, reconciliation POSTs `0`, Stripe API requests `0`, Accounts v2
+list calls `0`, Accounts v2 creates `0`, replacement accounts `0`, onboarding
+calls `0`, payments/refunds/earnings/payouts/transfers/cutovers `0`, and
+Production actions `0`.

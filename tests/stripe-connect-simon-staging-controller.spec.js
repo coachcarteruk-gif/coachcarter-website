@@ -19,7 +19,12 @@ function expectedDeployment() {
   };
 }
 
-function metadata(overrides = {}) {
+function sourceAttestation(phase = 'contract-test', nonce = 'c'.repeat(64)) {
+  const source = controller.validateDeploymentSource(deploymentSource(), expectedDeployment());
+  return controller.buildDeploymentSourceAttestation(source, phase, nonce);
+}
+
+function metadata(overrides = {}, attestation = sourceAttestation()) {
   return {
     id: 'dpl_ExactScalar123',
     readyState: 'READY',
@@ -28,7 +33,7 @@ function metadata(overrides = {}) {
     meta: {
       gitCommitSha: 'a'.repeat(40),
       gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
-      gitDirty: null,
+      ...attestation,
     },
     customEnvironment: { id: 'env_CustomStaging123', slug: 'staging' },
     alias: ['coachcarter-simon-staging.vercel.app'],
@@ -48,6 +53,20 @@ function deploymentSource(overrides = {}) {
     clean: true,
     statusPorcelain: '',
     ...overrides,
+  };
+}
+
+function reorderedDeploymentSource() {
+  const source = deploymentSource();
+  return {
+    statusPorcelain: source.statusPorcelain,
+    clean: source.clean,
+    branchCommitSha: source.branchCommitSha,
+    headCommitSha: source.headCommitSha,
+    symbolicRef: source.symbolicRef,
+    branch: source.branch,
+    detached: source.detached,
+    insideWorkTree: source.insideWorkTree,
   };
 }
 
@@ -158,6 +177,8 @@ function fakeAdapter({
     postCalls: 0,
     deployCalls: 0,
     deploySources: [],
+    deployAttestations: [],
+    deployAttestationMetaArgs: [],
     sourceReads: 0,
     metadataReads: 0,
   };
@@ -186,10 +207,12 @@ function fakeAdapter({
       if (sourceProofs) return sourceProofs[state.sourceReads - 1] || deploymentSource();
       return deploymentSource();
     },
-    async deploy({ phase, source }) {
+    async deploy({ phase, source, sourceAttestation: attestation, sourceAttestationMetaArgs }) {
       maybeFail('deploy');
       state.deployCalls += 1;
       state.deploySources.push(source);
+      state.deployAttestations.push(attestation);
+      state.deployAttestationMetaArgs.push(sourceAttestationMetaArgs);
       state.events.push(`deploy:${phase}`);
       if (deployOutputs) return deployOutputs[state.deployCalls - 1];
       return state.deployCalls % 2 === 0
@@ -200,8 +223,10 @@ function fakeAdapter({
       maybeFail('resolveDeploymentUrl');
       state.events.push(`resolve:${url}:${readOnly}`);
       state.metadataReads += 1;
-      if (deploymentMetadata) return deploymentMetadata[state.metadataReads - 1] || metadata();
-      return metadata();
+      const attestation = state.deployAttestations[state.deployCalls - 1];
+      const configured = deploymentMetadata && deploymentMetadata[state.metadataReads - 1];
+      if (configured) return typeof configured === 'function' ? configured(attestation) : configured;
+      return metadata({}, attestation);
     },
     async setStagingGate({ name, value }) {
       maybeFail(`setStagingGate:${name}:${value}`);
@@ -241,7 +266,7 @@ function expectOrderedShutdown(state) {
 test.describe('Simon staging reconciliation controller', () => {
   test('defaults to an offline dry-run with no operational request budget', () => {
     expect(controller.offlinePlan()).toEqual({
-      controllerVersion: 2,
+      controllerVersion: 3,
       mode: 'offline-dry-run',
       completed: true,
       postCount: 0,
@@ -293,12 +318,10 @@ test.describe('Simon staging reconciliation controller', () => {
     expect(state.events).toContain('deploy:final-disabled');
   });
 
-  test('detached HEAD or missing named-branch proof fails before deployment and POST', async () => {
+  test('outside-worktree or detached source fails before deployment and POST', async () => {
     const cases = [
       [deploymentSource({ insideWorkTree: false }), 'DEPLOYMENT_SOURCE_WORKTREE_AMBIGUOUS'],
       [deploymentSource({ detached: true }), 'DEPLOYMENT_SOURCE_DETACHED_OR_AMBIGUOUS'],
-      [deploymentSource({ symbolicRef: undefined }), 'DEPLOYMENT_SOURCE_DETACHED_OR_AMBIGUOUS'],
-      [{ ...deploymentSource(), branch: undefined }, 'DEPLOYMENT_SOURCE_BRANCH_AMBIGUOUS'],
     ];
 
     for (const [invalidSource, code] of cases) {
@@ -308,6 +331,58 @@ test.describe('Simon staging reconciliation controller', () => {
       expect(state.deployCalls).toBe(1);
       expect(state.events).not.toContain('deploy:disabled-preflight');
       expect(state.events).toContain('deploy:final-disabled');
+      expectOrderedShutdown(state);
+    }
+  });
+
+  test('source proof requires the exact typed field set and canonicalizes reordered insertion', async () => {
+    const canonical = controller.validateDeploymentSource(deploymentSource(), expectedDeployment());
+    const reordered = controller.validateDeploymentSource(reorderedDeploymentSource(), expectedDeployment());
+    expect(reordered).toEqual(canonical);
+    expect(controller.buildDeploymentSourceAttestation(canonical, 'contract-test', 'e'.repeat(64))).toEqual(
+      controller.buildDeploymentSourceAttestation(reordered, 'contract-test', 'e'.repeat(64))
+    );
+
+    const malformedSources = [];
+    for (const key of controller.SOURCE_PROOF_KEYS) {
+      const missing = deploymentSource();
+      delete missing[key];
+      expect(() => controller.validateDeploymentSource(missing, expectedDeployment())).toThrow(
+        'DEPLOYMENT_SOURCE_FIELDS_MISMATCH'
+      );
+      expect(() => controller.buildDeploymentSourceAttestation(missing, 'contract-test', 'e'.repeat(64))).toThrow(
+        'DEPLOYMENT_SOURCE_FIELDS_MISMATCH'
+      );
+      malformedSources.push(missing);
+
+      const wrongType = deploymentSource({
+        [key]: typeof deploymentSource()[key] === 'boolean' ? String(deploymentSource()[key]) : true,
+      });
+      expect(() => controller.validateDeploymentSource(wrongType, expectedDeployment())).toThrow(
+        'DEPLOYMENT_SOURCE_TYPES_MISMATCH'
+      );
+      malformedSources.push(wrongType);
+    }
+
+    const supplemented = { ...deploymentSource(), unexpectedSourceField: 'forbidden' };
+    expect(() => controller.validateDeploymentSource(supplemented, expectedDeployment())).toThrow(
+      'DEPLOYMENT_SOURCE_FIELDS_MISMATCH'
+    );
+    expect(() => controller.buildDeploymentSourceAttestation(
+      supplemented,
+      'contract-test',
+      'e'.repeat(64)
+    )).toThrow('DEPLOYMENT_SOURCE_FIELDS_MISMATCH');
+    malformedSources.push(supplemented);
+
+    for (const invalidSource of malformedSources) {
+      const { adapter, state } = fakeAdapter({ sourceProofs: [invalidSource, deploymentSource()] });
+      await expect(controller.runOperationalController({ adapter })).rejects.toThrow(controller.ControllerError);
+      expect(state.postCalls).toBe(0);
+      expect(state.deployCalls).toBe(1);
+      expect(state.events).not.toContain('deploy:disabled-preflight');
+      expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ENABLED:true');
+      expect(state.events).not.toContain('school:true:true');
       expectOrderedShutdown(state);
     }
   });
@@ -338,21 +413,49 @@ test.describe('Simon staging reconciliation controller', () => {
     expect(() => controller.selectDeploymentId({})).toThrow('DEPLOYMENT_ID_NOT_SCALAR');
   });
 
-  test('exact named clean source, commit, and explicit gitDirty null can proceed to deployment validation only', async () => {
+  test('exact named clean source and nonce-bound metadata attestation can proceed to deployment validation only', async () => {
     const { adapter, state } = fakeAdapter();
     const selected = await controller.deployAndValidate(adapter, 'contract-test');
     expect(selected).toEqual({ id: 'dpl_ExactScalar123', url: 'https://fresh-deployment.vercel.app' });
     expect(state.postCalls).toBe(0);
     expect(state.deployCalls).toBe(1);
     expect(state.deploySources).toEqual([deploymentSource()]);
+    expect(state.deployAttestations).toHaveLength(1);
+    expect(controller.validateDeploymentSourceAttestation(state.deployAttestations[0])).toBe(state.deployAttestations[0]);
+    expect(state.deployAttestations[0]).toMatchObject({
+      ccSourceProofVersion: '1',
+      ccSourcePhase: 'contract-test',
+      ccSourceInsideWorkTree: 'true',
+      ccSourceDetached: 'false',
+      ccSourceBranch: 'codex/simon-staging-reconciliation-mvp-a4',
+      ccSourceSymbolicRef: 'refs/heads/codex/simon-staging-reconciliation-mvp-a4',
+      ccSourceHeadCommitSha: 'a'.repeat(40),
+      ccSourceBranchCommitSha: 'a'.repeat(40),
+      ccSourceClean: 'true',
+    });
+    expect(state.deployAttestationMetaArgs).toEqual([
+      controller.buildVercelSourceAttestationMetaArgs(state.deployAttestations[0]),
+    ]);
+    expect(state.deployAttestationMetaArgs[0]).toHaveLength(controller.SOURCE_ATTESTATION_KEYS.length * 2);
+    expect(state.deployAttestationMetaArgs[0].filter((value) => value === '--meta')).toHaveLength(
+      controller.SOURCE_ATTESTATION_KEYS.length
+    );
+    const reorderedAttestation = Object.fromEntries(
+      [...controller.SOURCE_ATTESTATION_KEYS].reverse().map((key) => [key, state.deployAttestations[0][key]])
+    );
+    expect(controller.validateDeploymentSourceAttestation(reorderedAttestation)).toBe(reorderedAttestation);
+    expect(controller.buildVercelSourceAttestationMetaArgs(reorderedAttestation)).toEqual(
+      state.deployAttestationMetaArgs[0]
+    );
     expect(state.events).toContain('resolve:https://fresh-deployment.vercel.app:true');
 
+    const attestation = sourceAttestation();
     const mutations = [
       { projectId: 'prj_WrongProject' },
       { target: 'production' },
-      { meta: { gitCommitSha: 'b'.repeat(40), gitDirty: null } },
-      { meta: { gitCommitSha: 'a'.repeat(40), gitCommitRef: 'HEAD', gitDirty: null } },
-      { meta: { gitCommitSha: 'a'.repeat(40), gitDirty: false } },
+      { meta: { gitCommitSha: 'b'.repeat(40), gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4', ...attestation } },
+      { meta: { gitCommitSha: 'a'.repeat(40), gitCommitRef: 'HEAD', ...attestation } },
+      { meta: { gitCommitSha: 'a'.repeat(40), gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4', gitDirty: '1', ...attestation } },
       { customEnvironment: { id: 'env_Wrong', slug: 'staging' } },
       { customEnvironment: { id: 'env_CustomStaging123', slug: 'preview' } },
       { alias: ['coachcarter-simon-staging.vercel.app', 'production.example.test'] },
@@ -362,26 +465,135 @@ test.describe('Simon staging reconciliation controller', () => {
       expect(() => controller.validateDeploymentMetadata(
         metadata(override),
         expectedDeployment(),
-        'https://fresh-deployment.vercel.app'
+        'https://fresh-deployment.vercel.app',
+        attestation
       )).toThrow(controller.ControllerError);
     }
   });
 
-  test('absent meta.gitDirty remains rejected before enablement and POST with ordered shutdown', async () => {
-    const absentGitDirty = metadata({
-      meta: {
+  test('absent native gitDirty is accepted while a present non-null value is a contradiction', () => {
+    const attestation = sourceAttestation();
+    expect(controller.validateDeploymentMetadata(
+      metadata({}, attestation),
+      expectedDeployment(),
+      'https://fresh-deployment.vercel.app',
+      attestation
+    )).toEqual({ id: 'dpl_ExactScalar123', url: 'https://fresh-deployment.vercel.app' });
+    expect(controller.validateDeploymentMetadata(
+      metadata({ meta: {
         gitCommitSha: 'a'.repeat(40),
         gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
-      },
-    });
-    const { adapter, state } = fakeAdapter({ deploymentMetadata: [absentGitDirty, metadata()] });
+        gitDirty: null,
+        ...attestation,
+      } }, attestation),
+      expectedDeployment(),
+      'https://fresh-deployment.vercel.app',
+      attestation
+    )).toEqual({ id: 'dpl_ExactScalar123', url: 'https://fresh-deployment.vercel.app' });
+    expect(() => controller.validateDeploymentMetadata(
+      metadata({ meta: {
+        gitCommitSha: 'a'.repeat(40),
+        gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+        gitDirty: '1',
+        ...attestation,
+      } }, attestation),
+      expectedDeployment(),
+      'https://fresh-deployment.vercel.app',
+      attestation
+    )).toThrow('DEPLOYMENT_NATIVE_DIRTY_CONTRADICTION');
+  });
 
-    await expect(controller.runOperationalController({ adapter })).rejects.toThrow('DEPLOYMENT_DIRTY_OR_AMBIGUOUS');
-    expect(state.postCalls).toBe(0);
-    expect(state.deployCalls).toBe(2);
-    expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ENABLED:true');
-    expect(state.events).not.toContain('school:true:true');
-    expectOrderedShutdown(state);
+  test('missing, altered, malformed, or namespace-expanded source attestation stops before enablement and POST', async () => {
+    const badMetadataCases = [
+      (attestation) => metadata({ meta: {
+        gitCommitSha: 'a'.repeat(40),
+        gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+      } }, attestation),
+      (attestation) => {
+        const partial = { ...attestation };
+        delete partial.ccSourceProofSha256;
+        return metadata({ meta: {
+          gitCommitSha: 'a'.repeat(40),
+          gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+          ...partial,
+        } }, attestation);
+      },
+      (attestation) => metadata({ meta: {
+        gitCommitSha: 'a'.repeat(40),
+        gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+        ...attestation,
+        ccSourceProofSha256: 'd'.repeat(64),
+      } }, attestation),
+      (attestation) => metadata({ meta: {
+        gitCommitSha: 'a'.repeat(40),
+        gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+        ...attestation,
+        ccSourceUnexpected: 'forbidden',
+      } }, attestation),
+    ];
+
+    for (const badMetadata of badMetadataCases) {
+      const { adapter, state } = fakeAdapter({ deploymentMetadata: [badMetadata] });
+      await expect(controller.runOperationalController({ adapter })).rejects.toThrow(
+        'DEPLOYMENT_SOURCE_ATTESTATION_MISMATCH'
+      );
+      expect(state.postCalls).toBe(0);
+      expect(state.deployCalls).toBe(2);
+      expect(state.events).not.toContain('gate:STRIPE_CONNECT_V2_ENABLED:true');
+      expect(state.events).not.toContain('school:true:true');
+      expectOrderedShutdown(state);
+    }
+
+    const attestation = sourceAttestation();
+    expect(() => controller.validateDeploymentSourceAttestation({
+      ...attestation,
+      ccSourceProofSha256: 'd'.repeat(64),
+    })).toThrow('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+    for (const key of controller.SOURCE_ATTESTATION_KEYS) {
+      const missing = { ...attestation };
+      delete missing[key];
+      expect(() => controller.validateDeploymentMetadata(
+        metadata({ meta: {
+          gitCommitSha: 'a'.repeat(40),
+          gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+          ...missing,
+        } }, attestation),
+        expectedDeployment(),
+        'https://fresh-deployment.vercel.app',
+        attestation
+      )).toThrow('DEPLOYMENT_SOURCE_ATTESTATION_MISMATCH');
+
+      const changed = { ...attestation, [key]: `${attestation[key]}x` };
+      expect(() => controller.validateDeploymentMetadata(
+        metadata({ meta: {
+          gitCommitSha: 'a'.repeat(40),
+          gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+          ...changed,
+        } }, attestation),
+        expectedDeployment(),
+        'https://fresh-deployment.vercel.app',
+        attestation
+      )).toThrow(controller.ControllerError);
+    }
+    expect(() => controller.validateDeploymentMetadata(
+      metadata({ meta: {
+        gitCommitSha: 'a'.repeat(40),
+        gitCommitRef: 'codex/simon-staging-reconciliation-mvp-a4',
+        ...attestation,
+        ccSourceUnexpected: 'forbidden',
+      } }, attestation),
+      expectedDeployment(),
+      'https://fresh-deployment.vercel.app',
+      attestation
+    )).toThrow('DEPLOYMENT_SOURCE_ATTESTATION_MISMATCH');
+
+    for (const key of controller.SOURCE_ATTESTATION_KEYS) {
+      const malformed = { ...attestation };
+      delete malformed[key];
+      expect(() => controller.validateDeploymentSourceAttestation(malformed)).toThrow(
+        'DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED'
+      );
+    }
   });
 
   test('requires all six named gates present and exact false in disabled state', () => {
@@ -409,6 +621,9 @@ test.describe('Simon staging reconciliation controller', () => {
     ]);
     expect(state.gates).toEqual(disabledValues());
     expect(state.school).toBe(false);
+    expect(new Set(state.deployAttestations.map((attestation) => attestation.ccSourceNonce)).size).toBe(
+      state.deployAttestations.length
+    );
   });
 
   test('uses one authenticated CSRF-bound POST with redirects and retries disabled', async () => {
