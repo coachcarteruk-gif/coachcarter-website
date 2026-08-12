@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A7_DEPLOYMENT_SOURCE_ATTESTATION_PREPARED_NOT_OPERATED; RECONCILIATION_STOPPED_DISABLED`
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A8_NOT_OPERATED_SOURCE_ANCESTRY_AND_ADAPTER_COMPATIBILITY_STOP; RECONCILIATION_STOPPED`
 Prepared: 9 August 2026; updated 12 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -1483,3 +1483,52 @@ requests `0`, reconciliation POSTs `0`, Stripe API requests `0`, Accounts v2
 list calls `0`, Accounts v2 creates `0`, replacement accounts `0`, onboarding
 calls `0`, payments/refunds/earnings/payouts/transfers/cutovers `0`, and
 Production actions `0`.
+
+## MVP A8 pre-operation ancestry and adapter stop - 12 August 2026
+
+A8 fetched `origin --prune` and froze exact `origin/main`
+`27e94651369594a02791adbb178b9309c09d2f3b`, the squash-merge commit for PR
+#380. The fresh source was named branch
+`codex/simon-staging-reconciliation-mvp-a8` in worktree
+`C:\tmp\coachcarter-simon-mvp-a8-27e9465`, non-detached and clean with exact
+`HEAD`, branch tip and symbolic ref. PR #380's merge commit was an ancestor.
+Exact A7 commit `a5287d7296f84c150d0b469f666daa59996f5c56` was not: the merge
+commit's sole parent is `591a6996497c939435977b7f244a7c834fe73de3`. Although the A7 and
+merge trees are identical, the required ancestry proof failed and content
+equivalence was not substituted.
+
+The reviewed external adapter
+`C:\tmp\cc-simon-mvp-a6-adapter.js` has SHA-256
+`899B004186B0AADA52C2CBDBBFE62D908D7D48369D52D3A888C2BCA4004CD86E`.
+Its ten-method callable surface is sealed to the controller interface and has
+no direct account-create/provider-create bypass. It fixes reconciliation to the
+existing application POST, uses authenticated CSRF material only in memory,
+disables redirects and retries, and structurally parses command/API responses.
+However, it and its source-proof dependency are hard-bound to A6, and its
+deployment method neither accepts nor passes controller v3's
+`sourceAttestationMetaArgs`. Adapter change was therefore necessary and the
+instruction to stop rather than operate applied.
+
+Offline/fault-injection verification passed `57/57` (`17` controller, `22`
+Accounts v2, `2` Connect UI, `16` payout-v2 schema), syntax `206/206`, and C1
+`278/278`. No-argument controller v3 completed offline with POST count `0`.
+Both protected LF-normalised hashes matched the approved product
+`D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+and technical
+`C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`
+values. The same selected tests, dry-run and static checks passed again after
+the audit documentation; `git diff --check` passed and both protected hashes
+remained exact.
+
+A8 operational authority was not consumed. Exact counts are: operational
+controller invocations `0`; deployments `0`; authentication requests `0`;
+reconciliation POSTs `0`; redirects `0`; retries `0`; Stripe list requests and
+pages `0`; Accounts v2 creates `0`; direct creates `0`; replacements `0`;
+onboarding `0`; database writes `0`; gate changes `0`; school changes `0`; and
+Production or forbidden money/cutover/A9 actions `0`. No external preflight or
+postflight was performed after the pre-operation blockers, so A8 does not claim
+a fresh external-state proof. It caused zero state delta; the last trusted
+A6/A7 evidence remains disabled staging and Simon's original unmapped
+`reconciling` identity with no Simon scope, observation, mapping or replacement.
+Status is
+`MVP_A8_NOT_OPERATED_SOURCE_ANCESTRY_AND_ADAPTER_COMPATIBILITY_STOP`.

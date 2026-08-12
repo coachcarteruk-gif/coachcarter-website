@@ -3,30 +3,30 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **MVP A7 DEPLOYMENT-SOURCE ATTESTATION PREPARED IN THE
-REPOSITORY — NOT OPERATED OR DEPLOYED — A6 AUTHORITY REMAINS CONSUMED — SLICE
-4 RECONCILIATION REMAINS STOPPED AND DISABLED — PRODUCTION ACTIVATION NOT
-APPROVED**
+**Current status:** **MVP A8 STOPPED BEFORE OPERATION — REQUIRED A7 COMMIT
+ANCESTRY FAILED AND THE REVIEWED EXTERNAL ADAPTER IS NOT CONTROLLER-V3
+COMPATIBLE — A8 AUTHORITY NOT CONSUMED — SLICE 4 RECONCILIATION REMAINS
+STOPPED — PRODUCTION ACTIVATION NOT APPROVED**
 
 **Last updated:** 12 August 2026
 
 **Verified source baseline:** remote `main` at
-`591a6996497c939435977b7f244a7c834fe73de3` (merged PR #379)
+`27e94651369594a02791adbb178b9309c09d2f3b` (merged PR #380)
 
-**Current hold:** MVP A7 replaces controller v2's unreliable requirement for
-an own Vercel `meta.gitDirty === null` property with controller v3's sealed,
-nonce-bound custom deployment-source attestation. The strict eight-field local
-worktree proof still runs immediately before every deployment. The controller
-then supplies exact repeated Vercel `--meta KEY=value` arguments and requires
-the read-only deployment record to reproduce every attestation field while
-retaining exact native commit, named branch, project, custom environment,
-alias/domain and non-production checks. Missing, changed or namespace-expanded
-attestation evidence fails closed; a present non-null native `gitDirty` value
-is a contradiction, while omission is no longer treated as ambiguity. This is
-repository-only preparation: no A7 deployment or external mutation occurred.
-A6 authority remains consumed. Synthetic Simon remains `reconciling`, unmapped
-and unretried under the original stable identity. Any operational attempt
-requires new explicit authority. Production activation remains unapproved.
+**Current hold:** A8 fetched and froze PR #380's squash-merge commit, but the
+required exact A7 commit `a5287d7296f84c150d0b469f666daa59996f5c56`
+is not its ancestor. The two commits have identical trees, but tree equivalence
+does not satisfy the explicitly required ancestry proof. Separately, the only
+reviewed external operational adapter remains hard-bound to A6 and does not
+accept or pass controller v3's immutable `sourceAttestationMetaArgs`. A8
+therefore stopped before the operational controller process started. A8
+authority is unconsumed. No A8 external read, deployment, mutation,
+authentication request, reconciliation POST, Stripe request or database write
+occurred. The last trusted handover remains that staging is disabled and Simon
+is the original unmapped `reconciling` intent; A8 did not independently re-read
+that external state. A separately reviewed controller-v3-compatible external
+adapter and fresh source instructions are required before any operational
+attempt. Production activation remains unapproved.
 
 ## 1. Title and purpose
 
@@ -5273,3 +5273,81 @@ not be retried.
   Another operational attempt requires fresh, explicit owner authority and a
   separately reviewed external adapter that passes the controller-supplied
   metadata arguments unchanged.
+
+## 12 August 2026 - MVP A8 stopped before operation on source ancestry and adapter compatibility
+
+- A8 began by fetching `origin --prune`. Exact PR #380 merge commit is
+  `27e94651369594a02791adbb178b9309c09d2f3b`; this was also the frozen starting
+  `origin/main`. Fresh named branch
+  `codex/simon-staging-reconciliation-mvp-a8` was created in isolated worktree
+  `C:\tmp\coachcarter-simon-mvp-a8-27e9465`. Before any possible operation it
+  was non-detached on exact symbolic ref
+  `refs/heads/codex/simon-staging-reconciliation-mvp-a8`, with `HEAD` and
+  branch tip both equal to the frozen commit and empty tracked/untracked
+  porcelain.
+- PR #380's merge commit is an ancestor of the frozen source. Exact A7 commit
+  `a5287d7296f84c150d0b469f666daa59996f5c56` is not an ancestor: PR #380 was
+  squash-merged with sole parent `591a6996497c939435977b7f244a7c834fe73de3`.
+  The A7 and merge-commit trees are identical, but the owner-required ancestry
+  proof explicitly failed and was not weakened into content equivalence.
+- The only reviewed operational adapter was
+  `C:\tmp\cc-simon-mvp-a6-adapter.js`, SHA-256
+  `899B004186B0AADA52C2CBDBBFE62D908D7D48369D52D3A888C2BCA4004CD86E`,
+  with source-proof dependency `C:\tmp\cc-simon-mvp-a6-source-proof.js`,
+  SHA-256
+  `45B5BECF6C12399B2766D3FFBA358B428360C121DB229EAA77314D0780260DBA`.
+  Its callable surface is exactly `expectedDeployment` plus the controller's
+  ten required methods: gate, school, intent and source reads; deploy and
+  read-only deployment resolution; the two reviewed controls and guarded
+  school mutation; the single authenticated CSRF reconciliation method; and
+  postflight. It exposes no direct Stripe, Accounts v2 account-create or
+  provider-create method. The reconciliation method is fixed to the existing
+  application route, one POST, zero redirects and zero retries; its structured
+  parsers reject malformed output and it clears in-memory JWT/session/CSRF
+  values without logging or persisting them.
+- The adapter cannot be used for A8: its worktree, commit, branch, bridge and
+  expected-deployment facts are sealed to A6, and its `deploy` method accepts
+  only `{ environment, phase, source }`. It neither accepts nor forwards
+  controller v3's `sourceAttestation` and exact immutable
+  `sourceAttestationMetaArgs`. Changing or substituting it would require a
+  separate reviewed repository-only correction, so no adapter was changed and
+  the A8 operational process was not started.
+- Current official Vercel CLI documentation still specifies repeated
+  `vercel deploy --meta KEY=value` metadata and `--target=staging` for a custom
+  environment. Current primary CLI source parses repeated metadata into the
+  custom `meta` object and computes `gitMetadata` separately; its Git helper
+  reports local dirty state but does not establish an own returned
+  `meta.gitDirty` property. Controller v3's attestation design remains valid;
+  the blocker is the absent compatible external adapter and failed required
+  commit ancestry, not a new controller defect.
+- Pre-stop offline validation passed `57/57`: controller `17/17`, Accounts v2
+  `22/22`, Connect UI `2/2`, and payout-v2 schema `16/16`. The no-argument
+  controller returned version `3`, `offline-dry-run`, completed true, POST
+  count `0`, shutdown complete false. Syntax passed `206/206`; C1 passed
+  `278/278`. Before documentation, `git diff --check` passed and both protected
+  LF-normalised hashes matched: product
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+  After this audit documentation, the same `57/57`, controller dry-run,
+  `206/206` syntax and `278/278` C1 checks passed again; `git diff --check`
+  passed and both protected hashes remained exact.
+- A8 authority was not consumed because no operational controller process
+  started. Operational controller invocations, A8 deployments, authentication
+  requests, reconciliation POSTs, redirects, retries, Stripe list requests and
+  pages, Accounts v2 creates, direct creates, replacements, onboarding calls,
+  database writes, gate changes, school changes and Production actions are all
+  exactly `0`. All payment, refund, earning, payout, transfer, cutover, Slice 3,
+  Slice 5 and A9 effects are also `0`.
+- Because A8 stopped before the controller's external preflight, it did not
+  independently re-read staging or Simon. A8 caused zero state delta. The last
+  trusted A6/A7 handover therefore remains: all six staging gates false, live
+  absent, Stripe test mode, school `1` exact Boolean false, payout engine v1,
+  and Simon's original intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df` unmapped `reconciling` under stable
+  identity `cc:connect-v2:1:3:test:recipient`, with one retained ambiguous
+  attempt and zero Simon mapping, scope, observation or replacement.
+- Status is
+  `MVP_A8_NOT_OPERATED_SOURCE_ANCESTRY_AND_ADAPTER_COMPATIBILITY_STOP`.
+  A8 authority remains unconsumed, but it must not be treated as authority to
+  operate from changed instructions or a new adapter. No A9 action occurred.
