@@ -739,6 +739,25 @@
     '    transform: scale(1.1);',
     '  }',
     '  body.cc-has-sidebar.cc-has-bottom-bar { padding-bottom: 0; }',
+    /* iOS Safari is unreliable when the app shell locks <body> and delegates
+       the entire page to a nested overflow container. Instructor pages use
+       several different top-level wrappers, so keep their document as the
+       native vertical scroller and reserve space for the floating tab bar. */
+    '  body.cc-context-instructor.cc-has-sidebar.cc-has-bottom-bar {',
+    '    height: auto;',
+    '    min-height: 100dvh;',
+    '    overflow-x: hidden;',
+    '    overflow-y: auto;',
+    '    padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));',
+    '    -webkit-overflow-scrolling: touch;',
+    '  }',
+    '  body.cc-context-instructor.cc-has-sidebar.cc-has-bottom-bar main,',
+    '  body.cc-context-instructor.cc-has-sidebar.cc-has-bottom-bar #main,',
+    '  body.cc-context-instructor.cc-has-sidebar.cc-has-bottom-bar > .page,',
+    '  body.cc-context-instructor.cc-has-sidebar.cc-has-bottom-bar > .chat-container {',
+    '    height: auto;',
+    '    overflow-y: visible;',
+    '  }',
     '  .cc-bottom-menu { background: none; border: none; cursor: pointer; }',
     '}',
 
@@ -921,6 +940,7 @@
 
   function init() {
     document.body.classList.add('cc-has-sidebar');
+    document.body.classList.add('cc-context-' + context);
 
     // Context label
     var contextLabel = { public: '', learner: 'Learner Hub', instructor: 'Instructor' };
