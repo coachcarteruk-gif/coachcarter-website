@@ -122,6 +122,20 @@ test.describe('retired creation surfaces', () => {
     expect(webhook).not.toContain("require('./_retired-products')");
   });
 
+  test('public offer reads carry the offer school into retirement checks', () => {
+    const offers = read('api/offers.js');
+    const getOfferStart = offers.indexOf('async function handleGetOffer');
+    const getOfferEnd = offers.indexOf('async function handleAcceptOffer', getOfferStart);
+    const getOffer = offers.slice(getOfferStart, getOfferEnd);
+
+    expect(getOffer).toContain('SELECT o.id, o.school_id, o.learner_email');
+    expect(getOffer).toContain('AND lu.school_id = o.school_id');
+    expect(getOffer).toContain('loadRetiredProductState(sql, Number(offer.school_id))');
+    expect(getOffer.indexOf('SELECT o.id, o.school_id')).toBeLessThan(
+      getOffer.indexOf('loadRetiredProductState(sql, Number(offer.school_id))')
+    );
+  });
+
   test('learner, offer-acceptance, instructor, and admin UI remove retired entry points when active', () => {
     const learner = read('public/learner/book.js');
     const acceptOffer = read('public/accept-offer.js');

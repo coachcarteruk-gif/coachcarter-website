@@ -358,7 +358,7 @@ async function handleGetOffer(req, res) {
     `;
 
     const [offer] = await sql`
-      SELECT o.id, o.learner_email, o.learner_id, o.learner_name AS offer_learner_name,
+      SELECT o.id, o.school_id, o.learner_email, o.learner_id, o.learner_name AS offer_learner_name,
              o.scheduled_date::text,
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence, o.max_repeat_weeks,
@@ -374,7 +374,9 @@ async function handleGetOffer(req, res) {
       LEFT JOIN lesson_types lt
         ON lt.id = o.lesson_type_id
        AND lt.school_id = o.school_id
-      LEFT JOIN learner_users lu ON lu.id = o.learner_id
+      LEFT JOIN learner_users lu
+        ON lu.id = o.learner_id
+       AND lu.school_id = o.school_id
       WHERE o.token = ${token}
     `;
 
