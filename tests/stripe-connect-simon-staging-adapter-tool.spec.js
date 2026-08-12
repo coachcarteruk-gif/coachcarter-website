@@ -14,7 +14,7 @@ function config(overrides = {}) {
   return {
     worktree: path.join(base, 'future-worktree'),
     dependencyRepository: repositoryRoot,
-    npxCli: 'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npx-cli.js',
+    npxCli: path.join(base, 'npx-cli.js'),
     vercelCli: tool.FIXED_IDENTITY.vercelCli,
     scope: tool.FIXED_IDENTITY.scope,
     teamId: tool.FIXED_IDENTITY.teamId,
