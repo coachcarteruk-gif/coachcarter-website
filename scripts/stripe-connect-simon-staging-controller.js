@@ -2,10 +2,37 @@
 'use strict';
 
 const path = require('path');
+const crypto = require('crypto');
 
-const CONTROLLER_VERSION = 2;
+const CONTROLLER_VERSION = 3;
 const OPERATIONAL_APPROVAL = 'SIMON_STAGING_RECONCILIATION_APPROVED';
 const RECONCILIATION_ROUTE = '/api/connect?action=v2-account';
+const SOURCE_ATTESTATION_VERSION = '1';
+const SOURCE_ATTESTATION_PREFIX = 'ccSource';
+const SOURCE_PROOF_KEYS = Object.freeze([
+  'insideWorkTree',
+  'detached',
+  'branch',
+  'symbolicRef',
+  'headCommitSha',
+  'branchCommitSha',
+  'clean',
+  'statusPorcelain',
+]);
+const SOURCE_ATTESTATION_KEYS = Object.freeze([
+  'ccSourceProofVersion',
+  'ccSourcePhase',
+  'ccSourceInsideWorkTree',
+  'ccSourceDetached',
+  'ccSourceBranch',
+  'ccSourceSymbolicRef',
+  'ccSourceHeadCommitSha',
+  'ccSourceBranchCommitSha',
+  'ccSourceClean',
+  'ccSourceStatusSha256',
+  'ccSourceNonce',
+  'ccSourceProofSha256',
+]);
 const EXPECTED_IDENTITY = Object.freeze({
   schoolId: 1,
   instructorId: 3,
@@ -77,6 +104,10 @@ function isPlainObject(value) {
 function exactString(value, pattern, failureCode) {
   if (typeof value !== 'string' || !pattern.test(value)) fail(failureCode);
   return value;
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
 function parseDeploymentUrlOutput(output) {
@@ -178,6 +209,23 @@ function validateExpectedDeployment(expected) {
 function validateDeploymentSource(source, expectedInput) {
   const expected = validateExpectedDeployment(expectedInput);
   if (!isPlainObject(source)) fail('DEPLOYMENT_SOURCE_PROOF_MALFORMED');
+  const actualKeys = Object.keys(source).sort();
+  const expectedKeys = [...SOURCE_PROOF_KEYS].sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    fail('DEPLOYMENT_SOURCE_FIELDS_MISMATCH');
+  }
+  if (
+    typeof source.insideWorkTree !== 'boolean'
+    || typeof source.detached !== 'boolean'
+    || typeof source.branch !== 'string'
+    || typeof source.symbolicRef !== 'string'
+    || typeof source.headCommitSha !== 'string'
+    || typeof source.branchCommitSha !== 'string'
+    || typeof source.clean !== 'boolean'
+    || typeof source.statusPorcelain !== 'string'
+  ) {
+    fail('DEPLOYMENT_SOURCE_TYPES_MISMATCH');
+  }
   if (source.insideWorkTree !== true) fail('DEPLOYMENT_SOURCE_WORKTREE_AMBIGUOUS');
   if (source.detached !== false || source.symbolicRef !== `refs/heads/${expected.branch}`) {
     fail('DEPLOYMENT_SOURCE_DETACHED_OR_AMBIGUOUS');
@@ -190,18 +238,137 @@ function validateDeploymentSource(source, expectedInput) {
   }
   if (source.clean !== true || source.statusPorcelain !== '') fail('DEPLOYMENT_SOURCE_DIRTY_OR_AMBIGUOUS');
   return Object.freeze({
+    insideWorkTree: true,
+    detached: false,
     branch: expected.branch,
     symbolicRef: `refs/heads/${expected.branch}`,
     headCommitSha: expected.commitSha,
     branchCommitSha: expected.commitSha,
-    insideWorkTree: true,
-    detached: false,
     clean: true,
     statusPorcelain: '',
   });
 }
 
-function validateDeploymentMetadata(metadata, expectedInput, deploymentUrl) {
+function buildDeploymentSourceAttestation(sourceInput, phaseInput, nonceInput) {
+  if (!isPlainObject(sourceInput)) fail('DEPLOYMENT_SOURCE_PROOF_MALFORMED');
+  const actualKeys = Object.keys(sourceInput).sort();
+  const expectedKeys = [...SOURCE_PROOF_KEYS].sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    fail('DEPLOYMENT_SOURCE_FIELDS_MISMATCH');
+  }
+  if (
+    typeof sourceInput.insideWorkTree !== 'boolean'
+    || typeof sourceInput.detached !== 'boolean'
+    || typeof sourceInput.branch !== 'string'
+    || typeof sourceInput.symbolicRef !== 'string'
+    || typeof sourceInput.headCommitSha !== 'string'
+    || typeof sourceInput.branchCommitSha !== 'string'
+    || typeof sourceInput.clean !== 'boolean'
+    || typeof sourceInput.statusPorcelain !== 'string'
+  ) {
+    fail('DEPLOYMENT_SOURCE_TYPES_MISMATCH');
+  }
+  if (
+    sourceInput.insideWorkTree !== true
+    || sourceInput.detached !== false
+    || sourceInput.symbolicRef !== `refs/heads/${sourceInput.branch}`
+    || sourceInput.clean !== true
+    || sourceInput.statusPorcelain !== ''
+  ) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_INPUT_INVALID');
+  }
+  exactNamedBranch(sourceInput.branch, 'DEPLOYMENT_SOURCE_ATTESTATION_INPUT_INVALID');
+  exactString(sourceInput.headCommitSha, /^[a-f0-9]{40}$/, 'DEPLOYMENT_SOURCE_ATTESTATION_INPUT_INVALID');
+  if (sourceInput.branchCommitSha !== sourceInput.headCommitSha) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_INPUT_INVALID');
+  }
+  const phase = exactString(phaseInput, /^[a-z][a-z0-9-]{0,63}$/, 'DEPLOYMENT_PHASE_INVALID');
+  const nonce = nonceInput === undefined
+    ? crypto.randomBytes(32).toString('hex')
+    : exactString(nonceInput, /^[a-f0-9]{64}$/, 'DEPLOYMENT_SOURCE_ATTESTATION_NONCE_INVALID');
+  const base = {
+    ccSourceProofVersion: SOURCE_ATTESTATION_VERSION,
+    ccSourcePhase: phase,
+    ccSourceInsideWorkTree: sourceInput.insideWorkTree === true ? 'true' : 'false',
+    ccSourceDetached: sourceInput.detached === true ? 'true' : 'false',
+    ccSourceBranch: sourceInput.branch,
+    ccSourceSymbolicRef: sourceInput.symbolicRef,
+    ccSourceHeadCommitSha: sourceInput.headCommitSha,
+    ccSourceBranchCommitSha: sourceInput.branchCommitSha,
+    ccSourceClean: sourceInput.clean === true ? 'true' : 'false',
+    ccSourceStatusSha256: sha256(sourceInput.statusPorcelain),
+    ccSourceNonce: nonce,
+  };
+  return validateDeploymentSourceAttestation(Object.freeze({
+    ...base,
+    ccSourceProofSha256: sha256(JSON.stringify(base)),
+  }));
+}
+
+function validateDeploymentSourceAttestation(attestation) {
+  if (!isPlainObject(attestation)) fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  const actualKeys = Object.keys(attestation).sort();
+  const expectedKeys = [...SOURCE_ATTESTATION_KEYS].sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  if (attestation.ccSourceProofVersion !== SOURCE_ATTESTATION_VERSION) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  exactString(attestation.ccSourcePhase, /^[a-z][a-z0-9-]{0,63}$/, 'DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  if (
+    attestation.ccSourceInsideWorkTree !== 'true'
+    || attestation.ccSourceDetached !== 'false'
+    || attestation.ccSourceClean !== 'true'
+  ) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  exactNamedBranch(attestation.ccSourceBranch, 'DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  if (attestation.ccSourceSymbolicRef !== `refs/heads/${attestation.ccSourceBranch}`) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  exactString(attestation.ccSourceHeadCommitSha, /^[a-f0-9]{40}$/, 'DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  if (attestation.ccSourceBranchCommitSha !== attestation.ccSourceHeadCommitSha) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  if (attestation.ccSourceStatusSha256 !== sha256('')) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  exactString(attestation.ccSourceNonce, /^[a-f0-9]{64}$/, 'DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  const unsigned = {};
+  for (const key of SOURCE_ATTESTATION_KEYS) {
+    if (key !== 'ccSourceProofSha256') unsigned[key] = attestation[key];
+  }
+  if (attestation.ccSourceProofSha256 !== sha256(JSON.stringify(unsigned))) {
+    fail('DEPLOYMENT_SOURCE_ATTESTATION_MALFORMED');
+  }
+  return attestation;
+}
+
+function buildVercelSourceAttestationMetaArgs(attestationInput) {
+  const attestation = validateDeploymentSourceAttestation(attestationInput);
+  return Object.freeze(SOURCE_ATTESTATION_KEYS.flatMap((key) => Object.freeze([
+    '--meta',
+    `${key}=${attestation[key]}`,
+  ])));
+}
+
+function validateAttestedDeploymentMetadata(meta, sourceAttestationInput) {
+  const sourceAttestation = validateDeploymentSourceAttestation(sourceAttestationInput);
+  for (const key of SOURCE_ATTESTATION_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(meta, key) || meta[key] !== sourceAttestation[key]) {
+      fail('DEPLOYMENT_SOURCE_ATTESTATION_MISMATCH');
+    }
+  }
+  for (const key of Object.keys(meta)) {
+    if (key.startsWith(SOURCE_ATTESTATION_PREFIX) && !SOURCE_ATTESTATION_KEYS.includes(key)) {
+      fail('DEPLOYMENT_SOURCE_ATTESTATION_MISMATCH');
+    }
+  }
+  return true;
+}
+
+function validateDeploymentMetadata(metadata, expectedInput, deploymentUrl, sourceAttestation) {
   const expected = validateExpectedDeployment(expectedInput);
   const id = selectDeploymentId(metadata);
   if (metadata.readyState !== 'READY') fail('DEPLOYMENT_NOT_READY');
@@ -209,9 +376,10 @@ function validateDeploymentMetadata(metadata, expectedInput, deploymentUrl) {
   if (metadata.target !== expected.target || metadata.target === 'production') fail('DEPLOYMENT_TARGET_MISMATCH');
   if (!isPlainObject(metadata.meta) || metadata.meta.gitCommitSha !== expected.commitSha) fail('DEPLOYMENT_COMMIT_MISMATCH');
   if (metadata.meta.gitCommitRef !== expected.branch) fail('DEPLOYMENT_BRANCH_MISMATCH');
-  if (!Object.prototype.hasOwnProperty.call(metadata.meta, 'gitDirty') || metadata.meta.gitDirty !== null) {
-    fail('DEPLOYMENT_DIRTY_OR_AMBIGUOUS');
+  if (Object.prototype.hasOwnProperty.call(metadata.meta, 'gitDirty') && metadata.meta.gitDirty !== null) {
+    fail('DEPLOYMENT_NATIVE_DIRTY_CONTRADICTION');
   }
+  validateAttestedDeploymentMetadata(metadata.meta, sourceAttestation);
   if (
     !isPlainObject(metadata.customEnvironment)
     || metadata.customEnvironment.id !== expected.customEnvironmentId
@@ -319,7 +487,14 @@ async function deployAndValidate(adapter, phase) {
     await callAdapter(adapter, 'readDeploymentSource', {}, 'DEPLOYMENT_SOURCE_READ_FAILED'),
     adapter.expectedDeployment
   );
-  const output = await callAdapter(adapter, 'deploy', { environment: 'staging', phase, source }, 'DEPLOYMENT_FAILED');
+  const sourceAttestation = buildDeploymentSourceAttestation(source, phase);
+  const sourceAttestationMetaArgs = buildVercelSourceAttestationMetaArgs(sourceAttestation);
+  const output = await callAdapter(
+    adapter,
+    'deploy',
+    { environment: 'staging', phase, source, sourceAttestation, sourceAttestationMetaArgs },
+    'DEPLOYMENT_FAILED'
+  );
   const url = parseDeploymentUrlOutput(output);
   const metadata = await callAdapter(
     adapter,
@@ -327,7 +502,7 @@ async function deployAndValidate(adapter, phase) {
     { url, readOnly: true },
     'DEPLOYMENT_URL_RESOLUTION_FAILED'
   );
-  return validateDeploymentMetadata(metadata, adapter.expectedDeployment, url);
+  return validateDeploymentMetadata(metadata, adapter.expectedDeployment, url, sourceAttestation);
 }
 
 function validateReconciliationResult(result) {
@@ -544,7 +719,12 @@ module.exports = {
   RECONCILIATION_ROUTE,
   REQUEST_POLICY,
   SIX_DISABLED_GATES,
+  SOURCE_ATTESTATION_KEYS,
+  SOURCE_ATTESTATION_VERSION,
+  SOURCE_PROOF_KEYS,
   ControllerError,
+  buildDeploymentSourceAttestation,
+  buildVercelSourceAttestationMetaArgs,
   deployAndValidate,
   loadExternalAdapter,
   offlinePlan,
@@ -554,6 +734,7 @@ module.exports = {
   selectDeploymentId,
   validateDeploymentMetadata,
   validateDeploymentSource,
+  validateDeploymentSourceAttestation,
   validateGateState,
   validatePostflight,
   validateReconciliationResult,
