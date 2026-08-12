@@ -1,6 +1,6 @@
 # Simon Stripe Connect launch — Slice 4 rollout review
 
-Status: `MERGED_DEPLOYED_INACTIVE; MVP_A8_NOT_OPERATED_SOURCE_ANCESTRY_AND_ADAPTER_COMPATIBILITY_STOP; RECONCILIATION_STOPPED`
+Status: `MERGED_DEPLOYED_INACTIVE; MVP_A8_RETRY_01_ONE_MATCH_PROVIDER_VALIDATION_HTTP_409_STOPPED_CLOSED_DISABLED; RECONCILIATION_STOPPED`
 Prepared: 9 August 2026; updated 12 August 2026
 Branch: `codex/simon-slice4-accounts-v2-readiness`
 Source: `origin/main` at `502e675dc338cf2d232045e09289fdc1fb5387c5` (PR #357 merge)
@@ -1661,3 +1661,41 @@ actions all `0`. Post-stop evidence used one reviewed read-only Vercel
 gate-state operation and one read-only Neon SQL statement. No onboarding or A9
 occurred. Status is
 `MVP_A8_CONTROLLER_LAUNCH_AMBIGUOUS_STOPPED_CLOSED_DISABLED_VERIFIED`.
+
+## MVP A8 retry-01 one-match validation 409 stopped closed - 12 August 2026
+
+Fresh authority covered one and only one controller-v3 Simon staging
+reconciliation from frozen `origin/main`
+`7fe8c3ff93dcce20cf65c255f3a90f32192196c0`. The controller used the freshly
+generated outside-repository adapter with SHA-256
+`8D7BA1655976C1C43CD27A9B96357CE0AC8EC0144BCC77B76758776CCB1DEF60` and
+ran directly once as observable PID `23156`. No second invocation, redirect or
+retry occurred.
+
+The disabled-preflight and minimal-enabled deployments passed source and
+custom-staging attestation. The single authenticated CSRF-bound application
+POST listed Accounts v2 and recorded exactly one retained stable-identity match
+for `acct_1U2mHvIGQey1BnGx`. Subsequent provider-account validation returned
+HTTP `409`; its exact subtype was not persisted. The controller therefore
+stopped with `RECONCILIATION_APPLICATION_MISMATCH` before registering a scope,
+mapping the account, changing the retained intent to succeeded, or reaching
+onboarding.
+
+Mandatory shutdown completed without retry. School feature enablement was
+reversed to exact JSON Boolean false, all six staging gates were independently
+verified exact false, live remained absent, `STRIPE_MODE=test`, and Production
+was untouched. Final-disabled deployment
+`dpl_8awNPHnpmR1AfK8o1FEUi5cThu9e` was READY, non-production, used the exact
+staging alias and passed independent frozen-source attestation.
+
+The retained intent `3c2349a0-1696-4b57-b732-fc14bbde57df` remains unmapped
+`reconciling`. Append-only attempt `2` is `reconciled_existing` with
+`match_count=1`, but Simon scope/mapping, observation and onboarding link-event
+counts remain `0`. Provider account-create successes, direct creates,
+replacements, payments, refunds, earnings, payouts, transfers, cutovers,
+Production mutations and A9 actions are all exactly `0`. The one-shot authority
+is consumed and cannot be reused. Post-operation validation passed the selected
+`63/63` tests, syntax `206/206`, C1 `278/278`, direct syntax, controller dry-run
+POST count `0`, protected hashes and `git diff --check`. Status is
+`MVP_A8_RETRY_01_ONE_MATCH_PROVIDER_VALIDATION_HTTP_409_STOPPED_CLOSED_DISABLED`.
+No onboarding or A9 occurred.
