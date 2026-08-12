@@ -3,30 +3,26 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **MVP A8 STOPPED BEFORE OPERATION — REQUIRED A7 COMMIT
-ANCESTRY FAILED AND THE REVIEWED EXTERNAL ADAPTER IS NOT CONTROLLER-V3
-COMPATIBLE — A8 AUTHORITY NOT CONSUMED — SLICE 4 RECONCILIATION REMAINS
-STOPPED — PRODUCTION ACTIVATION NOT APPROVED**
+**Current status:** **MVP A8 RETRY-01 OPERATED ONCE — ONE RETAINED
+STABLE-IDENTITY MATCH FOUND — PROVIDER-ACCOUNT VALIDATION RETURNED HTTP 409 —
+NO MAPPING OR ONBOARDING — MANDATORY SHUTDOWN COMPLETE — STAGING DISABLED —
+PRODUCTION ACTIVATION NOT APPROVED**
 
 **Last updated:** 12 August 2026
 
-**Verified source baseline:** remote `main` at
-`27e94651369594a02791adbb178b9309c09d2f3b` (merged PR #380)
+**Verified source baseline:** frozen remote `main` at
+`7fe8c3ff93dcce20cf65c255f3a90f32192196c0`
 
-**Current hold:** A8 fetched and froze PR #380's squash-merge commit, but the
-required exact A7 commit `a5287d7296f84c150d0b469f666daa59996f5c56`
-is not its ancestor. The two commits have identical trees, but tree equivalence
-does not satisfy the explicitly required ancestry proof. Separately, the only
-reviewed external operational adapter remains hard-bound to A6 and does not
-accept or pass controller v3's immutable `sourceAttestationMetaArgs`. A8
-therefore stopped before the operational controller process started. A8
-authority is unconsumed. No A8 external read, deployment, mutation,
-authentication request, reconciliation POST, Stripe request or database write
-occurred. The last trusted handover remains that staging is disabled and Simon
-is the original unmapped `reconciling` intent; A8 did not independently re-read
-that external state. A separately reviewed controller-v3-compatible external
-adapter and fresh source instructions are required before any operational
-attempt. Production activation remains unapproved.
+**Current hold:** The separately authorised A8 retry-01 controller-v3 process
+ran exactly once. Accounts v2 listing reconciled exactly one retained
+stable-identity match, then application validation of that provider account
+returned HTTP `409`. The exact 409 subtype was not persisted, so the controller
+hard-stopped without retry, mapping, replacement, creation or onboarding.
+Mandatory shutdown restored the school Boolean and every staging gate to exact
+false and produced a source-attested final-disabled staging deployment.
+Authority is consumed and must not be reused. A new diagnosis and separately
+authorised plan are required before any further provider request. Production
+activation remains unapproved.
 
 ## 1. Title and purpose
 
@@ -5522,3 +5518,94 @@ not be retried.
 - The authority is consumed and must not be reused. Status is
   `MVP_A8_CONTROLLER_LAUNCH_AMBIGUOUS_STOPPED_CLOSED_DISABLED_VERIFIED`. No
   onboarding or A9 occurred.
+
+## 12 August 2026 - MVP A8 retry-01 one-match validation 409 stopped closed
+
+- Fresh authority covered exactly one controller-v3 Simon staging
+  reconciliation through `/api/connect?action=v2-account` from frozen source
+  `7fe8c3ff93dcce20cf65c255f3a90f32192196c0`. It explicitly excluded retry,
+  account creation or replacement, onboarding, financial activity, Production
+  changes and A9. The separately supplied controller approval scalar was used
+  once and is not reproduced here.
+- PR #383 merge `e8ee468944a370e1fb709b2f9312ad2cea592892`, PR #382 merge
+  `9fd4e02a7a80917068b37fd1b9c3cdd6289f0c05`, PR #381 commit
+  `d2f5330fd9bdd1afafb93e9b1ac3daa11a9dbc1e`, and PR #380 commit
+  `27e94651369594a02791adbb178b9309c09d2f3b` were all proven ancestors of the
+  frozen source. PR #380's tree remained exact
+  `78597d0b02c4ff9053a0676b383ce5999190c6c6`.
+- The operation used clean named branch
+  `codex/simon-staging-reconciliation-mvp-a8-retry-01-operational` in isolated
+  non-detached worktree
+  `C:\tmp\coachcarter-simon-mvp-a8-retry-01-7fe8c3f`. `HEAD` and branch tip
+  matched the frozen commit. The new external adapter was generated at
+  `C:\tmp\cc-simon-mvp-a8-retry-01.generated-operator-adapter.js` with exact
+  SHA-256
+  `8D7BA1655976C1C43CD27A9B96357CE0AC8EC0144BCC77B76758776CCB1DEF60`.
+  Byte-exact validation proved the frozen ten-method surface, no provider-create
+  method, exact staging target and source, immutable metadata tail, one-POST
+  budget, zero redirects/retries, and credential clearing in `finally`.
+- Pre-operation validation passed selected tests `63/63`: controller `17`,
+  adapter `6`, Accounts v2 `22`, Connect UI `2`, and payout-v2 schema `16`.
+  Syntax passed `206/206`, C1 passed `278/278`, direct syntax and
+  `git diff --check` passed, and the no-argument controller dry-run reported
+  version `3`, completion true and POST count `0`.
+- The authorised controller process was launched directly once as PID `23156`.
+  It remained observable, made one reconciliation POST, completed mandatory
+  shutdown, and exited once with code `1` and controller code
+  `RECONCILIATION_APPLICATION_MISMATCH`. There was no second invocation,
+  redirect or retry.
+- The controller created exactly three READY, non-production custom-staging
+  deployments, each bound to the frozen source and operational branch:
+  disabled-preflight `dpl_HkGFi6FpRcTZSGCHga6XpWQEFpwX`, minimal-enabled
+  `dpl_8DFtD4JuMafXDizJkJXffDQ6eboM`, and final-disabled
+  `dpl_8awNPHnpmR1AfK8o1FEUi5cThu9e`. The final deployment retained the single
+  exact staging alias and passed independent project, owner, custom-environment,
+  READY, non-production, native commit/ref and namespaced source-attestation
+  validation.
+- Reviewed bridge sequence was exact: read-only preflight; guarded school
+  Boolean `false` to `true`; and mandatory guarded shutdown `true` to `false`.
+  No reconciliation-postflight bridge request occurred because the application
+  POST failed first. Bridge responses contained only the reviewed sanitised
+  fields, and no bridge artifacts remained after exit. The adapter rotated the
+  isolated staging JWT exactly once and cleared authentication material.
+- Vercel recorded exactly one Preview request to the minimal-enabled deployment:
+  `POST /api/connect`, request ID `j8ktn-1786574094630-8f17c693ba2e`, HTTP
+  `409`. The application log did not preserve the response body, so the exact
+  provider-validation 409 subtype is intentionally not inferred.
+- Append-only Neon evidence proves the retained Simon intent
+  `3c2349a0-1696-4b57-b732-fc14bbde57df` remains `reconciling`, unmapped, with
+  stable identity `cc:connect-v2:1:3:test:recipient`, `connect_scope_id` null,
+  provider account null and retained `last_error_class=network`. Attempt `2`
+  occurred at `2026-08-12T22:34:59.528641Z` with outcome
+  `reconciled_existing`, provider account `acct_1U2mHvIGQey1BnGx`, null error
+  class and evidence `{ "match_count": 1 }`. Its preceding audit row records
+  the single application request at `2026-08-12T22:34:55.729872Z`. Provider
+  validation returned 409 before scope registration or intent completion.
+- Independent post-exit evidence proved all six staging gates exact false,
+  live absent, `STRIPE_MODE=test`, school feature exact JSON Boolean false,
+  legacy school and instructor Stripe mappings null, and Production untouched
+  with mutation count `0`. Retained Neon branch
+  `br-dark-recipe-zarmjbix` remained non-default and unprotected.
+- Exact resulting counts for Simon are: creation attempts `2` total, with one
+  new `reconciled_existing` evidence row; provider account-create successes
+  `0`; new or replacement intents `0`; connected-account scopes/mappings `0`;
+  account-state observations `0`; and onboarding link events `0`. The route's
+  reconciling branch listed before any creation path, and the sealed adapter had
+  no direct provider-create surface.
+- Forbidden-effect counts remained exact zero: lesson-payment-contract delta,
+  payout runs, refund intents/attempts/events, booking earnings, launch booking
+  earnings, launch transfer intents/attempts, payout transfers/attempts,
+  payout-v2 cutover config/shadow/readiness/events, Stripe Connect launch
+  events, onboarding actions, Production mutations and A9 actions. No payment,
+  refund, earning, payout, transfer or cutover occurred.
+- Post-operation audit validation again passed selected tests `63/63`, syntax
+  `206/206`, C1 `278/278`, direct syntax, no-argument controller dry-run with
+  POST count `0`, and `git diff --check`. Protected LF-normalised hashes remained
+  exact: product
+  `D91D5E2A01458840A2C569BC3041573BF093F1D726573B6F86C83E21A16B783B`
+  and technical
+  `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
+  Neither protected document was modified.
+- The consumed one-shot authority cannot be reused. Status is
+  `MVP_A8_RETRY_01_ONE_MATCH_PROVIDER_VALIDATION_HTTP_409_STOPPED_CLOSED_DISABLED`.
+  No onboarding or A9 occurred.
