@@ -5448,3 +5448,77 @@ not be retried.
   `C6FC70B23F35513199D7C2B94CAC750AB07D7658C9D13B4E56537BB3BA981C58`.
   Neither protected document was modified. Status is
   `MVP_A8_1_CONTROLLER_V3_EXTERNAL_ADAPTER_PREPARED_NOT_OPERATED`.
+
+## 12 August 2026 - MVP A8 controller-v3 launch ambiguity stopped closed
+
+- Fresh authority covered exactly one Simon staging reconciliation through
+  `/api/connect?action=v2-account`, using the exact source and generated
+  adapter frozen in this session. It did not authorise onboarding or A9. The
+  separately supplied approval scalar matched controller v3 and is not
+  reproduced in this audit.
+- After `git fetch origin --prune`, the operation froze exact `origin/main`
+  `9fd4e02a7a80917068b37fd1b9c3cdd6289f0c05`, PR #382's merge commit. PR
+  #382, PR #381 commit `d2f5330fd9bdd1afafb93e9b1ac3daa11a9dbc1e`, and PR #380
+  commit `27e94651369594a02791adbb178b9309c09d2f3b` were all ancestors. PR
+  #380 and A7 retained identical tree
+  `78597d0b02c4ff9053a0676b383ce5999190c6c6`; obsolete A7 commit ancestry
+  was not required.
+- Fresh named branch
+  `codex/simon-staging-reconciliation-mvp-a8-operational` was exact at the
+  frozen commit in isolated worktree
+  `C:\tmp\coachcarter-simon-mvp-a8-operational-9fd4e02`. `HEAD`, branch tip
+  and symbolic ref matched, the worktree was non-detached, and tracked plus
+  untracked porcelain was empty before operation.
+- The repository tool generated the credential-free external adapter at
+  `C:\tmp\cc-simon-mvp-a8-operational.generated-operator-adapter.js` from
+  the exact 13-field outside-repository configuration. Immediate byte-exact
+  validation passed with SHA-256
+  `768e47c15219fb588c4b6d9561b8cfc493bcfbb7db1dc2f104a2be725c838836`.
+  The object was frozen and its callable surface was exactly the reviewed ten
+  methods, with no direct account/provider-create surface. Its deploy contract
+  preserved controller v3's immutable ordered metadata array unchanged as the
+  final command arguments after fixed staging deployment arguments.
+- Pre-operation local evidence passed `63/63`: controller `17/17`, adapter
+  conformance `6/6`, Accounts v2 `22/22`, Connect UI `2/2`, and payout-v2
+  schema `16/16`. Syntax passed `206/206`, C1 passed `278/278`, the
+  no-argument controller reported offline version `3` with POST count `0`,
+  `git diff --check` passed, and both protected hashes were exact.
+- The one permitted operational launch command was submitted once after a
+  final byte-exact adapter validation. Its wrapper returned without a
+  controller PID/start record, controller JSON report, bridge request, stdout,
+  stderr, or observable child process. Both dedicated controller log files
+  remained zero bytes. This is an ambiguous launch outcome: it is treated as
+  the one consumed controller invocation, and no second invocation or retry
+  was made.
+- The absence of even bridge sequence `1` proves the controller did not reach
+  the reviewed Neon preflight required before any deployment or mutation.
+  Therefore no disabled-preflight, minimal-enabled or final-disabled
+  deployment was created; no gate or school mutation, JWT rotation,
+  authentication request, application POST, Stripe request, mapping, or
+  onboarding path was reached.
+- Independent read-only shutdown verification then called the adapter's
+  reviewed gate read once. All six staging gates were exact `false`, live was
+  absent, `STRIPE_MODE` was exact `test`, and Production reported untouched
+  with mutation count `0`. A single read-only Neon statement against retained
+  ready, non-primary, non-default, unprotected branch
+  `br-dark-recipe-zarmjbix` in project `shiny-bonus-66942766`, database
+  `neondb`, proved school `1`'s guarded feature remained exact JSON Boolean
+  false. Simon intent `3c2349a0-1696-4b57-b732-fc14bbde57df` remained test
+  `reconciling`, unmapped, under stable identity
+  `cc:connect-v2:1:3:test:recipient`, with one retained ambiguous attempt and
+  zero scope, replacement intent, reconciled-existing attempt, observation,
+  or onboarding link event.
+- Exact operational-effect counts are: controller launch submissions `1`,
+  controller completions/reports `0`; deployments by disabled-preflight,
+  minimal-enabled and final-disabled phase `0/0/0`; JWT rotations `0`;
+  authentication requests `0`; reconciliation POSTs `0`; redirects `0`;
+  retries `0`; Stripe API requests and Accounts v2 list pages `0`; Accounts v2
+  creates `0`; direct provider creates `0`; mappings `0`; replacements `0`;
+  onboarding calls `0`; database writes `0`; gate changes `0`; school changes
+  `0`; payments, refunds, earnings, payouts, transfers and cutovers `0` each;
+  Production actions `0`; and A9 actions `0`. Post-stop verification added
+  exactly one read-only Vercel gate-state operation and one read-only Neon SQL
+  statement, with no mutation.
+- The authority is consumed and must not be reused. Status is
+  `MVP_A8_CONTROLLER_LAUNCH_AMBIGUOUS_STOPPED_CLOSED_DISABLED_VERIFIED`. No
+  onboarding or A9 occurred.

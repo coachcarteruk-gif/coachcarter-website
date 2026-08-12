@@ -1609,3 +1609,55 @@ effects are all exactly `0`. The last trusted disabled-staging and original
 unmapped Simon `reconciling` intent evidence remains historical, not freshly
 reasserted. Status is
 `MVP_A8_1_CONTROLLER_V3_EXTERNAL_ADAPTER_PREPARED_NOT_OPERATED`.
+
+## MVP A8 controller-v3 launch ambiguity stopped closed - 12 August 2026
+
+Fresh authority covered one controller-v3 Simon staging reconciliation through
+the existing application route only, using the exact source and generated
+adapter frozen in this session. Onboarding and A9 were excluded. The approval
+scalar was supplied separately and is not retained here.
+
+The operation froze PR #382's `origin/main` merge commit
+`9fd4e02a7a80917068b37fd1b9c3cdd6289f0c05` on named branch
+`codex/simon-staging-reconciliation-mvp-a8-operational` in isolated clean,
+non-detached worktree
+`C:\tmp\coachcarter-simon-mvp-a8-operational-9fd4e02`. Required PR #382,
+PR #381 and PR #380 ancestry passed; PR #380 retained A7's exact tree
+`78597d0b02c4ff9053a0676b383ce5999190c6c6` without requiring obsolete A7
+commit ancestry.
+
+The exact outside-repository adapter path was
+`C:\tmp\cc-simon-mvp-a8-operational.generated-operator-adapter.js`; immediate
+generate/validate SHA-256 was
+`768e47c15219fb588c4b6d9561b8cfc493bcfbb7db1dc2f104a2be725c838836`.
+Byte-exact validation, frozen ten-method surface, no provider-create method,
+fixed staging target, and immutable final metadata-tail forwarding all passed.
+Selected tests passed `63/63`, syntax `206/206`, C1 `278/278`, dry-run POST
+count `0`, and `git diff --check` passed before the launch.
+
+The one authorised operational launch command was submitted exactly once after
+final adapter validation. The wrapper returned no controller PID/start record,
+JSON result, bridge request, stdout, stderr, or observable child process; its
+two dedicated logs remained zero bytes. The launch is therefore ambiguous,
+authority is consumed, and no retry or second controller invocation was made.
+Because bridge sequence `1` was never created, controller execution did not
+reach the mandatory Neon preflight that precedes every deployment and mutation.
+
+Independent read-only shutdown verification proved all six staging gates exact
+false, live absent, `STRIPE_MODE=test`, and Production untouched. Retained Neon
+branch `br-dark-recipe-zarmjbix` remained ready, non-primary, non-default and
+unprotected. School `1`'s guarded feature was exact JSON Boolean false. Simon's
+original intent remained unmapped `reconciling` with the exact test stable
+identity, one retained ambiguous attempt, and zero Simon scope, replacement,
+reconciled-existing attempt, observation or onboarding event.
+
+Exact operational-effect counts are: one ambiguous launch submission, zero
+controller completion reports; phase deployments `0/0/0`; JWT rotations,
+authentication requests, reconciliation POSTs, redirects, retries, Stripe API
+requests/list pages, Accounts v2 creates, direct creates, mappings,
+replacements, onboarding, database writes, gate changes, school changes,
+payments, refunds, earnings, payouts, transfers, cutovers, Production and A9
+actions all `0`. Post-stop evidence used one reviewed read-only Vercel
+gate-state operation and one read-only Neon SQL statement. No onboarding or A9
+occurred. Status is
+`MVP_A8_CONTROLLER_LAUNCH_AMBIGUOUS_STOPPED_CLOSED_DISABLED_VERIFIED`.
