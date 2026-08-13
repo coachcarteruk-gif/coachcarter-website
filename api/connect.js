@@ -35,14 +35,20 @@ const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_strip
 const stripe   = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.CONNECT_V1 });
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
-const { requireAuth }       = require('./_auth');
+const { requireAuth, getSchoolId } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
 const { logAudit }          = require('./_audit');
 const { createConnectV2Handler } = require('./_connect-v2-routes');
+const { createConnectV1InterimHandler } = require('./_connect-v1-interim');
 
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
 const handleConnectV2 = createConnectV2Handler();
+const handleConnectV1Interim = createConnectV1InterimHandler({
+  stripe,
+  baseUrl: BASE_URL,
+  createTransporter,
+});
 
 function setCors(res) {
 }
@@ -59,6 +65,7 @@ function verifyAdminJWT(req) {
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
+  if (await handleConnectV1Interim(req, res)) return;
   if (await handleConnectV2(req, res)) return;
   if (action === 'create-account')      return handleCreateAccount(req, res);
   if (action === 'onboarding-link')     return handleOnboardingLink(req, res);
@@ -82,26 +89,38 @@ async function handleCreateAccount(req, res) {
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
 
-  const schoolId = user.school_id || 1;
+  const schoolId = getSchoolId(user, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const [instructor] = await sql`SELECT id, email, name, stripe_account_id FROM instructors WHERE id = ${user.id} AND school_id = ${schoolId}`;
+    const [instructor] = await sql`
+      SELECT i.id, i.email, i.name, i.stripe_account_id, c.id AS interim_v1_control_id
+        FROM instructors i
+        LEFT JOIN interim_v1_instructor_controls c
+          ON c.school_id = i.school_id AND c.instructor_id = i.id
+       WHERE i.id = ${user.id} AND i.school_id = ${schoolId}
+    `;
     if (!instructor) return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Instructor not found' });
+
+    if (instructor.interim_v1_control_id) {
+      return res.status(409).json({
+        error: true,
+        code: 'INTERIM_V1_HARDENED_INVITE_REQUIRED',
+        message: 'Use the separately confirmed interim-v1 invitation command',
+      });
+    }
 
     let accountId = instructor.stripe_account_id;
 
-    // Create Express account if they don't have one yet
+    // New account creation must go through the durable admin-prepared interim
+    // command. Existing mapped instructors may still request a fresh hosted
+    // onboarding link here.
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'GB',
-        email: instructor.email,
-        capabilities: { transfers: { requested: true } },
-        business_type: 'individual',
-        metadata: { instructor_id: String(instructor.id), platform: 'coachcarter' }
+      return res.status(409).json({
+        error: true,
+        code: 'INTERIM_V1_PREPARATION_REQUIRED',
+        message: 'A school-scoped admin must prepare and reconcile the payout account first',
       });
-      accountId = account.id;
-      await sql`UPDATE instructors SET stripe_account_id = ${accountId} WHERE id = ${instructor.id}`;
     }
 
     // Generate onboarding link
@@ -124,13 +143,27 @@ async function handleCreateAccount(req, res) {
 async function handleOnboardingLink(req, res) {
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
-  const schoolId = user.school_id || 1;
+  const schoolId = getSchoolId(user, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const [instructor] = await sql`SELECT stripe_account_id FROM instructors WHERE id = ${user.id} AND school_id = ${schoolId}`;
+    const [instructor] = await sql`
+      SELECT i.stripe_account_id, c.id AS interim_v1_control_id
+        FROM instructors i
+        LEFT JOIN interim_v1_instructor_controls c
+          ON c.school_id = i.school_id AND c.instructor_id = i.id
+       WHERE i.id = ${user.id} AND i.school_id = ${schoolId}
+    `;
     if (!instructor?.stripe_account_id) {
       return res.status(400).json({ error: true, code: 'NO_ACCOUNT', message: 'No Connect account found. Create one first.' });
+    }
+    if (instructor.interim_v1_control_id) {
+      return res.status(409).json({
+        error: true,
+        code: 'INTERIM_V1_OWNER_INVITATION_REQUIRED',
+        message: 'Interim v1 onboarding links require the separate owner-controlled invitation route',
+      });
     }
 
     const link = await stripe.accountLinks.create({
@@ -163,7 +196,8 @@ async function handleOnboardingLink(req, res) {
 async function handleConnectStatus(req, res) {
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
-  const schoolId = user.school_id || 1;
+  const schoolId = getSchoolId(user, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -187,7 +221,7 @@ async function handleConnectStatus(req, res) {
       result.requirements_pending = (account.requirements?.currently_due || []).length;
 
       if (!instructor.stripe_onboarding_complete && account.charges_enabled && account.payouts_enabled) {
-        await sql`UPDATE instructors SET stripe_onboarding_complete = TRUE WHERE id = ${user.id}`;
+        await sql`UPDATE instructors SET stripe_onboarding_complete = TRUE WHERE id = ${user.id} AND school_id = ${schoolId}`;
         result.onboarding_complete = true;
       }
     }
@@ -203,7 +237,8 @@ async function handleConnectStatus(req, res) {
 async function handleDashboardLink(req, res) {
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
-  const schoolId = user.school_id || 1;
+  const schoolId = getSchoolId(user, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -227,7 +262,8 @@ async function handleAdminCreateAccount(req, res) {
   if (!admin) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Admin auth required' });
 
   try {
-    const adminSchoolId = admin.school_id || 1;
+    const adminSchoolId = getSchoolId(admin, req);
+    if (!adminSchoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
     const { instructor_id } = req.body || {};
     if (!instructor_id) return res.status(400).json({ error: true, code: 'MISSING_FIELD', message: 'instructor_id required' });
 
@@ -237,16 +273,11 @@ async function handleAdminCreateAccount(req, res) {
 
     let accountId = instructor.stripe_account_id;
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'GB',
-        email: instructor.email,
-        capabilities: { transfers: { requested: true } },
-        business_type: 'individual',
-        metadata: { instructor_id: String(instructor.id), platform: 'coachcarter' }
+      return res.status(409).json({
+        error: true,
+        code: 'INTERIM_V1_HARDENED_ROUTE_REQUIRED',
+        message: 'Use the durable interim-v1 account command with an explicit payout start date',
       });
-      accountId = account.id;
-      await sql`UPDATE instructors SET stripe_account_id = ${accountId} WHERE id = ${instructor.id}`;
     }
 
     const link = await stripe.accountLinks.create({
@@ -278,28 +309,40 @@ async function handleAdminSendInvite(req, res) {
   if (!admin) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Admin auth required' });
 
   try {
-    const adminSchoolId = admin.school_id || 1;
+    const adminSchoolId = getSchoolId(admin, req);
+    if (!adminSchoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
     const { instructor_id } = req.body || {};
     if (!instructor_id) return res.status(400).json({ error: true, code: 'MISSING_FIELD', message: 'instructor_id required' });
 
     const sql = neon(process.env.POSTGRES_URL);
-    const [instructor] = await sql`SELECT id, email, name, stripe_account_id FROM instructors WHERE id = ${instructor_id} AND school_id = ${adminSchoolId}`;
+    const [instructor] = await sql`
+      SELECT i.id, i.email, i.name, i.stripe_account_id, i.payouts_start_date,
+             i.payouts_paused, c.id AS interim_v1_control_id,
+             ci.state AS interim_v1_account_state, ci.provider_account_id
+        FROM instructors i
+        LEFT JOIN interim_v1_instructor_controls c
+          ON c.school_id = i.school_id AND c.instructor_id = i.id
+        LEFT JOIN connect_v1_account_creation_intents ci
+          ON ci.school_id = c.school_id AND ci.id = c.account_creation_intent_id
+       WHERE i.id = ${instructor_id} AND i.school_id = ${adminSchoolId}
+    `;
     if (!instructor) return res.status(404).json({ error: true, code: 'NOT_FOUND', message: 'Instructor not found' });
 
     let accountId = instructor.stripe_account_id;
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'GB',
-        email: instructor.email,
-        capabilities: { transfers: { requested: true } },
-        business_type: 'individual',
-        metadata: { instructor_id: String(instructor.id), platform: 'coachcarter' }
+      return res.status(409).json({
+        error: true,
+        code: 'INTERIM_V1_ACCOUNT_PREPARATION_REQUIRED',
+        message: 'Create or reconcile the durable account identity before sending an invitation',
       });
-      accountId = account.id;
-      await sql`UPDATE instructors SET stripe_account_id = ${accountId} WHERE id = ${instructor.id}`;
     }
-
+    if (instructor.interim_v1_control_id) {
+      return res.status(409).json({
+        error: true,
+        code: 'INTERIM_V1_OWNER_INVITATION_REQUIRED',
+        message: 'Interim v1 onboarding links require the separate owner-controlled invitation route',
+      });
+    }
     const link = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${BASE_URL}/instructor/earnings.html?connect=refresh`,
@@ -354,7 +397,8 @@ async function handleSchoolCreateAccount(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Admin auth required' });
 
-  const schoolId = admin.school_id || 1;
+  const schoolId = getSchoolId(admin, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [school] = await sql`SELECT id, name, stripe_account_id FROM schools WHERE id = ${schoolId}`;
@@ -395,7 +439,8 @@ async function handleSchoolOnboardingLink(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Admin auth required' });
 
-  const schoolId = admin.school_id || 1;
+  const schoolId = getSchoolId(admin, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [school] = await sql`SELECT stripe_account_id FROM schools WHERE id = ${schoolId}`;
@@ -422,7 +467,8 @@ async function handleSchoolConnectStatus(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Admin auth required' });
 
-  const schoolId = admin.school_id || 1;
+  const schoolId = getSchoolId(admin, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [school] = await sql`
@@ -472,7 +518,8 @@ async function handleSchoolDashboardLink(req, res) {
   const admin = verifyAdminJWT(req);
   if (!admin) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Admin auth required' });
 
-  const schoolId = admin.school_id || 1;
+  const schoolId = getSchoolId(admin, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [school] = await sql`SELECT stripe_account_id, stripe_onboarding_complete FROM schools WHERE id = ${schoolId}`;

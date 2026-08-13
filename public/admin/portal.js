@@ -27,6 +27,7 @@ function esc(str) {
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
 const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
 const isInstructorAdmin = !adminData && instrData && instrData.instructor && instrData.instructor.is_admin;
+const isPlatformOwner = !!(adminData && adminData.admin && adminData.admin.role === 'superadmin');
 
 if (!adminData && !isInstructorAdmin) window.location.href = '/admin/login.html';
 
@@ -3033,6 +3034,9 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+let currentInterimV1Preview = null;
+let currentInterimV1Approval = null;
+
 async function loadPayouts() {
   // Fire the balance fetch in parallel - independent network call, no need to chain.
   loadPlatformBalance();
@@ -3059,11 +3063,16 @@ async function loadPayouts() {
           : i.connect_status === 'pending'
           ? '<span style="color:#b45309;font-weight:600;">&#x23f3; Pending</span>'
           : '<span style="color:#6b7280;">Not started</span>';
-        const pauseBtn = i.connect_status === 'active'
+        const pauseBtn = i.connect_status === 'active' && !i.interim_v1_controlled
           ? `<button class="btn btn-sm" data-action="toggle-payout-pause" data-id="${i.id}" data-paused="${!i.payouts_paused}">${i.payouts_paused ? 'Resume' : 'Pause'}</button>`
           : '';
-        const inviteBtn = i.connect_status === 'not_started'
-          ? `<button class="btn btn-sm" data-action="send-connect-invite" data-id="${i.id}">Send Invite</button>`
+        const interimAction = isPlatformOwner && i.interim_v1_controlled
+          ? `<button class="btn btn-sm" data-action="review-interim-v1" data-id="${i.id}" data-school-id="${i.school_id}">Review interim v1</button>`
+          : isPlatformOwner && i.connect_status === 'not_started'
+          ? `<button class="btn btn-sm" data-action="prepare-interim-v1" data-id="${i.id}" data-school-id="${i.school_id}">Prepare interim v1</button>`
+          : '';
+        const inviteBtn = isPlatformOwner && i.interim_v1_controlled && i.interim_v1_account_state === 'succeeded' && i.connect_status === 'pending'
+          ? `<button class="btn btn-sm" data-action="send-interim-v1-invite" data-id="${i.id}" data-school-id="${i.school_id}">Send invitation</button>`
           : '';
         const feeLabel = i.fee_model === 'franchise'
           ? `\u00A3${(i.weekly_franchise_fee_pence / 100).toFixed(0)}/wk`
@@ -3073,7 +3082,7 @@ async function loadPayouts() {
           <td>${statusBadge}</td>
           <td>${esc(feeLabel)}</td>
           <td>${i.payouts_paused ? '<span style="color:#b45309;font-weight:600;">Paused</span>' : (i.connect_status === 'active' ? 'Active' : '\u2014')}</td>
-          <td>${inviteBtn}${pauseBtn}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap;">${interimAction}${inviteBtn}${pauseBtn}</td>
         </tr>`;
       }).join('') || '<tr><td colspan="5">No active instructors</td></tr>';
 
@@ -3168,10 +3177,118 @@ async function sendConnectInvite(instructorId) {
   }
 }
 
+async function prepareInterimV1(instructorId, schoolId) {
+  const startDate = prompt('Enter the deliberate interim v1 payout start date (YYYY-MM-DD). This will create the durable account identity and keep payouts paused.');
+  if (!startDate) return;
+  if (!confirm(`Prepare interim v1 for instructor ${instructorId} from ${startDate}? This may create or reconcile one live Express account, but it will not send an invitation.`)) return;
+  try {
+    const res = await fetchAdmin('/api/connect?action=interim-v1-account', {
+      method: 'POST',
+      body: JSON.stringify({
+        school_id: schoolId, instructor_id: instructorId, payouts_start_date: startDate,
+        operator_go: 'CREATE_INTERIM_V1_ACCOUNT_CONFIRMED'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.code || 'Preparation failed');
+    toast(data.state === 'reconciled' ? 'Existing account identity reconciled' : 'Interim v1 account prepared', 'success');
+    loadPayouts();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function sendInterimV1Invite(instructorId, schoolId) {
+  if (!confirm('Send the separately authorised Stripe hosted-onboarding invitation now? This does not unpause payouts.')) return;
+  try {
+    const res = await fetchAdmin('/api/connect?action=interim-v1-invite', {
+      method: 'POST',
+      body: JSON.stringify({ school_id: schoolId, instructor_id: instructorId, operator_go: 'SEND_INTERIM_V1_INVITE_CONFIRMED' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.code || 'Invitation failed');
+    toast('Interim v1 onboarding invitation sent; payouts remain paused', 'success');
+    loadPayouts();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function renderInterimV1Preview(preview, schoolId) {
+  const target = document.getElementById('interim-v1-payout-review');
+  const included = preview.included.map(line => `<tr><td>${line.booking_id}</td><td>${esc(line.scheduled_date)}</td><td>${esc(line.learner_name || '—')}</td><td>${esc(line.payment_intent_id)}</td><td>${esc(line.charge_id)}</td><td>${fmtPence(line.gross_pence)}</td><td>${fmtPence(line.stripe_fee_pence)}</td></tr>`).join('');
+  const excluded = preview.excluded.map(line => `<tr><td>${line.booking_id}</td><td>${esc(line.scheduled_date)}</td><td colspan="4">${esc(line.reason.replaceAll('_', ' '))}</td></tr>`).join('');
+  const blockerCopy = preview.blockers.length ? preview.blockers.join(', ').replaceAll('_', ' ') : 'None';
+  const approveButton = preview.ready_for_approval
+    ? `<button class="btn btn-sm" data-action="approve-interim-v1" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Approve this exact preview</button>` : '';
+  target.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">
+      <div><strong>${esc(preview.instructor.name)}</strong><br><span style="color:var(--muted);">Start ${esc(preview.instructor.payouts_start_date)}</span></div>
+      <div>Gross<br><strong>${fmtPence(preview.totals.gross_pence)}</strong></div>
+      <div>Exact Stripe fees<br><strong>${fmtPence(preview.totals.stripe_fees_pence)}</strong></div>
+      <div>Configured weekly fee<br><strong>${preview.totals.weekly_franchise_fee_pence == null ? 'Commission model' : fmtPence(preview.totals.weekly_franchise_fee_pence)}</strong></div>
+      <div>Proposed transfer<br><strong>${fmtPence(preview.totals.proposed_transfer_pence)}</strong></div>
+    </div>
+    <p><strong>Blockers:</strong> ${esc(blockerCopy)} · <strong>Fingerprint:</strong> <code>${esc(preview.preview_fingerprint)}</code></p>
+    <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Included booking</th><th>Date</th><th>Learner</th><th>PaymentIntent</th><th>Charge</th><th>Gross</th><th>Fee</th></tr></thead><tbody>${included || '<tr><td colspan="7">No included lessons</td></tr>'}</tbody></table></div>
+    <div style="overflow-x:auto;margin-top:10px"><table class="data-table"><thead><tr><th>Excluded booking</th><th>Date</th><th colspan="4">Reason</th></tr></thead><tbody>${excluded || '<tr><td colspan="6">No exclusions</td></tr>'}</tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">${approveButton}<span id="interim-v1-process-slot"></span></div>`;
+}
+
+async function reviewInterimV1(instructorId, schoolId) {
+  try {
+    const res = await fetchAdmin(`/api/admin?action=interim-v1-payout-preview&school_id=${schoolId}&instructor_id=${instructorId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.code || 'Preview failed');
+    currentInterimV1Preview = { ...data.preview, school_id: schoolId };
+    currentInterimV1Approval = null;
+    renderInterimV1Preview(data.preview, schoolId);
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function approveInterimV1(instructorId, schoolId) {
+  if (!currentInterimV1Preview || currentInterimV1Preview.instructor.id !== instructorId) return toast('Reload the exact preview first', 'error');
+  const reason = prompt('Record the owner approval reason.');
+  if (!reason) return;
+  const evidenceReference = prompt('Record the independent review/evidence reference.');
+  if (!evidenceReference) return;
+  if (!confirm(`Approve exactly ${fmtPence(currentInterimV1Preview.totals.proposed_transfer_pence)} for this fingerprint? Approval does not move money.`)) return;
+  try {
+    const res = await fetchAdmin('/api/admin?action=interim-v1-approve-first-run', {
+      method: 'POST', body: JSON.stringify({
+        school_id: schoolId, instructor_id: instructorId,
+        preview_fingerprint: currentInterimV1Preview.preview_fingerprint,
+        approved_amount_pence: currentInterimV1Preview.totals.proposed_transfer_pence,
+        reason, evidence_reference: evidenceReference,
+        operator_go: 'APPROVE_INTERIM_V1_FIRST_RUN_CONFIRMED'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.code || 'Approval failed');
+    currentInterimV1Approval = data.approval;
+    document.getElementById('interim-v1-process-slot').innerHTML = `<button class="btn btn-sm" data-action="process-interim-v1" data-id="${instructorId}" data-school-id="${schoolId}">Process this approved payout</button>`;
+    toast('Exact preview approved; no money moved', 'success');
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function processInterimV1(instructorId, schoolId) {
+  if (!currentInterimV1Approval) return toast('Create a distinct approval first', 'error');
+  if (!confirm('Submit this one approved payout to Stripe now? The instructor will remain paused afterwards.')) return;
+  try {
+    const res = await fetchAdmin('/api/admin?action=interim-v1-process-approved-payout', {
+      method: 'POST', body: JSON.stringify({
+        school_id: schoolId, instructor_id: instructorId, approval_id: currentInterimV1Approval.id,
+        operator_go: 'PROCESS_INTERIM_V1_APPROVED_PAYOUT_CONFIRMED'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.code || 'Payout submission failed');
+    toast('Reviewed payout completed; instructor remains paused', 'success');
+    currentInterimV1Approval = null;
+    loadPayouts();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
 async function processPayoutsNow() {
   if (!confirm('Process payouts for all eligible instructors now? This will create Stripe transfers immediately.')) return;
   const btn = document.getElementById('btn-process-payouts');
-  btn.textContent = 'Processing...';
+  btn.textContent = 'Processing legacy...';
   btn.disabled = true;
   try {
     const res = await fetchAdmin('/api/admin?action=process-payouts', {
@@ -3185,7 +3302,7 @@ async function processPayoutsNow() {
   } catch (err) {
     toast(err.message, 'error');
   } finally {
-    btn.textContent = 'Process Payouts Now';
+    btn.textContent = 'Process Legacy Payouts';
     btn.disabled = false;
   }
 }
@@ -4376,6 +4493,11 @@ document.addEventListener('click', function (e) {
   else if (a === 'toggle-lesson-type') toggleLessonType(parseInt(t.dataset.id, 10), t.dataset.active === 'true');
   else if (a === 'toggle-payout-pause') togglePayoutPause(parseInt(t.dataset.id, 10), t.dataset.paused === 'true');
   else if (a === 'send-connect-invite') sendConnectInvite(parseInt(t.dataset.id, 10));
+  else if (a === 'prepare-interim-v1') prepareInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'send-interim-v1-invite') sendInterimV1Invite(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'review-interim-v1') reviewInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'approve-interim-v1') approveInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'process-interim-v1') processInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'filter-bookings') filterBookings(t, t.dataset.status);
   else if (a === 'filter-learner-tier') filterLearnerTier(t, parseInt(t.dataset.tier, 10));
   else if (a === 'filter-learner-category') filterLearnerCategory(t, t.dataset.category);

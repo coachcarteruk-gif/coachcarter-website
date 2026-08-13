@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.125 - Simon Interim v1 Hardening (13 August 2026)
+
+Implements the reviewable, human-controlled Express/v1 bridge approved in PR #388 while keeping CoachCarter school-wide on payout engine v1. Additive migration 043 introduces durable account creation intents/attempts, an immutable controlled-instructor boundary, exact direct-slot funding evidence, owner approvals and transfer intents/attempts without seeding or operating any row. Account preparation transactionally establishes a deliberate payout start and `payouts_paused=true` before provider creation; ambiguous outcomes reconcile the same metadata identity and can never create a replacement. Invitation remains a separate explicitly confirmed owner action.
+
+Controlled instructors are excluded from generic cron/admin bulk payouts and cannot be generically unpaused. Their read-only owner preview accepts only chargeable, post-start, live, one-payment/one-lesson CoachCarter direct-slot Stripe evidence with exact IDs, gross, fee and availability; every unsupported source is reason-coded manual/£0. The configured `weekly_franchise_fee_pence` drives the calculation. First approval and movement use separate exact confirmations and a recomputed fingerprint; ambiguous or failed movement retains claims, success leaves the instructor paused, and this milestone refuses a second completed run. Accounts v2/payout v2 evidence is untouched and remains the long-term target.
+
+**Files:** `db/migration.sql`, `db/migrations/043_simon_interim_v1_hardening.sql`, `api/_connect-v1-interim.js`, `api/_interim-v1-payout.js`, `api/connect.js`, `api/admin.js`, `api/webhook.js`, `api/_payout-helpers.js`, `public/admin/portal.html`, `public/admin/portal.js`, `tests/simon-interim-v1-hardening.spec.js`, `docs/simon-interim-v1-hardening-implementation.md`, `docs/stripe-connect.md`, `docs/stripe-connect-simon-launch-project-log.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.124 - Shared Instructor Notes Board (29 July 2026)
 
 Adds a Notes item to the instructor sidebar and a school-wide ideas board at `/instructor/notes.html`. A labelled composer sits above a newest-first feed so instructors can share suggestions, reminders, and useful ideas with their team. Notes show the author and exact timestamp, safely render user text without HTML injection, and include clear loading, empty, success, error, keyboard-focus, reduced-motion, dark-mode, and phone layouts. The existing five-tab mobile bottom bar stays unchanged; Notes remains available from the mobile hamburger sidebar.

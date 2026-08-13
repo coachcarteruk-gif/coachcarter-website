@@ -58,6 +58,7 @@ const { createTransporter, generateToken } = require('./_auth-helpers');
 const { sendWhatsApp } = require('./_whatsapp');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
+const { createInterimV1PayoutHandler } = require('./_interim-v1-payout');
 const {
   validateGoodwillRequest,
   validateReconciliationRequest,
@@ -209,6 +210,10 @@ function createStripeClient(purpose = STRIPE_CLIENT_PURPOSES.PLATFORM_V1) {
   return createPlatformStripeClient({ purpose });
 }
 
+const handleInterimV1Payout = createInterimV1PayoutHandler({
+  stripe: createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.PAYOUTS }),
+});
+
 // Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)
 function getAdminSchoolId(admin, req) {
   return (admin.school_id != null) ? admin.school_id : (parseInt(req.query?.school_id) || 1);
@@ -345,6 +350,7 @@ function verifyAdminJWT(req) {
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
+  if (await handleInterimV1Payout(req, res)) return;
   if (action === 'login')           return handleLogin(req, res);
   if (action === 'logout')          return handleLogout(req, res);
   if (action === 'request-reset')   return handleRequestReset(req, res);
@@ -516,7 +522,6 @@ async function handleCreateAdmin(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-
     const existing = await sql`SELECT id FROM admin_users WHERE email = ${email.toLowerCase().trim()}`;
     if (existing.length > 0)
       return res.status(400).json({ error: 'An admin with this email already exists' });
@@ -4170,6 +4175,19 @@ async function handleTogglePayoutPause(req, res) {
       return res.status(400).json({ error: 'instructor_id and paused (boolean) required' });
 
     const sql = neon(process.env.POSTGRES_URL);
+    if (paused === false) {
+      const [control] = await sql`
+        SELECT id FROM interim_v1_instructor_controls
+         WHERE school_id = ${schoolId} AND instructor_id = ${instructor_id}
+      `;
+      if (control) {
+        return res.status(409).json({
+          error: true,
+          code: 'INTERIM_V1_UNPAUSE_FORBIDDEN',
+          message: 'Interim v1 controlled instructors remain paused; unattended payouts require a later reviewed milestone',
+        });
+      }
+    }
     const [updated] = await sql`
       UPDATE instructors SET payouts_paused = ${paused} WHERE id = ${instructor_id} AND school_id = ${schoolId} RETURNING id, name
     `;
@@ -4203,9 +4221,16 @@ async function handlePayoutOverview(req, res) {
 
     // Instructor connect statuses
     const instructors = await sql`
-      SELECT id, name, email, active, commission_rate, weekly_franchise_fee_pence,
-             stripe_account_id, stripe_onboarding_complete, payouts_paused, payouts_start_date
-        FROM instructors WHERE school_id = ${schoolId} ORDER BY name ASC
+      SELECT i.id, i.school_id, i.name, i.email, i.active, i.commission_rate, i.weekly_franchise_fee_pence,
+             i.stripe_account_id, i.stripe_onboarding_complete, i.payouts_paused, i.payouts_start_date,
+             c.id AS interim_v1_control_id, c.funding_policy AS interim_v1_funding_policy,
+             ci.state AS interim_v1_account_state
+        FROM instructors i
+        LEFT JOIN interim_v1_instructor_controls c
+          ON c.school_id = i.school_id AND c.instructor_id = i.id
+        LEFT JOIN connect_v1_account_creation_intents ci
+          ON ci.school_id = c.school_id AND ci.id = c.account_creation_intent_id
+       WHERE i.school_id = ${schoolId} ORDER BY i.name ASC
     `;
 
     // Upcoming payout estimates per instructor
@@ -4266,13 +4291,17 @@ async function handlePayoutOverview(req, res) {
     return res.json({
       ok: true,
       instructors: instructors.map(i => ({
-        id: i.id, name: i.name, email: i.email, active: i.active,
+        id: i.id, school_id: i.school_id, name: i.name, email: i.email, active: i.active,
         commission_rate: i.commission_rate,
         weekly_franchise_fee_pence: i.weekly_franchise_fee_pence,
         fee_model: i.weekly_franchise_fee_pence != null ? 'franchise' : 'commission',
         connect_status: !i.stripe_account_id ? 'not_started'
           : i.stripe_onboarding_complete ? 'active' : 'pending',
-        payouts_paused: i.payouts_paused
+        payouts_paused: i.payouts_paused,
+        payouts_start_date: i.payouts_start_date,
+        interim_v1_controlled: !!i.interim_v1_control_id,
+        interim_v1_funding_policy: i.interim_v1_funding_policy || null,
+        interim_v1_account_state: i.interim_v1_account_state || null
       })),
       estimates,
       recent_payouts: recentPayouts,

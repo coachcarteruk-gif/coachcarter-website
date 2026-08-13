@@ -759,6 +759,26 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `admin-create-account` | POST | Admin JWT | Create Express account for a specific instructor |
 | `admin-send-invite` | POST | Admin JWT | Create account + email onboarding link to instructor |
 
+The Simon interim-v1 hardening adds owner-only, school-scoped actions without
+changing the school payout engine:
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `interim-v1-status` | GET | Superadmin JWT | Database-only durable account/control status |
+| `interim-v1-account` | POST | Superadmin JWT + exact confirmation | Establish start/pause/intent, then create or reconcile one exact live Express account |
+| `interim-v1-invite` | POST | Superadmin JWT + exact confirmation | Send hosted onboarding only after exact account/start/pause evidence |
+| `interim-v1-payout-preview` | GET (`api/admin.js`) | Superadmin JWT | Read-only exact-funding preview and fingerprint |
+| `interim-v1-approve-first-run` | POST (`api/admin.js`) | Superadmin JWT + exact confirmation | Immutable fingerprint/amount approval; no money movement |
+| `interim-v1-process-approved-payout` | POST (`api/admin.js`) | Superadmin JWT + separate exact confirmation | One durable, reviewed transfer attempt; instructor stays paused |
+| `interim-v1-reconcile-transfer` | POST (`api/admin.js`) | Superadmin JWT + exact confirmation | Same-identity ambiguous transfer lookup; never replacement submission |
+
+Migration 043 is additive/inert. A controlled instructor is excluded from the
+generic cron and bulk-admin payout selector and cannot be generically unpaused.
+Only exact live direct-slot Stripe evidence after the deliberate start can have
+positive preview value; incomplete, external, credit, pre-start, test and
+contradictory sources are reason-coded manual/£0. See
+`docs/simon-interim-v1-hardening-implementation.md`.
+
 Slice 4 adds separately versioned, inactive-by-default actions without changing
 those legacy routes:
 
@@ -781,7 +801,7 @@ not activate payouts or replace legacy Connect.
 
 ### API — `api/cron-payouts.js` (Vercel Cron — Fridays 09:00 UTC)
 
-Processes weekly payouts for all onboarded instructors. Auth: CRON_SECRET or Admin JWT.
+Processes weekly payouts for all onboarded, unpaused, non-interim-controlled instructors. Auth: CRON_SECRET or Admin JWT.
 Eligible bookings: `status = 'chargeable'`. The 1-hour buffer on the `scheduled → chargeable` flip in `cron-auto-complete.js` absorbs clock skew and last-minute reschedule races; no extra grace period is applied.
 Creates Stripe transfers to instructor Express accounts. Sends email notifications.
 Safety: UNIQUE(booking_id) on payout_line_items prevents double-payment. See `docs/booking-statuses.md` for the risk-window analysis.

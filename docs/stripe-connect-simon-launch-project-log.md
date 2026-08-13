@@ -3,17 +3,19 @@
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **OWNER REBASELINED SIMON TO HARDENED, HUMAN-CONTROLLED
-INTERIM V1 — HARDENING NOT YET IMPLEMENTED — SIMON NOT ONBOARDED OR PAID —
-ACCOUNTS V2/A8 EVIDENCE PRESERVED AND DEFERRED — PRODUCTION ACTION NOT APPROVED**
+**Current status:** **SIMON INTERIM V1 HARDENING IMPLEMENTED LOCALLY FOR REVIEW
+ON PR #388 BASELINE — NOT MERGED, MIGRATED, DEPLOYED OR OPERATED — SIMON NOT
+ONBOARDED OR PAID — ACCOUNTS V2/A8 EVIDENCE PRESERVED AND DEFERRED —
+PRODUCTION ACTION NOT APPROVED**
 
 **Last updated:** 13 August 2026
 
 **Verified source baseline:** frozen remote `main` at
-`4a6ba4fafbebe167b113e61e80b0c0a711da3ccf` (PR #387 merge)
+`f29e67d945a559fd00c7ff08e1f34c96514e01f1` (PR #388 merge)
 
-**Current hold:** Do not operate the existing v1 invite/payout route for Simon
-until the focused interim hardening is reviewed and merged. Do not resume A8,
+**Current hold:** Do not apply migration 043, deploy, configure or operate the
+interim v1 account/invite/approval/payout routes until this implementation is
+reviewed and merged and the exact later operation is separately authorized. Do not resume A8,
 A9, Slice 4 reconciliation or Accounts v2 onboarding as the immediate launch
 path. Simon must remain without a new Production account/invite and must remain
 paused until later, separate operational authority. The A8 retry-01 retained
@@ -137,10 +139,10 @@ a new explicit product-document review.
 | Deployment/database identity | Step 17 reverified read-only | Vercel project `prj_mDx2UdBimT96XqQdVDhv3xVPKtxT` reports READY production-target deployment `dpl_ADaLL8crPKphQtwVfZtNbZCJtKun`, exact Git SHA `07871219afc9fc66084f2f8bc1bf609b23802dfd`, and alias `cc-simon-s2-shadow-05.vercel.app`. Neon remained exact project `shiny-bonus-66942766`, default/primary branch `br-empty-cell-za5kh6nr`, database `neondb`, school `1`. Stripe remained Sandbox/Test account `acct_1QUSsNIqhTSdZedS` with exact active eight-event webhook `we_1U0qdyIqhTSdZedS2h8O3RxW` and no live shadow-05 binding. |
 | Shadow Checkout return URLs | Merged; accepted shadow evidence | PR #342 merged fail-closed URL binding for all approved producers. All four approved shadow-05 origins are singular and complete; Step 17 accepted the Slice 2 evidence. |
 | Shadow-04 | Failed evidence; preserve | Aggregate applied once to an empty schema and a direct-slot payment was attempted. The environment has known binding/return-URL contamination and the `is_admin` defect. Never reuse it as clean acceptance evidence. |
-| Money movement | Not performed | The 13 August docs-only rebaseline performed no Vercel, Neon, Stripe, environment, database, account, payment, refund, earning, payout, transfer, cutover or production operation. |
+| Money movement | Not performed | The 13 August rebaseline and local hardening implementation performed no Vercel, Neon, Stripe, environment, database, account, payment, refund, earning, payout, transfer, cutover or production operation. |
 | Final Slice 2 evidence | Step 17 accepted | Fresh school-1 read-only evidence confirms one complete contract/source for each of the four origins, zero terminal discrepancies, exact audit/receipt counts, and the complete prohibited-effect matrix at zero. Independent repository, CI, Vercel, Neon, Stripe, protected-hash, and local validation review found no unresolved acceptance defect. |
 | Slice 3: retired new products | Merged, deployed, production inactive verified | PR #356 merged as `ea3a65cb…`; exact CI and four Vercel deployments are successful/READY. A serializable read-only production query proved school `1` is CoachCarter and the nested retirement value/type are absent. Supported one-off and grandfathered contracts remain; activation is a separate approval. |
-| Next implementation | Simon interim v1 hardening | Harden Express/v1 account identity and ambiguity recovery, tenant/audit scope, deliberate `payouts_start_date`, paused-by-default onboarding, exact approved Stripe-funded eligibility, the itemised Fraser preview and first-run authority boundary. Keep Accounts v2/A8/A9 deferred and unoperated. |
+| Current implementation | Simon interim v1 hardening implemented locally for review | Durable Express/v1 identity and ambiguity recovery, tenant/audit scope, deliberate `payouts_start_date`, paused-by-default onboarding, exact approved Stripe-funded eligibility, the itemised Fraser preview and first-run authority boundary are present on the isolated branch. Review/merge is next; deployment and every operation remain separately unauthorized. Accounts v2/A8/A9 stay deferred and unoperated. |
 
 ## 6. Chronological project journey
 
@@ -5663,3 +5665,50 @@ not be retried.
   payment/refund/payout/transfer/cutover, Production, controller, A8 and A9
   actions were all `0`. No Stripe, Neon or Vercel credentials were requested or
   used.
+
+## 13 August 2026 - Simon interim v1 hardening implemented locally
+
+- Starting safety froze fetched `origin/main` at
+  `f29e67d945a559fd00c7ff08e1f34c96514e01f1`. That commit is the merged PR
+  #388 commit and was verified as an ancestor of the frozen remote tip. Work
+  was isolated on `codex/simon-interim-v1-hardening` in a separate worktree.
+- Before editing, the protected LF-normalised hashes matched exactly: product
+  `5D2E956C94A88D496265DCBDDBC85BC2E5F92FFCE262463C978081805302BED3`
+  and technical
+  `C1C76E9DB3450D22C83B0CE3D9D47D835244CF9F51A73B120B3E3E7344851A2A`.
+  Verification tests confirm both remain unchanged.
+- Additive, inert migration 043 introduces durable v1 account intents and
+  attempts, immutable controlled-instructor and exact funding-evidence rows,
+  first-run approvals, and durable transfer intents/attempts. It seeds no
+  instructor, account, date, fee, approval or transfer.
+- The hardened Connect path persists the school/instructor/live/Express
+  identity and start/pause safeguards before account creation, uses one stable
+  provider idempotency key, and reconciles ambiguous results by exact metadata
+  without replacement creation. Account creation and invitation are separate
+  superadmin commands with separate exact confirmations.
+- Controlled instructors are isolated from generic cron/admin bulk payouts and
+  cannot be generically unpaused. Their direct-slot webhook evidence and payout
+  preview require exact live CoachCarter Stripe identities, gross, fee,
+  payment time and funds availability, plus a one-payment/one-lesson ledger
+  match after the deliberate start. Unsupported sources are reason-coded
+  manual/£0.
+- The owner preview, first-run approval and movement are distinct. Approval is
+  bound to the recomputed canonical fingerprint and exact amount. The transfer
+  intent and payout claims exist before the provider call; ambiguous/failed
+  outcomes retain claims, reconciliation uses the same identity, success keeps
+  the instructor paused, and a completed first run cannot authorize another
+  under this milestone. The weekly fee is loaded from
+  `weekly_franchise_fee_pence`; no Simon ID or £90 constant was added.
+- The admin UI exposes preparation, separate invitation, exact preview,
+  approval and first transfer controls only to the platform owner. The generic
+  bulk button is explicitly labelled legacy and cannot select a controlled
+  instructor.
+- Local verification completed without external systems: focused hardening
+  tests `13/13`; related payout/Accounts-v2 non-browser regressions `50/50`;
+  related headless UI regressions `2/2`; direct syntax checks passed. No
+  controller, A8 or A9 command ran.
+- Stripe, Neon and Vercel requests were `0`; credentials requested/used `0`;
+  database reads/writes `0`; migrations/deployments/environment/gate/feature
+  changes `0`; real account list/create/map/reconcile `0`; invitations/emails
+  `0`; previews from Production data `0`; unpauses/payouts/transfers `0`; and
+  Production mutations `0`.
