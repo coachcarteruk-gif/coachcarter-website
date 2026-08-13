@@ -32,7 +32,10 @@
 //     → Stripe Express dashboard login link for school
 
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
-const stripe   = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.CONNECT_V1 });
+const stripe   = createPlatformStripeClient({
+  purpose: STRIPE_CLIENT_PURPOSES.CONNECT_V1,
+  expectedMode: 'live',
+});
 const { neon } = require('@neondatabase/serverless');
 const jwt      = require('jsonwebtoken');
 const { requireAuth, getSchoolId } = require('./_auth');
