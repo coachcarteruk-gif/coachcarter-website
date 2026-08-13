@@ -231,6 +231,7 @@
         { icon: 'calendarPlus', label: 'Book', href: '/learner/book.html' },
         { icon: 'list', label: 'Upcoming', href: '/learner/lessons.html', authOnly: true }
       ]},
+      { icon: 'gift', label: 'Packages', href: '/learner/packages.html', featureGate: 'learner_packages' },
       { icon: 'clipboard', label: 'Driving Test', href: '/learner/driving-test.html', authOnly: true },
       { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true },
       { icon: 'user', label: 'Profile', href: '/learner/profile.html', authOnly: true }
@@ -335,7 +336,10 @@
         } else {
           var active = isActive(item.href, item.activeOn) ? ' active' : '';
           var actionAttr = item.action ? ' data-cc-action="' + escapeHtml(item.action) + '"' : '';
-          html += '<a href="' + item.href + '" class="cc-sb-link' + active + '"' + actionAttr + '>' +
+          var featureAttr = item.featureGate
+            ? ' data-cc-feature="' + escapeHtml(item.featureGate) + '" hidden'
+            : '';
+          html += '<a href="' + item.href + '" class="cc-sb-link' + active + '"' + actionAttr + featureAttr + '>' +
             '<span class="cc-sb-icon">' + icons[item.icon] + '</span>' +
             '<span>' + item.label + '</span></a>';
         }
@@ -485,6 +489,7 @@
     '.cc-sb-link { display: flex; align-items: center; gap: 12px; padding: 10px 20px;',
     '  color: var(--muted, #6b7280); text-decoration: none; font-size: 0.88rem; font-weight: 500;',
     '  transition: all 0.15s; border-left: 3px solid transparent; font-family: "Lato", sans-serif; }',
+    '.cc-sb-link[hidden] { display: none !important; }',
     '.cc-sb-link:hover { color: var(--primary, #1a1a1a); background: var(--surface, #f5f5f5); }',
     '.cc-sb-link.active { color: var(--brand-primary, var(--accent, #f58321)); background: var(--accent-mid, rgba(245,131,33,0.12)); border-left-color: var(--brand-primary, var(--accent, #f58321)); }',
     '.cc-sb-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }',
@@ -967,6 +972,26 @@
       '</div>';
 
     document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
+    if (context === 'learner') {
+      var packagesLink = document.querySelector('[data-cc-feature="learner_packages"]');
+      if (packagesLink) {
+        var featureUrl = '/api/packages?action=feature-state';
+        var featureParams = new URLSearchParams(window.location.search);
+        if (featureParams.get('school')) featureUrl += '&school=' + encodeURIComponent(featureParams.get('school'));
+        else if (featureParams.get('school_id')) featureUrl += '&school_id=' + encodeURIComponent(featureParams.get('school_id'));
+        fetch(featureUrl, { credentials: 'include' })
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            if (data && data.enabled === true) {
+              packagesLink.removeAttribute('hidden');
+              document.querySelectorAll('[data-cc-package-link]').forEach(function(link) {
+                link.removeAttribute('hidden');
+              });
+            }
+          })
+          .catch(function() {});
+      }
+    }
     var feedbackModalHTML = buildFeedbackModalHTML();
     if (feedbackModalHTML) document.body.insertAdjacentHTML('beforeend', feedbackModalHTML);
     updateTestSwapsBadge();

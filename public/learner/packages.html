@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Compare CoachCarter learner packages, curriculum pathways and focused manoeuvres choices.">
+  <title>Packages | CoachCarter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/brand-tokens.css">
+  <link rel="stylesheet" href="/shared/learner.css">
+  <link rel="stylesheet" href="/learner/packages.css">
+  <script src="/cookie-consent.js"></script>
+  <script src="/posthog-loader.js"></script>
+  <script src="/shared/branding.js"></script>
+  <script src="/sidebar.js"></script>
+  <script src="/shared/learner-auth.js"></script>
+</head>
+<body>
+  <main class="packages-page" id="main-content">
+    <section class="packages-hero" aria-labelledby="packages-title">
+      <div class="packages-hero-copy">
+        <p class="eyebrow">Compare your routes</p>
+        <h1 id="packages-title">Choose how you want to learn.</h1>
+        <p class="hero-intro">Book individual lessons when you want flexibility, or compare a larger package built around hours, a learning phase, or focused manoeuvres practice.</p>
+        <a class="lessons-link" href="/learner/book.html"><span>Prefer one lesson at a time?</span><strong>Explore Pay As You Go Lessons</strong></a>
+      </div>
+      <aside class="comparison-note" aria-label="Lessons and Packages comparison">
+        <div><span class="comparison-index">01</span><h2>Lessons</h2><p>Choose a real slot, lesson length and instructor. Pay As You Go or use eligible existing Lesson Credit.</p></div>
+        <div><span class="comparison-index">02</span><h2>Packages</h2><p>Compare prepaid school-wide hours, structured phases, Full Curriculum and specialist Manoeuvres choices.</p></div>
+      </aside>
+    </section>
+
+    <section id="catalogue-status" class="catalogue-status" role="status" aria-live="polite" aria-atomic="true">
+      <div class="skeleton-line skeleton-line-wide"></div><div class="skeleton-line"></div>
+    </section>
+
+    <div id="catalogue-content" hidden>
+      <section class="intent-section" aria-labelledby="flexible-heading">
+        <div class="section-intro"><p class="section-kicker">I want flexible hours</p><h2 id="flexible-heading">Hours without a named-instructor tie.</h2><p>Designed as separate school-wide value, not a revival of the retired Lesson Credit checkout.</p></div>
+        <div id="flexible-products" class="featured-product"></div>
+      </section>
+
+      <section class="intent-section" aria-labelledby="pathway-heading">
+        <div class="section-intro"><p class="section-kicker">I want a stage or result</p><h2 id="pathway-heading">A visible path, with honest gates.</h2><p>Later phases stay in view so you can understand the route. They remain locked until an independent assessment pass can be evidenced.</p></div>
+        <div id="phase-products" class="phase-path" aria-label="Curriculum phases"></div>
+        <div id="full-curriculum-product" class="curriculum-feature"></div>
+      </section>
+
+      <section class="intent-section" aria-labelledby="manoeuvres-heading">
+        <div class="section-intro"><p class="section-kicker">I want focused manoeuvre practice</p><h2 id="manoeuvres-heading">Same three sessions. Two clear choices.</h2><p>The Challenge remains optional. Its campaign rules, safeguards and evidence standards must be final before it can open.</p></div>
+        <div id="manoeuvres-products" class="manoeuvres-grid"></div>
+      </section>
+
+      <section class="truth-panel" aria-labelledby="before-you-choose-heading">
+        <div><p class="section-kicker">Phase 1 catalogue</p><h2 id="before-you-choose-heading">What happens today?</h2></div>
+        <div class="truth-list">
+          <p><strong>Compare only.</strong> No product on this page can start checkout or create hours, enrolments, rewards or bookings yet.</p>
+          <p><strong>No bank redirect yet.</strong> Pay by Bank and payment confirmation arrive in a later, separately tested phase.</p>
+          <p><strong>Old credit stays separate.</strong> Your existing Lesson Credit remains readable and usable under its current rules.</p>
+        </div>
+      </section>
+
+      <footer class="packages-footer-cta">
+        <div><p class="section-kicker">Need a date in the diary?</p><h2>Book an individual lesson instead.</h2></div>
+        <a href="/learner/book.html">Browse Pay As You Go Lessons</a>
+      </footer>
+    </div>
+  </main>
+  <script src="/learner/packages.js"></script>
+</body>
+</html>

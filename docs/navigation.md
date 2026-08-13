@@ -24,10 +24,13 @@ Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that
 
 - Dashboard (standalone)
 - Lessons → Book, Upcoming
+- Packages (top-level public comparison page; rendered only when the resolved school's strict `learner_packages_enabled` Boolean is true)
 - Practice → Log Session, Mock Test, My Progress
 - Learn → Videos, Examiner AI, Quiz
 - My Profile (standalone, auth-gated)
 - Accordion behaviour — one group open at a time; auto-expands to current section on page load
+
+`Packages` opens `/learner/packages.html`. It is deliberately separate from Lessons and from the read-only `/learner/buy-credits.html` compatibility page. Lessons and Packages cross-link prominently. The fixed learner bottom bar is unchanged; Packages remains a hamburger/sidebar destination on mobile.
 
 ## Instructor — fixed bottom tabs
 

@@ -1,6 +1,6 @@
 # CoachCarter Website — Project Reference
 
-> **Last updated:** 8 August 2026
+> **Last updated:** 13 August 2026
 
 A complete reference for the CoachCarter driving instructor website. Use this when continuing development with an AI assistant — paste it in at the start of a new session so the AI is fully up to speed.
 
@@ -1313,7 +1313,34 @@ after migration.
 
 ---
 
+## Learner Packages Phase 1 (13 August 2026)
+
+Learner Packages is a new product family, separate from historical Lesson Credit. Phase 1 is an inert catalogue only: it creates no Checkout Session, purchase, entitlement, booking allocation, course enrolment, assessment, refund, reward, earning, or payout.
+
+### API â€” `api/packages.js`
+
+| Action | Method | Auth | Description |
+|---|---|---|---|
+| `feature-state` | GET | No | Resolves the request school and returns only the strict Boolean feature state. Missing, malformed, string, numeric, and false values are disabled. |
+| `catalogue` | GET | No | Returns active, visible, currently effective products for the resolved school only when `schools.config.features.learner_packages_enabled === true`. Includes honest catalogue-only eligibility and always returns `checkout_available: false`. |
+| `admin-list` | GET | School admin | Returns all same-school stable products and immutable versions, including hidden, inactive, and future rows. |
+| `create-version` | POST | School admin | Creates the next immutable version with a server-validated GBP pence price, effective timestamp, terms identity, and content snapshot. Audit action: `package.create_version`. |
+| `update-product` | POST | School admin | Changes only stable display state (`visible`, `active`, `sort_order`) within the authenticated school. Audit action: `package.update_product`. |
+| `set-feature` | POST | School admin | Stores only a real JSON Boolean at `features.learner_packages_enabled`. Audit action: `package.set_feature`. |
+
+**`package_products`** stores stable school-owned identities, product type, same-school prerequisite, visibility, activation, and display order. Seeded choices are the 30-hour flexible package, Phases 1â€“3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge.
+
+**`package_product_versions`** stores immutable numbered commercial/catalogue snapshots: same-school product identity, GBP pence price, JSONB content, customer terms identity, effective timestamp, and creating actor evidence. A database trigger rejects update/delete so changes are prospective new versions.
+
+`/learner/packages.html` is a public, server-driven comparison page. Phase 2 and Phase 3 stay visible but locked because no independent package-assessment evidence exists in Phase 1. It and the Lessons page cross-link prominently. Packages is a strict-feature-gated top-level learner sidebar item; the fixed mobile bottom bar is unchanged. Admins manage the catalogue at `/admin/packages.html`.
+
+See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-product-decision-record.md). `/learner/buy-credits.html`, retired `api/credits?action=checkout`, and Reserved Weekly Slot routes/configuration remain unchanged.
+
+---
+
 ## What's still to build
+
+- **Learner Packages later phases** â€” durable purchase attempts, a separate Lesson Packages Pay by Bank configuration, signed/idempotent webhook fulfilment, hour/session ledgers, course enrolments/assessments, refunds, rewards, earnings, and payouts require later explicit approval and the unresolved decisions in section 10 of the product decision record.
 
 - **Refund flow polish** — backend preview, tightly gated execute, admin execute UI, manual bank-refund ledger recording, admin refund-event discovery/detail, admin refund notes timeline, and read-only incident readiness classification exist. Learner request UI, richer approval workflow, and actual incident repair mutation tooling are still to build.
 - **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)
