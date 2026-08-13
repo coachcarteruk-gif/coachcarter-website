@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Learner Packages | Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/packages.css">
+  <script src="/shared/admin-auth.js"></script>
+</head>
+<body>
+  <header class="admin-packages-header">
+    <a href="/admin/portal.html" class="back-link">Back to Admin Portal</a>
+    <div><p class="eyebrow">Catalogue operations</p><h1>Learner Packages</h1></div>
+    <p class="header-note">Phase 1 is catalogue-only. These controls cannot create purchases, payments, hours, enrolments, bookings, refunds, rewards or payouts.</p>
+  </header>
+
+  <main>
+    <section class="feature-control" aria-labelledby="feature-heading">
+      <div><p class="control-index">01 / School gate</p><h2 id="feature-heading">Public catalogue visibility</h2><p>Only the exact Boolean value <code>true</code> exposes this school's catalogue and learner navigation item.</p></div>
+      <div class="feature-action"><label for="feature-enabled"><input type="checkbox" id="feature-enabled"> Learner Packages enabled</label><button type="button" id="save-feature">Save school gate</button></div>
+    </section>
+
+    <section class="catalogue-admin" aria-labelledby="catalogue-heading">
+      <div class="section-heading"><div><p class="control-index">02 / Products</p><h2 id="catalogue-heading">Products and immutable versions</h2></div><p>Change price or terms by scheduling a new version. Existing versions cannot be edited or deleted.</p></div>
+      <div id="admin-status" role="status" aria-live="polite">Loading catalogue…</div>
+      <div id="product-admin-list"></div>
+    </section>
+  </main>
+  <script src="/admin/packages.js"></script>
+</body>
+</html>

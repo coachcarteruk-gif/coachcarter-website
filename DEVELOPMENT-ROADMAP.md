@@ -1,5 +1,17 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.126 - Learner Packages Phase 1: Inert Catalogue (13 August 2026)
+
+Adds the default-off, school-scoped catalogue foundation for the new Learner Packages family without reactivating Lesson Credit checkout or creating payment/accounting behaviour. Stable `package_products` identities hold visibility, order, activation and same-school prerequisite links; immutable numbered `package_product_versions` hold effective-dated GBP prices and customer-facing catalogue snapshots. Migration 044 seeds the 30-hour package, Phases 1–3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge for existing and future schools while leaving `learner_packages_enabled` absent/false.
+
+The public `api/packages.js?action=catalogue` resolves the school, requires the exact Boolean flag, selects only active/visible/current-effective versions, and returns catalogue-only eligibility with checkout disabled. Phase 2 and Phase 3 remain visibly locked because the platform has no independent package-assessment evidence yet. Audited school-admin controls schedule new immutable versions, manage product display/activation, and set the strict feature flag. `/learner/packages.html` provides an accessible, responsive comparison experience with prominent Pay As You Go cross-links; Packages is a feature-gated top-level learner sidebar item and the fixed mobile bottom bar is unchanged.
+
+This slice creates no purchase attempts, Stripe Checkout or Payment Method Configuration use, fulfilment, hour/session sources, course enrolments, assessments, refunds, Challenge rewards, instructor earnings, or payouts. `/learner/buy-credits.html`, retired `api/credits?action=checkout`, and Reserved Weekly Slot payment configuration/routes remain unchanged.
+
+**Files:** `db/migration.sql`, `db/migrations/044_learner_packages_catalogue.sql`, `api/_learner-packages.js`, `api/packages.js`, `public/learner/packages.html`, `public/learner/packages.css`, `public/learner/packages.js`, `public/learner/lessons.html`, `public/sidebar.js`, `public/admin/packages.html`, `public/admin/packages.css`, `public/admin/packages.js`, `public/admin/portal.html`, `tests/learner-packages-phase1.spec.js`, `docs/learner-packages-product-decision-record.md`, `docs/navigation.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.125 - Simon Interim v1 Hardening (13 August 2026)
 
 Implements the reviewable, human-controlled Express/v1 bridge approved in PR #388 while keeping CoachCarter school-wide on payout engine v1. Additive migration 043 introduces durable account creation intents/attempts, an immutable controlled-instructor boundary, exact direct-slot funding evidence, owner approvals and transfer intents/attempts without seeding or operating any row. Account preparation transactionally establishes a deliberate payout start and `payouts_paused=true` before provider creation; ambiguous outcomes reconcile the same metadata identity and can never create a replacement. Invitation remains a separate explicitly confirmed owner action.

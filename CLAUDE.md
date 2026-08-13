@@ -148,6 +148,14 @@ Do not gate grandfathered Lesson Credit balance reads/spending/returns, existing
 
 ## Broadcast offers
 
+## Learner Packages Phase 1 boundary
+
+`schools.config.features.learner_packages_enabled === true` is the only enabled value for the inert Learner Packages catalogue; missing, malformed, string, numeric, and false values are disabled. `api/packages.js` and `/learner/packages.html` are catalogue/comparison surfaces only. They must not create Stripe Checkout, payment fulfilment, package hours/session units, course enrolments, assessments, booking allocations, refunds, rewards, instructor earnings, or payouts until their separately approved phases.
+
+The new package family is not Lesson Credit. Do not route it through `learner_credit_balances`, reactivate `api/credits?action=checkout`, repurpose `/learner/buy-credits.html`, or reuse Reserved Weekly Slot tables/routes/Payment Method Configuration. Product versions are immutable and prospective; visibility/activation live on the stable same-school product identity. See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-product-decision-record.md).
+
+## Broadcast offers
+
 > Full plan: see DEVELOPMENT-ROADMAP.md entry 2.55
 
 The `lesson_offers` table supports two `kind`s:

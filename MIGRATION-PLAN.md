@@ -7,7 +7,7 @@
 ## Current Architecture (Verified May 2026)
 
 **Frontend:** 58 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
-**Backend:** 40 Vercel serverless API route files (excluding `_*.js` shared modules), 100+ actions via `?action=X` routing
+**Backend:** 41 Vercel serverless API route files (excluding `_*.js` shared modules), 100+ actions via `?action=X` routing
 **Database:** Neon PostgreSQL, ~41 tables (single idempotent migration file at `db/migration.sql`; `waitlist` and `qa_*` tables are explicitly dropped near the end)
 **Multi-tenancy:** Every tenant-scoped table has `school_id INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1`. Every SQL query filters by `school_id`. Every JWT carries `school_id`. School #1 is CoachCarter; new schools onboard via the superadmin portal. See `docs/multi-tenancy.md`.
 **Branding:** Two front doors share the same backend — `coachcarter.uk` (driving school) and `instructorbook.co.uk` (national SaaS for instructors). See `INSTRUCTORBOOK-PLAN.md`.
@@ -15,6 +15,8 @@
 **Payments:** Stripe Checkout sessions + webhook handler. Klarna enabled. Stripe Connect for instructor payouts (Model D: 0.75% fee on weekly automated payouts). Native app parity note: direct pay-and-book and offer-acceptance clients must treat the server as the price source of truth. For a chosen instructor, direct slot pricing is custom learner hourly rate → instructor hourly rate → school `bulk_hourly_pence`, multiplied by duration; bulk discounts are credit-package only and are not applied to direct single-slot checkout or instructor-created offers. New offers snapshot final `offer_price_pence` at creation and acceptance uses that stored price.
 **Booking:** 12-week (84-day) advance cap for self-serve. Slot-first UX on `book.html` (no calendar views, no lesson-type pill bar — pick slot first, then duration in modal). Offer-driven recurring series (`lesson_offers.max_repeat_weeks` 1–18) is the only path that may exceed the 12-week cap.
 **Simon interim v1 hardening (implemented for review, not operated):** migration 043 adds durable Express/v1 account intent, controlled-instructor, exact direct-slot funding-evidence, owner-approval and transfer-intent/attempt records. Native clients must treat this as an owner-only operational surface, not instructor self-service. Preview fingerprints and exact amounts are server-owned; clients must never submit trusted prices, fees, eligibility, source identities or an unpause instruction. Accounts v2/payout v2 remain the portability target. See `docs/simon-interim-v1-hardening-implementation.md`.
+
+**Learner Packages Phase 1 (inert catalogue):** migration 044 adds school-owned `package_products` and immutable effective-dated `package_product_versions`; `api/packages.js` exposes a strict-feature-flagged public read model and audited admin catalogue controls. A future native Packages screen must consume the server catalogue and eligibility response rather than copy prices, prerequisites, visibility, or terms into the app. Phase 1 always reports `checkout_available: false` and creates no payment or entitlement state. See `docs/learner-packages-product-decision-record.md`.
 
 **AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints, both hidden in v1)
 **Analytics:** PostHog (loaded via `posthog-loader.js` after cookie consent)
@@ -38,7 +40,7 @@
 **Public / marketing pages (~17):**
 - index (role selector), classroom, availability, lessons, login, learner-journey, accept-offer, offer-success, free-trial, free-trial-success, privacy, terms, success, maintenance, offline, 404, demo/book
 
-### Verified API Surface (40 route files, 100+ actions)
+### Verified API Surface (41 route files, 100+ actions)
 
 | File | Auth | Notes |
 |------|------|-------|
@@ -98,6 +100,8 @@
 Additional May 2026 shared server note: `_refund-planner.js` computes net-of-original-processing-fee refund previews from credit sources, BCS attribution, direct booking snapshots, and Stripe fee evidence when available. `_refund-executor.js` is the tightly gated admin execution orchestrator; it re-runs the planner, blocks manual-review cases, uses injected Stripe refunds, writes refund ledger rows, and applies supported CSA/LCB adjustments server-side.
 
 Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`](docs/per-instructor-credits-audit.md) is the current implementation tracker for scoped `learner_credit_balances`. Native payment and booking screens should preserve the `instructor_id`, `school_id`, server-pricing, and LCB mutation contracts recorded there.
+
+Learner Packages portability note: `api/packages.js?action=catalogue` is the only Phase 1 catalogue authority. Preserve its strict school flag, stable product/version IDs, current-effective version selection, locked prerequisite explanation, and catalogue-only states. Do not map these products onto `learner_credit_balances`, Reserved Weekly Slot APIs, or native payment SDKs in this phase.
 
 ### Shared Client Modules
 
@@ -237,6 +241,9 @@ Social video filming app parity note (June 2026): `instructors.social_video_opt_
 - Legacy key mapping handles all old data
 
 ---
+
+**Notable additions (August 2026):**
+- **Learner Packages inert catalogue** â€” `package_products` provides school-scoped stable identity, visibility, order, activation, and prerequisites; `package_product_versions` provides immutable effective-dated prices and display contracts. The learner page is public only when the exact school feature Boolean is true. Native parity is a thin render of the server response; no app checkout, local eligibility calculation, hour balance, enrolment, refund, reward, or payout logic exists in Phase 1.
 
 ## Migration Strategy: React Native (Expo)
 
