@@ -504,7 +504,7 @@ function validateTransfer(transfer, intent) {
   return transfer;
 }
 
-function createInterimV1PayoutHandler({ stripe, connectionString = process.env.POSTGRES_URL, sql = connectionString ? neon(connectionString) : null, transactionRunner } = {}) {
+function createInterimV1PayoutHandler({ stripe, connectionString = process.env.POSTGRES_URL, sql: injectedSql = null, transactionRunner } = {}) {
   const runTransaction = transactionRunner || ((work) => withNeonTransaction(connectionString, async (client) => work(clientSqlTag(client))));
   return async function handleInterimV1Payout(req, res) {
     const action = req.query?.action;
@@ -517,6 +517,8 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
       res.status(400).json({ error: true, code: 'INVALID_SCOPE', message: 'A valid school and instructor are required' }); return true;
     }
     try {
+      const sql = injectedSql || (connectionString ? neon(connectionString) : null);
+      if (!sql) throw new InterimV1PayoutError(500, 'INTERIM_V1_DATABASE_UNAVAILABLE', 'Interim v1 payout database access is unavailable');
       if (action === 'interim-v1-payout-preview') {
         if (req.method !== 'GET') throw new InterimV1PayoutError(405, 'METHOD_NOT_ALLOWED', 'GET required');
         const preview = await loadInterimV1Preview(sql, schoolId, instructorId);

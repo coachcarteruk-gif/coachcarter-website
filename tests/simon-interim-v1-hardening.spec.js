@@ -16,6 +16,7 @@ const {
 const {
   buildPreviewFromRows,
   classifyFundingRow,
+  createInterimV1PayoutHandler,
   evidenceRecord,
   validateTransfer,
 } = require('../api/_interim-v1-payout');
@@ -209,6 +210,19 @@ test.describe('Simon interim v1 exact funding and preview', () => {
 });
 
 test.describe('Simon interim v1 authority, isolation, and preservation', () => {
+  test('unrelated admin actions do not initialize the interim database client', async () => {
+    expect(() => createInterimV1PayoutHandler({
+      stripe: {},
+      connectionString: 'deliberately-not-a-database-url',
+    })).not.toThrow();
+
+    const handler = createInterimV1PayoutHandler({
+      stripe: {},
+      connectionString: 'deliberately-not-a-database-url',
+    });
+    await expect(handler({ query: { action: 'list-instructors' } }, {})).resolves.toBe(false);
+  });
+
   test('generic v1 payout selection excludes controlled instructors', () => {
     const source = read('api/_payout-helpers.js');
     expect(source).toContain('INTERIM_V1_DEDICATED_PATH_REQUIRED');
