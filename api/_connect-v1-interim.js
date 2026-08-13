@@ -43,6 +43,21 @@ function makeStableIdentity({ schoolId, instructorId }) {
   return `cc:connect-v1:${Number(schoolId)}:${Number(instructorId)}:live:express`;
 }
 
+function isOwnerAssistedSession({ owner, instructor, schoolId }) {
+  if (!owner || owner.role !== 'superadmin') return false;
+  if (!instructor || instructor.role !== 'instructor' || instructor.impersonation !== true) return false;
+
+  const ownerId = Number(owner.id);
+  const impersonatingAdminId = Number(instructor.impersonated_by_admin_id);
+  const instructorSchoolId = Number(instructor.school_id);
+  if (!Number.isSafeInteger(ownerId) || ownerId <= 0 || impersonatingAdminId !== ownerId) return false;
+  if (!Number.isSafeInteger(instructorSchoolId) || instructorSchoolId !== Number(schoolId)) return false;
+
+  const ownerEmail = String(owner.email || '').trim().toLowerCase();
+  const impersonatingAdminEmail = String(instructor.impersonated_by_admin_email || '').trim().toLowerCase();
+  return ownerEmail.length > 0 && impersonatingAdminEmail === ownerEmail;
+}
+
 function makeCreationCommand({ schoolId, instructorId, payoutsStartDate, intentId }) {
   const stableIdentity = makeStableIdentity({ schoolId, instructorId });
   const requestFacts = {
@@ -521,6 +536,7 @@ module.exports = {
   createConnectV1InterimHandler,
   findReconciliationMatches,
   fingerprint,
+  isOwnerAssistedSession,
   makeCreationCommand,
   makeStableIdentity,
   stableJson,

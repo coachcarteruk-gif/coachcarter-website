@@ -412,8 +412,16 @@
 
   async function continueConnectOnboarding() {
     try {
-      const res = await ccAuth.fetchAuthed('/api/connect?action=onboarding-link');
-      const data = await res.json();
+      let res = await ccAuth.fetchAuthed('/api/connect?action=onboarding-link');
+      let data = await res.json();
+      if (data.code === 'INTERIM_V1_OWNER_INVITATION_REQUIRED' && ccAuth.isImpersonating()) {
+        res = await ccAuth.fetchAuthed('/api/connect?action=owner-assisted-onboarding-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        data = await res.json();
+      }
       if (data.ok && data.onboarding_url) {
         window.location.href = data.onboarding_url;
       } else {
