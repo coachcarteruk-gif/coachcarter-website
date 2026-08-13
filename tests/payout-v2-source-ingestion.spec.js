@@ -228,9 +228,12 @@ test.describe('Payout v2 source ingestion pure contracts', () => {
     expect(webhook.indexOf('stripe.webhooks.constructEvent')).toBeLessThan(
       webhook.indexOf('payoutV2Receipt = await claimPayoutV2Receipt(event)')
     );
-    expect(webhook).toContain('await handleCreditPurchase(session, payoutV2Receipt)');
-    expect(webhook).toContain('await handleSlotBooking(session, payoutV2Receipt)');
-    expect(webhook).toContain('await handleOfferBooking(session, payoutV2Receipt)');
+    expect(webhook).toContain('const paymentEventContext = {');
+    expect(webhook).toContain('...(payoutV2Receipt || {})');
+    expect(webhook).toContain('providerLivemode: event.livemode === true');
+    expect(webhook).toContain('await handleCreditPurchase(session, paymentEventContext)');
+    expect(webhook).toContain('await handleSlotBooking(session, paymentEventContext)');
+    expect(webhook).toContain('await handleOfferBooking(session, paymentEventContext)');
     const checkoutDispatch = webhook.indexOf("event.type === 'checkout.session.completed'");
     const requestCreation = webhook.indexOf(
       'await handleRequestHold(session)',
@@ -238,7 +241,7 @@ test.describe('Payout v2 source ingestion pure contracts', () => {
     );
     const paymentIntentDispatch = webhook.indexOf("event.type === 'payment_intent.succeeded'");
     const capturedSource = webhook.indexOf(
-      'await handleCapturedRequestSource(paymentIntent, payoutV2Receipt)',
+      'await handleCapturedRequestSource(paymentIntent, paymentEventContext)',
       paymentIntentDispatch
     );
     expect(requestCreation).toBeGreaterThan(checkoutDispatch);

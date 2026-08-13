@@ -12,6 +12,7 @@ const { fetchSessionFeePence, fetchSessionFundingEvidence } = require('./_stripe
 const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { withNeonTransaction } = require('./_db-transaction');
+const { recordInterimV1FundingEvidence } = require('./_interim-v1-payout');
 const { normaliseSocialVideoConsent } = require('./_pricing-helpers');
 const {
   computeRequestExpiresAt,
@@ -600,6 +601,10 @@ module.exports = async (req, res) => {
     // payment_status='unpaid', then fire `async_payment_succeeded` once the
     // payment actually clears. Immediate methods usually fire `completed`
     // already paid. We route both events through the same dispatch.
+    const paymentEventContext = {
+      ...(payoutV2Receipt || {}),
+      providerLivemode: event.livemode === true,
+    };
     if (event.type === 'checkout.session.completed' ||
         event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object;
@@ -607,13 +612,13 @@ module.exports = async (req, res) => {
 
       if (paymentType === 'credit_purchase') {
         // Historical Lesson Credit purchase compatibility.
-        await handleCreditPurchase(session, payoutV2Receipt);
+        await handleCreditPurchase(session, paymentEventContext);
       } else if (paymentType === 'slot_booking') {
         // ── Pay-per-slot: single lesson purchase + instant booking ─────
-        await handleSlotBooking(session, payoutV2Receipt);
+        await handleSlotBooking(session, paymentEventContext);
       } else if (paymentType === 'lesson_offer') {
         // ── Instructor-initiated offer: learner accepted + paid ────────
-        await handleOfferBooking(session, payoutV2Receipt);
+        await handleOfferBooking(session, paymentEventContext);
       } else if (paymentType === 'lesson_request_hold') {
         // Manual-capture Checkout completion creates the pending request;
         // payment_intent.succeeded later records the captured funding source.
@@ -650,10 +655,10 @@ module.exports = async (req, res) => {
       if (paymentType === 'credit_purchase') {
         await handleCreditPurchase(
           paymentIntentToCreditSession(paymentIntent),
-          payoutV2Receipt
+          paymentEventContext
         );
       } else if (paymentType === 'lesson_request_hold') {
-        await handleCapturedRequestSource(paymentIntent, payoutV2Receipt);
+        await handleCapturedRequestSource(paymentIntent, paymentEventContext);
       } else if (paymentType === 'recurring_block_bank_checkout') {
         await handleRecurringBlockBankPaymentSuccess(paymentIntentToRecurringBlockSession(paymentIntent));
       }
@@ -1284,6 +1289,13 @@ async function handleSlotBooking(session, eventContext = null) {
           creditTransaction: existingCreditTx,
           durationMins: chargeMins,
         });
+        if (bookingPurpose === 'lesson') {
+          await recordInterimV1FundingEvidence(sql, {
+            schoolId, instructorId, learnerId, bookingId: Number(existingBooking.id),
+            creditTransactionId: Number(existingCreditTx.id), fundingEvidence,
+            providerLivemode: eventContext?.providerLivemode === true,
+          });
+        }
         const launchResult = await ensurePayoutV2StripeSource({
           sql,
           schoolId,
@@ -1367,6 +1379,13 @@ async function handleSlotBooking(session, eventContext = null) {
             creditTransaction: racedCreditTx,
             durationMins: chargeMins,
           });
+          if (bookingPurpose === 'lesson') {
+            await recordInterimV1FundingEvidence(sql, {
+              schoolId, instructorId, learnerId, bookingId: Number(racedBooking.id),
+              creditTransactionId: Number(racedCreditTx.id), fundingEvidence,
+              providerLivemode: eventContext?.providerLivemode === true,
+            });
+          }
         } else if (racedBooking && isTerminal(racedBooking.status)) {
           console.warn(`slot_booking ${session.id} hit uq_credit_tx_session with refunded booking ${racedBooking.id}; not repairing active BCS`);
         } else {
@@ -1559,6 +1578,17 @@ async function handleSlotBooking(session, eventContext = null) {
       creditTransaction: slotCreditTx,
       durationMins: chargeMins,
     });
+    if (bookingPurpose === 'lesson') {
+      await recordInterimV1FundingEvidence(sql, {
+        schoolId,
+        instructorId,
+        learnerId,
+        bookingId: Number(booking.id),
+        creditTransactionId: Number(slotCreditTx.id),
+        fundingEvidence,
+        providerLivemode: eventContext?.providerLivemode === true,
+      });
+    }
     let deferredLaunchRetryError = null;
     if (
       Number.isSafeInteger(explicitPayoutV2SchoolId) &&

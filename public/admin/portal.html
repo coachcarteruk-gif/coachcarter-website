@@ -825,7 +825,16 @@ body {
         <div class="page-title">Payouts</div>
         <div class="page-subtitle">Manage instructor Stripe Connect payouts</div>
       </div>
-      <button class="btn" id="btn-process-payouts">Process Payouts Now</button>
+      <button class="btn" id="btn-process-payouts">Process Legacy Payouts</button>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;border:2px solid #f59e0b;" aria-label="Interim v1 reviewed payout control">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;">
+        <h3 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin:0;">Interim v1 — owner-reviewed first payout</h3>
+        <span class="badge badge-gray">Human controlled</span>
+      </div>
+      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 12px;">Controlled instructors remain excluded from the legacy cron and bulk button. Preparation, invitation, preview, approval and transfer are separate owner actions. A successful reviewed payout does not unpause future runs.</p>
+      <div id="interim-v1-payout-review" style="font-size:0.86rem;color:var(--muted);">Choose “Review interim v1” beside a controlled instructor.</div>
     </div>
 
     <!-- Next-payout dry-run preview (same math as Friday's cron, no writes).

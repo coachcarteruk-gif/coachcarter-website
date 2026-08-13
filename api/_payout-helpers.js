@@ -146,6 +146,16 @@ async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
  */
 async function processPayoutForInstructor(sql, stripe, instructor) {
   await assertV1PayoutEngine(sql, instructor.school_id);
+  const [interimControl] = await sql`
+    SELECT id FROM interim_v1_instructor_controls
+     WHERE school_id = ${instructor.school_id} AND instructor_id = ${instructor.id}
+     LIMIT 1
+  `;
+  if (interimControl) {
+    const err = new Error('Interim v1 controlled instructors require a fingerprint-bound owner approval');
+    err.code = 'INTERIM_V1_DEDICATED_PATH_REQUIRED';
+    throw err;
+  }
   const bookings = await getEligibleBookings(sql, instructor.id, instructor.payouts_start_date || null);
   if (!bookings.length) return null;
 
@@ -410,6 +420,10 @@ async function processAllPayouts(sql, stripe, opts = {}) {
            AND payouts_paused = FALSE
            AND stripe_account_id IS NOT NULL
            AND school_id = ${schoolId}
+           AND NOT EXISTS (
+             SELECT 1 FROM interim_v1_instructor_controls c
+              WHERE c.school_id = instructors.school_id AND c.instructor_id = instructors.id
+           )
       `
     : await sql`
         SELECT id, school_id, name, email, commission_rate, weekly_franchise_fee_pence, stripe_account_id, payouts_start_date
@@ -418,6 +432,10 @@ async function processAllPayouts(sql, stripe, opts = {}) {
            AND stripe_onboarding_complete = TRUE
            AND payouts_paused = FALSE
            AND stripe_account_id IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM interim_v1_instructor_controls c
+              WHERE c.school_id = instructors.school_id AND c.instructor_id = instructors.id
+           )
       `;
 
   const results = { processed: 0, skipped: 0, failed: 0, total_pence: 0, details: [] };
@@ -437,7 +455,7 @@ async function processAllPayouts(sql, stripe, opts = {}) {
         results.failed++;
       }
     } catch (err) {
-      if (err.code === V1_DISABLED_CODE) {
+      if (err.code === V1_DISABLED_CODE || err.code === 'INTERIM_V1_DEDICATED_PATH_REQUIRED') {
         results.skipped++;
         results.details.push({
           instructor_id: inst.id,
