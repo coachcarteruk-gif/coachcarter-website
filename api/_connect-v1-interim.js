@@ -5,7 +5,7 @@ const { neon } = require('@neondatabase/serverless');
 const { requireAuth, getSchoolId } = require('./_auth');
 const { logAuditRequired } = require('./_audit');
 const { withNeonTransaction } = require('./_db-transaction');
-const { classifyStripeError } = require('./_stripe-clients');
+const { classifyStripeError, getStripeClientMetadata } = require('./_stripe-clients');
 
 const ACTIONS = new Set([
   'interim-v1-account',
@@ -93,11 +93,16 @@ function normalizeDateOnly(value) {
   return String(value || '').slice(0, 10);
 }
 
-function validateProviderAccount(account, { schoolId, instructorId, intentId, stableIdentity }) {
+function validateProviderAccount(account, {
+  schoolId, instructorId, intentId, stableIdentity, providerMode,
+}) {
   if (!account || !/^acct_[A-Za-z0-9]+$/.test(account.id || '')) {
     throw new ConnectV1InterimError(502, 'INTERIM_V1_PROVIDER_CONTRACT_INVALID', 'Stripe returned an invalid account response');
   }
-  if (account.livemode !== true) {
+  // Stripe v1 Account objects do not expose a `livemode` property. Prove the
+  // mode at the authenticated client boundary instead of treating an absent
+  // response field as test-mode evidence.
+  if (providerMode !== 'live') {
     throw new ConnectV1InterimError(409, 'INTERIM_V1_TEST_ACCOUNT_REFUSED', 'A test-mode account cannot be used for the interim Production path');
   }
   const metadata = account.metadata || {};
@@ -232,6 +237,7 @@ function createConnectV1InterimHandler({
   transactionRunner,
 } = {}) {
   const runTransaction = transactionRunner || ((work) => withNeonTransaction(connectionString, async (client) => work(clientSqlTag(client))));
+  const providerMode = getStripeClientMetadata(stripe)?.mode || null;
 
   return async function handleConnectV1Interim(req, res) {
     const action = req.query?.action;
@@ -353,6 +359,7 @@ function createConnectV1InterimHandler({
           if (matches.length === 1) {
             const account = validateProviderAccount(matches[0], {
               schoolId, instructorId, intentId: intent.id, stableIdentity: intent.stable_identity,
+              providerMode,
             });
             const accountId = await finalizeMappedAccount({
               transactionRunner: runTransaction, req, admin, schoolId, instructor, intent, account,
@@ -410,6 +417,7 @@ function createConnectV1InterimHandler({
           );
           validateProviderAccount(account, {
             schoolId, instructorId, intentId: intent.id, stableIdentity: intent.stable_identity,
+            providerMode,
           });
         } catch (error) {
           const classification = classifyStripeError(error);

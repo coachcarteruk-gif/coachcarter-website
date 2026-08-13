@@ -115,22 +115,25 @@ test.describe('Simon interim v1 Connect identity', () => {
     });
   });
 
-  test('refuses test-mode or cross-scope provider evidence', () => {
+  test('uses the authenticated client mode and refuses test-mode or cross-scope provider evidence', () => {
     const facts = {
       schoolId: 7, instructorId: 19,
       intentId: '11111111-1111-4111-8111-111111111111',
       stableIdentity: 'cc:connect-v1:7:19:live:express',
+      providerMode: 'live',
     };
     const account = {
-      id: 'acct_exact', livemode: false,
+      id: 'acct_exact',
       metadata: {
         cc_connect_v1_intent_id: facts.intentId,
         cc_stable_identity: facts.stableIdentity,
         cc_school_id: '7', cc_instructor_id: '19',
       },
     };
-    expect(() => validateProviderAccount(account, facts)).toThrow(/test-mode/i);
-    expect(() => validateProviderAccount({ ...account, livemode: true, metadata: { ...account.metadata, cc_school_id: '8' } }, facts)).toThrow(/ownership/i);
+    expect(validateProviderAccount(account, facts)).toBe(account);
+    expect(() => validateProviderAccount(account, { ...facts, providerMode: 'test' })).toThrow(/test-mode/i);
+    expect(() => validateProviderAccount(account, { ...facts, providerMode: null })).toThrow(/test-mode/i);
+    expect(() => validateProviderAccount({ ...account, metadata: { ...account.metadata, cc_school_id: '8' } }, facts)).toThrow(/ownership/i);
   });
 
   test('bounded reconciliation finds exact metadata and never creates', async () => {
