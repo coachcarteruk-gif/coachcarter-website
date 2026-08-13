@@ -10,6 +10,7 @@ const path = require('path');
 const {
   buildAccountCreateParams,
   findReconciliationMatches,
+  isOwnerAssistedSession,
   makeCreationCommand,
   validateProviderAccount,
 } = require('../api/_connect-v1-interim');
@@ -213,6 +214,43 @@ test.describe('Simon interim v1 exact funding and preview', () => {
 });
 
 test.describe('Simon interim v1 authority, isolation, and preservation', () => {
+  test('owner-assisted onboarding requires the exact bound superadmin support session', () => {
+    const owner = { id: 2, email: 'owner@example.test', role: 'superadmin' };
+    const instructorSession = {
+      id: 6,
+      email: 'instructor@example.test',
+      role: 'instructor',
+      school_id: 1,
+      impersonation: true,
+      impersonated_by_admin_id: 2,
+      impersonated_by_admin_email: 'owner@example.test',
+    };
+
+    expect(isOwnerAssistedSession({ owner, instructor: instructorSession, schoolId: 1 })).toBe(true);
+    expect(isOwnerAssistedSession({ owner: { ...owner, role: 'admin' }, instructor: instructorSession, schoolId: 1 })).toBe(false);
+    expect(isOwnerAssistedSession({ owner, instructor: { ...instructorSession, impersonation: false }, schoolId: 1 })).toBe(false);
+    expect(isOwnerAssistedSession({ owner, instructor: { ...instructorSession, impersonated_by_admin_id: 3 }, schoolId: 1 })).toBe(false);
+    expect(isOwnerAssistedSession({ owner, instructor: { ...instructorSession, impersonated_by_admin_email: 'other@example.test' }, schoolId: 1 })).toBe(false);
+    expect(isOwnerAssistedSession({ owner, instructor: instructorSession, schoolId: 2 })).toBe(false);
+  });
+
+  test('Continue Setup uses the audited owner-assisted route without relaxing generic access', () => {
+    const connect = read('api/connect.js');
+    const earnings = read('public/instructor/earnings.js');
+
+    expect(connect).toContain("if (action === 'owner-assisted-onboarding-link') return handleOwnerAssistedOnboardingLink(req, res);");
+    expect(connect).toContain("requireAuth(req, { roles: ['superadmin'] })");
+    expect(connect).toContain('isOwnerAssistedSession({ owner, instructor: instructorUser, schoolId })');
+    expect(connect).toContain('instructor.stable_identity === expectedStableIdentity');
+    expect(connect).toContain('instructor.payouts_paused === true');
+    expect(connect).toContain("action: 'connect.interim_v1_owner_assisted_onboarding_link_created'");
+    expect(connect).toContain("code: 'INTERIM_V1_OWNER_INVITATION_REQUIRED'");
+    expect(connect).not.toContain('payouts_paused = FALSE');
+    expect(earnings).toContain("data.code === 'INTERIM_V1_OWNER_INVITATION_REQUIRED' && ccAuth.isImpersonating()");
+    expect(earnings).toContain("'/api/connect?action=owner-assisted-onboarding-link'");
+    expect(earnings).toContain("method: 'POST'");
+  });
+
   test('unrelated admin actions do not initialize the interim database client', async () => {
     expect(() => createInterimV1PayoutHandler({
       stripe: {},

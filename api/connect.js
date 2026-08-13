@@ -41,9 +41,13 @@ const jwt      = require('jsonwebtoken');
 const { requireAuth, getSchoolId } = require('./_auth');
 const { createTransporter } = require('./_auth-helpers');
 const { reportError }       = require('./_error-alert');
-const { logAudit }          = require('./_audit');
+const { logAudit, logAuditRequired } = require('./_audit');
 const { createConnectV2Handler } = require('./_connect-v2-routes');
-const { createConnectV1InterimHandler } = require('./_connect-v1-interim');
+const {
+  createConnectV1InterimHandler,
+  isOwnerAssistedSession,
+  makeStableIdentity,
+} = require('./_connect-v1-interim');
 
 const BASE_URL = process.env.BASE_URL || 'https://coachcarter.uk';
 const handleConnectV2 = createConnectV2Handler();
@@ -65,6 +69,12 @@ function verifyAdminJWT(req) {
   return requireAuth(req, { roles: ['admin'] });
 }
 
+function dateOnly(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
 module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
@@ -72,6 +82,7 @@ module.exports = async (req, res) => {
   if (await handleConnectV2(req, res)) return;
   if (action === 'create-account')      return handleCreateAccount(req, res);
   if (action === 'onboarding-link')     return handleOnboardingLink(req, res);
+  if (action === 'owner-assisted-onboarding-link') return handleOwnerAssistedOnboardingLink(req, res);
   if (action === 'connect-status')      return handleConnectStatus(req, res);
   if (action === 'dashboard-link')      return handleDashboardLink(req, res);
   if (action === 'admin-create-account') return handleAdminCreateAccount(req, res);
@@ -194,8 +205,107 @@ async function handleOnboardingLink(req, res) {
 //   requirements_pending — Stripe-live: count of currently_due items
 //
 // charges/payouts/requirements fields are present only when has_account=true.
-// Banner UI uses them to distinguish "red (no account)" from "amber (account
-// exists but Stripe needs more info)" from "green (all set)".
+// The status handler that returns these fields follows the owner-assisted route.
+//
+// Platform owner + instructor support session: fresh interim-v1 onboarding link.
+async function handleOwnerAssistedOnboardingLink(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: true, code: 'METHOD_NOT_ALLOWED', message: 'POST required' });
+
+  // Both independently signed cookies must be present on the same request:
+  // cc_instructor identifies the exact support-access target and cc_admin
+  // proves the platform owner who started that impersonation is still present.
+  const instructorUser = verifyInstructorAuth(req);
+  if (!instructorUser) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Instructor support session required' });
+  const owner = requireAuth(req, { roles: ['superadmin'] });
+  if (!owner) return res.status(403).json({ error: true, code: 'OWNER_SUPPORT_SESSION_REQUIRED', message: 'Platform owner support access is required' });
+
+  const schoolId = getSchoolId(instructorUser, req);
+  if (!schoolId) return res.status(403).json({ error: true, code: 'SCHOOL_SCOPE_REQUIRED', message: 'School scope is required' });
+  if (!isOwnerAssistedSession({ owner, instructor: instructorUser, schoolId })) {
+    return res.status(403).json({
+      error: true,
+      code: 'OWNER_SUPPORT_SESSION_MISMATCH',
+      message: 'The owner session does not match this instructor support session',
+    });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [instructor] = await sql`
+      SELECT i.id, i.stripe_account_id, i.stripe_onboarding_complete,
+             i.payouts_start_date, i.payouts_paused,
+             c.id AS interim_v1_control_id,
+             c.payouts_start_date AS control_start_date,
+             ci.id AS account_intent_id,
+             ci.payouts_start_date AS intent_start_date,
+             ci.stable_identity, ci.state AS account_state,
+             ci.provider_account_id
+        FROM instructors i
+        JOIN interim_v1_instructor_controls c
+          ON c.school_id = i.school_id AND c.instructor_id = i.id
+        JOIN connect_v1_account_creation_intents ci
+          ON ci.school_id = c.school_id AND ci.id = c.account_creation_intent_id
+       WHERE i.id = ${instructorUser.id} AND i.school_id = ${schoolId}
+       LIMIT 1
+    `;
+    if (!instructor) {
+      return res.status(409).json({ error: true, code: 'INTERIM_V1_PREPARATION_REQUIRED', message: 'The hardened interim-v1 account must be prepared first' });
+    }
+
+    const expectedStableIdentity = makeStableIdentity({ schoolId, instructorId: instructor.id });
+    const startDate = dateOnly(instructor.payouts_start_date);
+    const controlStartDate = dateOnly(instructor.control_start_date);
+    const intentStartDate = dateOnly(instructor.intent_start_date);
+    const accountReady = instructor.stripe_account_id
+      && instructor.account_state === 'succeeded'
+      && instructor.provider_account_id === instructor.stripe_account_id
+      && instructor.stable_identity === expectedStableIdentity;
+    const safeguardsIntact = instructor.payouts_paused === true
+      && startDate.length === 10
+      && controlStartDate === startDate
+      && intentStartDate === startDate;
+    if (!accountReady) {
+      return res.status(409).json({ error: true, code: 'INTERIM_V1_ACCOUNT_NOT_READY', message: 'The durable account identity is not reconciled' });
+    }
+    if (!safeguardsIntact) {
+      return res.status(409).json({ error: true, code: 'INTERIM_V1_SAFEGUARD_MISSING', message: 'Start-date and paused safeguards must be intact' });
+    }
+    if (instructor.stripe_onboarding_complete === true) {
+      return res.status(409).json({ error: true, code: 'INTERIM_V1_ONBOARDING_COMPLETE', message: 'Stripe onboarding is already complete' });
+    }
+
+    const link = await stripe.accountLinks.create({
+      account: instructor.stripe_account_id,
+      refresh_url: `${BASE_URL}/instructor/earnings.html?connect=refresh`,
+      return_url: `${BASE_URL}/instructor/earnings.html?connect=return`,
+      type: 'account_onboarding',
+    });
+
+    await logAuditRequired(sql, {
+      adminId: owner.id,
+      adminEmail: owner.email,
+      action: 'connect.interim_v1_owner_assisted_onboarding_link_created',
+      targetType: 'instructor',
+      targetId: instructor.id,
+      details: {
+        stripe_account_id: instructor.stripe_account_id,
+        stable_identity: expectedStableIdentity,
+        payouts_start_date: startDate,
+        payouts_paused: true,
+        support_access: true,
+      },
+      schoolId,
+      req,
+    });
+
+    return res.json({ ok: true, onboarding_url: link.url, payouts_paused: true });
+  } catch (err) {
+    reportError('/api/connect?action=owner-assisted-onboarding-link', err);
+    return res.status(500).json({ error: true, code: 'SERVER_ERROR', message: 'Failed to generate owner-assisted onboarding link' });
+  }
+}
+
+// Instructor: check Connect status.
 async function handleConnectStatus(req, res) {
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: true, code: 'AUTH_REQUIRED', message: 'Not authenticated' });
