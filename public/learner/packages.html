@@ -23,17 +23,25 @@
       <div class="packages-hero-copy">
         <p class="eyebrow">Compare your routes</p>
         <h1 id="packages-title">Choose how you want to learn.</h1>
-        <p class="hero-intro">Book individual lessons when you want flexibility, or compare a larger package built around hours, a learning phase, or focused manoeuvres practice.</p>
+        <p class="hero-intro">Book individual lessons when you want flexibility, or compare school-wide hours, the complete structured curriculum, and focused manoeuvres practice.</p>
         <a class="lessons-link" href="/learner/book.html"><span>Prefer one lesson at a time?</span><strong>Explore Pay As You Go Lessons</strong></a>
       </div>
       <aside class="comparison-note" aria-label="Lessons and Packages comparison">
         <div><span class="comparison-index">01</span><h2>Lessons</h2><p>Choose a real slot, lesson length and instructor. Pay As You Go or use eligible existing Lesson Credit.</p></div>
-        <div><span class="comparison-index">02</span><h2>Packages</h2><p>Compare prepaid school-wide hours, structured phases, Full Curriculum and specialist Manoeuvres choices.</p></div>
+        <div><span class="comparison-index">02</span><h2>Packages</h2><p>Compare prepaid school-wide hours, one complete Full Curriculum programme and specialist Manoeuvres choices.</p></div>
       </aside>
     </section>
 
     <section id="catalogue-status" class="catalogue-status" role="status" aria-live="polite" aria-atomic="true">
       <div class="skeleton-line skeleton-line-wide"></div><div class="skeleton-line"></div>
+    </section>
+
+    <section id="purchase-status" class="purchase-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1" hidden></section>
+
+    <section id="programme-status" class="programme-status" aria-labelledby="programme-status-heading" hidden>
+      <p class="section-kicker">Your Full Curriculum</p>
+      <h2 id="programme-status-heading">Programme status</h2>
+      <div id="programme-status-content"></div>
     </section>
 
     <div id="catalogue-content" hidden>
@@ -43,9 +51,19 @@
       </section>
 
       <section class="intent-section" aria-labelledby="pathway-heading">
-        <div class="section-intro"><p class="section-kicker">I want a stage or result</p><h2 id="pathway-heading">A visible path, with honest gates.</h2><p>Later phases stay in view so you can understand the route. They remain locked until an independent assessment pass can be evidenced.</p></div>
-        <div id="phase-products" class="phase-path" aria-label="Curriculum phases"></div>
+        <div class="section-intro"><p class="section-kicker">I want a structured route</p><h2 id="pathway-heading">One programme. Three internal stages.</h2><p>Phase 1, Phase 2 and Phase 3 are progress stages inside Full Curriculum. They are not separately purchasable products.</p></div>
+        <ol class="internal-phases" aria-label="Internal Full Curriculum stages"><li><strong>Phase 1</strong><span>Foundation teaching and readiness</span></li><li><strong>Phase 2</strong><span>Intermediate progress and independent assessment</span></li><li><strong>Phase 3</strong><span>Independent driving preparation</span></li></ol>
         <div id="full-curriculum-product" class="curriculum-feature"></div>
+        <section id="test-booking-panel" class="test-booking-panel" aria-labelledby="test-booking-heading" hidden>
+          <div><p class="section-kicker">Eligibility</p><h3 id="test-booking-heading">Your practical test booking</h3><p>Supply only the date, time and test centre. An admin manually verifies those details after reviewing evidence outside this application. CoachCarter cannot book, change or cancel your test.</p></div>
+          <form id="test-booking-form">
+            <label>Test date<input name="test_date" type="date" required></label>
+            <label>Test time<input name="test_time" type="time" required></label>
+            <label>Test centre<input name="test_centre" type="text" minlength="2" maxlength="160" autocomplete="off" required></label>
+            <button type="submit">Send details for verification</button>
+          </form>
+          <p id="test-booking-result" role="status" aria-live="polite"></p>
+        </section>
       </section>
 
       <section class="intent-section" aria-labelledby="manoeuvres-heading">
@@ -54,10 +72,11 @@
       </section>
 
       <section class="truth-panel" aria-labelledby="before-you-choose-heading">
-        <div><p class="section-kicker">Phase 1 catalogue</p><h2 id="before-you-choose-heading">What happens today?</h2></div>
+        <div><p class="section-kicker">Payment foundation</p><h2 id="before-you-choose-heading">How confirmation works.</h2></div>
         <div class="truth-list">
-          <p><strong>Compare only.</strong> No product on this page can start checkout or create hours, enrolments, rewards or bookings yet.</p>
-          <p><strong>No bank redirect yet.</strong> Pay by Bank and payment confirmation arrive in a later, separately tested phase.</p>
+          <p><strong>Test mode only.</strong> A school must separately enable the dedicated purchasing test gate before Full Curriculum checkout appears.</p>
+          <p><strong>Stripe confirms payment.</strong> Returning to this page never activates value; only verified signed webhook evidence can create the programme.</p>
+          <p><strong>Programme value is separate.</strong> Full Curriculum creates weekly programme opportunities and actual booking allocations, never general Lesson Credit.</p>
           <p><strong>Old credit stays separate.</strong> Your existing Lesson Credit remains readable and usable under its current rules.</p>
         </div>
       </section>

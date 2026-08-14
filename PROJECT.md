@@ -38,6 +38,9 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 | `STRIPE_SECRET_KEY` | Stripe payments |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification |
 | `STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION` | Stripe Payment Method Configuration ID used only by Reserved Weekly Slot Pay by Bank Checkout. The referenced Stripe configuration must be Pay by Bank-only for this product; Pay As You Go and offers must not use this env var. |
+| `STRIPE_PACKAGES_TEST_RESTRICTED_KEY` | Dedicated Stripe test-mode restricted key for Learner Package Checkout only; no live/shared-key fallback. |
+| `STRIPE_PACKAGES_TEST_PAYMENT_METHOD_CONFIGURATION` | Dedicated test-mode Pay by Bank Payment Method Configuration ID for Learner Packages. Must not be the Reserved Weekly Slot configuration. |
+| `STRIPE_PACKAGES_TEST_WEBHOOK_SECRET` | Signing secret for the separate `/api/package-webhook` endpoint. |
 | `SMTP_HOST` | SMTP email host (booking confirmations, magic links) |
 | `SMTP_PORT` | SMTP port (465 for secure) |
 | `SMTP_USER` | SMTP username |
@@ -1313,26 +1316,48 @@ after migration.
 
 ---
 
-## Learner Packages Phase 1 (13 August 2026)
+## Learner Packages: revised Full Curriculum test foundation (13 August 2026)
 
-Learner Packages is a new product family, separate from historical Lesson Credit. Phase 1 is an inert catalogue only: it creates no Checkout Session, purchase, entitlement, booking allocation, course enrolment, assessment, refund, reward, earning, or payout.
+Learner Packages is separate from historical Lesson Credit. Migrations 044-045 provide the immutable catalogue and test-mode payment evidence; migration 046 applies the commercial revision and adds Full Curriculum fulfilment records; migration 047 adds explicit matching, assignment history and versioned agreed availability. Phase 1/2/3 identities remain historical but are inactive/hidden customer products. Flexible 30 Hours and Manoeuvres remain visible without fulfilment. Only Full Curriculum can use the default-off test purchase path.
 
 ### API â€” `api/packages.js`
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `feature-state` | GET | No | Resolves the request school and returns only the strict Boolean feature state. Missing, malformed, string, numeric, and false values are disabled. |
-| `catalogue` | GET | No | Returns active, visible, currently effective products for the resolved school only when `schools.config.features.learner_packages_enabled === true`. Includes honest catalogue-only eligibility and always returns `checkout_available: false`. |
+| `catalogue` | GET | No/optional learner | Returns active visible products. Full Curriculum eligibility also reads verified future first-test and duplicate-active-enrolment state. |
+| `submit-test-booking` | POST | Learner | Records only future date, time and centre for manual verification. |
+| `test-bookings` / `verify-test-booking` | GET / POST | School admin | Lists same-school facts and records a one-way manual verify/reject decision with audit reason. |
+| `create-checkout` | POST | Verified learner | Full Curriculum only. Freezes server price/terms/test eligibility/config identity before one idempotent test Checkout call. |
+| `attempt-status` | GET | Owning learner | Polls school/learner-scoped payment and webhook-created enrolment identity; never fulfils from the browser. |
+| `attempt-diagnostics` | GET | School admin | Read-only queue or exact-session provider comparison; never guesses, replaces, or mutates an attempt. |
 | `admin-list` | GET | School admin | Returns all same-school stable products and immutable versions, including hidden, inactive, and future rows. |
 | `create-version` | POST | School admin | Creates the next immutable version with a server-validated GBP pence price, effective timestamp, terms identity, and content snapshot. Audit action: `package.create_version`. |
 | `update-product` | POST | School admin | Changes only stable display state (`visible`, `active`, `sort_order`) within the authenticated school. Audit action: `package.update_product`. |
 | `set-feature` | POST | School admin | Stores only a real JSON Boolean at `features.learner_packages_enabled`. Audit action: `package.set_feature`. |
+| `set-purchasing-feature` | POST | School admin | Stores only a real JSON Boolean at `features.learner_package_purchasing_test_enabled`. Audit action: `package.set_purchasing_feature`. It does not configure Stripe. |
+| `programme-status` / `programme-list` | GET | Learner / instructor or admin | Returns role-appropriate same-school programme state. |
+| `assign-instructor` / `accept-assignment` | POST | Admin or assigned instructor | Admin assigns/reassigns an active same-school instructor; an ordinary instructor can self-assign or accept only themselves. Assignment history is append-only. |
+| `record-programme-availability` | POST | Admin or current instructor | Appends the agreed weekday/local-time windows and IANA timezone. Zero windows is allowed; no booking or financial row is created. |
+| `start-programme` | POST | Instructor or admin | Starts an unstarted `paid_matching` enrolment at the agreed timestamp, then creates its first-test/24-week bounded weekly opportunities and an append-only audited progress event. Payment alone never starts this clock. |
+| `record-readiness` / `record-assessment` | POST | Instructor or admin | Appends readiness and a different-instructor assessment result; a pass advances the internal phase without checkout. |
+| `record-test-date-change` / `record-extension` | POST | Admin | Separates a date change from an audited DVSA/exception/CoachCarter replacement extension. |
+| `allocate-programme-booking` / `record-week-outcome` | POST | Instructor or admin | Links actual same-school lessons and records cancellation/replacement outcomes without Lesson Credit. |
+| `activate-retake` / `record-retake-test-change` | POST | Admin | Activates one 600-minute allowance or moves its 28-day window for verified DVSA/exception evidence. |
 
 **`package_products`** stores stable school-owned identities, product type, same-school prerequisite, visibility, activation, and display order. Seeded choices are the 30-hour flexible package, Phases 1â€“3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge.
 
 **`package_product_versions`** stores immutable numbered commercial/catalogue snapshots: same-school product identity, GBP pence price, JSONB content, customer terms identity, effective timestamp, and creating actor evidence. A database trigger rejects update/delete so changes are prospective new versions.
 
-`/learner/packages.html` is a public, server-driven comparison page. Phase 2 and Phase 3 stay visible but locked because no independent package-assessment evidence exists in Phase 1. It and the Lessons page cross-link prominently. Packages is a strict-feature-gated top-level learner sidebar item; the fixed mobile bottom bar is unchanged. Admins manage the catalogue at `/admin/packages.html`.
+**`package_purchase_attempts`**, **`package_payment_events`**, and **`package_purchase_attempt_state_events`** store the immutable server-priced attempt, durable signed-event receipt, and append-only status history. Late success may promote failed/expired/review states to paid; reordered failure cannot downgrade paid. Learner deletion one-way nulls the retained financial record's learner link, and live learner attempts are included in GDPR export.
+
+`/api/package-webhook` is separate from the legacy booking webhook. It verifies raw bytes before database access, rejects live events, durably deduplicates event IDs, validates exact test-mode tenant/learner/version/amount/currency/terms/Payment Method Configuration evidence, and atomically/idempotently creates one immutable purchase plus one unstarted `paid_matching` enrolment for Full Curriculum paid success only. It starts the seven-day matching deadline but creates no programme weeks. A later instructor/admin `start-programme` action anchors the 24-week clock and creates the bounded weekly opportunities.
+
+Migration 046 adds `full_curriculum_test_bookings`, `learner_package_purchases`, `full_curriculum_enrolments`, weekly opportunities, progress events, independent assessments, test-date changes, extensions, actual booking allocations, retake allowances/window events and retake movements. Migration 047 adds `full_curriculum_matching_records`, append-only `full_curriculum_assignment_events`, `full_curriculum_availability_versions`, and their structured windows. Initial assignment cannot be overwritten; later rotation is an explicit event. Every relation is school scoped and indexed. No row is inserted into `learner_credit_balances`.
+
+**Not-executed test setup order:** (1) review and apply migrations 044-047 to a disposable/test database only; (2) create a distinct Stripe test Payment Method Configuration with Pay by Bank only; (3) create the least-privilege dedicated test restricted key for Checkout create/retrieve; (4) create the separate `/api/package-webhook` test endpoint for the five supported events; (5) set the three dedicated package environment values; (6) smoke-test while both flags remain false; then separately enable a named test school. No live resource, deployment or production activation is approved.
+
+`/learner/packages.html` presents the revised model and shows payment, matching status, matched instructor, agreed availability, start, weekly/internal-progress and retake state. `/admin/packages.html` provides verification, assignment/reassignment, availability, programme-start and extension controls. `/instructor/programmes.html` is restricted to the current instructor's assignments and provides acceptance, availability, agreed-start, readiness and assessment controls.
 
 See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-product-decision-record.md). `/learner/buy-credits.html`, retired `api/credits?action=checkout`, and Reserved Weekly Slot routes/configuration remain unchanged.
 
@@ -1340,7 +1365,7 @@ See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-p
 
 ## What's still to build
 
-- **Learner Packages later phases** â€” durable purchase attempts, a separate Lesson Packages Pay by Bank configuration, signed/idempotent webhook fulfilment, hour/session ledgers, course enrolments/assessments, refunds, rewards, earnings, and payouts require later explicit approval and the unresolved decisions in section 10 of the product decision record.
+- **Learner Packages operational setup and remaining fulfilment** - migrations 044-047 and the three dedicated Stripe test resources still require separate approval/configuration before a named-school exercise. Flexible Hours and Manoeuvres fulfilment, automated matching, refunds, rewards, instructor/assessor earnings, payouts, production/live configuration, legal closeout and rollout remain deferred.
 
 - **Refund flow polish** — backend preview, tightly gated execute, admin execute UI, manual bank-refund ledger recording, admin refund-event discovery/detail, admin refund notes timeline, and read-only incident readiness classification exist. Learner request UI, richer approval workflow, and actual incident repair mutation tooling are still to build.
 - **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)

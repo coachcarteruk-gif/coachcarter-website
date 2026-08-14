@@ -3,6 +3,14 @@
 
   var statusEl = document.getElementById('catalogue-status');
   var contentEl = document.getElementById('catalogue-content');
+  var purchaseStatusEl = document.getElementById('purchase-status');
+  var programmeStatusEl = document.getElementById('programme-status');
+  var programmeStatusContentEl = document.getElementById('programme-status-content');
+  var testBookingPanelEl = document.getElementById('test-booking-panel');
+  var testBookingFormEl = document.getElementById('test-booking-form');
+  var testBookingResultEl = document.getElementById('test-booking-result');
+  var pollTimer = null;
+  var pollStartedAt = 0;
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -19,12 +27,20 @@
     }).format(Number(pence || 0) / 100);
   }
 
-  function catalogueUrl() {
-    var url = '/api/packages?action=catalogue';
-    var params = new URLSearchParams(window.location.search);
-    if (params.get('school')) url += '&school=' + encodeURIComponent(params.get('school'));
-    else if (params.get('school_id')) url += '&school_id=' + encodeURIComponent(params.get('school_id'));
-    return url;
+  function schoolQuery() {
+    var source = new URLSearchParams(window.location.search);
+    var target = new URLSearchParams();
+    if (source.get('school')) target.set('school', source.get('school'));
+    else if (source.get('school_id')) target.set('school_id', source.get('school_id'));
+    return target.toString();
+  }
+
+  function apiUrl(action, extra) {
+    var query = new URLSearchParams(extra || {});
+    query.set('action', action);
+    var school = new URLSearchParams(schoolQuery());
+    school.forEach(function (value, key) { query.set(key, value); });
+    return '/api/packages?' + query.toString();
   }
 
   function renderList(items) {
@@ -34,11 +50,31 @@
     }).join('') + '</ul>';
   }
 
+  function actionButton(product, locked, describedBy) {
+    var eligibility = product.eligibility || {};
+    if (eligibility.checkout_available) {
+      return '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" aria-describedby="' + describedBy + '">Start test Pay by Bank</button>';
+    }
+    if (eligibility.state === 'authentication_required') {
+      return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">Sign in for test checkout</button>';
+    }
+    if (eligibility.state === 'verification_pending') {
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Verification pending</button>';
+    }
+    if (eligibility.state === 'test_booking_required') {
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Verify test booking first</button>';
+    }
+    if (eligibility.state === 'already_enrolled') {
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Already enrolled</button>';
+    }
+    return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Fulfilment not in this pass</button>';
+  }
+
   function renderProduct(product, options) {
     options = options || {};
     var content = product.content || {};
     var eligibility = product.eligibility || {};
-    var locked = eligibility.state === 'locked';
+    var locked = false;
     var descriptionId = 'product-disclosure-' + escapeHtml(product.slug);
     var lockId = 'product-lock-' + escapeHtml(product.slug);
     var label = options.label || (locked ? 'Locked phase' : 'Catalogue version ' + product.version_number);
@@ -46,6 +82,10 @@
       ? '<p class="lock-explanation" id="' + lockId + '"><strong>Why this is locked:</strong> ' + escapeHtml(eligibility.reason) + '</p>'
       : '';
     var describedBy = locked ? lockId + ' ' + descriptionId : descriptionId;
+    var disclosure = content.checkout_disclosure || eligibility.reason || 'Checkout is not available.';
+    if (eligibility.checkout_available) {
+      disclosure = 'Test mode only. A verified Stripe webhook creates the Full Curriculum enrolment; this return page cannot.';
+    }
 
     return '<article class="product-shell' + (locked ? ' locked' : '') + '">' +
       '<div class="product-main">' +
@@ -53,42 +93,71 @@
           '<p class="product-label">' + escapeHtml(label) + '</p>' +
           '<h3>' + escapeHtml(content.name || product.slug) + '</h3>' +
           '<p class="product-summary">' + escapeHtml(content.short_description || '') + '</p>' +
-        '</div><div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '<small>current version</small></div></div>' +
+        '</div><div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '<small>version ' + escapeHtml(product.version_number) + '</small></div></div>' +
         renderList(content.highlights) + lockCopy +
       '</div>' +
       '<div class="product-footer">' +
-        '<p class="version-note" id="' + descriptionId + '">' + escapeHtml(content.checkout_disclosure || 'Comparison only. Checkout is not available in Phase 1.') + '</p>' +
-        '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">' + (locked ? 'Prerequisite required' : 'Purchasing comes later') + '</button>' +
+        '<p class="version-note" id="' + descriptionId + '">' + escapeHtml(disclosure) + '</p>' +
+        actionButton(product, locked, describedBy) +
       '</div>' +
     '</article>';
   }
 
   function showMessage(title, message, retry) {
+    statusEl.hidden = false;
     statusEl.className = 'catalogue-status is-message';
     statusEl.innerHTML = '<h2>' + escapeHtml(title) + '</h2><p>' + escapeHtml(message) + '</p>' +
       (retry ? '<button type="button" id="retry-catalogue">Try again</button>' : '<a href="/learner/book.html">Browse Pay As You Go Lessons</a>');
     if (retry) document.getElementById('retry-catalogue').addEventListener('click', loadCatalogue);
   }
 
+  function showPurchaseStatus(title, message, tone, focus) {
+    purchaseStatusEl.hidden = false;
+    purchaseStatusEl.className = 'purchase-status ' + (tone || 'is-pending');
+    purchaseStatusEl.innerHTML = '<p class="section-kicker">Test payment status</p><h2>' + escapeHtml(title) + '</h2><p>' + escapeHtml(message) + '</p>';
+    if (focus) purchaseStatusEl.focus();
+  }
+
+  function renderAttempt(attempt, focus, fulfilmentCreated) {
+    var status = attempt && attempt.status;
+    if (status === 'paid') {
+      showPurchaseStatus(
+        fulfilmentCreated ? 'Full Curriculum created' : 'Test payment confirmed',
+        fulfilmentCreated
+          ? 'Stripe confirmed the test payment and the webhook created one school-scoped programme enrolment. Matching is now pending.'
+          : 'Stripe has confirmed the payment. Fulfilment is still being checked; this browser page cannot create it.',
+        'is-paid', focus
+      );
+      clearPolling();
+      clearAttemptRequest(attempt.product && attempt.product.id);
+    } else if (status === 'failed') {
+      showPurchaseStatus('Test payment failed', attempt.message || 'No package was activated. You can start a new test attempt.', 'is-failed', focus);
+      clearPolling();
+      clearAttemptRequest(attempt.product && attempt.product.id);
+    } else if (status === 'expired') {
+      showPurchaseStatus('Test checkout expired', attempt.message || 'No package was activated. You can start a new test attempt.', 'is-failed', focus);
+      clearPolling();
+      clearAttemptRequest(attempt.product && attempt.product.id);
+    } else if (status === 'review_required') {
+      showPurchaseStatus('Payment review required', 'The result is ambiguous or has remained unresolved. Do not pay again; support must reconcile the exact test Checkout identity.', 'is-review', focus);
+      clearPolling();
+    } else {
+      showPurchaseStatus('Confirming your bank payment', 'Stripe has not yet proved payment success. This page is only checking the durable attempt; it cannot activate anything.', 'is-pending', focus);
+    }
+  }
+
   function renderCatalogue(data) {
     var products = Array.isArray(data.products) ? data.products : [];
     var flexible = products.filter(function (product) { return product.product_type === 'flexible_hours'; });
-    var phases = products.filter(function (product) { return product.product_type === 'guaranteed_phase'; });
     var curriculum = products.filter(function (product) { return product.product_type === 'full_curriculum'; });
     var manoeuvres = products.filter(function (product) { return product.product_type === 'manoeuvres'; });
-    if (!flexible.length || phases.length < 3 || !curriculum.length || manoeuvres.length < 2) {
+    if (!flexible.length || !curriculum.length || !manoeuvres.length) {
       showMessage('Catalogue not ready', 'This school catalogue is incomplete. No package can be purchased; please use Pay As You Go Lessons for now.', false);
       return;
     }
 
     document.getElementById('flexible-products').innerHTML = flexible.map(function (product) {
       return renderProduct(product, { label: 'School-wide flexible hours' });
-    }).join('');
-    document.getElementById('phase-products').innerHTML = phases.map(function (product, index) {
-      return '<div class="phase-product' + (product.eligibility && product.eligibility.state === 'locked' ? ' locked' : '') + '">' +
-        '<div class="phase-number">Phase ' + (index + 1) + '</div>' +
-        renderProduct(product, { label: product.eligibility && product.eligibility.state === 'locked' ? 'Assessment gate' : 'Starting phase' }) +
-      '</div>';
     }).join('');
     document.getElementById('full-curriculum-product').innerHTML = curriculum.map(function (product) {
       return renderProduct(product, { label: 'Whole-path option' });
@@ -99,6 +168,118 @@
     }).join('');
     statusEl.hidden = true;
     contentEl.hidden = false;
+    if (data.viewer && data.viewer.signed_in_as_learner) {
+      testBookingPanelEl.hidden = false;
+      var evidence = data.full_curriculum_eligibility && data.full_curriculum_eligibility.test_booking;
+      if (evidence) {
+        testBookingResultEl.textContent = evidence.verification_status === 'verified'
+          ? 'Your future test details are verified.'
+          : evidence.verification_status === 'pending'
+            ? 'Your details are waiting for manual admin verification.'
+            : 'The latest details were not verified. Submit current future test details for review.';
+      }
+    }
+  }
+
+  function requestStorageKey(productId) { return 'cc_package_test_request_' + String(productId); }
+  function requestIdentity(productId) {
+    var key = requestStorageKey(productId);
+    var value = sessionStorage.getItem(key);
+    if (!value) {
+      if (!window.crypto || typeof window.crypto.randomUUID !== 'function') {
+        throw new Error('This browser cannot create a secure checkout identity. Please update it and try again.');
+      }
+      value = window.crypto.randomUUID();
+      sessionStorage.setItem(key, value);
+    }
+    return value;
+  }
+  function clearAttemptRequest(productId) {
+    if (productId) sessionStorage.removeItem(requestStorageKey(productId));
+  }
+
+  async function startCheckout(button) {
+    var productId = Number(button.getAttribute('data-package-checkout'));
+    if (!productId) return;
+    var original = button.textContent;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Starting secure test checkout…';
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(apiUrl('create-checkout'), {
+        method: 'POST',
+        body: JSON.stringify({ product_id: productId, client_request_id: requestIdentity(productId) }),
+        credentials: 'include'
+      });
+      var data = await response.json();
+      if (response.status === 401) {
+        if (window.ccAuth) window.ccAuth.requireAuth();
+        return;
+      }
+      if (data.attempt) renderAttempt(data.attempt, true, data.fulfilment_created === true);
+      if (response.ok && data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'Test checkout could not be started.');
+      if (data.attempt && data.attempt.status === 'pending') startPolling(data.attempt.id);
+    } catch (error) {
+      showPurchaseStatus('Checkout not started', error.message || 'Please try again.', 'is-failed', true);
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = original;
+    }
+  }
+
+  async function pollAttempt(attemptId, focus) {
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(apiUrl('attempt-status', { attempt_id: attemptId }), { credentials: 'include' });
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Payment status is unavailable.');
+      renderAttempt(data.attempt, focus, data.fulfilment_created === true);
+      if (data.fulfilment_created) loadProgrammeStatus();
+      return data.attempt;
+    } catch (error) {
+      showPurchaseStatus('Status check unavailable', 'We could not confirm the result. Do not start another payment; try this status check again.', 'is-review', focus);
+      clearPolling();
+      return null;
+    }
+  }
+
+  function clearPolling() {
+    if (pollTimer) window.clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  function startPolling(attemptId) {
+    clearPolling();
+    pollStartedAt = Date.now();
+    pollTimer = window.setInterval(function () {
+      if (Date.now() - pollStartedAt > 10 * 60 * 1000) {
+        clearPolling();
+        showPurchaseStatus('Still confirming', 'This is taking longer than expected. Do not pay again; reopen this return link to check the same attempt.', 'is-review', false);
+        return;
+      }
+      pollAttempt(attemptId, false);
+    }, 3000);
+  }
+
+  function handleReturnState() {
+    var params = new URLSearchParams(window.location.search);
+    var attemptId = params.get('attempt_id');
+    if (!attemptId) return;
+    showPurchaseStatus(
+      params.get('package_cancelled') === '1' ? 'Checking the closed checkout' : 'Confirming your bank payment',
+      'This return page cannot activate a package. It is checking the durable server-side attempt.',
+      'is-pending',
+      true
+    );
+    pollAttempt(attemptId, false).then(function (attempt) {
+      if (attempt && attempt.status === 'pending') startPolling(attemptId);
+    });
   }
 
   async function loadCatalogue() {
@@ -107,7 +288,7 @@
     statusEl.innerHTML = '<div class="skeleton-line skeleton-line-wide"></div><div class="skeleton-line"></div>';
     contentEl.hidden = true;
     try {
-      var response = await fetch(catalogueUrl(), { credentials: 'include' });
+      var response = await fetch(apiUrl('catalogue'), { credentials: 'include' });
       var data = await response.json();
       if (!response.ok) {
         if (data.code === 'LEARNER_PACKAGES_DISABLED') {
@@ -122,5 +303,81 @@
     }
   }
 
+  function formatDate(value) {
+    if (!value) return 'Not yet set';
+    var date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function renderProgramme(programme) {
+    if (!programme) { programmeStatusEl.hidden = true; return; }
+    var retake = programme.retake;
+    var matching = programme.matching || {};
+    var weekdayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    var availability = matching.availability;
+    var availabilitySummary = !availability
+      ? 'Not yet agreed'
+      : (availability.windows || []).length
+        ? (availability.windows || []).map(function (window) { return weekdayNames[window.weekday] + ' ' + window.local_start_time + '–' + window.local_end_time; }).join(', ') + ' (' + availability.timezone + ')'
+        : 'No recurring weekly window was recorded (' + availability.timezone + ')';
+    var hasStarted = Boolean(programme.programme_start_at);
+    var programmeWindow = hasStarted
+      ? escapeHtml(formatDate(programme.programme_start_at)) + ' to ' + escapeHtml(formatDate(programme.approved_entitlement_end_at))
+      : 'Awaiting the programme start agreed by your instructor or admin';
+    programmeStatusContentEl.innerHTML =
+      '<dl class="programme-facts">' +
+        '<div><dt>Payment</dt><dd>Confirmed in Stripe test mode</dd></div>' +
+        '<div><dt>Matching</dt><dd>' + escapeHtml(programme.status) + ' · deadline ' + escapeHtml(formatDate(programme.matching_deadline)) + '</dd></div>' +
+        '<div><dt>Matching status</dt><dd>' + escapeHtml(matching.status || 'pending') + '</dd></div>' +
+        '<div><dt>Matched instructor</dt><dd>' + escapeHtml(matching.instructor_name || 'Not yet assigned') + '</dd></div>' +
+        '<div><dt>Agreed availability</dt><dd>' + escapeHtml(availabilitySummary) + '</dd></div>' +
+        '<div><dt>Programme start</dt><dd>' + escapeHtml(hasStarted ? formatDate(programme.programme_start_at) : 'Pending agreement') + '</dd></div>' +
+        '<div><dt>Internal progress</dt><dd>Phase ' + escapeHtml(programme.current_phase) + ' of 3</dd></div>' +
+        '<div><dt>Base programme</dt><dd>' + programmeWindow + '</dd></div>' +
+        '<div><dt>Weekly opportunities</dt><dd>' + escapeHtml((programme.weeks || []).length) + ' records · one 90-minute opportunity per programme week</dd></div>' +
+        '<div><dt>Retake</dt><dd>' + (retake ? escapeHtml(retake.consumed_minutes) + ' of 600 minutes used; expires ' + escapeHtml(formatDate(retake.expires_at)) : 'Not activated') + '</dd></div>' +
+      '</dl>';
+    programmeStatusEl.hidden = false;
+  }
+
+  async function loadProgrammeStatus() {
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(apiUrl('programme-status'), { credentials: 'include' });
+      if (!response.ok) return;
+      var data = await response.json();
+      renderProgramme(data.programme);
+    } catch (error) {}
+  }
+
+  testBookingFormEl.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    var button = testBookingFormEl.querySelector('button[type="submit"]');
+    var form = new FormData(testBookingFormEl);
+    button.disabled = true;
+    testBookingResultEl.textContent = 'Saving details…';
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(apiUrl('submit-test-booking'), {
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({ test_date: form.get('test_date'), test_time: form.get('test_time'), test_centre: form.get('test_centre'), attempt_number: 1 })
+      });
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Details could not be saved.');
+      testBookingResultEl.textContent = 'Saved. An admin must manually verify the details before checkout becomes available.';
+      await loadCatalogue();
+    } catch (error) {
+      testBookingResultEl.textContent = error.message || 'Details could not be saved.';
+    } finally { button.disabled = false; }
+  });
+
+  contentEl.addEventListener('click', function (event) {
+    var checkout = event.target.closest('[data-package-checkout]');
+    if (checkout) { startCheckout(checkout); return; }
+    if (event.target.closest('[data-package-sign-in]') && window.ccAuth) window.ccAuth.requireAuth();
+  });
+
+  handleReturnState();
   loadCatalogue();
+  loadProgrammeStatus();
 })();

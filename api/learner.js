@@ -76,7 +76,14 @@ const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { checkRateLimit } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
-const { deleteLearnerCascade, refundLedgerTablesExist, learnerBroadcastTablesExist } = require('./_gdpr');
+const {
+  deleteLearnerCascade,
+  refundLedgerTablesExist,
+  learnerBroadcastTablesExist,
+  packagePurchaseAttemptsTableExists,
+  fullCurriculumTablesExist,
+  fullCurriculumMatchingTablesExist,
+} = require('./_gdpr');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 // Every handler in this file operates on learner-owned data (skill ratings,
@@ -1685,6 +1692,180 @@ async function handleExportData(req, res) {
         AND r.school_id = ${schoolId}
       ORDER BY r.created_at DESC`;
 
+    // Test-mode Learner Package attempts are retained financial evidence. The
+    // provider URL and idempotency key are deliberately excluded; learners get
+    // the commercial snapshot and outcome, while operational replay material
+    // remains internal.
+    const hasPackagePurchaseAttempts = await packagePurchaseAttemptsTableExists(sql);
+    const packagePurchaseAttempts = hasPackagePurchaseAttempts
+      ? await sql`
+          SELECT product_slug, product_name, product_description,
+                 product_snapshot, amount_pence, currency,
+                 customer_terms_version, stripe_mode, status,
+                 paid_at, failed_at, expired_at, refunded_at, created_at
+            FROM package_purchase_attempts
+           WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+           ORDER BY created_at DESC`
+      : null;
+
+    const hasFullCurriculum = await fullCurriculumTablesExist(sql);
+    const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
+    let fullCurriculum = null;
+    if (hasFullCurriculum) {
+      const [
+        testBookings,
+        purchases,
+        enrolments,
+        weeks,
+        progress,
+        assessments,
+        testDateChanges,
+        extensions,
+        bookingAllocations,
+        retakeAllowances,
+        retakeWindowEvents,
+        retakeMovements,
+      ] = await Promise.all([
+        sql`SELECT attempt_number, test_date::text, test_time::text, test_centre,
+                   verification_status, verified_at, verification_reason, created_at
+              FROM full_curriculum_test_bookings
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at`,
+        sql`SELECT product_slug, product_snapshot, amount_pence, currency,
+                   customer_terms_version, stripe_mode, paid_at, created_at
+              FROM learner_package_purchases
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at`,
+        sql`SELECT id, status, current_phase, matching_deadline, programme_start_at,
+                   original_first_test_at, current_first_test_at, twenty_four_week_cap_at,
+                   base_entitlement_end_at, approved_entitlement_end_at, completed_at,
+                   start_set_by_actor_type, start_set_at, withdrawn_at, created_at
+              FROM full_curriculum_enrolments
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at`,
+        sql`SELECT w.enrolment_id, w.programme_week, w.week_start_at, w.week_end_at,
+                   w.opportunity_minutes, w.status, w.status_reason, w.created_at
+              FROM full_curriculum_weekly_opportunities w
+              JOIN full_curriculum_enrolments e
+                ON e.id = w.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND w.school_id = ${schoolId}
+             ORDER BY w.enrolment_id, w.programme_week`,
+        sql`SELECT pe.enrolment_id, pe.phase_number, pe.event_type, pe.actor_type,
+                   pe.detail, pe.created_at
+              FROM full_curriculum_progress_events pe
+              JOIN full_curriculum_enrolments e
+                ON e.id = pe.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND pe.school_id = ${schoolId}
+             ORDER BY pe.id`,
+        sql`SELECT a.enrolment_id, a.phase_number, a.outcome,
+                   a.improvement_areas, a.assessed_at
+              FROM full_curriculum_assessments a
+              JOIN full_curriculum_enrolments e
+                ON e.id = a.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND a.school_id = ${schoolId}
+             ORDER BY a.assessed_at`,
+        sql`SELECT c.enrolment_id, c.old_test_at, c.new_test_at, c.cause,
+                   c.reason, c.created_at
+              FROM full_curriculum_test_date_changes c
+              JOIN full_curriculum_enrolments e
+                ON e.id = c.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND c.school_id = ${schoolId}
+             ORDER BY c.id`,
+        sql`SELECT x.enrolment_id, x.previous_end_at, x.approved_end_at,
+                   x.reason_type, x.reason, x.created_at
+              FROM full_curriculum_extensions x
+              JOIN full_curriculum_enrolments e
+                ON e.id = x.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND x.school_id = ${schoolId}
+             ORDER BY x.id`,
+        sql`SELECT a.enrolment_id, a.weekly_opportunity_id, a.lesson_booking_id,
+                   a.instructor_id, a.allocation_type, a.allocated_minutes, a.created_at
+              FROM full_curriculum_booking_allocations a
+              JOIN full_curriculum_enrolments e
+                ON e.id = a.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND a.school_id = ${schoolId}
+             ORDER BY a.id`,
+        sql`SELECT r.id, r.enrolment_id, r.second_test_booking_id, r.total_minutes,
+                   r.opens_at, r.expires_at, r.failed_first_test_evidence,
+                   r.activated_at, r.created_at
+              FROM full_curriculum_retake_allowances r
+              JOIN full_curriculum_enrolments e
+                ON e.id = r.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND r.school_id = ${schoolId}
+             ORDER BY r.id`,
+        sql`SELECT w.allowance_id, w.new_second_test_booking_id,
+                   w.previous_opens_at, w.previous_expires_at,
+                   w.new_opens_at, w.new_expires_at, w.cause, w.reason, w.created_at
+              FROM full_curriculum_retake_window_events w
+              JOIN full_curriculum_retake_allowances r
+                ON r.id = w.allowance_id AND r.school_id = ${schoolId}
+              JOIN full_curriculum_enrolments e
+                ON e.id = r.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND w.school_id = ${schoolId}
+             ORDER BY w.id`,
+        sql`SELECT m.allowance_id, m.booking_allocation_id, m.movement_type,
+                   m.minutes, m.created_at
+              FROM full_curriculum_retake_movements m
+              JOIN full_curriculum_retake_allowances r
+                ON r.id = m.allowance_id AND r.school_id = ${schoolId}
+              JOIN full_curriculum_enrolments e
+                ON e.id = r.enrolment_id AND e.school_id = ${schoolId}
+             WHERE e.learner_id = ${user.id} AND m.school_id = ${schoolId}
+             ORDER BY m.id`,
+      ]);
+      fullCurriculum = {
+        test_bookings: testBookings,
+        purchases,
+        enrolments,
+        weekly_opportunities: weeks,
+        progress_events: progress,
+        assessments,
+        test_date_changes: testDateChanges,
+        extensions,
+        booking_allocations: bookingAllocations,
+        retake_allowances: retakeAllowances,
+        retake_window_events: retakeWindowEvents,
+        retake_movements: retakeMovements,
+      };
+      if (hasFullCurriculumMatching) {
+        const [matchingRecords, assignmentEvents, availabilityVersions, availabilityWindows] = await Promise.all([
+          sql`SELECT m.enrolment_id, m.status, m.initial_instructor_id,
+                     m.current_instructor_id, m.assigned_at, m.accepted_at,
+                     m.started_at, m.created_at
+                FROM full_curriculum_matching_records m
+               WHERE m.learner_id = ${user.id} AND m.school_id = ${schoolId}
+               ORDER BY m.created_at`,
+          sql`SELECT ae.enrolment_id, ae.previous_instructor_id, ae.instructor_id,
+                     ae.event_type, ae.actor_type, ae.reason, ae.created_at
+                FROM full_curriculum_assignment_events ae
+                JOIN full_curriculum_matching_records m
+                  ON m.id = ae.matching_record_id AND m.school_id = ${schoolId}
+               WHERE m.learner_id = ${user.id} AND ae.school_id = ${schoolId}
+               ORDER BY ae.id`,
+          sql`SELECT av.id, av.enrolment_id, av.instructor_id, av.version_number, av.timezone,
+                     av.actor_type, av.reason, av.created_at
+                FROM full_curriculum_availability_versions av
+                JOIN full_curriculum_matching_records m
+                  ON m.id = av.matching_record_id AND m.school_id = ${schoolId}
+               WHERE m.learner_id = ${user.id} AND av.school_id = ${schoolId}
+               ORDER BY av.enrolment_id, av.version_number`,
+          sql`SELECT aw.availability_version_id, aw.weekday,
+                     aw.local_start_time::text, aw.local_end_time::text, aw.created_at
+                FROM full_curriculum_availability_windows aw
+                JOIN full_curriculum_availability_versions av
+                  ON av.id = aw.availability_version_id AND av.school_id = ${schoolId}
+                JOIN full_curriculum_matching_records m
+                  ON m.id = av.matching_record_id AND m.school_id = ${schoolId}
+               WHERE m.learner_id = ${user.id} AND aw.school_id = ${schoolId}
+               ORDER BY aw.availability_version_id, aw.weekday, aw.local_start_time`,
+        ]);
+        fullCurriculum.matching_records = matchingRecords;
+        fullCurriculum.assignment_events = assignmentEvents;
+        fullCurriculum.availability_versions = availabilityVersions;
+        fullCurriculum.availability_windows = availabilityWindows;
+      }
+    }
+
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
@@ -1701,6 +1882,8 @@ async function handleExportData(req, res) {
           'feedback_submitted',
           'test_swap_listings', 'test_swap_requests',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
+          ...(hasPackagePurchaseAttempts ? ['package_purchase_attempts'] : []),
+          ...(hasFullCurriculum ? ['full_curriculum'] : []),
           ...(hasRefundLedger ? ['refund_events'] : []),
           ...(hasLearnerBroadcasts ? ['broadcasts_received'] : [])
         ]
@@ -1730,6 +1913,8 @@ async function handleExportData(req, res) {
       credit_balances: creditBalances,
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,
+      ...(hasPackagePurchaseAttempts ? { package_purchase_attempts: packagePurchaseAttempts } : {}),
+      ...(hasFullCurriculum ? { full_curriculum: fullCurriculum } : {}),
       ...(hasRefundLedger ? { refund_events: refundEvents } : {}),
       ...(hasLearnerBroadcasts ? { broadcasts_received: broadcastsReceived } : {}),
     };

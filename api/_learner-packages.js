@@ -1,42 +1,22 @@
 const LEARNER_PACKAGES_CONFIG_PATH = Object.freeze(['features', 'learner_packages_enabled']);
 const FEATURE_DISABLED_CODE = 'LEARNER_PACKAGES_DISABLED';
+const { catalogueEligibility } = require('./_full-curriculum');
 
 function isLearnerPackagesEnabled(config) {
   return config?.features?.learner_packages_enabled === true;
 }
 
-function buildCatalogueEligibility(product) {
-  const checkoutUnavailable = {
-    purchase_eligible: false,
-    checkout_available: false,
-    phase: 'catalogue_only',
-  };
-
-  if (product.prerequisite_product_id) {
-    const prerequisiteName = product.prerequisite_name || 'the previous phase';
-    return {
-      ...checkoutUnavailable,
-      state: 'locked',
-      eligibility_determined: true,
-      reason: `Requires an independently assessed pass for ${prerequisiteName}. No package assessment evidence is available in Phase 1.`,
-      evidence: {
-        source: 'catalogue_prerequisite_only',
-        assessment_records_available: false,
-        prerequisite_product_id: product.prerequisite_product_id,
-        prerequisite_slug: product.prerequisite_slug || null,
-      },
-    };
-  }
-
+function buildCatalogueEligibility(product, options = {}) {
+  const result = catalogueEligibility(product, options);
   return {
-    ...checkoutUnavailable,
-    state: 'available_to_compare',
-    eligibility_determined: false,
-    reason: 'No catalogue prerequisite blocks comparison. Purchase eligibility is not evaluated until the later enrolment and payment phases exist.',
+    ...result,
+    phase: options.purchasingEnabled === true ? 'full_curriculum_test_foundation' : 'catalogue_only',
+    eligibility_determined: true,
     evidence: {
-      source: 'catalogue_only',
-      assessment_records_available: false,
-      enrolment_records_available: false,
+      source: 'full_curriculum_foundation',
+      test_booking_status: options.testBookingStatus || 'missing',
+      test_booking_future: options.testBookingFuture === true,
+      active_enrolment: options.hasActiveEnrolment === true,
     },
   };
 }

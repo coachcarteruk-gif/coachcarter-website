@@ -1,0 +1,13 @@
+:root{--pc-ink:#292827;--pc-muted:#746f69;--pc-line:#ddd6cd;--pc-paper:#f4f0ea;--pc-orange:var(--brand-primary,#f58321)}
+body{background:var(--pc-paper);color:var(--pc-ink)}
+.programmes-page{max-width:1100px;margin:0 auto;padding:54px 34px 100px}
+.programmes-header{display:grid;grid-template-columns:1fr minmax(280px,.7fr);gap:10px 50px;align-items:end;padding-bottom:35px;border-bottom:1px solid var(--pc-line)}
+.programmes-header>p{grid-column:1/-1;margin:0;color:var(--pc-orange);font-size:.7rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.programmes-header h1{margin:0;font:800 clamp(2.8rem,7vw,5.7rem)/.9 "Bricolage Grotesque",sans-serif;letter-spacing:-.06em}
+.programmes-header span{color:var(--pc-muted);line-height:1.6}
+#programme-operation-status{min-height:24px;margin:24px 0;color:var(--pc-muted)}
+.programme-list{display:grid;gap:18px}.programme-card{padding:25px;border:1px solid var(--pc-line);border-radius:18px;background:#fffdfa}
+.programme-card h2{margin:0;font:700 1.65rem/1 "Bricolage Grotesque",sans-serif}.programme-card-meta{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px}.programme-card-meta span{padding:5px 9px;border-radius:999px;background:#eee8df;font-size:.72rem;font-weight:800}
+.programme-actions{display:grid;grid-template-columns:1fr 1fr;gap:14px}.programme-actions form{display:grid;gap:10px;padding:18px;border:1px solid var(--pc-line);border-radius:14px}.programme-actions h3{margin:0;font:700 1rem/1.2 "Bricolage Grotesque",sans-serif}.programme-actions label{display:grid;gap:6px;color:var(--pc-muted);font-size:.72rem;font-weight:800}.programme-actions input,.programme-actions textarea,.programme-actions select{width:100%;min-height:42px;padding:9px;border:1px solid #c9c0b6;border-radius:8px;background:#fff;font:inherit}.programme-actions textarea{min-height:76px;resize:vertical}.programme-actions button{min-height:42px;border:0;border-radius:999px;color:#fff;background:var(--pc-ink);font-weight:800;cursor:pointer}.programme-actions button:hover{background:var(--pc-orange)}
+.programme-actions .availability-form{grid-column:1/-1}.availability-window-list{display:grid;gap:9px}.availability-window-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}.programme-actions button.secondary{color:var(--pc-ink);background:#eee8df}.availability-form p{margin:0;color:var(--pc-muted);font-size:.78rem;line-height:1.5}
+@media(max-width:760px){.programmes-page{padding:34px 18px 110px}.programmes-header,.programme-actions,.availability-window-row{grid-template-columns:1fr}.programmes-header>p{grid-column:1}.programmes-header{gap:18px}}

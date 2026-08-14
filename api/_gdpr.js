@@ -16,7 +16,8 @@
 // Behaviour:
 //   1. Anonymise `credit_transactions` (learner_id = NULL, anonymized = true)
 //   2. Anonymise `lesson_bookings` (learner_id = NULL, learner_anonymized = true).
-//   3. Nullify refund_events.learner_id (financial refund ledger retained).
+//   3. Nullify refund_events.learner_id and package_purchase_attempts.learner_id
+//      when those retained financial-ledger tables exist.
 //      The migration drops the old ON DELETE CASCADE FK on
 //      lesson_bookings.learner_id and replaces it with ON DELETE SET NULL —
 //      belt-and-braces with the explicit UPDATE here.
@@ -72,6 +73,37 @@ async function learnerBroadcastTablesExist(sql) {
   return Boolean(row?.has_learner_broadcast_recipients);
 }
 
+async function packagePurchaseAttemptsTableExists(sql) {
+  const [row] = await sql`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'package_purchase_attempts'
+    ) AS has_package_purchase_attempts
+  `;
+  return Boolean(row?.has_package_purchase_attempts);
+}
+
+async function fullCurriculumTablesExist(sql) {
+  const [row] = await sql`
+    SELECT
+      to_regclass('public.learner_package_purchases') IS NOT NULL AS has_purchases,
+      to_regclass('public.full_curriculum_enrolments') IS NOT NULL AS has_enrolments,
+      to_regclass('public.full_curriculum_test_bookings') IS NOT NULL AS has_test_bookings
+  `;
+  return Boolean(row?.has_purchases && row?.has_enrolments && row?.has_test_bookings);
+}
+
+async function fullCurriculumMatchingTablesExist(sql) {
+  const [row] = await sql`
+    SELECT
+      to_regclass('public.full_curriculum_matching_records') IS NOT NULL AS has_matching,
+      to_regclass('public.full_curriculum_assignment_events') IS NOT NULL AS has_assignments,
+      to_regclass('public.full_curriculum_availability_versions') IS NOT NULL AS has_availability,
+      to_regclass('public.full_curriculum_availability_windows') IS NOT NULL AS has_windows
+  `;
+  return Boolean(row?.has_matching && row?.has_assignments && row?.has_availability && row?.has_windows);
+}
+
 async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (!sql || !learnerId) {
     throw new Error('deleteLearnerCascade: sql and learnerId required');
@@ -88,6 +120,9 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
 
   const hasRefundLedger = await refundLedgerTablesExist(sql);
   const hasLearnerBroadcasts = await learnerBroadcastTablesExist(sql);
+  const hasPackagePurchaseAttempts = await packagePurchaseAttemptsTableExists(sql);
+  const hasFullCurriculum = await fullCurriculumTablesExist(sql);
+  const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
 
   const txn = [
     // 1. Anonymise financial records (7-year retention).
@@ -135,11 +170,34 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`,
   ];
 
+  const retainedAnonymisation = [];
   if (hasRefundLedger) {
-    txn.splice(2, 0, sql`UPDATE refund_events SET learner_id = NULL WHERE learner_id = ${learnerId}`);
+    retainedAnonymisation.push(sql`UPDATE refund_events SET learner_id = NULL WHERE learner_id = ${learnerId}`);
+  }
+  if (hasFullCurriculum) {
+    retainedAnonymisation.push(
+      sql`UPDATE learner_package_purchases SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+      ...(hasFullCurriculumMatching
+        ? [sql`UPDATE full_curriculum_matching_records
+                  SET learner_id = NULL
+                WHERE learner_id = ${learnerId}
+                  AND school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId})`]
+        : []),
+      sql`UPDATE full_curriculum_enrolments SET learner_id = NULL WHERE learner_id = ${learnerId}`
+    );
+  }
+  // The attempt FK contains the learner identity of its referenced test booking,
+  // so the referencing attempt must be anonymised before that test-booking row.
+  if (hasPackagePurchaseAttempts) {
+    retainedAnonymisation.push(sql`UPDATE package_purchase_attempts SET learner_id = NULL WHERE learner_id = ${learnerId}`);
+  }
+  if (hasFullCurriculum) {
+    retainedAnonymisation.push(
+      sql`UPDATE full_curriculum_test_bookings SET learner_id = NULL, test_centre = NULL WHERE learner_id = ${learnerId}`
+    );
   }
   if (hasLearnerBroadcasts) {
-    txn.splice(2, 0, sql`
+    retainedAnonymisation.push(sql`
       UPDATE learner_broadcast_recipients
          SET learner_id = NULL,
              learner_name = NULL,
@@ -148,6 +206,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
        WHERE learner_id = ${learnerId}
     `);
   }
+  txn.splice(2, 0, ...retainedAnonymisation);
 
   // Magic-link tokens key on email, not learner_id. Append conditionally.
   if (email) {
@@ -164,4 +223,11 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   return { ok: true, learnerId, email };
 }
 
-module.exports = { deleteLearnerCascade, refundLedgerTablesExist, learnerBroadcastTablesExist };
+module.exports = {
+  deleteLearnerCascade,
+  refundLedgerTablesExist,
+  learnerBroadcastTablesExist,
+  packagePurchaseAttemptsTableExists,
+  fullCurriculumTablesExist,
+  fullCurriculumMatchingTablesExist,
+};

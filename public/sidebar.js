@@ -243,6 +243,7 @@
       { icon: 'list', label: 'My Learners', href: '/instructor/learners.html' },
       { icon: 'tag', label: 'Earnings', href: '/instructor/earnings.html' },
       { icon: 'network', label: 'Curriculum', href: '/instructor/curriculum.html', activeOn: ['/instructor/curriculum-topic'] },
+      { icon: 'gift', label: 'Programmes', href: '/instructor/programmes.html' },
       { icon: 'fileText', label: 'Notes', href: '/instructor/notes.html' },
       'divider',
       { icon: 'user', label: 'Profile', href: '/instructor/profile.html' }
