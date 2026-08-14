@@ -36,7 +36,9 @@ function loadPackagesHandler({ sql, admin = null, school = { schoolId: 7 }, sess
     ['@neondatabase/serverless', { neon: () => sql }],
     [path.join(root, 'api', '_auth.js'), {
       requireAuth: () => admin,
-      getSchoolId: (actor) => Number(actor?.school_id),
+      getSchoolId: (actor, req) => actor?.role === 'superadmin'
+        ? Number(req?.query?.school_id || req?.body?.school_id)
+        : Number(actor?.school_id),
       decodeToken: () => session,
       SESSION_COOKIE_NAMES: { learner: 'cc_learner' },
     }],
@@ -158,7 +160,7 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(api).toContain("resolveSchoolFromRequest(req, {");
     expect(api).toContain('allowLegacySchoolIdQuery: true');
     expect(api).toContain('if (!isLearnerPackagesEnabled(schoolRow.config))');
-    expect(api).toContain("requireAuth(req, { roles: ['admin'], requireSchool: true })");
+    expect(api).toContain("requireAuth(req, { roles: ['admin'], requireSchool: false })");
     expect(api).toContain('const schoolId = getSchoolId(admin, req)');
     expect(api).toContain('WHERE p.school_id = ${schoolId}');
     expect(api).toContain('WHERE p.school_id = ${scope.schoolId}');
@@ -251,6 +253,57 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(audits[0]).toMatchObject({ action: 'package.update_product', schoolId: 7, targetId: 91 });
   });
 
+  test('superadmin package mutations require and preserve an explicit school scope', async () => {
+    const admin = { id: 1, email: 'owner@example.test', role: 'superadmin', school_id: null };
+    const scopesHandler = loadPackagesHandler({
+      sql: async (strings) => {
+        const statement = strings.join('?');
+        if (statement.includes('FROM schools')) return [{ id: 7, name: 'North School', slug: 'north' }];
+        throw new Error(`Unexpected SQL: ${statement}`);
+      },
+      admin,
+    });
+    const scopes = await callPackages(scopesHandler, { action: 'admin-scopes' });
+    expect(scopes.statusCode).toBe(200);
+    expect(scopes.body).toMatchObject({
+      requires_explicit_selection: true,
+      schools: [{ id: 7, name: 'North School', slug: 'north' }],
+    });
+
+    const missingScopeHandler = loadPackagesHandler({
+      sql: async () => { throw new Error('SQL must not run without an explicit school'); },
+      admin,
+    });
+    const missingScope = await callPackages(missingScopeHandler, {
+      method: 'POST',
+      action: 'set-feature',
+      body: { enabled: true },
+    });
+    expect(missingScope.statusCode).toBe(400);
+    expect(missingScope.body.code).toBe('SCHOOL_REQUIRED');
+
+    const calls = [];
+    const audits = [];
+    const sql = async (strings, ...values) => {
+      const statement = strings.join('?');
+      calls.push({ statement, values });
+      if (statement.includes('UPDATE schools')) {
+        return [{ id: 7, config: { features: { learner_packages_enabled: true } } }];
+      }
+      throw new Error(`Unexpected SQL: ${statement}`);
+    };
+    const handler = loadPackagesHandler({ sql, admin, audits });
+    const response = await callPackages(handler, {
+      method: 'POST',
+      action: 'set-feature',
+      query: { school_id: '7' },
+      body: { enabled: true },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(calls[0].values).toContain(7);
+    expect(audits[0]).toMatchObject({ action: 'package.set_feature', schoolId: 7 });
+  });
+
   test('admin and learner surfaces expose controls and navigation without changing the fixed mobile tabs', () => {
     const adminHtml = read('public/admin/packages.html');
     const adminJs = read('public/admin/packages.js');
@@ -261,6 +314,9 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(adminJs).toContain('/api/packages?action=create-version');
     expect(adminJs).toContain('/api/packages?action=update-product');
     expect(adminJs).toContain('/api/packages?action=set-feature');
+    expect(adminJs).toContain('/api/packages?action=admin-scopes');
+    expect(adminJs).toContain("url.searchParams.set('school_id',String(selectedSchoolId))");
+    expect(adminHtml).toContain('id="school-scope-control"');
     expect(sidebar).toContain("label: 'Packages', href: '/learner/packages.html', featureGate: 'learner_packages'");
     expect(sidebar).toContain("label: 'Lessons', href: '/learner/book.html'");
     const bottomBar = sidebar.slice(sidebar.indexOf('var bottomSections'), sidebar.indexOf('function getBottomTabs'));

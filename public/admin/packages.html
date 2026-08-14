@@ -18,6 +18,14 @@
   </header>
 
   <main>
+    <section class="feature-control" id="school-scope-control" aria-labelledby="school-scope-heading" hidden>
+      <div><p class="control-index">School scope</p><h2 id="school-scope-heading">Choose a school</h2><p>Superadmin catalogue changes are always applied to the explicitly selected school.</p></div>
+      <div class="feature-action">
+        <label for="school-scope"><span>School</span><select id="school-scope"></select></label>
+        <button type="button" id="apply-school-scope">Open school catalogue</button>
+      </div>
+    </section>
+
     <section class="feature-control" aria-labelledby="feature-heading">
       <div><p class="control-index">01 / School gate</p><h2 id="feature-heading">Public catalogue visibility</h2><p>Only the exact Boolean value <code>true</code> exposes this school's catalogue and learner navigation item.</p></div>
       <div class="feature-action">
