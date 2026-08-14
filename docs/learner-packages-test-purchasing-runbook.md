@@ -25,7 +25,7 @@ Create every resource while the Stripe Dashboard is in test mode:
    - It must begin with `rk_test_`.
    - Grant Checkout Sessions Write. This permits Checkout creation and implies the read access needed by the package diagnostics; leave refunds, transfers, payouts, Connect, customers, subscriptions, disputes, and unrelated resources at None.
    - Store the one-time key value directly in Vercel. Never paste it into source, a ticket, chat, terminal output, or a local committed file.
-3. A separate test webhook endpoint at `https://coachcarter.uk/api/package-webhook` using snapshot events only:
+3. A separate test webhook endpoint at `https://www.coachcarter.uk/api/package-webhook` using snapshot events only. Use the `www` hostname exactly: the apex `https://coachcarter.uk/api/package-webhook` currently returns a Vercel `307` canonical-host redirect, which Stripe records as a failed delivery rather than following to fulfilment:
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
    - `checkout.session.async_payment_failed`
@@ -55,7 +55,7 @@ Changing a Vercel variable does not update an existing deployment. Redeploy the 
 4. Use Stripe test-mode inspection to prove:
    - the restricted key is test mode and least privilege;
    - the Payment Method Configuration is test mode, dedicated, active, and Pay by Bank-only;
-   - the webhook is test mode, enabled, points to the exact production URL, and subscribes to exactly the five events above.
+   - the webhook is test mode, enabled, points to the exact non-redirecting `https://www.coachcarter.uk/api/package-webhook` production URL, and subscribes to exactly the five events above.
 5. Run focused package tests and JavaScript syntax checks.
 6. Run `tests/learner-packages-full-curriculum.integration.spec.js` only with `CC_TEST_DB=1`, `CC_TEST_DB_CONFIRMED_NON_PRODUCTION=1`, and the hard-pinned disposable `POSTGRES_URL_TEST`. Never point it at the production host.
 7. Confirm checkout creation fails closed for missing credentials, live credentials, missing or non-dedicated configuration, either disabled gate, cross-school/invalid learner, unsupported product, wrong version/price/currency/terms, and ambiguous Stripe responses.
