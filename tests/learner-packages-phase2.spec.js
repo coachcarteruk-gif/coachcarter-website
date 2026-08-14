@@ -304,7 +304,6 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
     const params = buildPackageCheckoutParams({
       attempt: local,
       learnerEmail: 'learner@example.test',
-      schoolName: 'North School',
       returnBaseUrl: 'https://north.example.test',
       paymentMethodConfiguration: 'pmc_package_test',
     });
@@ -313,6 +312,7 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
     expect(params.line_items[0].price_data.product_data.name).toBe(local.product_name);
     expect(params.payment_method_configuration).toBe('pmc_package_test');
     expect(params).not.toHaveProperty('payment_method_types');
+    expect(params).not.toHaveProperty('payment_method_options');
     expect(params.metadata).toMatchObject({
       payment_type: 'learner_package_test',
       package_attempt_id: local.id,

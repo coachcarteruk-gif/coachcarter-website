@@ -993,7 +993,6 @@ async function handleCreateCheckout(req, res) {
     const checkoutParams = buildPackageCheckoutParams({
       attempt,
       learnerEmail: learner.email,
-      schoolName: school.name,
       returnBaseUrl: packageReturnBaseUrl(req, school),
       paymentMethodConfiguration,
     });

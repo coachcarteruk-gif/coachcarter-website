@@ -117,17 +117,7 @@ function packageMetadata(attempt) {
   return metadata;
 }
 
-function statementDescriptor(schoolName) {
-  const value = String(schoolName || 'COACHCARTER')
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 22);
-  return value || 'COACHCARTER';
-}
-
-function buildPackageCheckoutParams({ attempt, learnerEmail, schoolName, returnBaseUrl, paymentMethodConfiguration }) {
+function buildPackageCheckoutParams({ attempt, learnerEmail, returnBaseUrl, paymentMethodConfiguration }) {
   const metadata = packageMetadata(attempt);
   const productName = String(attempt.product_name).slice(0, 240);
   const description = String(attempt.product_description || '').slice(0, 500);
@@ -153,9 +143,6 @@ function buildPackageCheckoutParams({ attempt, learnerEmail, schoolName, returnB
     payment_intent_data: { metadata },
     customer_email: learnerEmail,
     payment_method_configuration: paymentMethodConfiguration,
-    payment_method_options: {
-      pay_by_bank: { statement_descriptor: statementDescriptor(schoolName) },
-    },
     billing_address_collection: 'required',
     success_url: `${returnBaseUrl}/learner/packages.html?package_return=1&attempt_id=${attempt.id}`,
     cancel_url: `${returnBaseUrl}/learner/packages.html?package_cancelled=1&attempt_id=${attempt.id}`,
