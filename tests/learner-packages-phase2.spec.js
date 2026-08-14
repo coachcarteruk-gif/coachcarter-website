@@ -1,10 +1,12 @@
 const { test, expect } = require('@playwright/test');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const {
   buildPackageCheckoutParams,
   createPackageTestStripeClient,
   getPackageTestPaymentConfiguration,
+  getPackageTestWebhookSecret,
   isLearnerPackagePurchasingEnabled,
   publicAttemptStatus,
   validateProviderObject,
@@ -157,14 +159,22 @@ function loadPackagesApi({ sql, learner, stripeClient, audits = [] }) {
   return handler;
 }
 
-function checkoutSql({ existingAttempt = null, learnerSchoolMatches = true } = {}) {
+function checkoutSql({
+  existingAttempt = null,
+  learnerSchoolMatches = true,
+  catalogueEnabled = true,
+  purchasingEnabled = true,
+} = {}) {
   const state = { attempt: existingAttempt, statements: [] };
   const sql = async (strings, ...values) => {
     const statement = strings.join('?');
     state.statements.push({ statement, values });
     if (/SELECT id, name, slug, primary_host, config\s+FROM schools/.test(statement)) {
       return [{ id: 7, name: 'North School', slug: 'north', primary_host: null, config: {
-        features: { learner_packages_enabled: true, learner_package_purchasing_test_enabled: true },
+        features: {
+          learner_packages_enabled: catalogueEnabled,
+          learner_package_purchasing_test_enabled: purchasingEnabled,
+        },
       } }];
     }
     if (/SELECT id, email, name, email_verified\s+FROM learner_users/.test(statement)) {
@@ -462,15 +472,46 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
     expect(calls).toBe(0);
   });
 
+  test('either package feature gate blocks Checkout before an attempt or Stripe call', async () => {
+    for (const disabled of [
+      { catalogueEnabled: false, purchasingEnabled: true, expectedCode: 'LEARNER_PACKAGES_DISABLED' },
+      { catalogueEnabled: true, purchasingEnabled: false, expectedCode: 'PACKAGE_TEST_PURCHASING_DISABLED' },
+    ]) {
+      const database = checkoutSql(disabled);
+      let stripeCalls = 0;
+      const handler = loadPackagesApi({
+        sql: database.sql,
+        learner: { id: 41, role: 'learner', school_id: 7 },
+        stripeClient: { checkout: { sessions: { create: async () => { stripeCalls += 1; } } } },
+      });
+      const response = await callPackageApi(handler, {
+        action: 'create-checkout', method: 'POST',
+        body: {
+          product_id: 91,
+          client_request_id: crypto.randomUUID(),
+        },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.body.code).toBe(disabled.expectedCode);
+      expect(database.state.attempt).toBeNull();
+      expect(stripeCalls).toBe(0);
+    }
+  });
+
   test('dedicated package client fails closed on missing or live credentials', () => {
     expect(() => createPackageTestStripeClient({ env: {} })).toThrow(/credential is not configured/i);
     expect(() => createPackageTestStripeClient({
+      env: { STRIPE_SECRET_KEY: 'sk_test_shared_not_allowed' },
+    })).toThrow(/credential is not configured/i);
+    expect(() => createPackageTestStripeClient({
       env: { STRIPE_PACKAGES_TEST_RESTRICTED_KEY: 'rk_live_not_allowed' },
     })).toThrow(/required test mode/i);
+    expect(() => getPackageTestPaymentConfiguration({})).toThrow(/not configured/i);
     expect(() => getPackageTestPaymentConfiguration({
       STRIPE_PACKAGES_TEST_PAYMENT_METHOD_CONFIGURATION: 'pmc_shared123',
       STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION: 'pmc_shared123',
     })).toThrow(/must not reuse/i);
+    expect(() => getPackageTestWebhookSecret({})).toThrow(/not configured/i);
   });
 
   test('provider evidence requires exact school, learner, version, amount, currency, terms, and test mode', () => {
@@ -480,14 +521,39 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
       livemode: true,
       amount_total: 75000,
       currency: 'eur',
-      metadata: { ...checkoutSession(local).metadata, school_id: '8', package_product_version_id: '9999' },
+      payment_method_configuration_details: { id: 'pmc_wrong' },
+      metadata: {
+        ...checkoutSession(local).metadata,
+        school_id: '8',
+        learner_id: '42',
+        package_product_id: '92',
+        package_product_version_id: '9999',
+        customer_terms_version: 'wrong-terms',
+        full_curriculum_test_booking_id: '702',
+        payment_method_configuration_id: 'pmc_wrong',
+      },
     });
     const result = validateProviderObject(local, wrong);
     expect(result.ok).toBe(false);
     expect(result.contradictions).toEqual(expect.arrayContaining([
       'provider_not_test_mode', 'school_id_mismatch', 'product_version_id_mismatch',
-      'amount_mismatch', 'currency_mismatch',
+      'learner_id_mismatch', 'product_id_mismatch', 'amount_mismatch',
+      'currency_mismatch', 'terms_version_mismatch', 'test_booking_id_mismatch',
+      'payment_configuration_metadata_mismatch', 'payment_configuration_provider_mismatch',
     ]));
+  });
+
+  test('operator runbook pins test-only setup, safe disable, and exact production project', () => {
+    const runbook = read('docs/learner-packages-test-purchasing-runbook.md');
+    expect(runbook).toContain('coachcarter-website');
+    expect(runbook).toContain('STRIPE_PACKAGES_TEST_RESTRICTED_KEY');
+    expect(runbook).toContain('STRIPE_PACKAGES_TEST_PAYMENT_METHOD_CONFIGURATION');
+    expect(runbook).toContain('STRIPE_PACKAGES_TEST_WEBHOOK_SECRET');
+    expect(runbook).toContain('learner_package_purchasing_test_enabled');
+    expect(runbook).toContain('checkout.session.async_payment_succeeded');
+    expect(runbook).toContain('payment_intent.payment_failed');
+    expect(runbook).toContain('Do not delete or disable the webhook endpoint while a test payment is unresolved');
+    expect(runbook).toContain('No live-mode resource');
   });
 
   test('stale pending attempts become honest review-required polling states without mutation', () => {
