@@ -16,7 +16,7 @@
 **Booking:** 12-week (84-day) advance cap for self-serve. Slot-first UX on `book.html` (no calendar views, no lesson-type pill bar — pick slot first, then duration in modal). Offer-driven recurring series (`lesson_offers.max_repeat_weeks` 1–18) is the only path that may exceed the 12-week cap.
 **Simon interim v1 hardening (implemented for review, not operated):** migration 043 adds durable Express/v1 account intent, controlled-instructor, exact direct-slot funding-evidence, owner-approval and transfer-intent/attempt records. Native clients must treat this as an owner-only operational surface, not instructor self-service. Preview fingerprints and exact amounts are server-owned; clients must never submit trusted prices, fees, eligibility, source identities or an unpause instruction. Accounts v2/payout v2 remain the portability target. See `docs/simon-interim-v1-hardening-implementation.md`.
 
-**Learner Packages Phase 1 (inert catalogue):** migration 044 adds school-owned `package_products` and immutable effective-dated `package_product_versions`; `api/packages.js` exposes a strict-feature-flagged public read model and audited admin catalogue controls. A future native Packages screen must consume the server catalogue and eligibility response rather than copy prices, prerequisites, visibility, or terms into the app. Phase 1 always reports `checkout_available: false` and creates no payment or entitlement state. See `docs/learner-packages-product-decision-record.md`.
+**Learner Packages test-mode Full Curriculum foundation:** migrations 044-045 provide the versioned catalogue and durable test payment evidence; migration 046 adds Full Curriculum fulfilment ledgers; migration 047 adds explicit school-scoped matching, immutable initial/current assignment history, and versioned recurring local availability. `api/packages.js` remains the server authority for product, price, eligibility, assignment and programme operations; `/api/package-webhook` is the only payment fulfilment source and creates an unstarted `paid_matching` enrolment plus pending matching identity, never programme weeks. Native clients render the current matched instructor and availability, send structured weekday/local-time/timezone facts, and use the assignment-authorised start action to anchor the 24-week clock; they never treat availability as a reservation or fulfil/start from a return URL. No Lesson Credit, refund, earning, payout or live-payment behaviour is created. See `docs/learner-packages-product-decision-record.md`.
 
 **AI:** Direct Anthropic API calls (ask-examiner + advisor endpoints, both hidden in v1)
 **Analytics:** PostHog (loaded via `posthog-loader.js` after cookie consent)
@@ -101,7 +101,7 @@ Additional May 2026 shared server note: `_refund-planner.js` computes net-of-ori
 
 Per-instructor credit portability note: [`docs/per-instructor-credits-audit.md`](docs/per-instructor-credits-audit.md) is the current implementation tracker for scoped `learner_credit_balances`. Native payment and booking screens should preserve the `instructor_id`, `school_id`, server-pricing, and LCB mutation contracts recorded there.
 
-Learner Packages portability note: `api/packages.js?action=catalogue` is the only Phase 1 catalogue authority. Preserve its strict school flag, stable product/version IDs, current-effective version selection, locked prerequisite explanation, and catalogue-only states. Do not map these products onto `learner_credit_balances`, Reserved Weekly Slot APIs, or native payment SDKs in this phase.
+Learner Packages portability note: preserve both strict school Booleans, stable product/version identities, current-effective selection, server pricing, locked prerequisites, durable client request UUIDs, and server-owned attempt status. Open the returned Checkout URL in a browser flow and poll `attempt-status`; never create/confirm package payment locally or fulfil from URL parameters. Do not map packages onto `learner_credit_balances`, Reserved Weekly Slot APIs/configuration, or a native payment SDK in Phase 2.
 
 ### Shared Client Modules
 
@@ -243,7 +243,7 @@ Social video filming app parity note (June 2026): `instructors.social_video_opt_
 ---
 
 **Notable additions (August 2026):**
-- **Learner Packages inert catalogue** â€” `package_products` provides school-scoped stable identity, visibility, order, activation, and prerequisites; `package_product_versions` provides immutable effective-dated prices and display contracts. The learner page is public only when the exact school feature Boolean is true. Native parity is a thin render of the server response; no app checkout, local eligibility calculation, hour balance, enrolment, refund, reward, or payout logic exists in Phase 1.
+- **Learner Packages test-mode Full Curriculum foundation** â€” catalogue identities/versions and payment evidence are joined to immutable purchases and school-scoped programme records. Native parity uses server eligibility, Checkout URL, status/programme reads and explicit operational actions; it contains no local pricing or fulfilment logic. Weekly and retake allocations are not Lesson Credit. Flexible/Manoeuvres fulfilment, refunds, rewards, earnings, payouts and production-live behaviour remain absent.
 
 ## Migration Strategy: React Native (Expo)
 

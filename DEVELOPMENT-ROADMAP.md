@@ -1,5 +1,31 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.129 - Full Curriculum Matching and Programme Start Controls (13 August 2026)
+
+Added migration 047 and the matching slice for the revised Full Curriculum test foundation. Webhook fulfilment now creates a pending school-scoped matching identity alongside the unstarted enrolment. Admins can assign or explicitly reassign an eligible active same-school instructor; an ordinary instructor can accept or self-assign only themselves and the instructor programme list is restricted to current assignments. Initial assignment remains immutable while assignment, acceptance and rotation evidence is append-only and admin actions are audit logged.
+
+Agreed recurring availability is stored as append-only versions of weekday/local-start/local-end windows with an explicit IANA timezone. An empty version is valid, and availability creates no booking, hold, Lesson Credit, earning or payout. Programme start now requires the current assignment and availability recorded for that instructor, enforces paid/original-test boundaries, serialises assignment/start races, and creates the 24-week/first-test boundary, weekly opportunities, progress evidence and matching transition atomically. Admin, instructor and learner interfaces expose role-appropriate matching state without internal financial information; GDPR export/anonymisation covers the new records. No migration, deployment, Stripe configuration, flag activation or live operation was performed.
+
+## 2.128 - Revised Full Curriculum Test Foundation (13 August 2026)
+
+Implemented the approved commercial revision in repository code only. Migration 046 prospectively hides/deactivates the former Phase 1/2/3 products while preserving identities and immutable versions, adds a revised Â£2,000 Full Curriculum version, and introduces school-scoped manual test verification, immutable purchase/enrolment evidence, instructor/admin-agreed programme starts, weekly opportunities, actual booking allocations, append-only progress/assessment, audited test changes/extensions, and one-retake allowance/consumption records.
+
+Only verified signed Stripe test webhook evidence can create the purchase/enrolment, transactionally and idempotently. The webhook leaves it unstarted in `paid_matching`; payment starts only the seven-day matching deadline. A later same-school instructor/admin action records the agreed start, anchors the 24-week cap, and creates weekly opportunities. Flexible 30 Hours and Manoeuvres remain visible with no fulfilment. No Lesson Credit, automated refund, earning, transfer, payout, live Stripe change, migration execution, deployment or feature activation was performed. Legal terms, refund/non-fulfilment policy, instructor/assessor rates, live configuration and launch remain blockers.
+
+---
+
+## 2.127 - Learner Packages Phase 2: Test Payment Foundation (13 August 2026)
+
+Adds a default-off, school-scoped test Pay by Bank boundary without creating package value. Migration 045 introduces immutable server-priced purchase attempts, durable signed-event receipts, append-only state transitions, review-queue indexes, late-success transitions, and one-way GDPR anonymisation. Verified same-school learners can create one explicitly idempotent Checkout request only when both strict feature Booleans are true and the dedicated package test credential/configuration are present. Ambiguous provider responses become review-required and are never automatically replaced.
+
+The separate `/api/package-webhook` verifies its own raw-body signature before database access, rejects live events, deduplicates deliveries, validates exact tenant/learner/version/amount/currency/terms evidence, and prevents reordered failures from downgrading paid attempts. Learner return URLs only poll owned status; admin reconciliation is read-only. The responsive UI clearly labels test mode and states that no entitlement is created. GDPR export includes attempts, while account deletion anonymises the retained learner link.
+
+No Stripe configuration, webhook endpoint, environment value, migration, production flag, entitlement, credit, enrolment, booking allocation, assessment, refund, reward, earning, transfer, or payout is created or operated by this slice. External test Stripe setup and Phase 3+ require separate approval.
+
+**Files:** `db/migration.sql`, `db/migrations/045_learner_packages_payment_foundation.sql`, `api/_learner-package-payments.js`, `api/_learner-packages.js`, `api/_stripe-clients.js`, `api/packages.js`, `api/package-webhook.js`, `api/_gdpr.js`, `api/learner.js`, `public/learner/packages.html`, `public/learner/packages.css`, `public/learner/packages.js`, `public/admin/packages.html`, `public/admin/packages.js`, `tests/learner-packages-phase1.spec.js`, `tests/learner-packages-phase2.spec.js`, `docs/learner-packages-product-decision-record.md`, `CLAUDE.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `DEVELOPMENT-ROADMAP.md`.
+
+---
+
 ## 2.126 - Learner Packages Phase 1: Inert Catalogue (13 August 2026)
 
 Adds the default-off, school-scoped catalogue foundation for the new Learner Packages family without reactivating Lesson Credit checkout or creating payment/accounting behaviour. Stable `package_products` identities hold visibility, order, activation and same-school prerequisite links; immutable numbered `package_product_versions` hold effective-dated GBP prices and customer-facing catalogue snapshots. Migration 044 seeds the 30-hour package, Phases 1–3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge for existing and future schools while leaving `learner_packages_enabled` absent/false.

@@ -18,6 +18,7 @@ const STRIPE_CLIENT_PURPOSES = Object.freeze({
 const STRIPE_NETWORK_PROFILES = Object.freeze({
   DEFAULT: 'default',
   READ_ONLY_AUDIT: 'read_only_audit',
+  NO_AUTOMATIC_RETRIES: 'no_automatic_retries',
 });
 
 // These values make the stripe-node defaults used by the prior integration
@@ -32,6 +33,13 @@ const NETWORK_CONFIGS = Object.freeze({
   [STRIPE_NETWORK_PROFILES.READ_ONLY_AUDIT]: Object.freeze({
     timeout: 80_000,
     maxNetworkRetries: 2,
+    telemetry: true,
+  }),
+  // Money-creation flows with their own durable ambiguous-response state use
+  // this profile so the application, not an SDK retry, owns reconciliation.
+  [STRIPE_NETWORK_PROFILES.NO_AUTOMATIC_RETRIES]: Object.freeze({
+    timeout: 80_000,
+    maxNetworkRetries: 0,
     telemetry: true,
   }),
 });

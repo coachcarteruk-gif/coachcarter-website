@@ -1,10 +1,26 @@
 # Learner Packages Product Decision Record
 
-Status: Phase 1 inert catalogue implemented; payment and entitlement phases remain unapproved
+Status: Revised Full Curriculum test-mode foundation and matching slice implemented in code; migrations/configuration not applied, live payments and launch remain unapproved
 Date: 2026-08-13
 Proposed learner route: `/learner/packages.html`
 
-This document records the product decisions from the learner Packages interview. It authorises no production code, database migration, live Stripe change, or rollout by itself.
+This document records the product decisions from the learner Packages interview. The attached 13 August 2026 implementation request separately authorised the scoped production code, additive migration and tests in test mode only; it did not authorise migration execution, Stripe configuration, live payments, deployment or rollout.
+
+### Revised Full Curriculum implementation record (2026-08-13)
+
+Migration 046 and the application changes now implement the approved test-mode foundation:
+
+- Phase 1/2/3 stable identities and historical versions are retained, while their product rows are prospectively inactive/hidden and the catalogue presents them only as internal Full Curriculum progress stages.
+- Full Curriculum receives a new immutable Â£2,000 pilot version. Flexible 30 Hours and Manoeuvres remain visible but cannot checkout or fulfil in this slice.
+- Learners supply only a future test date, time and centre. Admins manually verify or reject the record with an audited reason; no document upload, licence data, screenshot or booking-reference storage was added.
+- Full Curriculum eligibility requires the verified same-school future first-test record and no active enrolment. Prices, product/version/terms, tenant, learner, Stripe mode, amount, currency, Checkout/PaymentIntent and dedicated Payment Method Configuration identities remain server/provider-authoritative.
+- Verified paid webhook evidence atomically creates exactly one immutable purchase and one unstarted `paid_matching` enrolment with its seven-day matching deadline and original first-test evidence. It creates no programme weeks. A same-school instructor or admin separately records the agreed start, which begins the 24-week clock and creates the bounded weekly 90-minute opportunities. The success/return page only polls.
+- School-scoped programme records cover actual booking allocations, weekly outcomes, independent assessments, test-date changes, audited extensions, one-retake activation, a movable DVSA/exception window and append-only 90/120-minute consumption capped at 600 minutes. No general Lesson Credit is created.
+- Learner, admin and instructor surfaces expose the minimum test flow, and GDPR export/anonymisation covers the new learner-linked evidence.
+
+Migration 047 adds the approved matching slice: webhook fulfilment creates a pending matching record; admins assign/reassign active same-school instructors; ordinary instructors can accept/assign only themselves; initial assignment is retained while rotations are append-only. Agreed recurring availability is stored as versioned weekday/local-time windows with an IANA timezone and no minimum window count. Start requires the current instructor plus an availability version for that instructor and atomically records the matching transition, programme boundary, weekly opportunities and progress evidence.
+
+The implementation still creates no automated refund, instructor earning, Stripe Connect transfer, payout, flexible-hours fulfilment, Manoeuvres fulfilment/reward, test-document storage, automated DVSA verification, third-attempt protection or live Stripe behaviour. Both feature flags remain absent/off unless separately enabled, and the dedicated test Stripe configuration is still an external prerequisite.
 
 ### Phase 1 implementation record (2026-08-13)
 
@@ -18,6 +34,33 @@ Phase 1 implements only the strict-feature-flagged catalogue and comparison surf
 - all purchase buttons are disabled and the response declares `checkout_available: false`.
 
 This slice creates no purchase attempts, Stripe Checkout, payment fulfilment, hour/session sources, course enrolments, assessments, booking allocations, refunds, Challenge evidence/rewards, earnings, or payout behaviour. The feature flag defaults off. Section 10 remains authoritative for later phases.
+
+### Phase 2 implementation record (2026-08-13)
+
+Phase 2 implements the durable test-payment boundary described in section 9:
+
+- migration 045 adds school/learner/product-version-scoped `package_purchase_attempts`, durable signed-event receipts, and append-only status evidence with immutable commercial/provider identity;
+- a second exact Boolean, `learner_package_purchasing_test_enabled`, defaults absent/off and must be enabled separately from catalogue visibility;
+- verified same-school learners can create a server-priced Checkout attempt with only product identity and a browser client-request UUID; the database attempt exists before the single explicitly idempotent Stripe request;
+- the package Stripe client fails closed unless its dedicated test restricted key and Payment Method Configuration are present, and automatic provider retries are disabled so ambiguous responses go to human review rather than creating a replacement;
+- `/api/package-webhook` uses a separate signing secret, verifies raw bytes before database access, rejects live events, durably deduplicates event IDs, validates exact provider evidence, tolerates reordering and late success, and creates no fulfilment;
+- the learner return flow only polls owned school-scoped attempt status; admin diagnostics are read-only and never guess or repair uncertain money state;
+- retained attempt evidence is included in GDPR export and its learner link is one-way anonymised on deletion.
+
+No Stripe Payment Method Configuration, restricted key, webhook endpoint, environment value, production flag, or database migration was created/applied as part of this repository implementation. Those remain explicit external operations. The purchasing flag therefore remains off and the code creates no package entitlement, hours, enrolment, booking allocation, assessment, refund, reward, earning, transfer, or payout. Phase 3+ and all live/production behaviour still require separate approval.
+
+### Commercial revision (2026-08-13)
+
+The interview subsequently simplified the guaranteed-course proposition:
+
+- Phase 1, Phase 2, and Phase 3 are not separately purchasable products.
+- They remain internal curriculum, progress, and independent-assessment stages within one Full Curriculum programme.
+- The Full Curriculum programme starts at £2,000 and requires the learner to have a valid, verifiable DVSA practical car test booking.
+- It provides one 90-minute lesson per programme week until the first test date recorded at enrolment, with an absolute maximum of 24 programme weeks.
+- If the learner fails that first attempt, the programme provides up to 10 additional instructor-led lesson hours for preparation for one retake.
+- A learner-requested postponement does not automatically extend the weekly entitlement. DVSA-caused changes and exceptional circumstances may receive a recorded admin-approved extension.
+
+This revision supersedes the earlier phase-by-phase price, purchase, prerequisite, upgrade, and customer-facing locked-phase rules elsewhere in this record. Existing catalogue versions and implementation evidence are not deleted or silently repurposed; migration 046 prospectively deactivates the superseded phase products and creates the revised immutable Full Curriculum version.
 
 ## 1. Product boundary
 
@@ -35,7 +78,7 @@ Current boundaries to preserve:
 Packages and Lessons are separate customer journeys:
 
 - **Lessons:** choose a lesson and Pay As You Go or use eligible existing value.
-- **Packages:** choose flexible prepaid hours, an outcome-guaranteed course, Full Curriculum, or the Manoeuvres product.
+- **Packages:** choose flexible prepaid hours, the structured Full Curriculum programme, or the Manoeuvres product.
 - The two pages should link clearly to each other.
 
 ## 2. Product decision record
@@ -62,42 +105,41 @@ Although the learner sees hours, the safest internal unit is 30 minutes. One pur
 
 Multiple purchases remain separate immutable sources. Booking consumption should be FIFO from the oldest eligible source so used and refundable value can always be reconstructed.
 
-### 2.2 Outcome-guaranteed courses
+### 2.2 Full Curriculum programme
 
-| Product | Starting price | Outcome |
-|---|---:|---|
-| Phase 1 Fundamental Driving Course | £750 | Completion of Phase 1 |
-| Phase 2 Intermediate Driving Course | £450 | Completion of Phase 2 |
-| Phase 3 Independent Driving Course | £300 | Completion of Phase 3 |
-| Full Curriculum Enrolment | £2,000 | Phases 1–3, Manoeuvres, assessments/reassessments, and second-attempt protection |
+| Decision | Launch rule |
+|---|---|
+| Introductory pilot price | £2,000 |
+| Entry requirement | A valid, verifiable DVSA practical car test booking belonging to the learner |
+| Included weekly teaching | One 90-minute lesson per programme week |
+| Base end date | The first-test date recorded and verified at enrolment |
+| Absolute base limit | 24 programme weeks / 36 scheduled lesson hours |
+| Instructor | CoachCarter may rotate eligible same-school instructors |
+| Internal pathway | Phase 1, Phase 2, and Phase 3 progress stages with independent assessment gates |
+| Retake protection | Up to 10 additional instructor-led lesson hours after a failed first attempt, for one retake |
 
-Course rules:
+Programme rules:
 
-- The learner is buying the defined outcome, not a fixed number of hours.
-- Necessary teaching continues until the learner passes the applicable independent assessment, subject to fair participation conditions.
-- Normal teaching sessions are 90 minutes.
-- The learner indicates a preferred pace of one or two lessons per week. This informs planning but is not an unconditional weekly guarantee.
-- The learner provides several recurring availability windows before payment.
-- Payment occurs before final instructor assignment or exact scheduling.
-- After payment, the enrolment is `paid_matching`; no lesson is represented as confirmed yet.
-- CoachCarter has seven calendar days to agree an instructor/schedule. If it cannot, the learner may accept alternatives or receive a full original-payment-method refund. CoachCarter absorbs the original Stripe fee in this CoachCarter-failure case.
-- The initial schedule aims to provide up to 12 weeks of diary security. It is not a fixed course duration or a permanent claim to one slot.
-- If the phase continues beyond the first 12 weeks, scheduling normally continues in the same pattern but can flex by agreement.
-- CoachCarter may rotate or reassign teaching instructors. The learner is paying for the outcome, not a named instructor.
-- The course does not expire automatically at launch. Genuine pauses and disengagement are handled relationally while the pilot establishes a natural policy.
-- A learner cannot buy the same active guaranteed course twice.
-- An active Full Curriculum enrolment blocks separate purchases for outcomes already included in it.
-
-CoachCarter bears the cost risk if a guaranteed outcome takes longer than expected and retains the margin benefit if it is completed efficiently.
+- The learner provides recurring availability before payment, but payment does not itself confirm exact lesson dates or a named instructor.
+- After webhook-confirmed payment, the enrolment enters `paid_matching`. CoachCarter has seven calendar days to agree the initial schedule; otherwise the learner may accept alternatives or receive a full original-payment-method refund.
+- Payment does not start or consume the programme. A same-school active instructor or admin records the agreed programme start after matching; that timestamp anchors programme week 1 and the 24-week cap.
+- The normal cadence is one 90-minute lesson each programme week. Unused weekly opportunities do not accumulate into a freely spendable hour balance.
+- The programme ends on the verified first-test date, or after 24 programme weeks if that occurs first.
+- A learner-requested postponement does not automatically create further included weeks. An admin may record an extension for a DVSA cancellation or genuine exceptional circumstance.
+- The programme is not instructor-specific. Reassignment and rotation are permitted within the learner's school.
+- A learner cannot hold two active Full Curriculum enrolments.
+- CoachCarter must verify test-booking evidence but must not book, change, or cancel the learner's practical car test.
+- The 24-week boundary makes delivery finite; it is not an unlimited-until-pass guarantee.
+- The £2,000 price is a deliberate introductory first-run price. Admins may create higher prospective price versions as delivery evidence develops; active and historical enrolments retain their purchased price and terms.
 
 ### 2.3 Phase progression and independent assessment
 
 - The teaching instructor records `ready_for_assessment`.
 - A different in-house instructor performs the assessment.
-- Only the independent assessor's recorded pass completes the phase and unlocks the next phase for purchase.
+- Only the independent assessor's recorded approval completes the internal phase and moves the learner into the next stage.
 - If the learner does not pass, the assessor records areas for improvement.
-- Further necessary teaching and reassessments remain included without a fixed attempt limit, subject to participation conditions.
-- Locked phases remain visible on the Packages page but are disabled with an explanation.
+- Further teaching continues within the programme's remaining weekly entitlement; internal phase movement does not create a new purchase or extend the programme end date.
+- Internal phases appear in progress views, not as customer-facing purchasable package cards.
 - Assessment activity and assessor earnings are separate from ordinary teaching lessons.
 - Exact assessment duration, internal value, payout rate, and refund treatment are deliberately unresolved and must not be inferred as £82.50.
 
@@ -105,18 +147,29 @@ CoachCarter bears the cost risk if a guaranteed outcome takes longer than expect
 
 Full Curriculum currently includes:
 
-- guaranteed completion of Phases 1, 2, and 3;
+- one 90-minute lesson per programme week until the verified first-test date, capped at 24 programme weeks;
+- internal teaching and progress through Phases 1, 2, and 3;
 - Test Ready Manoeuvres;
 - required independent assessments and reassessments;
 - up to 10 additional instructor-led lesson hours after a failed first DVSA practical test, for preparation for a second attempt.
+
+Second-attempt allowance rules:
+
+- The learner must provide acceptable evidence of the failed first attempt and a valid booking for the second practical test.
+- The allowance becomes schedulable no earlier than 28 days before the booked second test.
+- It may be delivered in 90-minute or two-hour lessons, up to 10 hours in total, subject to instructor availability.
+- Any unused allowance expires when the second test begins. It cannot be carried into preparation for a third attempt, refunded, transferred, or converted into ordinary Lesson Credit.
+- If DVSA postpones the second test, the preparation window moves with it; hours already delivered remain used.
+- A learner-requested postponement does not restore hours already used. Any exceptional extension requires a recorded admin decision.
 
 It currently excludes:
 
 - DVSA test fees;
 - use of an instructor's car for the practical test;
-- tuition beyond the additional 10-hour second-attempt allowance.
+- tuition beyond the base weekly entitlement and additional 10-hour second-attempt allowance;
+- automatic extra weeks caused by a learner-requested test postponement.
 
-Payments for eligible individual phases count toward a later Full Curriculum upgrade. A prior Manoeuvres purchase can contribute up to £150. Refunded value cannot also reduce the upgrade price, and no payment or reward can be credited twice.
+A prior qualifying Manoeuvres Challenge reward may contribute £150 of non-cash programme credit. Refunded value cannot also reduce the price, and no payment or reward can be credited twice.
 
 ### 2.5 Test Ready Manoeuvres and Manoeuvres Challenge
 
@@ -192,7 +245,7 @@ Admin edits are prospective. Existing purchases never silently reprice or change
 1. The visitor opens `/learner/packages.html` publicly.
 2. The page distinguishes Pay As You Go Lessons from Packages and links to `/learner/book.html`.
 3. Products are loaded from a school-scoped server catalogue.
-4. Locked phases remain visible with the assessment prerequisite.
+4. Full Curriculum shows its test-booking eligibility requirement; internal phases are explained as the programme structure, not offered for sale.
 5. The learner selects a product and sees its exact current version, price, key conditions, refund basis, and payment method.
 6. A logged-out visitor completes passwordless authentication and returns to the selected product.
 
@@ -206,17 +259,18 @@ Admin edits are prospective. Existing purchases never silently reprice or change
 6. The learner books ordinary eligible lessons with any eligible same-school instructor.
 7. Each booking consumes units from immutable sources and attributes delivery to the actual instructor.
 
-### 3.3 Guaranteed phase or Full Curriculum
+### 3.3 Full Curriculum
 
-1. The learner selects the product and supplies several weekly availability windows plus a preferred one- or two-lesson pace.
-2. The server enforces prerequisite and active-enrolment rules.
-3. The learner pays by bank before exact dates/instructor are confirmed.
-4. On webhook success the enrolment enters `paid_matching`, and the seven-day matching deadline begins.
-5. Admin/instructors agree the initial schedule with the learner and create the actual bookings.
-6. Teaching continues in 90-minute sessions, with instructor rotation allowed.
-7. The teaching instructor requests assessment when ready.
-8. A different instructor records pass or improvement areas.
-9. A pass completes/unlocks the phase; a non-pass returns the learner to included teaching and later reassessment.
+1. The learner selects Full Curriculum and signs in to the learner account that will own the programme.
+2. The learner supplies test date, time, centre, appropriate proof of the booking, and recurring weekly availability.
+3. The server verifies school scope, test eligibility, current product version, and absence of another active Full Curriculum enrolment.
+4. The learner pays by bank before exact dates or instructors are confirmed.
+5. On webhook-confirmed success, the enrolment enters `paid_matching` and the seven-day matching deadline begins.
+6. After payment, a same-school instructor or admin agrees and records the programme start and initial weekly schedule with the learner. This starts programme week 1 and the 24-week clock.
+7. Teaching proceeds in one 90-minute lesson per programme week from that agreed start, with same-school instructor rotation allowed.
+8. A different in-house instructor records internal phase approvals or improvement areas; these stages do not trigger further checkout.
+9. Base teaching ends at the recorded first-test date or 24 programme weeks, whichever comes first.
+10. A failed first attempt, once evidenced, activates up to 10 additional lesson hours for preparation for one retake.
 
 ### 3.4 Manoeuvres
 
@@ -258,14 +312,17 @@ Accounting treatment:
 - Unused refundable value remains protected until consumed or refunded.
 - Multiple sources are consumed FIFO.
 
-### 4.3 Guaranteed courses
+### 4.3 Full Curriculum programme
 
-- `course_enrolments`: purchase, current phase/status, matching deadline, preferred pace, current teaching context, completion/withdrawal timestamps.
+- `course_enrolments`: purchase, current internal phase/status, matching deadline, verified first-test date, base start/end dates, 24-week cap, current teaching context, completion/withdrawal timestamps.
+- `course_test_booking_evidence`: learner-supplied booking facts, verification status, minimum necessary evidence reference, verifier, and timestamps; sensitive evidence must follow retention and access rules.
 - `course_availability_preferences`: learner-supplied recurring windows, versioned when changed.
-- `course_progress_events`: append-only readiness, improvement-plan, pause, reassignment, completion, and admin decision events.
+- `course_progress_events`: append-only readiness, improvement-plan, internal phase movement, pause, reassignment, test-date change, extension decision, completion, and admin decision events.
 - `course_assessments`: assessor, phase, outcome, evidence/notes, timestamps; assessor must differ from the current teaching instructor.
 - `course_booking_allocations`: links actual bookings to enrolment/phase and identifies teaching versus assessment activity.
-- `programme_value_adjustments`: upgrades, withdrawals, programme credits, and other non-hour value movements.
+- `programme_week_entitlements`: scheduled weekly opportunities and their booked, delivered, cancelled, missed, waived, or unused status; these are not general Lesson Credit.
+- `programme_retake_allowances`: append-only activation and consumption of the post-failure 10-hour allowance.
+- `programme_value_adjustments`: withdrawals, Challenge programme credits, and other non-hour value movements.
 
 Accounting treatment:
 
@@ -273,6 +330,7 @@ Accounting treatment:
 - Teaching instructors earn per delivered/chargeable 90-minute course lesson at an admin-configured internal course payout basis.
 - Assessors earn through a separately configured assessment rule.
 - CoachCarter keeps the remaining course funds and bears overrun risk.
+- At the maximum 24-week cadence, base delivery is 36 hours: £1,980 at the current £55 retail rate. The £2,000 introductory price intentionally provides little retail-value headroom before assessments, payment fees, overhead, or retake protection. This is an accepted pilot investment, not an accidental pricing assumption; actual delivery cost and outcomes must be measured to inform prospective price increases.
 - Voluntary withdrawal refund starts as: `price actually paid - delivered instructor-led hours at the purchase's frozen standard Pay As You Go rate`, floored at zero.
 - Assessment deductions must not be invented until the assessment valuation decision is made.
 - CoachCarter-caused non-fulfilment and statutory cancellations use their own more learner-protective rules.
@@ -378,20 +436,21 @@ The product direction is to let learners start promptly. Implementation must pro
 ### 6.5 Manoeuvres refunds and rewards
 
 - Each unused session is worth £50 for voluntary unused-value refunds.
-- A session, cash refund, programme credit, or Full Curriculum upgrade credit cannot consume the same value twice.
+- A session, cash refund, or Full Curriculum programme credit cannot consume the same value twice.
 - A Challenge cash winner receives the advertised full £150 original-method refund; CoachCarter absorbs the original processing fee.
 - Programme-credit reward is an append-only non-cash value adjustment.
 
 ### 6.6 Lesson cancellation
 
-For guaranteed-course bookings, the agreed launch policy is deliberately relational:
+For Full Curriculum weekly bookings:
 
-- 48+ hours' learner notice: rearrange where practical, with no late charge.
-- Under 48 hours or no-show: the instructor remains payable under the existing calendar rule.
-- CoachCarter may manually request 50% of the standard Pay As You Go price for the booked duration (starting example: £41.25 for 90 minutes).
-- No automated invoice, debt balance, collection workflow, or scheduling lock is built at launch.
-- Admin can waive the charge for emergencies, recovered slots, or other reasonable circumstances.
-- The course guarantee remains, with repeated disengagement handled manually during the pilot.
+- With 48+ hours' learner notice, CoachCarter will try to rearrange the lesson within the same programme week, subject to availability.
+- A rearrangement is not guaranteed and does not roll the weekly opportunity into a later week or extend the recorded programme end date.
+- With under 48 hours' notice or a learner no-show, that programme week's lesson opportunity is treated as used and the instructor remains payable under the existing calendar rule.
+- No additional late-cancellation fee is charged. Treating the weekly opportunity as used is the complete consequence; the learner is not penalised twice.
+- If CoachCarter or the instructor cancels, the lesson must be rearranged. The programme may be extended when necessary to deliver that replacement, including beyond the recorded first-test date where the cancellation made earlier delivery impractical.
+- Reasonable emergency exceptions remain available as recorded admin decisions during the pilot.
+- Repeated disengagement is handled manually under the programme participation terms.
 
 The exact late-cancellation consumption rule for the flexible 30-hour package remains to be confirmed. The existing Lesson Credit precedent would consume/forfeit the booked value under 48 hours, but this must be an explicit new-package decision before implementation.
 
@@ -404,7 +463,7 @@ Reconciliation must compare, by `school_id`:
 - granted versus remaining hour/session sources;
 - booking allocations and returns;
 - course teaching and assessment activity;
-- refunds, promotional rewards, and upgrade credits;
+- refunds, promotional rewards, and programme credits;
 - instructor earning/payout attribution.
 
 Contradiction, missing fee evidence, cross-school identity, amount mismatch, duplicate reward, negative balance, or provider/local disagreement blocks automated mutation and enters manual review.
@@ -426,8 +485,7 @@ Recommended order:
 1. Header: `Choose how you want to learn`.
 2. Short comparison between Pay As You Go and Packages.
 3. Flexible card: 30 hours, school-wide, £1,650 starting version, no expiry.
-4. Guaranteed pathway: Phase 1–3 cards with visible locked/unlocked states.
-5. Full Curriculum feature card showing inclusions and second-attempt protection.
+4. Full Curriculum feature card showing the test-booking requirement, weekly cadence, 24-week boundary, internal assessment structure, and second-attempt protection.
 6. Manoeuvres card with an Ordinary / Challenge choice and plain reward conditions.
 7. How payment and confirmation work.
 8. Refund, scheduling, transfer, and course-guarantee disclosures.
@@ -436,7 +494,7 @@ Recommended order:
 The page should avoid a dense pricing-table feel. It should answer three customer intents:
 
 - `I want flexible hours` -> 30-hour package.
-- `I want a guaranteed stage/result` -> phase or Full Curriculum.
+- `I want a structured route to my booked test` -> Full Curriculum.
 - `I want focused manoeuvre practice` -> Manoeuvres.
 
 ### 7.3 Product detail and checkout summary
@@ -456,7 +514,7 @@ Before checkout, show prominently:
 - Challenge criteria and reward choice where selected;
 - applicable cooling-off/start-service request.
 
-Availability inputs for guaranteed courses should use reusable weekly windows and a one/two-lessons preferred-pace selector. They are matching inputs, not guaranteed reservations.
+Full Curriculum availability inputs should collect reusable weekly windows around the fixed one-lesson-per-week cadence. They are matching inputs, not guaranteed reservations.
 
 ### 7.4 States
 
@@ -464,7 +522,7 @@ The page/return flow needs clear, non-conflicting states:
 
 - browsing;
 - authentication required;
-- phase locked;
+- Full Curriculum ineligible because test evidence is missing or invalid;
 - ready for checkout;
 - redirected to bank;
 - confirming payment;
@@ -472,7 +530,8 @@ The page/return flow needs clear, non-conflicting states:
 - paid and matching;
 - active;
 - assessment pending;
-- phase completed;
+- internal phase updated;
+- programme completed;
 - withdrawn/refunded.
 
 ### 7.5 Existing frontend requirements
@@ -499,7 +558,7 @@ Admin can create/deactivate future product versions and manage price, display, p
 - course matching queue and seven-day deadline;
 - active phase, teaching history, assessment readiness/results;
 - remaining package/session sources and refundable unused value;
-- withdrawals, upgrades, rewards, and refunds;
+- withdrawals, programme credits, rewards, and refunds;
 - instructor and assessor earnings by enrolment/lesson;
 - reconciliation warnings.
 
@@ -508,7 +567,7 @@ Admin can create/deactivate future product versions and manage price, display, p
 Instructors need only operational information:
 
 - assigned course learners and actual bookings;
-- preferred pace/current schedule;
+- programme week/current schedule;
 - applicable product terms (read-only);
 - progress/readiness action;
 - assessment assignments and outcome form where acting as assessor.
@@ -537,11 +596,11 @@ No phase starts until implementation is explicitly approved.
 
 ### Phase 2: payment foundation
 
-- Create the separate test/live Lesson Packages Payment Method Configuration through an approved Stripe operation.
-- Add durable purchase attempts and product-specific Checkout creation.
-- Add signed, idempotent webhook activation and status endpoint.
-- Add 24-hour review queue and reconciliation diagnostics.
-- Test success, failure, expiry, late success, duplicate events, and ambiguous responses in Stripe test mode.
+- **Implemented in repository code (test only):** durable purchase attempts and product-specific Checkout creation.
+- **Implemented in repository code (test only):** signed, idempotent webhook state processing and owned status endpoint; there is deliberately no activation/fulfilment yet.
+- **Implemented in repository code (test only):** 24-hour review classification and read-only reconciliation diagnostics.
+- **Implemented in automated tests:** success, unpaid/pending, failure, expiry, reordered events, late success, duplicates, ambiguous provider responses, signature/live-event rejection, tenant scope, return polling, and mobile accessibility.
+- **External operation still required:** create and verify the separate test Lesson Packages Payment Method Configuration, restricted key and webhook endpoint, then supply the three dedicated environment values. No live configuration is approved.
 
 ### Phase 3: flexible 30-hour package
 
@@ -550,11 +609,12 @@ No phase starts until implementation is explicitly approved.
 - Attribute chargeable bookings to the delivering instructor at the frozen package rate.
 - Add source/balance/booking/refund reconciliation.
 
-### Phase 4: guaranteed courses
+### Phase 4: Full Curriculum programme
 
-- Add enrolment, availability preferences, matching queue, actual scheduling, instructor rotation, progress, assessment and phase-unlock flows.
-- Add course lesson earning attribution using configured internal rates.
-- Add withdrawals and Full Curriculum upgrades after their accounting rules are final.
+- **Implemented in repository code, test mode only:** prospective Phase 1/2/3 product deactivation with historical identity/version retention and one revised Full Curriculum version.
+- **Implemented in repository code, test mode only:** minimal test-booking facts/manual verification, immutable purchase/enrolment identity, payment-separated matching, instructor/admin-agreed programme start, bounded weekly opportunities, actual booking allocation, append-only progress/assessment, audited test/extension events and retake activation/consumption.
+- **Implemented in repository code, test mode only:** signed-webhook-only transactional/idempotent fulfilment and learner/admin/instructor exercise surfaces.
+- **Still deferred:** automated matching/scheduling, teaching/assessment earning attribution, withdrawals/refunds and live rollout. Manual structured matching availability is implemented.
 
 ### Phase 5: Manoeuvres and promotion
 
@@ -576,8 +636,8 @@ At minimum:
 
 - school/learner/instructor scope and cross-school rejection;
 - admin-only product mutation and immutable version snapshots;
-- phase prerequisites and duplicate-enrolment blocks;
-- server-only pricing and upgrade calculations;
+- duplicate-enrolment and verified test-booking eligibility blocks;
+- server-only pricing and Challenge programme-credit calculations;
 - Pay by Bank amount/currency/configuration contract;
 - webhook signature, unpaid guard, idempotency, concurrent delivery, late success, failure and expiry;
 - no browser-return fulfilment;
@@ -585,9 +645,10 @@ At minimum:
 - package lesson instructor attribution and payout eligibility;
 - seven-day matching states and full matching-failure refund;
 - instructor rotation and independent-assessor constraint;
-- phase unlock only after assessor pass;
+- internal phase movement only after independent-assessor approval, without checkout or entitlement extension;
+- 24-week cap, original-test-date anchoring, learner postponement, DVSA exception, first-attempt evidence, and 10-hour retake allowance;
 - Manoeuvres unit refunds and cash-versus-programme-credit exclusivity;
-- Full Curriculum upgrade anti-double-credit rules;
+- Challenge programme-credit anti-double-credit rules;
 - GDPR export/anonymisation/retention for new learner and promotion data;
 - responsive, accessible browser flows for public, logged-out, logged-in, locked, pending, success, and failure states.
 
@@ -595,8 +656,8 @@ At minimum:
 
 These are deliberately unresolved. Implementation must not guess them.
 
-1. **Guarantee participation conditions:** concise fair conditions covering attendance, cooperation, practice, safety, and repeated disengagement without undermining the outcome promise.
-2. **Phase definition:** the minimum competency/outcome record needed for Phase 1/2/3 assessment. The full curriculum content can remain deferred, but a pass cannot be an undefined free-text decision.
+1. **Programme participation conditions:** concise fair conditions covering attendance, cooperation, practice, safety, missed weekly opportunities, and repeated disengagement without implying an unlimited-until-pass promise.
+2. **Internal phase definition:** the minimum competency/progress record needed for Phase 1/2/3 assessment. The full curriculum content can remain deferred, but internal movement cannot be an undefined free-text decision.
 3. **Assessment commercial rule:** normal duration, assessor payout, course accounting value, and whether/how it affects voluntary-withdrawal calculations.
 4. **Course teaching payout:** exact admin-configurable per-lesson instructor rate and how existing commission/franchise rules consume it.
 5. **CoachCarter non-fulfilment after teaching starts:** fair refund/transfer/remedy policy.
@@ -605,10 +666,12 @@ These are deliberately unresolved. Implementation must not guess them.
 8. **Cooling-off implementation:** final disclosure, durable early-start request, cancellation channel, and delivered-service calculation.
 9. **Manoeuvres Challenge definition:** final hashtag, exact evidence, reflection criteria, any driving-performance criterion, deadlines, proof retention, registration-plate rule, reward turnaround, and eligibility exclusions.
 10. **Under-18 Challenge safeguards:** final consent form, privacy notice, DPIA/safeguarding review, evidence retention, and learner withdrawal mechanism.
-11. **Full Curriculum second-attempt protection:** evidence of first test failure, when the 10 hours become available, permitted lesson durations, and any reasonable participation/time conditions.
-12. **Availability form:** minimum number of recurring windows and how conflicts/changes are handled during the seven-day matching period.
+11. **Full Curriculum test evidence:** acceptable booking/failure evidence, evidence retention, and treatment when a scheduled first test is cancelled rather than failed. The 28-day retake window, 90-minute/two-hour lesson lengths, 10-hour cap, second-test expiry, and DVSA-postponement rule are decided.
+12. **Availability form:** resolved for this slice: no minimum window count; store only agreed recurring local windows and timezone in append-only versions. Conflict resolution and automated scheduling remain deferred.
 13. **Tax/accounting review:** VAT status, revenue recognition, protected unused-value liability, course guarantee reserves, promotional refund treatment, and instructor earning classification.
 14. **Final customer terms and marketing claims:** solicitor/consumer-law review before using `guaranteed`, `win your money back`, cancellation charges, or refund-fee wording publicly.
+
+Commercial pricing is not a launch blocker: £2,000 is an intentionally lean introductory pilot price. Pilot reporting must still measure instructor and assessor cost, programme weeks used, first-test outcomes, retake-hour use, refunds, payment fees, and contribution margin before each prospective price review.
 
 ## 11. External payment and consumer guidance used
 

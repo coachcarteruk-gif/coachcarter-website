@@ -3,6 +3,9 @@
   var listEl = document.getElementById('product-admin-list');
   var statusEl = document.getElementById('admin-status');
   var featureEl = document.getElementById('feature-enabled');
+  var purchasingFeatureEl = document.getElementById('purchasing-test-enabled');
+  var testBookingListEl = document.getElementById('test-booking-admin-list');
+  var programmeListEl = document.getElementById('programme-admin-list');
 
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function pounds(pence) { return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(pence||0)/100); }
@@ -10,9 +13,14 @@
   function show(message,error){ statusEl.textContent=message||''; statusEl.className=error?'error':''; }
   function authState(){var a=window.ccAdminAuth&&window.ccAdminAuth.getAuth();if(a)return a;try{var i=JSON.parse(localStorage.getItem('cc_instructor')||'null');return i&&((i.instructor||i).isAdmin===true)?i:null;}catch(e){return null;}}
   function api(url,options){return window.ccAdminAuth.fetchAuthed(url,options).then(async function(res){var data=await res.json();if(!res.ok)throw new Error(data.message||'Request failed');return data;});}
+  var weekdayNames=['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  function instructorOptions(rows,selected){return rows.map(function(row){return '<option value="'+esc(row.id)+'"'+(Number(row.id)===Number(selected)?' selected':'')+'>'+esc(row.name)+' (#'+esc(row.id)+')</option>';}).join('');}
+  function availabilityRows(windows){var rows=windows&&windows.length?windows:[{}];return rows.map(function(window){return '<div class="availability-window-row"><label>Weekday<select name="weekday"><option value="">No window</option>'+weekdayNames.slice(1).map(function(name,index){return '<option value="'+(index+1)+'"'+(Number(window.weekday)===index+1?' selected':'')+'>'+name+'</option>';}).join('')+'</select></label><label>From<input name="local_start_time" type="time" value="'+esc(window.local_start_time||'')+'"></label><label>To<input name="local_end_time" type="time" value="'+esc(window.local_end_time||'')+'"></label></div>';}).join('');}
+  function readAvailability(form){return Array.from(form.querySelectorAll('.availability-window-row')).map(function(row){return{weekday:Number(row.querySelector('[name="weekday"]').value),local_start_time:row.querySelector('[name="local_start_time"]').value,local_end_time:row.querySelector('[name="local_end_time"]').value};}).filter(function(window){return window.weekday||window.local_start_time||window.local_end_time;});}
 
   function render(data){
     featureEl.checked=data.feature_enabled===true;
+    purchasingFeatureEl.checked=data.purchasing_test_enabled===true;
     listEl.innerHTML=data.products.map(function(product){
       var now=Date.now();
       var current=product.versions.find(function(v){return new Date(v.effective_from).getTime()<=now;})||product.versions[product.versions.length-1];
@@ -26,11 +34,55 @@
     }).join('');
   }
 
-  async function load(){try{show('Loading catalogue…');var data=await api('/api/packages?action=admin-list');render(data);show(data.products.length+' products loaded for '+data.school.name+'.');}catch(e){show(e.message,true);}}
+  function renderTestBookings(rows){
+    testBookingListEl.innerHTML=rows.length?rows.map(function(row){return '<article class="operation-card" data-test-booking-id="'+esc(row.id)+'"><div><h3>'+esc(row.learner_name||'Anonymised learner')+'</h3><p>'+esc(row.test_date)+' at '+esc(row.test_time)+' · '+esc(row.test_centre||'No centre')+'</p><span class="badge">'+esc(row.verification_status)+'</span></div>'+(row.verification_status==='pending'?'<form class="verification-form"><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button name="decision" value="verified">Verify</button><button name="decision" value="rejected" class="secondary">Reject</button></form>':'<p class="operation-note">'+esc(row.verification_reason||'Decision recorded')+'</p>')+'</article>';}).join(''):'<p class="empty-state">No test-booking records.</p>';
+  }
+
+  function renderProgrammes(rows,eligibleInstructors){
+    programmeListEl.innerHTML=rows.length?rows.map(function(row){
+      var started=Boolean(row.programme_start_at),assigned=Boolean(row.current_instructor_id);
+      var boundary=started?'Starts '+new Date(row.programme_start_at).toLocaleString('en-GB')+' to '+new Date(row.approved_entitlement_end_at).toLocaleString('en-GB'):'Programme weeks have not started';
+      var assignment='<details open><summary>'+(assigned?'Reassign instructor':'Assign instructor')+'</summary><form class="assignment-form"><label>Eligible active instructor<select name="instructor_id" required><option value="">Choose an instructor</option>'+instructorOptions(eligibleInstructors,row.current_instructor_id)+'</select></label><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">'+(assigned?'Record reassignment':'Assign instructor')+'</button></form></details>';
+      var availability=assigned?'<details open><summary>Record agreed recurring availability</summary><form class="programme-availability-form"><p class="operation-note">Matching input only: these windows are not reservations or lesson bookings. Save an empty version if no recurring window was agreed.</p><label>Timezone<input name="timezone" value="'+esc(row.availability_timezone||'Europe/London')+'" required></label><div class="availability-window-list">'+availabilityRows(row.availability_windows)+'</div><button type="button" class="add-availability-window secondary">Add another window</button><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">Save availability version</button></form></details>':'';
+      var start=assigned&&row.availability_version&&!started?'<details open><summary>Agree programme start</summary><form class="start-programme-form"><input name="instructor_id" type="hidden" value="'+esc(row.current_instructor_id)+'"><label>Programme start<input name="programme_start_at" type="datetime-local" value="'+esc(localDateTime(new Date(Date.now()+3600000)))+'" required></label><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">Start programme weeks</button></form></details>':'';
+      var activeControls='<details><summary>Record readiness</summary><form class="admin-readiness-form"><label>Teaching instructor ID<input name="instructor_id" type="number" min="1" required></label><label>Note<input name="note" maxlength="1000"></label><button type="submit">Ready for assessment</button></form></details><details><summary>Record independent assessment</summary><form class="admin-assessment-form"><label>Teaching instructor ID<input name="teaching_instructor_id" type="number" min="1" required></label><label>Assessor instructor ID<input name="assessor_instructor_id" type="number" min="1" required></label><label>Outcome<select name="outcome"><option value="passed">Passed</option><option value="improvement_required">Improvement required</option></select></label><label>Improvement areas<input name="improvement_areas" maxlength="1000"></label><button type="submit">Record outcome</button></form></details><details><summary>Record an audited extension</summary><form class="extension-form"><label>New end<input name="approved_end_at" type="datetime-local" required></label><label>Reason type<select name="reason_type"><option value="dvsa_change">DVSA change</option><option value="exceptional_circumstance">Exceptional circumstance</option><option value="coachcarter_replacement">CoachCarter replacement</option></select></label><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">Record extension</button></form></details>';
+      var controls=started?assignment+availability+activeControls:assignment+availability+start+(start?'':'<p class="operation-note">Assignment and an availability version are required before start.</p>');
+      return '<article class="operation-card" data-enrolment-id="'+esc(row.id)+'"><div><h3>'+esc(row.learner_name||'Anonymised learner')+'</h3><p>'+esc(row.status)+' · internal Phase '+esc(row.current_phase)+'</p><p class="operation-note">Matching: '+esc(row.matching_status)+' · '+esc(row.matched_instructor_name||'No instructor assigned')+' · deadline '+esc(new Date(row.matching_deadline).toLocaleString('en-GB'))+'</p><p class="operation-note">Availability: '+esc(row.availability_version?'version '+row.availability_version+' ('+row.availability_window_count+' window(s), '+row.availability_timezone+')':'not recorded')+' · '+esc(boundary)+'</p></div><div class="programme-operation-forms">'+controls+'</div></article>';
+    }).join(''):'<p class="empty-state">No Full Curriculum enrolments.</p>';
+  }
+
+  async function loadOperations(){
+    try{var results=await Promise.all([api('/api/packages?action=test-bookings'),api('/api/packages?action=programme-list')]);renderTestBookings(results[0].test_bookings||[]);renderProgrammes(results[1].programmes||[],results[1].eligible_instructors||[]);}catch(e){testBookingListEl.innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';programmeListEl.innerHTML='';}
+  }
+
+  async function load(){try{show('Loading catalogue…');var data=await api('/api/packages?action=admin-list');render(data);await loadOperations();show(data.products.length+' retained products loaded for '+data.school.name+'.');}catch(e){show(e.message,true);}}
 
   document.getElementById('save-feature').addEventListener('click',async function(){var button=this;try{button.disabled=true;await api('/api/packages?action=set-feature',{method:'POST',body:JSON.stringify({enabled:featureEl.checked})});show('School feature gate saved and audit logged.');}catch(e){show(e.message,true);featureEl.checked=!featureEl.checked;}finally{button.disabled=false;}});
+  document.getElementById('save-purchasing-feature').addEventListener('click',async function(){var button=this;try{button.disabled=true;await api('/api/packages?action=set-purchasing-feature',{method:'POST',body:JSON.stringify({enabled:purchasingFeatureEl.checked})});show('Test purchasing gate saved and audit logged. No Stripe resource was changed.');}catch(e){show(e.message,true);purchasingFeatureEl.checked=!purchasingFeatureEl.checked;}finally{button.disabled=false;}});
   listEl.addEventListener('click',async function(event){var button=event.target.closest('.save-product');if(!button)return;var card=button.closest('.admin-product');try{button.disabled=true;await api('/api/packages?action=update-product',{method:'POST',body:JSON.stringify({product_id:Number(card.dataset.productId),visible:card.querySelector('.visible-input').checked,active:card.querySelector('.active-input').checked,sort_order:Number(card.querySelector('.sort-input').value)})});show('Product display settings saved and audit logged.');await load();}catch(e){show(e.message,true);}finally{button.disabled=false;}});
   listEl.addEventListener('submit',async function(event){if(!event.target.classList.contains('version-form'))return;event.preventDefault();var form=event.target;var card=form.closest('.admin-product');var button=form.querySelector('button[type="submit"]');try{button.disabled=true;var effective=new Date(form.elements.effective.value);await api('/api/packages?action=create-version',{method:'POST',body:JSON.stringify({product_id:Number(card.dataset.productId),price_pence:Math.round(Number(form.elements.price.value)*100),effective_from:effective.toISOString(),customer_terms_version:form.elements.terms.value})});show('Immutable future version created and audit logged.');await load();}catch(e){show(e.message,true);}finally{button.disabled=false;}});
+  testBookingListEl.addEventListener('submit',async function(event){if(!event.target.classList.contains('verification-form'))return;event.preventDefault();var form=event.target;var card=form.closest('[data-test-booking-id]');var submitter=event.submitter;try{await api('/api/packages?action=verify-test-booking',{method:'POST',body:JSON.stringify({test_booking_id:Number(card.dataset.testBookingId),decision:submitter.value,reason:form.elements.reason.value})});show('Test-booking decision recorded and audit logged.');await loadOperations();}catch(e){show(e.message,true);}});
+  programmeListEl.addEventListener('click',function(event){var button=event.target.closest('.add-availability-window');if(!button)return;button.previousElementSibling.insertAdjacentHTML('beforeend',availabilityRows([{}]));});
+  programmeListEl.addEventListener('submit',async function(event){
+    event.preventDefault();var form=event.target;var card=form.closest('[data-enrolment-id]');var button=form.querySelector('button[type="submit"]');
+    try{
+      button.disabled=true;
+      if(form.classList.contains('assignment-form')){
+        await api('/api/packages?action=assign-instructor',{method:'POST',body:JSON.stringify({enrolment_id:Number(card.dataset.enrolmentId),instructor_id:Number(form.elements.instructor_id.value),reason:form.elements.reason.value})});show('Instructor assignment recorded and audit logged.');
+      }else if(form.classList.contains('programme-availability-form')){
+        await api('/api/packages?action=record-programme-availability',{method:'POST',body:JSON.stringify({enrolment_id:Number(card.dataset.enrolmentId),timezone:form.elements.timezone.value,windows:readAvailability(form),reason:form.elements.reason.value})});show('Agreed availability version recorded and audit logged.');
+      }else if(form.classList.contains('start-programme-form')){
+        await api('/api/packages?action=start-programme',{method:'POST',body:JSON.stringify({enrolment_id:Number(card.dataset.enrolmentId),instructor_id:Number(form.elements.instructor_id.value),programme_start_at:new Date(form.elements.programme_start_at.value).toISOString(),reason:form.elements.reason.value})});show('Programme start and weekly opportunities recorded and audit logged.');
+      }else if(form.classList.contains('extension-form')){
+        await api('/api/packages?action=record-extension',{method:'POST',body:JSON.stringify({enrolment_id:Number(card.dataset.enrolmentId),approved_end_at:new Date(form.elements.approved_end_at.value).toISOString(),reason_type:form.elements.reason_type.value,reason:form.elements.reason.value})});show('Programme extension recorded and audit logged.');
+      }else if(form.classList.contains('admin-readiness-form')){
+        await api('/api/packages?action=record-readiness',{method:'POST',body:JSON.stringify({enrolment_id:Number(card.dataset.enrolmentId),instructor_id:Number(form.elements.instructor_id.value),note:form.elements.note.value})});show('Readiness recorded and audit logged.');
+      }else if(form.classList.contains('admin-assessment-form')){
+        await api('/api/packages?action=record-assessment',{method:'POST',body:JSON.stringify({enrolment_id:Number(card.dataset.enrolmentId),teaching_instructor_id:Number(form.elements.teaching_instructor_id.value),assessor_instructor_id:Number(form.elements.assessor_instructor_id.value),outcome:form.elements.outcome.value,improvement_areas:form.elements.improvement_areas.value})});show('Independent assessment recorded and audit logged.');
+      }else{return;}
+      await loadOperations();
+    }catch(e){show(e.message,true);}finally{button.disabled=false;}
+  });
 
   if(!authState()){window.location.href='/admin/login.html';return;}
   load();

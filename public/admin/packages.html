@@ -14,19 +14,35 @@
   <header class="admin-packages-header">
     <a href="/admin/portal.html" class="back-link">Back to Admin Portal</a>
     <div><p class="eyebrow">Catalogue operations</p><h1>Learner Packages</h1></div>
-    <p class="header-note">Phase 1 is catalogue-only. These controls cannot create purchases, payments, hours, enrolments, bookings, refunds, rewards or payouts.</p>
+    <p class="header-note">Test mode only. Verified Stripe webhook evidence can create Full Curriculum programme records, but no refunds, instructor earnings, transfers or payouts are implemented here.</p>
   </header>
 
   <main>
     <section class="feature-control" aria-labelledby="feature-heading">
       <div><p class="control-index">01 / School gate</p><h2 id="feature-heading">Public catalogue visibility</h2><p>Only the exact Boolean value <code>true</code> exposes this school's catalogue and learner navigation item.</p></div>
-      <div class="feature-action"><label for="feature-enabled"><input type="checkbox" id="feature-enabled"> Learner Packages enabled</label><button type="button" id="save-feature">Save school gate</button></div>
+      <div class="feature-action">
+        <label for="feature-enabled"><input type="checkbox" id="feature-enabled"> Learner Packages catalogue enabled</label>
+        <button type="button" id="save-feature">Save catalogue gate</button>
+        <label for="purchasing-test-enabled"><input type="checkbox" id="purchasing-test-enabled"> Full Curriculum test purchasing enabled</label>
+        <p>Separate default-off gate. Requires dedicated Stripe test credentials and a Lesson Packages test Payment Method Configuration.</p>
+        <button type="button" id="save-purchasing-feature">Save test purchasing gate</button>
+      </div>
     </section>
 
     <section class="catalogue-admin" aria-labelledby="catalogue-heading">
       <div class="section-heading"><div><p class="control-index">02 / Products</p><h2 id="catalogue-heading">Products and immutable versions</h2></div><p>Change price or terms by scheduling a new version. Existing versions cannot be edited or deleted.</p></div>
       <div id="admin-status" role="status" aria-live="polite">Loading catalogue…</div>
       <div id="product-admin-list"></div>
+    </section>
+
+    <section class="programme-admin" aria-labelledby="verification-heading">
+      <div class="section-heading"><div><p class="control-index">03 / Eligibility</p><h2 id="verification-heading">Manual test-booking verification</h2></div><p>Review evidence outside the application. Store only the learner-supplied date, time and centre plus this audit decision.</p></div>
+      <div id="test-booking-admin-list" class="operation-list"></div>
+    </section>
+
+    <section class="programme-admin" aria-labelledby="programme-heading">
+      <div class="section-heading"><div><p class="control-index">04 / Programmes</p><h2 id="programme-heading">Full Curriculum matching</h2></div><p>Assign an eligible same-school instructor, record only the recurring availability actually agreed, then set the programme start. Availability is not a reservation or lesson booking.</p></div>
+      <div id="programme-admin-list" class="operation-list"></div>
     </section>
   </main>
   <script src="/admin/packages.js"></script>

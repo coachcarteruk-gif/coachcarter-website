@@ -40,7 +40,7 @@ function loadPackagesHandler({ sql, admin = null, school = { schoolId: 7 }, sess
       decodeToken: () => session,
       SESSION_COOKIE_NAMES: { learner: 'cc_learner' },
     }],
-    [path.join(root, 'api', '_tenant.js'), { resolveSchoolFromRequest: async () => school }],
+    [path.join(root, 'api', '_tenant.js'), { isDevelopmentHost: () => false, resolveSchoolFromRequest: async () => school }],
     [path.join(root, 'api', '_audit.js'), { logAudit: async (_sql, entry) => audits.push(entry) }],
     [path.join(root, 'api', '_error-alert.js'), { reportError: () => {} }],
   ];
@@ -66,9 +66,6 @@ function loadPackagesHandler({ sql, admin = null, school = { schoolId: 7 }, sess
 
 const catalogueProducts = [
   product(1, 'flexible-30-hours', 'flexible_hours', '30-hour flexible package', 165000),
-  product(2, 'phase-1-fundamental', 'guaranteed_phase', 'Phase 1 Fundamental Driving Course', 75000),
-  product(3, 'phase-2-intermediate', 'guaranteed_phase', 'Phase 2 Intermediate Driving Course', 45000, 2, 'phase-1-fundamental', 'Phase 1 Fundamental Driving Course'),
-  product(4, 'phase-3-independent', 'guaranteed_phase', 'Phase 3 Independent Driving Course', 30000, 3, 'phase-2-intermediate', 'Phase 2 Intermediate Driving Course'),
   product(5, 'full-curriculum', 'full_curriculum', 'Full Curriculum Enrolment', 200000),
   product(6, 'manoeuvres', 'manoeuvres', 'Manoeuvres', 15000, null, null, null, 'ordinary'),
   product(7, 'manoeuvres-challenge', 'manoeuvres', 'Manoeuvres Challenge', 15000, null, null, null, 'challenge'),
@@ -110,31 +107,28 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(isLearnerPackagesEnabled({ features: { learner_packages_enabled: true } })).toBe(true);
   });
 
-  test('eligibility is honest about unavailable evidence and never enables checkout', () => {
-    const open = buildCatalogueEligibility({ prerequisite_product_id: null });
+  test('eligibility offers only verified Full Curriculum and treats phases as internal stages', () => {
+    const open = buildCatalogueEligibility({ slug: 'flexible-30-hours' });
     expect(open).toMatchObject({
-      state: 'available_to_compare',
-      purchase_eligible: false,
-      checkout_available: false,
-      eligibility_determined: false,
-    });
-
-    const locked = buildCatalogueEligibility({
-      prerequisite_product_id: 12,
-      prerequisite_slug: 'phase-1-fundamental',
-      prerequisite_name: 'Phase 1 Fundamental Driving Course',
-    });
-    expect(locked).toMatchObject({
-      state: 'locked',
+      state: 'visible_not_fulfilled',
       purchase_eligible: false,
       checkout_available: false,
       eligibility_determined: true,
-      evidence: {
-        source: 'catalogue_prerequisite_only',
-        assessment_records_available: false,
-      },
     });
-    expect(locked.reason).toContain('No package assessment evidence is available in Phase 1');
+
+    const locked = buildCatalogueEligibility({
+      slug: 'phase-1-fundamental',
+    });
+    expect(locked).toMatchObject({
+      state: 'internal_stage',
+      purchase_eligible: false,
+      checkout_available: false,
+    });
+    const curriculum = buildCatalogueEligibility({ slug: 'full-curriculum' }, {
+      purchasingEnabled: true, sameSchoolLearner: true,
+      testBookingStatus: 'verified', testBookingFuture: true, hasActiveEnrolment: false,
+    });
+    expect(curriculum).toMatchObject({ state: 'test_checkout_available', purchase_eligible: true, checkout_available: true });
   });
 
   test('schema is school-scoped, indexed, immutable by version, and seeds every approved choice', () => {
@@ -159,7 +153,7 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     }
   });
 
-  test('public and admin APIs apply exact school scope, admin auth, prospective versions, and audit logs', () => {
+  test('public and admin catalogue APIs retain exact school scope, prospective versions, and audit logs', () => {
     const api = read('api/packages.js');
     expect(api).toContain("resolveSchoolFromRequest(req, {");
     expect(api).toContain('allowLegacySchoolIdQuery: true');
@@ -179,7 +173,6 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(api).toContain("action: 'package.set_feature'");
     expect(api).toContain('await logAudit(sql');
     expect(api).toContain("'{features,learner_packages_enabled}'");
-    expect(api).not.toContain('stripe');
     expect(api).not.toContain('learner_credit_balances');
     expect(api).not.toContain('recurring_slot_blocks');
   });
@@ -263,7 +256,7 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     const adminJs = read('public/admin/packages.js');
     const sidebar = read('public/sidebar.js');
     const lessons = read('public/learner/lessons.html');
-    expect(adminHtml).toContain('Learner Packages enabled');
+    expect(adminHtml).toContain('Learner Packages catalogue enabled');
     expect(adminHtml).toContain('Products and immutable versions');
     expect(adminJs).toContain('/api/packages?action=create-version');
     expect(adminJs).toContain('/api/packages?action=update-product');
@@ -276,7 +269,7 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(lessons).toContain('Explore Packages');
   });
 
-  test('page meets project includes, thin-client, disclosure, and accessible locked-state contracts', () => {
+  test('page meets project includes, thin-client, disclosure, and accessible eligibility contracts', () => {
     const html = read('public/learner/packages.html');
     const js = read('public/learner/packages.js');
     expect(html).toContain('/sidebar.js');
@@ -285,10 +278,10 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(html).toContain('/posthog-loader.js');
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i);
     expect(html).toContain('Explore Pay As You Go Lessons');
-    expect(html).toContain('No product on this page can start checkout');
-    expect(js).toContain("fetch(catalogueUrl(), { credentials: 'include' })");
+    expect(html).toContain('Programme value is separate.');
+    expect(js).toContain("fetch(apiUrl('catalogue'), { credentials: 'include' })");
     expect(js).toContain("disabled aria-describedby=\"");
-    expect(js).toContain('Why this is locked:');
+    expect(js).toContain("apiUrl('submit-test-booking')");
     expect(js).not.toContain('checkout-slot');
     expect(js).not.toContain('/api/credits');
   });
@@ -301,7 +294,6 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(credits).toContain("if (action === 'checkout')");
     expect(buyCredits).not.toContain('/api/packages');
     expect(packagesApi).not.toContain('STRIPE_RESERVED_BLOCK_BANK_PAYMENT_METHOD_CONFIGURATION');
-    expect(packagesApi).not.toContain('payment_method_configuration');
     expect(packagesApi).not.toContain('api/credits');
   });
 });
@@ -318,7 +310,7 @@ test.describe('Learner Packages Phase 1 page', () => {
     }));
   });
 
-  test('renders all choices, locked explanations, disabled actions, and mobile-safe cross-links', async ({ page }) => {
+  test('renders revised customer choices, internal stages, disabled unimplemented actions, and mobile-safe cross-links', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.route('**/api/packages?action=catalogue**', (route) => route.fulfill({
       status: 200,
@@ -335,22 +327,16 @@ test.describe('Learner Packages Phase 1 page', () => {
 
     await expect(page.getByRole('heading', { name: 'Choose how you want to learn.' })).toBeVisible();
     for (const name of [
-      '30-hour flexible package', 'Phase 1 Fundamental Driving Course',
-      'Phase 2 Intermediate Driving Course', 'Phase 3 Independent Driving Course',
-      'Full Curriculum Enrolment', 'Manoeuvres', 'Manoeuvres Challenge',
+      '30-hour flexible package', 'Full Curriculum Enrolment', 'Manoeuvres', 'Manoeuvres Challenge',
     ]) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
     await expect(page.locator('.product-price').filter({ hasText: '£1,650' })).toBeVisible();
     await expect(page.locator('.product-price').filter({ hasText: '£2,000' })).toBeVisible();
-    await expect(page.getByText(/No package assessment evidence is available in Phase 1/)).toHaveCount(2);
-    await expect(page.getByRole('button', { name: 'Prerequisite required' })).toHaveCount(2);
-    await expect(page.getByRole('button', { name: 'Prerequisite required' }).first()).toBeDisabled();
+    await expect(page.getByText(/Three internal stages/i)).toBeVisible();
     await expect(page.getByRole('link', { name: /Explore Pay As You Go Lessons/ })).toBeVisible();
     await expect(page.locator('[data-cc-feature="learner_packages"]')).toBeVisible();
 
     const layout = await page.evaluate(() => ({ width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth }));
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
-    const lockDescription = await page.getByRole('button', { name: 'Prerequisite required' }).first().getAttribute('aria-describedby');
-    expect(lockDescription).toContain('product-lock-');
   });
 
   test('shows a safe feature-off state with no catalogue or purchase control', async ({ page }) => {
