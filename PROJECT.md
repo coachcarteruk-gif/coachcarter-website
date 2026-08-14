@@ -1357,6 +1357,8 @@ Migration 046 adds `full_curriculum_test_bookings`, `learner_package_purchases`,
 
 **Not-executed test setup order:** (1) review and apply migrations 044-047 to a disposable/test database only; (2) create a distinct Stripe test Payment Method Configuration with Pay by Bank only; (3) create the least-privilege dedicated test restricted key for Checkout create/retrieve; (4) create the separate `/api/package-webhook` test endpoint for the five supported events; (5) set the three dedicated package environment values; (6) smoke-test while both flags remain false; then separately enable a named test school. No live resource, deployment or production activation is approved.
 
+The enable/test/disable/diagnose procedure and exact preflight evidence are in [`docs/learner-packages-test-purchasing-runbook.md`](docs/learner-packages-test-purchasing-runbook.md). The production Vercel project is `coachcarter-website`; operators must verify the project/domain explicitly instead of trusting a local `.vercel/project.json` link.
+
 `/learner/packages.html` presents the revised model and shows payment, matching status, matched instructor, agreed availability, start, weekly/internal-progress and retake state. `/admin/packages.html` provides verification, assignment/reassignment, availability, programme-start and extension controls. `/instructor/programmes.html` is restricted to the current instructor's assignments and provides acceptance, availability, agreed-start, readiness and assessment controls.
 
 See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-product-decision-record.md). `/learner/buy-credits.html`, retired `api/credits?action=checkout`, and Reserved Weekly Slot routes/configuration remain unchanged.
