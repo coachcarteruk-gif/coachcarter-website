@@ -40,12 +40,18 @@ function requireMethod(req, res, method) {
   return false;
 }
 
-function getAdmin(req, res) {
-  const admin = requireAuth(req, { roles: ['admin'], requireSchool: true });
+function getAdminActor(req, res) {
+  const admin = requireAuth(req, { roles: ['admin'], requireSchool: false });
   if (!admin) {
     errorResponse(res, 401, 'UNAUTHORIZED', 'Admin access required');
     return null;
   }
+  return admin;
+}
+
+function getAdmin(req, res) {
+  const admin = getAdminActor(req, res);
+  if (!admin) return null;
   const schoolId = getSchoolId(admin, req);
   if (!Number.isSafeInteger(schoolId) || schoolId <= 0) {
     errorResponse(res, 400, 'SCHOOL_REQUIRED', 'A valid school is required');
@@ -361,6 +367,42 @@ async function handleFeatureState(req, res) {
   } catch (err) {
     reportError('/api/packages?action=feature-state', err);
     return res.json({ ok: true, enabled: false, purchasing_test_enabled: false });
+  }
+}
+
+async function handleAdminScopes(req, res) {
+  if (!requireMethod(req, res, 'GET')) return;
+  const admin = getAdminActor(req, res);
+  if (!admin) return;
+  const isSuperadmin = admin.role === 'superadmin';
+  const schoolId = isSuperadmin ? null : getSchoolId(admin, req);
+  if (!isSuperadmin && (!Number.isSafeInteger(schoolId) || schoolId <= 0)) {
+    return errorResponse(res, 400, 'SCHOOL_REQUIRED', 'A valid school is required');
+  }
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const schools = isSuperadmin
+      ? await sql`
+          SELECT id, name, slug
+          FROM schools
+          WHERE active = TRUE
+          ORDER BY name, id
+        `
+      : await sql`
+          SELECT id, name, slug
+          FROM schools
+          WHERE id = ${schoolId}
+            AND active = TRUE
+          LIMIT 1
+        `;
+    return res.json({
+      ok: true,
+      requires_explicit_selection: isSuperadmin,
+      schools,
+    });
+  } catch (err) {
+    reportError('/api/packages?action=admin-scopes', err);
+    return errorResponse(res, 500, 'SERVER_ERROR', 'Failed to load package school scopes');
   }
 }
 
@@ -1151,6 +1193,7 @@ module.exports = async function handler(req, res) {
   if (await handleFullCurriculumAction(req, res)) return;
   if (action === 'feature-state') return handleFeatureState(req, res);
   if (action === 'catalogue') return handleCatalogue(req, res);
+  if (action === 'admin-scopes') return handleAdminScopes(req, res);
   if (action === 'admin-list') return handleAdminList(req, res);
   if (action === 'create-version') return handleCreateVersion(req, res);
   if (action === 'update-product') return handleUpdateProduct(req, res);

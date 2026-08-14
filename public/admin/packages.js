@@ -6,13 +6,34 @@
   var purchasingFeatureEl = document.getElementById('purchasing-test-enabled');
   var testBookingListEl = document.getElementById('test-booking-admin-list');
   var programmeListEl = document.getElementById('programme-admin-list');
+  var schoolScopeControlEl = document.getElementById('school-scope-control');
+  var schoolScopeEl = document.getElementById('school-scope');
+  var selectedSchoolId = null;
 
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function pounds(pence) { return new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(pence||0)/100); }
   function localDateTime(value) { var d=new Date(value); if(Number.isNaN(d.getTime()))return''; var off=d.getTimezoneOffset(); return new Date(d.getTime()-off*60000).toISOString().slice(0,16); }
   function show(message,error){ statusEl.textContent=message||''; statusEl.className=error?'error':''; }
   function authState(){var a=window.ccAdminAuth&&window.ccAdminAuth.getAuth();if(a)return a;try{var i=JSON.parse(localStorage.getItem('cc_instructor')||'null');return i&&((i.instructor||i).isAdmin===true)?i:null;}catch(e){return null;}}
-  function api(url,options){return window.ccAdminAuth.fetchAuthed(url,options).then(async function(res){var data=await res.json();if(!res.ok)throw new Error(data.message||'Request failed');return data;});}
+  function scopedUrl(url){if(!selectedSchoolId)return url;var joiner=url.indexOf('?')===-1?'?':'&';return url+joiner+'school_id='+encodeURIComponent(selectedSchoolId);}
+  function api(url,options,includeSchoolScope){var target=includeSchoolScope===false?url:scopedUrl(url);return window.ccAdminAuth.fetchAuthed(target,options).then(async function(res){var data=await res.json();if(!res.ok)throw new Error(data.message||'Request failed');return data;});}
+  function requestedSchoolId(){var value=Number(new URLSearchParams(window.location.search).get('school_id'));return Number.isSafeInteger(value)&&value>0?value:null;}
+  function persistSchoolScope(){var url=new URL(window.location.href);url.searchParams.set('school_id',String(selectedSchoolId));window.history.replaceState(null,'',url.pathname+url.search+url.hash);}
+  async function prepareSchoolScope(){
+    var data=await api('/api/packages?action=admin-scopes',undefined,false);
+    var schools=Array.isArray(data.schools)?data.schools:[];
+    if(!data.requires_explicit_selection)return true;
+    schoolScopeControlEl.hidden=false;
+    schoolScopeEl.innerHTML=schools.map(function(school){return '<option value="'+esc(school.id)+'">'+esc(school.name)+' (#'+esc(school.id)+')</option>';}).join('');
+    var requested=requestedSchoolId();
+    var selected=schools.find(function(school){return Number(school.id)===requested;});
+    if(!selected&&schools.length===1)selected=schools[0];
+    if(!selected){show(schools.length?'Choose a school before loading or changing its catalogue.':'No active schools are available.',true);return false;}
+    selectedSchoolId=Number(selected.id);
+    schoolScopeEl.value=String(selectedSchoolId);
+    persistSchoolScope();
+    return true;
+  }
   var weekdayNames=['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   function instructorOptions(rows,selected){return rows.map(function(row){return '<option value="'+esc(row.id)+'"'+(Number(row.id)===Number(selected)?' selected':'')+'>'+esc(row.name)+' (#'+esc(row.id)+')</option>';}).join('');}
   function availabilityRows(windows){var rows=windows&&windows.length?windows:[{}];return rows.map(function(window){return '<div class="availability-window-row"><label>Weekday<select name="weekday"><option value="">No window</option>'+weekdayNames.slice(1).map(function(name,index){return '<option value="'+(index+1)+'"'+(Number(window.weekday)===index+1?' selected':'')+'>'+name+'</option>';}).join('')+'</select></label><label>From<input name="local_start_time" type="time" value="'+esc(window.local_start_time||'')+'"></label><label>To<input name="local_end_time" type="time" value="'+esc(window.local_end_time||'')+'"></label></div>';}).join('');}
@@ -84,6 +105,14 @@
     }catch(e){show(e.message,true);}finally{button.disabled=false;}
   });
 
+  document.getElementById('apply-school-scope').addEventListener('click',function(){
+    var schoolId=Number(schoolScopeEl.value);
+    if(!Number.isSafeInteger(schoolId)||schoolId<=0){show('Choose a valid school.',true);return;}
+    selectedSchoolId=schoolId;
+    persistSchoolScope();
+    load();
+  });
+
   if(!authState()){window.location.href='/admin/login.html';return;}
-  load();
+  prepareSchoolScope().then(function(ready){if(ready)load();}).catch(function(error){show(error.message||'Failed to load school scope.',true);});
 })();
