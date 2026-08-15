@@ -97,3 +97,15 @@ Do not delete or disable the webhook endpoint while a test payment is unresolved
 - Any credit, refund, earning, payout, transfer, Connect, Flexible 30 Hours, or Manoeuvres mutation: stop the exercise and treat it as an incident.
 
 The normal final state after a successful controlled exercise is catalogue still enabled, purchasing gate disabled, test Stripe resources retained for diagnosis, and a concise evidence record containing only non-secret identifiers and row counts.
+
+## Controlled pilot evidence — 15 August 2026
+
+The School 1 exercise used disposable learner `CoachCarter Full Curriculum Pilot Learner 2` (learner 156) and attempt `e5905b24-dc37-4231-aeb5-57d3bef4eddc` against the reviewed production deployment in Stripe Sandbox mode.
+
+- Full Curriculum was the only purchased product. The server amount was GBP 200000 pence, the Checkout identity had the `cs_test_` prefix, and Pay by Bank was the only offered payment method.
+- The sanitized read-only provider diagnostic reported `consistent_paid`, `livemode=false`, Checkout `complete`, payment `paid`, exact amount and currency matches, and no contradictions.
+- The signed webhook created exactly one `learner_package_purchases` row, one unstarted `paid_matching` enrolment, and one pending matching record. Programme weekly opportunities remained zero.
+- A credential-bearing redirect URL appeared in diagnostic output during the payment exercise. The purchasing gate was immediately disabled, no replacement Checkout was created, no credential value was retained in this record, and the original exercise stopped.
+- After a separate explicit approval, a replay-only exercise resent the retained Sandbox `checkout.session.async_payment_succeeded` event `evt_1U4gSDIqhTSdZedStBAYa75S` once to the existing production package webhook. Its durable delivery count increased from one to two and remained `processed`; the purchase, enrolment, and matching counts remained exactly one.
+- Post-replay read-only checks found zero learner credit-balance rows, credit transactions, bookings, booking-credit sources, credit-source adjustments, refund events or lines, booking earnings, payout line items, payout-batch earnings, payout transfers, and payout-transfer attempts attributable to learner 156. The learner shadow balance remained zero minutes.
+- Final control state was catalogue enabled, purchasing gate disabled, no Checkout available, and the dedicated test webhook retained and active. No live Stripe resource or credential was used.
