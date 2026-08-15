@@ -800,6 +800,42 @@ test.describe('Full Curriculum matching/start database integration', () => {
     });
     expect(beforeAcceptance.statusCode).toBe(409);
 
+    const adminWithoutOverride = await callAction('start-programme', {
+      body: {
+        enrolment_id: enrolmentId,
+        instructor_id: instructorBId,
+        programme_start_at: startAt,
+        reason: 'Admin must explicitly override missing acceptance',
+      },
+    });
+    expect(adminWithoutOverride.statusCode).toBe(409);
+    expect(adminWithoutOverride.body.code).toBe('PROGRAMME_START_NOT_ALLOWED');
+
+    const malformedOverride = await callAction('start-programme', {
+      body: {
+        enrolment_id: enrolmentId,
+        instructor_id: instructorBId,
+        programme_start_at: startAt,
+        instructor_acceptance_override: 'true',
+        reason: 'String override is refused',
+      },
+    });
+    expect(malformedOverride.statusCode).toBe(400);
+    expect(malformedOverride.body.code).toBe('INVALID_ACCEPTANCE_OVERRIDE');
+
+    const instructorOverride = await callAction('start-programme', {
+      role: 'instructor',
+      actorId: instructorBId,
+      body: {
+        enrolment_id: enrolmentId,
+        programme_start_at: startAt,
+        instructor_acceptance_override: true,
+        reason: 'Instructor cannot override their own acceptance',
+      },
+    });
+    expect(instructorOverride.statusCode).toBe(403);
+    expect(instructorOverride.body.code).toBe('ADMIN_ACCEPTANCE_OVERRIDE_ONLY');
+
     const wrongAdminInstructor = await callAction('start-programme', {
       body: {
         enrolment_id: enrolmentId,
@@ -881,10 +917,11 @@ test.describe('Full Curriculum matching/start database integration', () => {
     expect(finalState.rows[0].started_at).not.toBeNull();
     expect(Number(finalState.rows[0].week_count)).toBe(24);
     expect(Number(finalState.rows[0].start_event_count)).toBe(1);
-    expect(
-      finalState.rows[0].twenty_four_week_cap_at.getTime()
-      - finalState.rows[0].programme_start_at.getTime()
-    ).toBe(24 * 7 * 24 * 60 * 60 * 1000);
+    const localTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    });
+    expect(localTime.format(finalState.rows[0].twenty_four_week_cap_at))
+      .toBe(localTime.format(finalState.rows[0].programme_start_at));
 
     await expect(primaryClient.query(
       'UPDATE full_curriculum_availability_versions SET reason = $1 WHERE school_id = $2 AND enrolment_id = $3',
@@ -901,6 +938,182 @@ test.describe('Full Curriculum matching/start database integration', () => {
           WHERE school_id = $1 AND enrolment_id = $2) AS weeks
     `, [schoolBId, enrolmentId]);
     expect(crossTenantRows.rows[0]).toEqual({ matching: 0, availability: 0, weeks: 0 });
+  });
+
+  test('explicit admin override is audited and keeps programme weeks at the same London wall-clock time', async () => {
+    const learner = await primaryClient.query(`
+      INSERT INTO learner_users (name, email, school_id)
+      VALUES ('Full Curriculum Override Learner', $1, $2)
+      RETURNING id
+    `, [`override-learner-${schemaName}@example.test`, schoolAId]);
+    const overrideLearnerId = Number(learner.rows[0].id);
+
+    const testBooking = await primaryClient.query(`
+      INSERT INTO full_curriculum_test_bookings (
+        school_id, learner_id, attempt_number, test_date, test_time, test_centre,
+        verification_status, verified_by_actor_type, verified_by_admin_id,
+        verified_at, verification_reason
+      ) VALUES (
+        $1, $2, 1, '2027-02-18', '10:30', 'DST Integration Test Centre',
+        'verified', 'admin', $3, NOW(), 'Verified DST integration fixture'
+      )
+      RETURNING id
+    `, [schoolAId, overrideLearnerId, adminAId]);
+
+    const overrideAttemptId = crypto.randomUUID();
+    const checkoutSuffix = overrideAttemptId.replace(/-/g, '');
+    await primaryClient.query(`
+      INSERT INTO package_purchase_attempts (
+        id, school_id, learner_id, product_id, product_version_id,
+        product_slug, product_name, product_description, product_snapshot,
+        amount_pence, currency, customer_terms_version, stripe_mode, status,
+        client_request_id, idempotency_key, stripe_checkout_session_id,
+        stripe_payment_intent_id, paid_at, full_curriculum_test_booking_id,
+        eligibility_snapshot, stripe_payment_method_configuration_id
+      )
+      SELECT $1::uuid, school_id, $2, product_id, product_version_id,
+             product_slug, product_name, product_description, product_snapshot,
+             amount_pence, currency, customer_terms_version, stripe_mode, 'paid',
+             $3::uuid, $4, $5, $6, '2026-08-01T10:00:00Z'::timestamptz, $7,
+             eligibility_snapshot, stripe_payment_method_configuration_id
+        FROM package_purchase_attempts
+       WHERE id = $8::uuid AND school_id = $9
+    `, [
+      overrideAttemptId,
+      overrideLearnerId,
+      crypto.randomUUID(),
+      `cc-package-test-checkout-${overrideAttemptId}`,
+      `cs_test_full_curriculum_${checkoutSuffix}`,
+      `pi_fullcurriculum${checkoutSuffix}`,
+      testBooking.rows[0].id,
+      attemptId,
+      schoolAId,
+    ]);
+    const overrideAttempt = (await primaryClient.query(
+      'SELECT * FROM package_purchase_attempts WHERE id = $1::uuid AND school_id = $2',
+      [overrideAttemptId, schoolAId]
+    )).rows[0];
+    const fulfilment = await workflowModules.webhook._test.fulfilFullCurriculum(primarySql, {
+      attempt: overrideAttempt,
+    });
+    expect(fulfilment.created).toBe(true);
+
+    const identity = await primaryClient.query(`
+      SELECT e.id AS enrolment_id
+        FROM full_curriculum_enrolments e
+        JOIN learner_package_purchases p
+          ON p.id = e.purchase_id AND p.school_id = e.school_id
+       WHERE p.attempt_id = $1::uuid AND e.school_id = $2
+    `, [overrideAttemptId, schoolAId]);
+    const overrideEnrolmentId = Number(identity.rows[0].enrolment_id);
+
+    const assigned = await callAction('assign-instructor', {
+      body: {
+        enrolment_id: overrideEnrolmentId,
+        instructor_id: instructorAId,
+        reason: 'Assign instructor for explicit override coverage',
+      },
+    });
+    expect(assigned.statusCode).toBe(201);
+    const availability = await callAction('record-programme-availability', {
+      body: {
+        enrolment_id: overrideEnrolmentId,
+        timezone: 'Europe/London',
+        reason: 'Monday ten o clock DST coverage',
+        windows: [{ weekday: 1, local_start_time: '10:00', local_end_time: '11:30' }],
+      },
+    });
+    expect(availability.statusCode).toBe(201);
+
+    const rejectedWithoutOverride = await callAction('start-programme', {
+      body: {
+        enrolment_id: overrideEnrolmentId,
+        instructor_id: instructorAId,
+        programme_start_at: '2026-08-24T09:00:00.000Z',
+        reason: 'Missing explicit override must be rejected',
+      },
+    });
+    expect(rejectedWithoutOverride.statusCode).toBe(409);
+
+    const started = await callAction('start-programme', {
+      body: {
+        enrolment_id: overrideEnrolmentId,
+        instructor_id: instructorAId,
+        programme_start_at: '2026-08-24T09:00:00.000Z',
+        instructor_acceptance_override: true,
+        reason: 'Exceptional admin start for deterministic integration coverage',
+      },
+    });
+    expect(
+      started.statusCode,
+      workflowModules.reportedErrors.at(-1)?.error?.message || 'override start returned no SQL diagnostic'
+    ).toBe(201);
+
+    const evidence = await primaryClient.query(`
+      SELECT e.twenty_four_week_cap_at, m.status AS matching_status,
+             m.accepted_at, m.accepted_by_instructor_id,
+             pe.detail AS progress_detail,
+             audit.details AS audit_details
+        FROM full_curriculum_enrolments e
+        JOIN full_curriculum_matching_records m
+          ON m.enrolment_id = e.id AND m.school_id = e.school_id
+        JOIN full_curriculum_progress_events pe
+          ON pe.enrolment_id = e.id AND pe.school_id = e.school_id
+         AND pe.event_type = 'programme_started'
+        JOIN audit_log audit
+         ON audit.school_id = e.school_id
+         AND audit.action = 'package.start_programme'
+         AND audit.target_id = e.id
+       WHERE e.school_id = $1 AND e.id = $2
+       ORDER BY audit.id DESC
+       LIMIT 1
+    `, [schoolAId, overrideEnrolmentId]);
+    expect(evidence.rows[0].twenty_four_week_cap_at.toISOString()).toBe('2027-02-08T10:00:00.000Z');
+    expect(evidence.rows[0].matching_status).toBe('started');
+    expect(evidence.rows[0].accepted_at).toBeNull();
+    expect(evidence.rows[0].accepted_by_instructor_id).toBeNull();
+    expect(evidence.rows[0].progress_detail).toMatchObject({
+      instructor_acceptance_overridden: true,
+      operational_timezone: 'Europe/London',
+    });
+    expect(evidence.rows[0].audit_details).toMatchObject({
+      instructor_acceptance_overridden: true,
+      operational_timezone: 'Europe/London',
+    });
+
+    const weeks = await primaryClient.query(`
+      SELECT programme_week, week_start_at, week_end_at,
+             TO_CHAR(week_start_at AT TIME ZONE 'Europe/London', 'Dy HH24:MI') AS local_start,
+             EXTRACT(EPOCH FROM (week_end_at - week_start_at)) / 3600 AS duration_hours
+        FROM full_curriculum_weekly_opportunities
+       WHERE school_id = $1 AND enrolment_id = $2
+       ORDER BY programme_week
+    `, [schoolAId, overrideEnrolmentId]);
+    expect(weeks.rowCount).toBe(24);
+    expect(weeks.rows.every((week) => week.local_start === 'Mon 10:00')).toBe(true);
+    expect(weeks.rows.some((week) => Number(week.duration_hours) === 169)).toBe(true);
+
+    const extension = await callAction('record-extension', {
+      body: {
+        enrolment_id: overrideEnrolmentId,
+        approved_end_at: '2027-02-22T10:00:00.000Z',
+        reason_type: 'coachcarter_replacement',
+        reason: 'Verify extended weeks retain London wall-clock time',
+      },
+    });
+    expect(
+      extension.statusCode,
+      workflowModules.reportedErrors.at(-1)?.error?.message || 'extension returned no SQL diagnostic'
+    ).toBe(201);
+    const extendedWeeks = await primaryClient.query(`
+      SELECT programme_week,
+             TO_CHAR(week_start_at AT TIME ZONE 'Europe/London', 'Dy HH24:MI') AS local_start
+        FROM full_curriculum_weekly_opportunities
+       WHERE school_id = $1 AND enrolment_id = $2
+       ORDER BY programme_week
+    `, [schoolAId, overrideEnrolmentId]);
+    expect(extendedWeeks.rowCount).toBe(26);
+    expect(extendedWeeks.rows.every((week) => week.local_start === 'Mon 10:00')).toBe(true);
   });
 
   test('concurrent retake allocations cannot reserve more than 600 minutes', async () => {

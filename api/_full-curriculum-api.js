@@ -616,15 +616,24 @@ async function startProgramme(req, res) {
   const instructorId = scope.actorType === 'instructor' ? scope.actor.id : requestedInstructorId;
   const programmeStart = new Date(req.body?.programme_start_at);
   const reason = String(req.body?.reason || '').trim();
+  const acceptanceOverrideValue = req.body?.instructor_acceptance_override;
+  const acceptanceOverrideRequested = acceptanceOverrideValue === true;
   if (!enrolmentId || !instructorId || Number.isNaN(programmeStart.getTime()) || reason.length < 2 || reason.length > 1000) {
     return fail(res, 400, 'INVALID_PROGRAMME_START', 'An assigned instructor, programme start date and audit reason are required');
+  }
+  if (acceptanceOverrideValue !== undefined && typeof acceptanceOverrideValue !== 'boolean') {
+    return fail(res, 400, 'INVALID_ACCEPTANCE_OVERRIDE', 'Instructor acceptance override must be an explicit Boolean');
   }
   if (scope.actorType === 'instructor' && requestedInstructorId && requestedInstructorId !== scope.actor.id) {
     return fail(res, 403, 'INSTRUCTOR_SELF_START_ONLY', 'An instructor may start only a programme assigned to themselves');
   }
+  if (scope.actorType === 'instructor' && acceptanceOverrideRequested) {
+    return fail(res, 403, 'ADMIN_ACCEPTANCE_OVERRIDE_ONLY', 'Only an authorised admin may override missing instructor acceptance');
+  }
   const startAt = programmeStart.toISOString();
   const sql = neon(process.env.POSTGRES_URL);
   try {
+    const schoolTimezone = await loadSchoolTimezone(sql, scope.schoolId);
     const rows = await sql`
       WITH eligible AS (
         SELECT e.id, e.school_id, e.original_first_test_at, p.paid_at,
@@ -644,7 +653,8 @@ async function startProgramme(req, res) {
            AND (
              (${scope.actorType === 'instructor'} AND m.status = 'accepted'
                AND m.accepted_by_instructor_id = ${scope.actor.id})
-             OR (${scope.actorType !== 'instructor'} AND m.status IN ('assigned', 'accepted'))
+             OR (${scope.actorType !== 'instructor'} AND m.status = 'accepted')
+             OR (${scope.actorType !== 'instructor'} AND ${acceptanceOverrideRequested} AND m.status = 'assigned')
            )
            AND EXISTS (
              SELECT 1 FROM full_curriculum_availability_versions av
@@ -655,25 +665,33 @@ async function startProgramme(req, res) {
            AND ${startAt}::timestamptz >= p.paid_at
            AND ${startAt}::timestamptz < e.original_first_test_at
          FOR UPDATE OF e, m
+      ), boundaries AS (
+        SELECT eligible.*,
+               ${startAt}::timestamptz AS start_at,
+               (
+                 ((${startAt}::timestamptz AT TIME ZONE ${schoolTimezone}) + INTERVAL '24 weeks')
+                 AT TIME ZONE ${schoolTimezone}
+               ) AS cap_at
+          FROM eligible
       ), started AS (
         UPDATE full_curriculum_enrolments e
            SET status = 'active',
-               programme_start_at = ${startAt}::timestamptz,
-               twenty_four_week_cap_at = ${startAt}::timestamptz + INTERVAL '24 weeks',
+               programme_start_at = boundaries.start_at,
+               twenty_four_week_cap_at = boundaries.cap_at,
                base_entitlement_end_at = LEAST(
-                 eligible.original_first_test_at,
-                 ${startAt}::timestamptz + INTERVAL '24 weeks'
+                 boundaries.original_first_test_at,
+                 boundaries.cap_at
                ),
                approved_entitlement_end_at = LEAST(
-                 eligible.original_first_test_at,
-                 ${startAt}::timestamptz + INTERVAL '24 weeks'
+                 boundaries.original_first_test_at,
+                 boundaries.cap_at
                ),
                start_set_by_actor_type = ${scope.actorType},
                start_set_by_actor_id = ${scope.actor.id},
                start_set_at = NOW(),
                updated_at = NOW()
-          FROM eligible
-         WHERE e.id = eligible.id AND e.school_id = eligible.school_id
+          FROM boundaries
+         WHERE e.id = boundaries.id AND e.school_id = boundaries.school_id
         RETURNING e.*
       ), weeks AS (
         INSERT INTO full_curriculum_weekly_opportunities (
@@ -681,15 +699,24 @@ async function startProgramme(req, res) {
           opportunity_minutes, status
         )
         SELECT e.school_id, e.id, series.week_number + 1,
-               e.programme_start_at + (series.week_number * INTERVAL '7 days'),
+               (
+                 ((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + (series.week_number * INTERVAL '7 days'))
+                 AT TIME ZONE ${schoolTimezone}
+               ),
                LEAST(
-                 e.programme_start_at + ((series.week_number + 1) * INTERVAL '7 days'),
+                 (
+                   ((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + ((series.week_number + 1) * INTERVAL '7 days'))
+                   AT TIME ZONE ${schoolTimezone}
+                 ),
                  e.base_entitlement_end_at
                ),
                90, 'available'
           FROM started e
           CROSS JOIN generate_series(0, 23) AS series(week_number)
-         WHERE e.programme_start_at + (series.week_number * INTERVAL '7 days') < e.base_entitlement_end_at
+         WHERE (
+           ((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + (series.week_number * INTERVAL '7 days'))
+           AT TIME ZONE ${schoolTimezone}
+         ) < e.base_entitlement_end_at
         ON CONFLICT (school_id, enrolment_id, programme_week) DO NOTHING
         RETURNING id
       ), event AS (
@@ -703,11 +730,14 @@ async function startProgramme(req, res) {
                  'base_entitlement_end_at', e.base_entitlement_end_at,
                  'matching_completed', true,
                  'instructor_id', ${instructorId}::integer,
+                 'instructor_acceptance_overridden', (eligible.matching_status = 'assigned'),
+                 'operational_timezone', ${schoolTimezone}::text,
                  'availability_recorded', true,
                  'reason', ${reason}::text,
                  'weekly_opportunities_created', (SELECT COUNT(*) FROM weeks)
                )
           FROM started e
+          JOIN eligible ON eligible.id = e.id
         RETURNING enrolment_id
       ), matching_started AS (
         UPDATE full_curriculum_matching_records m
@@ -718,8 +748,9 @@ async function startProgramme(req, res) {
            AND started.id = eligible.id
         RETURNING m.id
       )
-      SELECT started.*
+      SELECT started.*, eligible.matching_status AS start_matching_status
         FROM started
+        JOIN eligible ON eligible.id = started.id
         JOIN event ON event.enrolment_id = started.id
         JOIN matching_started ON TRUE
     `;
@@ -729,6 +760,8 @@ async function startProgramme(req, res) {
     await audit(sql, req, scope, 'package.start_programme', 'full_curriculum_enrolment', enrolmentId, {
       programme_start_at: startAt,
       instructor_id: instructorId,
+      instructor_acceptance_overridden: rows[0].start_matching_status === 'assigned',
+      operational_timezone: schoolTimezone,
       reason,
       base_entitlement_end_at: rows[0].base_entitlement_end_at,
     });
@@ -919,6 +952,7 @@ async function recordExtension(req, res) {
   }
   const sql = neon(process.env.POSTGRES_URL);
   try {
+    const schoolTimezone = await loadSchoolTimezone(sql, scope.schoolId);
     const rows = await sql`
       WITH previous AS (
         SELECT id, approved_entitlement_end_at FROM full_curriculum_enrolments
@@ -939,18 +973,30 @@ async function recordExtension(req, res) {
           school_id, enrolment_id, programme_week, week_start_at, week_end_at,
           opportunity_minutes, status
         )
-        SELECT ${scope.schoolId}, e.id, series.week_number,
-               series.week_start_at,
-               LEAST(series.week_start_at + INTERVAL '7 days', extension.approved_end_at),
+        SELECT ${scope.schoolId}, e.id, series.week_number + 1,
+               (
+                 ((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + (series.week_number * INTERVAL '7 days'))
+                 AT TIME ZONE ${schoolTimezone}
+               ),
+               LEAST(
+                 (
+                   ((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + ((series.week_number + 1) * INTERVAL '7 days'))
+                   AT TIME ZONE ${schoolTimezone}
+                 ),
+                 extension.approved_end_at
+               ),
                90, 'available'
           FROM extension
           JOIN full_curriculum_enrolments e
             ON e.id = extension.enrolment_id AND e.school_id = ${scope.schoolId}
           CROSS JOIN LATERAL generate_series(
-            e.programme_start_at,
-            extension.approved_end_at - INTERVAL '1 microsecond',
-            INTERVAL '7 days'
-          ) WITH ORDINALITY AS series(week_start_at, week_number)
+            0,
+            CEIL(EXTRACT(EPOCH FROM (extension.approved_end_at - e.programme_start_at)) / 604800)::integer + 1
+          ) AS series(week_number)
+         WHERE (
+           ((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + (series.week_number * INTERVAL '7 days'))
+           AT TIME ZONE ${schoolTimezone}
+         ) < extension.approved_end_at
         ON CONFLICT (school_id, enrolment_id, programme_week) DO NOTHING
         RETURNING id
       ), event AS (

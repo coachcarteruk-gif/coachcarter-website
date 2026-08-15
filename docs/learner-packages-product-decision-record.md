@@ -20,6 +20,12 @@ Migration 046 and the application changes now implement the approved test-mode f
 
 Migration 047 adds the approved matching slice: webhook fulfilment creates a pending matching record; admins assign/reassign active same-school instructors; ordinary instructors can accept/assign only themselves; initial assignment is retained while rotations are append-only. Agreed recurring availability is stored as versioned weekday/local-time windows with an IANA timezone and no minimum window count. Start requires the current instructor plus an availability version for that instructor and atomically records the matching transition, programme boundary, weekly opportunities and progress evidence.
 
+### Programme-start guardrail record (2026-08-15)
+
+- Normal programme start requires acceptance by the current assigned instructor. Admin authority no longer silently treats `assigned` as equivalent to `accepted`.
+- An authorised admin may use an exceptional override only by sending the exact Boolean `instructor_acceptance_override: true` with the required audit reason. The effective override is recorded in both the start audit and append-only programme progress evidence; ordinary instructors cannot request it.
+- The 24-week cap, initial weekly opportunities and later extension weeks are generated in the school's validated IANA timezone. An agreed Monday 10:00 Europe/London boundary therefore remains 10:00 after the clocks change, even though the corresponding UTC instant changes.
+
 The implementation still creates no automated refund, instructor earning, Stripe Connect transfer, payout, flexible-hours fulfilment, Manoeuvres fulfilment/reward, test-document storage, automated DVSA verification, third-attempt protection or live Stripe behaviour. Both feature flags remain absent/off unless separately enabled, and the dedicated test Stripe configuration is still an external prerequisite.
 
 ### Phase 1 implementation record (2026-08-13)

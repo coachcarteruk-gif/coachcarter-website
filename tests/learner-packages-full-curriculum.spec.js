@@ -93,8 +93,10 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(api).toContain("'start-programme'");
     expect(api).toContain("scopeFor(req, res, ['instructor', 'admin'])");
     expect(api).toContain("e.status = 'paid_matching' AND e.programme_start_at IS NULL");
-    expect(api).toContain("programme_start_at = ${startAt}::timestamptz");
-    expect(api).toContain("twenty_four_week_cap_at = ${startAt}::timestamptz + INTERVAL '24 weeks'");
+    expect(api).toContain('programme_start_at = boundaries.start_at');
+    expect(api).toContain('twenty_four_week_cap_at = boundaries.cap_at');
+    expect(api).toContain("((${startAt}::timestamptz AT TIME ZONE ${schoolTimezone}) + INTERVAL '24 weeks')");
+    expect(api).toContain("((e.programme_start_at AT TIME ZONE ${schoolTimezone}) + (series.week_number * INTERVAL '7 days'))");
     expect(api).toContain('CROSS JOIN generate_series(0, 23)');
     expect(api).toContain("'package.start_programme'");
     expect(migration).toContain('programme_start_at         TIMESTAMPTZ,');
@@ -143,6 +145,10 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(api).toContain("'package.reassign_instructor'");
     expect(api).toContain("m.status = 'accepted'");
     expect(api).toContain('m.accepted_by_instructor_id = ${scope.actor.id}');
+    expect(api).toContain("acceptanceOverrideValue === true");
+    expect(api).toContain("ADMIN_ACCEPTANCE_OVERRIDE_ONLY");
+    expect(api).toContain("AND ${acceptanceOverrideRequested} AND m.status = 'assigned'");
+    expect(api).toContain("instructor_acceptance_overridden: rows[0].start_matching_status === 'assigned'");
     expect(api).toContain('FROM full_curriculum_availability_versions av');
     expect(api).toContain("${startAt}::timestamptz >= p.paid_at");
     expect(api).toContain("${startAt}::timestamptz < e.original_first_test_at");
@@ -168,6 +174,7 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(learnerUi).toContain('Agreed availability');
     expect(read('public/instructor/programmes.js')).toContain('These windows are not reservations or lesson bookings');
     expect(read('public/admin/packages.js')).toContain('Save an empty version if no recurring window was agreed');
+    expect(read('public/admin/packages.js')).toContain('Override missing instructor acceptance');
   });
 
   test('learner postponement does not extend while permitted admin reasons are explicit and audited', () => {
