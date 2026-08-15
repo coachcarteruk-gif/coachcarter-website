@@ -41,7 +41,8 @@ test.describe('Full Curriculum revised foundation', () => {
   test('only Full Curriculum can become checkout eligible', () => {
     const eligible = catalogueEligibility({ slug: 'full-curriculum' }, {
       purchasingEnabled: true, sameSchoolLearner: true,
-      testBookingStatus: 'verified', testBookingFuture: true,
+      testBookingStatus: 'verified', testBookingFuture: true, consumerRightsReady: true,
+      pilotAccessApproved: true,
     });
     expect(eligible).toMatchObject({ state: 'test_checkout_available', purchase_eligible: true, checkout_available: true });
     expect(catalogueEligibility({ slug: 'flexible-30-hours' }, { purchasingEnabled: true, sameSchoolLearner: true })).toMatchObject({ checkout_available: false });
@@ -83,11 +84,12 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(buildProgrammeWeeks(start, '2027-08-17T09:00:00Z')).toHaveLength(24);
   });
 
-  test('payment starts matching only; instructor/admin agreement starts programme weeks and the 24-week clock', () => {
+  test('payment honours cooling-off choice; instructor/admin agreement starts programme weeks and the 24-week clock', () => {
     const webhook = read('api/package-webhook.js');
     const api = read('api/_full-curriculum-api.js');
     const migration = read('db/migrations/046_full_curriculum_foundation.sql');
-    expect(webhook).toContain("'paid_matching', 1, p.paid_at + INTERVAL '7 days'");
+    expect(webhook).toContain("CASE WHEN s.early_start_requested THEN 'paid_matching' ELSE 'cooling_off_hold' END");
+    expect(webhook).toContain("CASE WHEN s.early_start_requested THEN p.paid_at ELSE s.cooling_off_expires_at END");
     expect(webhook).toContain("'programme_started', false");
     expect(webhook).not.toContain('generate_series(0, 23)');
     expect(api).toContain("'start-programme'");
@@ -150,7 +152,8 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(api).toContain("AND ${acceptanceOverrideRequested} AND m.status = 'assigned'");
     expect(api).toContain("instructor_acceptance_overridden: rows[0].start_matching_status === 'assigned'");
     expect(api).toContain('FROM full_curriculum_availability_versions av');
-    expect(api).toContain("${startAt}::timestamptz >= p.paid_at");
+    expect(api).toContain('e.service_may_start_at IS NOT NULL');
+    expect(api).toContain("${startAt}::timestamptz >= e.service_may_start_at");
     expect(api).toContain("${startAt}::timestamptz < e.original_first_test_at");
   });
 
@@ -261,7 +264,7 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(calls[0]).toContain('ON CONFLICT (purchase_id) DO UPDATE');
     expect(calls[0]).toContain('RETURNING *, (xmax = 0) AS created_now');
     expect(calls[0]).toContain('WHERE e.created_now = TRUE');
-    expect(calls[0]).toContain("'paid_matching'");
+    expect(calls[0]).toContain("'paid_matching' ELSE 'cooling_off_hold'");
     expect(calls[0]).toContain("'programme_started'");
     expect(calls[0]).not.toContain('generate_series(0, 23)');
   });

@@ -129,8 +129,16 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     const curriculum = buildCatalogueEligibility({ slug: 'full-curriculum' }, {
       purchasingEnabled: true, sameSchoolLearner: true,
       testBookingStatus: 'verified', testBookingFuture: true, hasActiveEnrolment: false,
+      consumerRightsReady: true, pilotAccessApproved: true,
     });
     expect(curriculum).toMatchObject({ state: 'test_checkout_available', purchase_eligible: true, checkout_available: true });
+    expect(buildCatalogueEligibility({ slug: 'full-curriculum' }, {
+      purchasingEnabled: true, sameSchoolLearner: true,
+      testBookingStatus: 'verified', testBookingFuture: true, hasActiveEnrolment: false,
+      consumerRightsReady: true,
+    })).toMatchObject({
+      state: 'controlled_pilot_access_required', purchase_eligible: false, checkout_available: false,
+    });
   });
 
   test('schema is school-scoped, indexed, immutable by version, and seeds every approved choice', () => {

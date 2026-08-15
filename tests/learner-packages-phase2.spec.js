@@ -30,7 +30,10 @@ function attempt(overrides = {}) {
     stripe_payment_method_configuration_id: 'pmc_package_test',
     amount_pence: 200000,
     currency: 'GBP',
-    customer_terms_version: 'package-terms-v1',
+    customer_terms_version: 'full-curriculum-owner-certified-v1',
+    early_start_requested: false,
+    adult_age_confirmed: true,
+    disclosure_version: 'full-curriculum-checkout-disclosure-v1',
     status: 'pending',
     review_after: '2026-08-14T12:00:00.000Z',
     ...overrides,
@@ -105,6 +108,13 @@ function makeResponse() {
 }
 
 async function callPackageApi(handler, { action, method = 'GET', body = {}, query = {} } = {}) {
+  if (action === 'create-checkout') body = {
+    consumer_terms_accepted: true,
+    adult_age_confirmed: true,
+    early_start_requested: false,
+    disclosure_version: 'full-curriculum-checkout-disclosure-v1',
+    ...body,
+  };
   const req = {
     method,
     body,
@@ -164,6 +174,7 @@ function checkoutSql({
   learnerSchoolMatches = true,
   catalogueEnabled = true,
   purchasingEnabled = true,
+  pilotAccessApproved = true,
 } = {}) {
   const state = { attempt: existingAttempt, statements: [] };
   const sql = async (strings, ...values) => {
@@ -185,12 +196,38 @@ function checkoutSql({
         product_id: 91, product_slug: 'full-curriculum', product_type: 'full_curriculum',
         prerequisite_product_id: null, product_version_id: 9101, version_number: 3,
         price_pence: 200000, currency: 'GBP',
-        content: { name: 'Full Curriculum', short_description: 'Structured weekly programme.' },
-        customer_terms_version: 'package-terms-v1', effective_from: '2026-08-13T00:00:00.000Z',
+        content: {
+          name: 'Full Curriculum', short_description: 'Structured weekly programme.',
+          controlled_pilot: {
+            adult_only: true,
+            one_active_learner_per_school: true,
+            owner_certification_version: 'full-curriculum-owner-self-certification-v1',
+          },
+          consumer_rights: {
+            policy_version: 'full-curriculum-consumer-rights-v1',
+            disclosure_version: 'full-curriculum-checkout-disclosure-v1',
+            refund_calculation_version: 'full-curriculum-refund-v1',
+            cooling_off_days: 14,
+            valuation_basis: 'purchase_price_allocation',
+            rounding_rule: 'whole_pence_deductions_down',
+            matching_admin_deduction_pence: 0,
+            stripe_fee_customer_deduction_pence: 0,
+            teaching_deductions: {
+              base_90_minutes_pence: 6000, base_cap_pence: 144000,
+              retake_90_minutes_pence: 6000, retake_120_minutes_pence: 8000,
+              retake_cap_pence: 40000,
+            },
+            assessment_deductions: { each_completed_pence: 5000, cap_pence: 15000 },
+          },
+        },
+        customer_terms_version: 'full-curriculum-owner-certified-v1', effective_from: '2026-08-13T00:00:00.000Z',
       }];
     }
     if (/FROM full_curriculum_test_bookings/.test(statement)) {
       return [{ id: 701, test_date: '2026-12-10', test_time: '10:30:00', test_centre: 'Example Centre', verified_at: '2026-08-13T10:00:00.000Z', test_at: '2026-12-10T10:30:00.000Z' }];
+    }
+    if (/FROM full_curriculum_pilot_access/.test(statement)) {
+      return pilotAccessApproved ? [{ id: '118f47b0-1a2b-4c3d-8e9f-0123456789ab' }] : [];
     }
     if (/FROM full_curriculum_enrolments/.test(statement)) return [];
     if (/INSERT INTO package_purchase_attempts/.test(statement)) {
@@ -203,6 +240,7 @@ function checkoutSql({
       return [state.attempt];
     }
     if (/INSERT INTO package_purchase_attempt_state_events/.test(statement)) return [];
+    if (/INSERT INTO full_curriculum_consumer_contract_evidence/.test(statement)) return [];
     if (/SET status = 'submitting'/.test(statement)) {
       state.attempt = { ...state.attempt, status: 'submitting' };
       return [state.attempt];
@@ -222,7 +260,7 @@ function checkoutSql({
       return [state.attempt];
     }
     if (/client_request_id = \?::uuid/.test(statement)) {
-      return state.attempt && state.attempt.client_request_id === values[2] ? [state.attempt] : [];
+      return state.attempt && state.attempt.client_request_id === values[3] ? [state.attempt] : [];
     }
     if (/status IN \('created', 'submitting', 'pending', 'paid', 'review_required'\)/.test(statement)) return state.attempt ? [state.attempt] : [];
     if (/WHERE id = \?::uuid/.test(statement)) return state.attempt ? [state.attempt] : [];
@@ -470,6 +508,35 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
     expect(response.statusCode).toBe(403);
     expect(response.body.code).toBe('VERIFIED_LEARNER_REQUIRED');
     expect(calls).toBe(0);
+  });
+
+  test('adult declaration and active controlled-pilot access both fail closed before Stripe', async () => {
+    const noAccess = checkoutSql({ pilotAccessApproved: false });
+    let stripeCalls = 0;
+    const noAccessHandler = loadPackagesApi({
+      sql: noAccess.sql,
+      learner: { id: 41, role: 'learner', school_id: 7 },
+      stripeClient: { checkout: { sessions: { create: async () => { stripeCalls += 1; } } } },
+    });
+    const denied = await callPackageApi(noAccessHandler, {
+      action: 'create-checkout', method: 'POST',
+      body: { product_id: 91, client_request_id: crypto.randomUUID() },
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.body.code).toBe('CONTROLLED_PILOT_ACCESS_REQUIRED');
+
+    const missingAdult = await callPackageApi(noAccessHandler, {
+      action: 'create-checkout', method: 'POST',
+      body: {
+        product_id: 91,
+        client_request_id: crypto.randomUUID(),
+        adult_age_confirmed: false,
+      },
+    });
+    expect(missingAdult.statusCode).toBe(400);
+    expect(missingAdult.body.code).toBe('CONSUMER_RIGHTS_ACKNOWLEDGEMENT_REQUIRED');
+    expect(stripeCalls).toBe(0);
+    expect(noAccess.state.attempt).toBeNull();
   });
 
   test('either package feature gate blocks Checkout before an attempt or Stripe call', async () => {
@@ -732,6 +799,13 @@ function uiProduct(id, slug, productType, name, pricePence, eligibility) {
     id, slug, product_type: productType, product_version_id: id * 100,
     version_number: 1, price_pence: pricePence, currency: 'GBP',
     content: { name, short_description: `${name} description`, highlights: ['Server condition'] },
+    consumer_rights: slug === 'full-curriculum' ? {
+      ready: true,
+      disclosure_version: 'full-curriculum-checkout-disclosure-v1',
+      checkout_acknowledgement: 'I have read the Full Curriculum terms, cancellation policy and withdrawal calculation supplied at checkout.',
+      early_start_request: 'I expressly ask CoachCarter to begin matching and teaching during my 14-day cancellation period.',
+      deferred_start_request: 'I want matching to begin after my 14-day cancellation period.',
+    } : null,
     eligibility,
   };
 }
@@ -794,13 +868,25 @@ test.describe('Learner Packages Phase 2 page states', () => {
       });
     });
     await page.goto('/learner/packages.html', { waitUntil: 'domcontentloaded' });
-    const button = page.getByRole('button', { name: 'Start test Pay by Bank' }).first();
+    const button = page.getByRole('button', { name: 'Pay £2,000 and enrol' }).first();
     await expect(button).toBeVisible();
+    await page.getByLabel(/I confirm that I am 18 or over/i).check();
+    await page.getByLabel(/I have read the Full Curriculum terms/i).check();
     await button.click();
     await expect(page.getByRole('heading', { name: 'Payment review required' })).toBeVisible();
     expect(checkoutBody.product_id).toBe(5);
     expect(checkoutBody.client_request_id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(Object.keys(checkoutBody).sort()).toEqual(['client_request_id', 'product_id']);
+    expect(checkoutBody).toMatchObject({
+      product_id: 5,
+      consumer_terms_accepted: true,
+      adult_age_confirmed: true,
+      early_start_requested: false,
+      disclosure_version: 'full-curriculum-checkout-disclosure-v1',
+    });
+    expect(Object.keys(checkoutBody).sort()).toEqual([
+      'adult_age_confirmed', 'client_request_id', 'consumer_terms_accepted', 'disclosure_version',
+      'early_start_requested', 'product_id',
+    ]);
     await expect(page.getByText(/Three internal stages/i)).toBeVisible();
     const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);

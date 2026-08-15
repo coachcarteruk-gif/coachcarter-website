@@ -2,6 +2,7 @@
 
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
+const { sendFullCurriculumDurableConfirmation } = require('./_full-curriculum-confirmation');
 const {
   PACKAGE_EVENT_TYPES,
   PACKAGE_PAYMENT_TYPE,
@@ -224,6 +225,15 @@ async function fulfilFullCurriculum(sql, { attempt }) {
   const rows = await sql`
     WITH source AS (
       SELECT a.*,
+             evidence.early_start_requested,
+             evidence.policy_version,
+             evidence.disclosure_version,
+             evidence.refund_calculation_version,
+             a.paid_at AS contract_formed_at,
+             (
+               ((a.paid_at AT TIME ZONE zone.name)::date + 15)
+               AT TIME ZONE zone.name
+             ) AS cooling_off_expires_at,
              (tb.test_date + tb.test_time) AT TIME ZONE zone.name AS verified_first_test_at
         FROM package_purchase_attempts a
         JOIN schools school
@@ -234,6 +244,12 @@ async function fulfilFullCurriculum(sql, { attempt }) {
          AND tb.learner_id = a.learner_id
          AND tb.attempt_number = 1
          AND tb.verification_status = 'verified'
+        JOIN full_curriculum_consumer_contract_evidence evidence
+          ON evidence.attempt_id = a.id
+         AND evidence.school_id = a.school_id
+         AND evidence.learner_id = a.learner_id
+         AND evidence.customer_terms_version = a.customer_terms_version
+         AND evidence.adult_age_confirmed = TRUE
         CROSS JOIN LATERAL (
           SELECT COALESCE(
             (SELECT name FROM pg_timezone_names
@@ -270,11 +286,18 @@ async function fulfilFullCurriculum(sql, { attempt }) {
     ), inserted_enrolment AS (
       INSERT INTO full_curriculum_enrolments (
         school_id, learner_id, purchase_id, first_test_booking_id, status,
-        current_phase, matching_deadline, original_first_test_at, current_first_test_at
+        current_phase, matching_deadline, original_first_test_at, current_first_test_at,
+        early_start_requested, contract_formed_at, cooling_off_expires_at,
+        service_may_start_at
       )
       SELECT p.school_id, p.learner_id, p.id, s.full_curriculum_test_booking_id,
-             'paid_matching', 1, p.paid_at + INTERVAL '7 days',
-             s.verified_first_test_at, s.verified_first_test_at
+             CASE WHEN s.early_start_requested THEN 'paid_matching' ELSE 'cooling_off_hold' END,
+             1,
+             (CASE WHEN s.early_start_requested THEN p.paid_at ELSE s.cooling_off_expires_at END)
+               + INTERVAL '7 days',
+             s.verified_first_test_at, s.verified_first_test_at,
+             s.early_start_requested, s.contract_formed_at, s.cooling_off_expires_at,
+             CASE WHEN s.early_start_requested THEN p.paid_at ELSE s.cooling_off_expires_at END
         FROM purchase_identity p
         JOIN source s ON s.id = p.attempt_id AND s.school_id = p.school_id
       ON CONFLICT (purchase_id) DO UPDATE
@@ -298,11 +321,32 @@ async function fulfilFullCurriculum(sql, { attempt }) {
              jsonb_build_object(
                'purchase_id', e.purchase_id,
                'matching_deadline', e.matching_deadline,
+               'early_start_requested', e.early_start_requested,
+               'cooling_off_expires_at', e.cooling_off_expires_at,
+               'service_may_start_at', e.service_may_start_at,
                'programme_started', false,
                'weekly_opportunities_created', 0
              )
         FROM inserted_enrolment e
        WHERE e.created_now = TRUE
+      RETURNING id
+    ), contract_event AS (
+      INSERT INTO full_curriculum_contract_events (
+        school_id, attempt_id, purchase_id, enrolment_id, event_type,
+        actor_type, detail, occurred_at
+      )
+      SELECT e.school_id, p.attempt_id, p.id, e.id, 'contract_formed',
+             'system',
+             jsonb_build_object(
+               'customer_terms_version', p.customer_terms_version,
+               'early_start_requested', e.early_start_requested,
+               'cooling_off_expires_at', e.cooling_off_expires_at,
+               'service_may_start_at', e.service_may_start_at
+             ), e.contract_formed_at
+        FROM inserted_enrolment e
+        JOIN purchase_identity p ON p.id = e.purchase_id AND p.school_id = e.school_id
+       WHERE e.created_now = TRUE
+      ON CONFLICT DO NOTHING
       RETURNING id
     )
     SELECT e.*, e.created_now AS fulfilment_created
@@ -386,12 +430,20 @@ module.exports = async function handler(req, res) {
     const fulfilment = updated.status === 'paid'
       ? await fulfilFullCurriculum(sql, { attempt: updated })
       : { created: false, enrolment: null };
+    const confirmation = updated.status === 'paid' && updated.product_slug === 'full-curriculum'
+      ? await sendFullCurriculumDurableConfirmation({
+        sql,
+        attemptId: updated.id,
+        schoolId: updated.school_id,
+      })
+      : { delivered: false, reused: false };
     await markEventProcessed(sql, receipt);
     return res.json({
       received: true,
       status: updated.status,
       fulfilment_created: fulfilment.created,
       enrolment_id: fulfilment.enrolment?.id || null,
+      durable_confirmation_delivered: confirmation.delivered,
     });
   } catch (err) {
     if (receipt) {

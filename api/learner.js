@@ -83,6 +83,8 @@ const {
   packagePurchaseAttemptsTableExists,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
+  fullCurriculumConsumerRightsTablesExist,
+  fullCurriculumPilotAccessTableExists,
 } = require('./_gdpr');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
@@ -1710,6 +1712,10 @@ async function handleExportData(req, res) {
 
     const hasFullCurriculum = await fullCurriculumTablesExist(sql);
     const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
+    const hasFullCurriculumConsumerRights = hasFullCurriculum
+      && await fullCurriculumConsumerRightsTablesExist(sql);
+    const hasFullCurriculumPilotAccess = hasFullCurriculum
+      && await fullCurriculumPilotAccessTableExists(sql);
     let fullCurriculum = null;
     if (hasFullCurriculum) {
       const [
@@ -1863,6 +1869,64 @@ async function handleExportData(req, res) {
         fullCurriculum.assignment_events = assignmentEvents;
         fullCurriculum.availability_versions = availabilityVersions;
         fullCurriculum.availability_windows = availabilityWindows;
+      }
+      if (hasFullCurriculumConsumerRights) {
+        const [contractEvidence, contractEvents, terminationRequests, refundCases, refundLines, refundCaseEvents] = await Promise.all([
+          sql`SELECT attempt_id, customer_terms_version, policy_version, disclosure_version,
+                     refund_calculation_version, disclosure_snapshot, early_start_requested,
+                     adult_age_confirmed,
+                     start_request_text, acknowledged_at, created_at
+                FROM full_curriculum_consumer_contract_evidence
+               WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+               ORDER BY created_at`,
+          sql`SELECT ce.attempt_id, ce.event_type, ce.detail, ce.occurred_at, ce.created_at
+                FROM full_curriculum_contract_events ce
+                JOIN full_curriculum_consumer_contract_evidence evidence
+                  ON evidence.attempt_id = ce.attempt_id AND evidence.school_id = ${schoolId}
+               WHERE evidence.learner_id = ${user.id} AND ce.school_id = ${schoolId}
+               ORDER BY ce.id`,
+          sql`SELECT id, enrolment_id, request_kind, channel, reason, received_at, created_at
+                FROM full_curriculum_termination_requests
+               WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+               ORDER BY received_at`,
+          sql`SELECT id, enrolment_id, purchase_id, termination_request_id, classification,
+                     status, calculation_version, calculation_snapshot,
+                     original_payment_pence, previous_refund_pence, deduction_pence,
+                     refund_due_pence, stripe_fee_absorbed_pence, provider_status,
+                     provider_recorded_at, created_at
+                FROM full_curriculum_refund_cases
+               WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+               ORDER BY created_at`,
+          sql`SELECT line.refund_case_id, line.line_number, line.line_type, line.quantity,
+                     line.unit_value_pence, line.cap_pence, line.deduction_pence,
+                     line.evidence_snapshot, line.created_at
+                FROM full_curriculum_refund_lines line
+                JOIN full_curriculum_refund_cases c
+                  ON c.id = line.refund_case_id AND c.school_id = ${schoolId}
+               WHERE c.learner_id = ${user.id} AND line.school_id = ${schoolId}
+               ORDER BY line.refund_case_id, line.line_number`,
+          sql`SELECT event.refund_case_id, event.from_status, event.to_status,
+                     event.actor_type, event.detail, event.created_at
+                FROM full_curriculum_refund_case_events event
+                JOIN full_curriculum_refund_cases c
+                  ON c.id = event.refund_case_id AND c.school_id = ${schoolId}
+               WHERE c.learner_id = ${user.id} AND event.school_id = ${schoolId}
+               ORDER BY event.id`,
+        ]);
+        fullCurriculum.consumer_contract_evidence = contractEvidence;
+        fullCurriculum.contract_events = contractEvents;
+        fullCurriculum.termination_requests = terminationRequests;
+        fullCurriculum.refund_cases = refundCases;
+        fullCurriculum.refund_lines = refundLines;
+        fullCurriculum.refund_case_events = refundCaseEvents;
+      }
+      if (hasFullCurriculumPilotAccess) {
+        fullCurriculum.pilot_access = await sql`
+          SELECT certification_version, granted_at, grant_reason, active,
+                 revoked_at, revocation_reason, created_at, updated_at
+            FROM full_curriculum_pilot_access
+           WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+           ORDER BY granted_at`;
       }
     }
 

@@ -17,6 +17,8 @@ function buildCatalogueEligibility(product, options = {}) {
       test_booking_status: options.testBookingStatus || 'missing',
       test_booking_future: options.testBookingFuture === true,
       active_enrolment: options.hasActiveEnrolment === true,
+      consumer_rights_ready: options.consumerRightsReady === true,
+      controlled_pilot_access: options.pilotAccessApproved === true,
     },
   };
 }

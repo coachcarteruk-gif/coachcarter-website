@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { neon } = require('@neondatabase/serverless');
 const { requireAuth, getSchoolId } = require('./_auth');
 const { logAudit } = require('./_audit');
@@ -14,13 +15,22 @@ const {
   retakeWindow,
   weeklyCancellationOutcome,
 } = require('./_full-curriculum');
+const {
+  listRefundCases,
+  requestProgrammeTermination,
+  validUuid,
+} = require('./_full-curriculum-refunds');
+const { PILOT_CERTIFICATION_VERSION } = require('./_full-curriculum-consumer-rights');
 
 const ACTIONS = new Set([
   'submit-test-booking', 'test-bookings', 'verify-test-booking',
   'programme-status', 'programme-list', 'assign-instructor', 'accept-assignment',
-  'record-programme-availability', 'start-programme', 'record-readiness', 'record-assessment',
+  'release-cooling-off-hold', 'record-programme-availability', 'start-programme', 'record-readiness', 'record-assessment',
   'record-test-date-change', 'record-extension', 'record-week-outcome',
   'allocate-programme-booking', 'activate-retake', 'record-retake-test-change',
+  'request-programme-termination', 'programme-refund-cases',
+  'review-programme-refund', 'approve-programme-refund', 'record-programme-refund-result',
+  'programme-pilot-access', 'grant-programme-pilot-access', 'revoke-programme-pilot-access',
 ]);
 
 function fail(res, status, code, message) {
@@ -34,6 +44,7 @@ function positiveInteger(value) {
 
 function actorType(actor) {
   if (actor.role === 'superadmin') return 'superadmin';
+  if (actor.role === 'learner') return 'learner';
   if (actor.role === 'instructor' && actor.isAdmin === true) return 'instructor_admin';
   return actor.role === 'instructor' ? 'instructor' : 'admin';
 }
@@ -197,7 +208,7 @@ async function verifyTestBooking(req, res) {
 
 async function loadProgramme(sql, schoolId, learnerId) {
   const rows = await sql`
-    SELECT e.*, p.amount_pence, p.currency, p.product_snapshot, p.customer_terms_version,
+    SELECT e.*, p.attempt_id, p.amount_pence, p.currency, p.product_snapshot, p.customer_terms_version,
            tb.test_date AS verified_test_date, tb.test_time AS verified_test_time,
            tb.test_centre AS verified_test_centre
       FROM full_curriculum_enrolments e
@@ -210,7 +221,7 @@ async function loadProgramme(sql, schoolId, learnerId) {
   `;
   if (!rows[0]) return null;
   const enrolment = rows[0];
-  const [weeks, progress, assessments, retake, matching] = await Promise.all([
+  const [weeks, progress, assessments, retake, matching, contractEvidence, refundCases] = await Promise.all([
     sql`SELECT id, programme_week, week_start_at, week_end_at, opportunity_minutes, status, status_reason
           FROM full_curriculum_weekly_opportunities
          WHERE school_id = ${schoolId} AND enrolment_id = ${enrolment.id}
@@ -279,6 +290,21 @@ async function loadProgramme(sql, schoolId, learnerId) {
             ON i.id = m.current_instructor_id AND i.school_id = ${schoolId}
          WHERE m.school_id = ${schoolId} AND m.enrolment_id = ${enrolment.id}
          LIMIT 1`,
+    sql`SELECT customer_terms_version, policy_version, disclosure_version,
+               refund_calculation_version, disclosure_snapshot,
+               early_start_requested, adult_age_confirmed,
+               start_request_text, acknowledged_at
+          FROM full_curriculum_consumer_contract_evidence
+         WHERE school_id = ${schoolId} AND attempt_id = ${enrolment.attempt_id}::uuid
+         LIMIT 1`,
+    sql`SELECT c.id, c.classification, c.status, c.original_payment_pence,
+               c.previous_refund_pence, c.deduction_pence, c.refund_due_pence,
+               c.provider_status, c.created_at, r.received_at
+          FROM full_curriculum_refund_cases c
+          JOIN full_curriculum_termination_requests r
+            ON r.id = c.termination_request_id AND r.school_id = ${schoolId}
+         WHERE c.school_id = ${schoolId} AND c.enrolment_id = ${enrolment.id}
+         ORDER BY c.created_at DESC`,
   ]);
   return {
     ...enrolment,
@@ -287,7 +313,156 @@ async function loadProgramme(sql, schoolId, learnerId) {
     assessments,
     retake: retake[0] || null,
     matching: matching[0] || null,
+    consumer_contract: contractEvidence[0] || null,
+    refund_cases: refundCases,
   };
+}
+
+async function programmePilotAccess(req, res) {
+  if (!requireGet(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const sql = neon(process.env.POSTGRES_URL);
+  try {
+    const [rows, eligibleLearners] = await Promise.all([
+      sql`SELECT access.id, access.learner_id, access.certification_version,
+             access.granted_by_admin_id, access.granted_at, access.grant_reason,
+             access.active, access.revoked_by_admin_id, access.revoked_at,
+             access.revocation_reason,
+             learner.name AS learner_name, learner.email AS learner_email
+        FROM full_curriculum_pilot_access access
+        LEFT JOIN learner_users learner
+          ON learner.id = access.learner_id AND learner.school_id = ${scope.schoolId}
+       WHERE access.school_id = ${scope.schoolId}
+       ORDER BY access.active DESC, access.granted_at DESC
+       LIMIT 100`,
+      sql`SELECT learner.id, learner.name, learner.email
+            FROM learner_users learner
+           WHERE learner.school_id = ${scope.schoolId}
+             AND learner.email_verified = TRUE
+             AND NOT EXISTS (
+               SELECT 1 FROM package_purchase_attempts attempt
+                WHERE attempt.school_id = ${scope.schoolId}
+                  AND attempt.product_slug = 'full-curriculum'
+                  AND attempt.status IN ('created', 'submitting', 'pending', 'paid', 'review_required')
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM full_curriculum_enrolments active_enrolment
+                WHERE active_enrolment.school_id = ${scope.schoolId}
+                  AND active_enrolment.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM full_curriculum_enrolments enrolment
+                WHERE enrolment.school_id = ${scope.schoolId}
+                  AND enrolment.learner_id = learner.id
+                  AND enrolment.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
+             )
+           ORDER BY learner.name, learner.id
+           LIMIT 250`,
+    ]);
+    return res.json({
+      ok: true,
+      certification_version: PILOT_CERTIFICATION_VERSION,
+      active_access: rows.find(row => row.active === true) || null,
+      history: rows,
+      eligible_learners: eligibleLearners,
+    });
+  } catch (err) {
+    reportError('/api/packages?action=programme-pilot-access', err);
+    return fail(res, 500, 'PILOT_ACCESS_LIST_FAILED', 'Failed to load controlled-pilot access');
+  }
+}
+
+async function grantProgrammePilotAccess(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const learnerId = positiveInteger(req.body?.learner_id);
+  const reason = String(req.body?.reason || '').trim();
+  if (!learnerId || reason.length < 2 || reason.length > 1000) {
+    return fail(res, 400, 'INVALID_PILOT_ACCESS_GRANT', 'A same-school learner and audit reason are required');
+  }
+  const sql = neon(process.env.POSTGRES_URL);
+  try {
+    if (!await requireCatalogueFeature(sql, scope.schoolId, res)) return;
+    const rows = await sql`
+      INSERT INTO full_curriculum_pilot_access (
+        id, school_id, learner_id, certification_version,
+        granted_by_admin_id, grant_reason
+      )
+      SELECT ${crypto.randomUUID()}::uuid, ${scope.schoolId}, learner.id,
+             ${PILOT_CERTIFICATION_VERSION}, ${scope.actor.id}, ${reason}
+        FROM learner_users learner
+       WHERE learner.id = ${learnerId}
+         AND learner.school_id = ${scope.schoolId}
+         AND learner.email_verified = TRUE
+         AND NOT EXISTS (
+           SELECT 1 FROM package_purchase_attempts attempt
+            WHERE attempt.school_id = ${scope.schoolId}
+              AND attempt.product_slug = 'full-curriculum'
+              AND attempt.status IN ('created', 'submitting', 'pending', 'paid', 'review_required')
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM full_curriculum_enrolments active_enrolment
+            WHERE active_enrolment.school_id = ${scope.schoolId}
+              AND active_enrolment.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM full_curriculum_enrolments enrolment
+            WHERE enrolment.school_id = ${scope.schoolId}
+              AND enrolment.learner_id = learner.id
+              AND enrolment.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
+         )
+      RETURNING *
+    `;
+    if (!rows[0]) {
+      return fail(res, 409, 'PILOT_LEARNER_NOT_ELIGIBLE', 'The learner must be verified, in this school and not already actively enrolled');
+    }
+    await audit(sql, req, scope, 'package.grant_programme_pilot_access', 'learner', learnerId, {
+      pilot_access_id: rows[0].id,
+      certification_version: PILOT_CERTIFICATION_VERSION,
+      reason,
+    });
+    return res.status(201).json({ ok: true, access: rows[0] });
+  } catch (err) {
+    if (err?.code === '23505') {
+      return fail(res, 409, 'PILOT_ACCESS_ALREADY_ACTIVE', 'Revoke the current pilot learner before granting another');
+    }
+    reportError('/api/packages?action=grant-programme-pilot-access', err);
+    return fail(res, 500, 'PILOT_ACCESS_GRANT_FAILED', 'Failed to grant controlled-pilot access');
+  }
+}
+
+async function revokeProgrammePilotAccess(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const accessId = String(req.body?.pilot_access_id || '').trim().toLowerCase();
+  const reason = String(req.body?.reason || '').trim();
+  if (!validUuid(accessId) || reason.length < 2 || reason.length > 1000) {
+    return fail(res, 400, 'INVALID_PILOT_ACCESS_REVOCATION', 'An active pilot access record and audit reason are required');
+  }
+  const sql = neon(process.env.POSTGRES_URL);
+  try {
+    const rows = await sql`
+      UPDATE full_curriculum_pilot_access
+         SET active = FALSE, revoked_by_admin_id = ${scope.actor.id},
+             revoked_at = NOW(), revocation_reason = ${reason}, updated_at = NOW()
+       WHERE id = ${accessId}::uuid
+         AND school_id = ${scope.schoolId}
+         AND active = TRUE
+      RETURNING *
+    `;
+    if (!rows[0]) return fail(res, 409, 'PILOT_ACCESS_NOT_ACTIVE', 'This pilot access record is not active in this school');
+    await audit(sql, req, scope, 'package.revoke_programme_pilot_access', 'learner', rows[0].learner_id, {
+      pilot_access_id: rows[0].id,
+      reason,
+    });
+    return res.json({ ok: true, access: rows[0] });
+  } catch (err) {
+    reportError('/api/packages?action=revoke-programme-pilot-access', err);
+    return fail(res, 500, 'PILOT_ACCESS_REVOCATION_FAILED', 'Failed to revoke controlled-pilot access');
+  }
 }
 
 async function programmeStatus(req, res) {
@@ -322,6 +497,7 @@ async function programmeList(req, res) {
       SELECT e.id, e.learner_id, lu.name AS learner_name, e.status, e.current_phase,
              e.matching_deadline, e.programme_start_at, e.original_first_test_at,
              e.current_first_test_at, e.base_entitlement_end_at, e.approved_entitlement_end_at,
+             e.early_start_requested, e.cooling_off_expires_at, e.service_may_start_at,
              m.id AS matching_record_id, m.status AS matching_status,
              m.initial_instructor_id, m.current_instructor_id, m.assigned_at,
              m.accepted_at, mi.name AS matched_instructor_name,
@@ -380,6 +556,291 @@ async function programmeList(req, res) {
   }
 }
 
+async function programmeRefundCases(req, res) {
+  if (!requireGet(req, res)) return;
+  const scope = scopeFor(req, res, ['learner', 'admin']);
+  if (!scope) return;
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const cases = await listRefundCases(
+      sql,
+      scope.schoolId,
+      scope.actorType === 'learner' ? scope.actor.id : null
+    );
+    return res.json({ ok: true, refund_cases: cases });
+  } catch (err) {
+    reportError('/api/packages?action=programme-refund-cases', err);
+    return fail(res, 500, 'PROGRAMME_REFUND_CASES_FAILED', 'Failed to load programme refund cases');
+  }
+}
+
+async function requestProgrammeTerminationAction(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['learner', 'admin']);
+  if (!scope) return;
+  const enrolmentId = positiveInteger(req.body?.enrolment_id);
+  const requestId = String(req.body?.request_id || '').trim().toLowerCase();
+  const learnerRequest = scope.actorType === 'learner';
+  const requestKind = learnerRequest
+    ? 'learner_cancellation'
+    : String(req.body?.request_kind || '').trim();
+  const channel = learnerRequest
+    ? 'self_service'
+    : String(req.body?.channel || 'admin_recorded').trim();
+  const receivedAt = learnerRequest ? new Date() : new Date(req.body?.received_at || Date.now());
+  if (!enrolmentId || !validUuid(requestId)) {
+    return fail(res, 400, 'INVALID_TERMINATION_REQUEST', 'A valid programme and request identity are required');
+  }
+  if (!learnerRequest && !['learner_cancellation', 'matching_failure', 'provider_nonfulfilment'].includes(requestKind)) {
+    return fail(res, 400, 'INVALID_TERMINATION_KIND', 'Choose learner cancellation, matching failure or provider non-fulfilment');
+  }
+  try {
+    const result = await requestProgrammeTermination({
+      connectionString: process.env.POSTGRES_URL,
+      schoolId: scope.schoolId,
+      actorId: scope.actor.id,
+      actorType: scope.actorType,
+      learnerId: learnerRequest ? scope.actor.id : null,
+      enrolmentId,
+      requestId,
+      requestKind,
+      channel,
+      reason: req.body?.reason,
+      receivedAt,
+    });
+    await audit(neon(process.env.POSTGRES_URL), req, scope, 'package.request_programme_termination', 'full_curriculum_enrolment', enrolmentId, {
+      request_id: requestId,
+      request_kind: requestKind,
+      channel,
+      classification: result.refundCase.classification,
+      refund_due_pence: result.refundCase.refund_due_pence,
+      idempotent: result.idempotent,
+      stripe_refund_issued: false,
+    });
+    return res.status(result.idempotent ? 200 : 201).json({
+      ok: true,
+      idempotent: result.idempotent,
+      refund_case: result.refundCase,
+      calculation: result.calculation || result.refundCase.calculation_snapshot?.calculation || null,
+      stripe_refund_issued: false,
+      message: 'Your request has been recorded at its received time. A manual review is required before any refund is issued.',
+    });
+  } catch (err) {
+    reportError('/api/packages?action=request-programme-termination', err);
+    return fail(res, err.status || 500, err.code || 'PROGRAMME_TERMINATION_FAILED', err.status ? err.message : 'Failed to record the programme cancellation request');
+  }
+}
+
+async function reviewProgrammeRefund(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const caseId = String(req.body?.refund_case_id || '').trim().toLowerCase();
+  const feePence = Number(req.body?.stripe_fee_absorbed_pence);
+  const reason = String(req.body?.reason || '').trim();
+  if (!validUuid(caseId) || !Number.isSafeInteger(feePence) || feePence < 0 || reason.length < 2 || reason.length > 1000) {
+    return fail(res, 400, 'INVALID_REFUND_REVIEW', 'A refund case, verified Stripe fee and audit reason are required');
+  }
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      WITH previous AS (
+        SELECT id, school_id, status
+          FROM full_curriculum_refund_cases
+         WHERE id = ${caseId}::uuid AND school_id = ${scope.schoolId}
+           AND status IN ('calculated', 'manual_review')
+         FOR UPDATE
+      ), reviewed AS (
+        UPDATE full_curriculum_refund_cases c
+           SET status = 'reviewed', stripe_fee_absorbed_pence = ${feePence},
+               reviewed_by_admin_id = ${scope.actor.id}, reviewed_at = NOW(), updated_at = NOW()
+          FROM previous p
+         WHERE c.id = p.id AND c.school_id = p.school_id
+        RETURNING c.*, p.status AS from_status
+      ), event AS (
+        INSERT INTO full_curriculum_refund_case_events (
+          school_id, refund_case_id, from_status, to_status, actor_type, actor_id, detail
+        )
+        SELECT school_id, id, from_status, status, ${scope.actorType}, ${scope.actor.id},
+               jsonb_build_object('reason', ${reason}::text, 'stripe_fee_absorbed_pence', ${feePence}::integer)
+          FROM reviewed
+        RETURNING refund_case_id
+      )
+      SELECT reviewed.* FROM reviewed JOIN event ON event.refund_case_id = reviewed.id
+    `;
+    if (!rows[0]) return fail(res, 409, 'REFUND_REVIEW_NOT_ALLOWED', 'The refund case is not awaiting first review');
+    await audit(sql, req, scope, 'package.review_programme_refund', 'full_curriculum_enrolment', rows[0].enrolment_id, {
+      refund_case_id: caseId,
+      reason,
+      stripe_fee_absorbed_pence: feePence,
+    });
+    return res.json({ ok: true, refund_case: rows[0], stripe_refund_issued: false });
+  } catch (err) {
+    reportError('/api/packages?action=review-programme-refund', err);
+    return fail(res, 500, 'REFUND_REVIEW_FAILED', 'Failed to record the first refund review');
+  }
+}
+
+async function approveProgrammeRefund(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const caseId = String(req.body?.refund_case_id || '').trim().toLowerCase();
+  const reason = String(req.body?.reason || '').trim();
+  if (!validUuid(caseId) || reason.length < 2 || reason.length > 1000) {
+    return fail(res, 400, 'INVALID_REFUND_APPROVAL', 'A refund case and audit reason are required');
+  }
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const rows = await sql`
+      WITH approved AS (
+        UPDATE full_curriculum_refund_cases
+           SET status = 'approved', approved_by_admin_id = ${scope.actor.id},
+               approved_at = NOW(), updated_at = NOW()
+         WHERE id = ${caseId}::uuid AND school_id = ${scope.schoolId}
+           AND status = 'reviewed'
+           AND reviewed_by_admin_id IS DISTINCT FROM ${scope.actor.id}
+           AND stripe_fee_absorbed_pence IS NOT NULL
+        RETURNING *
+      ), event AS (
+        INSERT INTO full_curriculum_refund_case_events (
+          school_id, refund_case_id, from_status, to_status, actor_type, actor_id, detail
+        )
+        SELECT school_id, id, 'reviewed', status, ${scope.actorType}, ${scope.actor.id},
+               jsonb_build_object('reason', ${reason}::text, 'provider_call_made', false)
+          FROM approved
+        RETURNING refund_case_id
+      )
+      SELECT approved.* FROM approved JOIN event ON event.refund_case_id = approved.id
+    `;
+    if (!rows[0]) return fail(res, 409, 'SECOND_APPROVER_REQUIRED', 'A different admin must approve a reviewed case with complete fee evidence');
+    await audit(sql, req, scope, 'package.approve_programme_refund', 'full_curriculum_enrolment', rows[0].enrolment_id, {
+      refund_case_id: caseId,
+      reason,
+      stripe_refund_issued: false,
+    });
+    return res.json({ ok: true, refund_case: rows[0], stripe_refund_issued: false });
+  } catch (err) {
+    reportError('/api/packages?action=approve-programme-refund', err);
+    return fail(res, 500, 'REFUND_APPROVAL_FAILED', 'Failed to approve the programme refund');
+  }
+}
+
+async function recordProgrammeRefundResult(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const caseId = String(req.body?.refund_case_id || '').trim().toLowerCase();
+  const providerRefundId = String(req.body?.provider_refund_id || '').trim();
+  const providerStatus = String(req.body?.provider_status || '').trim();
+  const reason = String(req.body?.reason || '').trim();
+  if (!validUuid(caseId) || !/^re_[A-Za-z0-9_]+$/.test(providerRefundId)
+      || !['succeeded', 'failed'].includes(providerStatus)
+      || reason.length < 2 || reason.length > 1000) {
+    return fail(res, 400, 'INVALID_PROVIDER_REFUND_RESULT', 'A Stripe refund identity, result and audit reason are required');
+  }
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const targetStatus = providerStatus === 'succeeded' ? 'provider_succeeded' : 'provider_failed';
+    const rows = await sql`
+      WITH previous AS (
+        SELECT id, school_id, status
+          FROM full_curriculum_refund_cases
+         WHERE id = ${caseId}::uuid AND school_id = ${scope.schoolId}
+           AND status = ANY(${['approved', 'provider_failed']}::text[])
+         FOR UPDATE
+      ), recorded AS (
+        UPDATE full_curriculum_refund_cases c
+           SET status = ${targetStatus}, provider_refund_id = ${providerRefundId},
+               provider_status = ${providerStatus}, provider_recorded_at = NOW(), updated_at = NOW()
+          FROM previous p
+         WHERE c.id = p.id AND c.school_id = p.school_id
+        RETURNING c.*, p.status AS from_status
+      ), event AS (
+        INSERT INTO full_curriculum_refund_case_events (
+          school_id, refund_case_id, from_status, to_status, actor_type, actor_id, detail
+        )
+        SELECT school_id, id, from_status, status, ${scope.actorType}, ${scope.actor.id},
+               jsonb_build_object('reason', ${reason}::text, 'provider_refund_id', ${providerRefundId}::text, 'provider_status', ${providerStatus}::text)
+          FROM recorded
+        RETURNING refund_case_id
+      )
+      SELECT recorded.* FROM recorded JOIN event ON event.refund_case_id = recorded.id
+    `;
+    if (!rows[0]) return fail(res, 409, 'REFUND_RESULT_NOT_RECORDABLE', 'Only an approved or failed case can receive a manual Stripe result');
+    await audit(sql, req, scope, 'package.record_programme_refund_result', 'full_curriculum_enrolment', rows[0].enrolment_id, {
+      refund_case_id: caseId,
+      reason,
+      provider_refund_id: providerRefundId,
+      provider_status: providerStatus,
+    });
+    return res.json({ ok: true, refund_case: rows[0], provider_call_made_by_application: false });
+  } catch (err) {
+    reportError('/api/packages?action=record-programme-refund-result', err);
+    return fail(res, err?.code === '23505' ? 409 : 500, err?.code === '23505' ? 'PROVIDER_REFUND_ID_CONFLICT' : 'REFUND_RESULT_RECORD_FAILED', err?.code === '23505' ? 'This Stripe refund identity is already recorded' : 'Failed to record the provider refund result');
+  }
+}
+
+async function releaseCoolingOffHold(req, res) {
+  if (!requirePost(req, res)) return;
+  const scope = scopeFor(req, res, ['admin']);
+  if (!scope) return;
+  const enrolmentId = positiveInteger(req.body?.enrolment_id);
+  const reason = String(req.body?.reason || '').trim();
+  if (!enrolmentId || reason.length < 2 || reason.length > 1000) {
+    return fail(res, 400, 'INVALID_COOLING_OFF_RELEASE', 'An enrolment and audit reason are required');
+  }
+  const sql = neon(process.env.POSTGRES_URL);
+  try {
+    const rows = await sql`
+      WITH released AS (
+        UPDATE full_curriculum_enrolments e
+           SET status = 'paid_matching', updated_at = NOW()
+         WHERE e.id = ${enrolmentId}
+           AND e.school_id = ${scope.schoolId}
+           AND e.status = 'cooling_off_hold'
+           AND e.early_start_requested = FALSE
+           AND e.service_may_start_at <= NOW()
+           AND e.programme_start_at IS NULL
+           AND EXISTS (
+             SELECT 1
+               FROM learner_package_purchases purchase
+               JOIN full_curriculum_contract_events confirmation
+                 ON confirmation.attempt_id = purchase.attempt_id
+                AND confirmation.school_id = purchase.school_id
+                AND confirmation.event_type = 'durable_confirmation_delivered'
+              WHERE purchase.id = e.purchase_id
+                AND purchase.school_id = e.school_id
+           )
+        RETURNING e.*
+      ), contract_event AS (
+        INSERT INTO full_curriculum_contract_events (
+          school_id, attempt_id, purchase_id, enrolment_id, event_type,
+          actor_type, actor_id, detail, occurred_at
+        )
+        SELECT e.school_id, p.attempt_id, p.id, e.id,
+               'cooling_off_hold_released', ${scope.actorType}, ${scope.actor.id},
+               jsonb_build_object('reason', ${reason}::text), NOW()
+          FROM released e
+          JOIN learner_package_purchases p
+            ON p.id = e.purchase_id AND p.school_id = e.school_id
+        RETURNING enrolment_id
+      )
+      SELECT released.*
+        FROM released
+        JOIN contract_event ON contract_event.enrolment_id = released.id
+    `;
+    if (!rows[0]) {
+      return fail(res, 409, 'COOLING_OFF_HOLD_NOT_RELEASABLE', 'The cooling-off hold has not expired, was already released, or is outside this school');
+    }
+    await audit(sql, req, scope, 'package.release_cooling_off_hold', 'full_curriculum_enrolment', enrolmentId, { reason });
+    return res.json({ ok: true, enrolment: rows[0] });
+  } catch (err) {
+    reportError('/api/packages?action=release-cooling-off-hold', err);
+    return fail(res, 500, 'COOLING_OFF_RELEASE_FAILED', 'Failed to release the cooling-off hold');
+  }
+}
+
 async function assignInstructor(req, res) {
   if (!requirePost(req, res)) return;
   const scope = scopeFor(req, res, ['instructor', 'admin']);
@@ -408,6 +869,17 @@ async function assignInstructor(req, res) {
            AND m.school_id = ${scope.schoolId}
            AND e.learner_id IS NOT NULL
            AND e.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
+           AND e.status <> 'cooling_off_hold'
+           AND EXISTS (
+             SELECT 1
+               FROM learner_package_purchases purchase
+               JOIN full_curriculum_contract_events confirmation
+                 ON confirmation.attempt_id = purchase.attempt_id
+                AND confirmation.school_id = purchase.school_id
+                AND confirmation.event_type = 'durable_confirmation_delivered'
+              WHERE purchase.id = e.purchase_id
+                AND purchase.school_id = e.school_id
+           )
            AND (${scope.actorType !== 'instructor'} OR (e.status = 'paid_matching' AND m.status <> 'started'))
            AND (
              ${scope.actorType !== 'instructor'}
@@ -662,7 +1134,15 @@ async function startProgramme(req, res) {
                 AND av.matching_record_id = m.id
                 AND av.instructor_id = m.current_instructor_id
            )
-           AND ${startAt}::timestamptz >= p.paid_at
+           AND EXISTS (
+             SELECT 1
+               FROM full_curriculum_contract_events confirmation
+              WHERE confirmation.school_id = e.school_id
+                AND confirmation.attempt_id = p.attempt_id
+                AND confirmation.event_type = 'durable_confirmation_delivered'
+           )
+           AND e.service_may_start_at IS NOT NULL
+           AND ${startAt}::timestamptz >= e.service_may_start_at
            AND ${startAt}::timestamptz < e.original_first_test_at
          FOR UPDATE OF e, m
       ), boundaries AS (
@@ -1312,6 +1792,15 @@ async function handleFullCurriculumAction(req, res) {
   else if (action === 'verify-test-booking') await verifyTestBooking(req, res);
   else if (action === 'programme-status') await programmeStatus(req, res);
   else if (action === 'programme-list') await programmeList(req, res);
+  else if (action === 'programme-refund-cases') await programmeRefundCases(req, res);
+  else if (action === 'request-programme-termination') await requestProgrammeTerminationAction(req, res);
+  else if (action === 'review-programme-refund') await reviewProgrammeRefund(req, res);
+  else if (action === 'approve-programme-refund') await approveProgrammeRefund(req, res);
+  else if (action === 'record-programme-refund-result') await recordProgrammeRefundResult(req, res);
+  else if (action === 'programme-pilot-access') await programmePilotAccess(req, res);
+  else if (action === 'grant-programme-pilot-access') await grantProgrammePilotAccess(req, res);
+  else if (action === 'revoke-programme-pilot-access') await revokeProgrammePilotAccess(req, res);
+  else if (action === 'release-cooling-off-hold') await releaseCoolingOffHold(req, res);
   else if (action === 'assign-instructor') await assignInstructor(req, res);
   else if (action === 'accept-assignment') await acceptAssignment(req, res);
   else if (action === 'record-programme-availability') await recordProgrammeAvailability(req, res);
