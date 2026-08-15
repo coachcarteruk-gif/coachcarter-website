@@ -29,6 +29,24 @@ const {
   operationalTimeZone,
 } = require('./_full-curriculum');
 const { handleFullCurriculumAction } = require('./_full-curriculum-api');
+const {
+  CHECKOUT_ACKNOWLEDGEMENT,
+  CONSUMER_RIGHTS_DISCLOSURE_VERSION,
+  DEFERRED_START_REQUEST,
+  EARLY_START_REQUEST,
+  OWNER_CERTIFIED_TERMS_VERSION,
+  PILOT_CERTIFICATION_VERSION,
+  buildConsumerContractSnapshot,
+  normaliseConsumerRightsConfig,
+} = require('./_full-curriculum-consumer-rights');
+
+function ownerCertifiedPilotTermsReady(product) {
+  const pilot = product?.content?.controlled_pilot;
+  return product?.customer_terms_version === OWNER_CERTIFIED_TERMS_VERSION
+    && pilot?.adult_only === true
+    && pilot?.one_active_learner_per_school === true
+    && pilot?.owner_certification_version === PILOT_CERTIFICATION_VERSION;
+}
 
 function errorResponse(res, status, code, message) {
   return res.status(status).json({ error: true, code, message });
@@ -113,6 +131,10 @@ function safeAttempt(attempt) {
     amount_pence: Number(attempt.amount_pence),
     currency: attempt.currency,
     customer_terms_version: attempt.customer_terms_version,
+    early_start_requested: typeof attempt.early_start_requested === 'boolean'
+      ? attempt.early_start_requested
+      : null,
+    adult_age_confirmed: attempt.adult_age_confirmed === true,
     created_at: attempt.created_at,
     checkout_created_at: attempt.checkout_created_at,
     provider_expires_at: attempt.provider_expires_at,
@@ -285,6 +307,7 @@ async function handleCatalogue(req, res) {
     const schoolTimezone = operationalTimeZone(schoolRow.config);
     let latestTestBooking = null;
     let hasActiveEnrolment = false;
+    let pilotAccessApproved = false;
     if (sameSchoolLearner) {
       const testBookings = await sql`
         SELECT id, verification_status, test_date, test_time, test_centre, verified_at,
@@ -306,6 +329,15 @@ async function handleCatalogue(req, res) {
          LIMIT 1
       `;
       hasActiveEnrolment = !!active[0];
+      const pilotAccess = await sql`
+        SELECT id FROM full_curriculum_pilot_access
+         WHERE school_id = ${school.schoolId}
+           AND learner_id = ${sameSchoolLearner.id}
+           AND certification_version = ${PILOT_CERTIFICATION_VERSION}
+           AND active = TRUE
+         LIMIT 1
+      `;
+      pilotAccessApproved = !!pilotAccess[0];
     }
 
     return res.json({
@@ -319,22 +351,40 @@ async function handleCatalogue(req, res) {
       checkout_available: purchasingEnabled && !!sameSchoolLearner
         && latestTestBooking?.verification_status === 'verified'
         && latestTestBooking?.is_future === true
-        && !hasActiveEnrolment,
+        && !hasActiveEnrolment
+        && pilotAccessApproved
+        && products.some(product => product.slug === FULL_CURRICULUM_SLUG
+          && normaliseConsumerRightsConfig(product.content, product.price_pence).ok
+          && ownerCertifiedPilotTermsReady(product)),
       purchasing_test_enabled: purchasingEnabled,
       payment_method: purchasingEnabled ? 'pay_by_bank_test' : null,
-      products: products.map((product) => ({
-        ...product,
-        eligibility: buildCatalogueEligibility(product, {
+      products: products.map((product) => {
+        const consumerRights = normaliseConsumerRightsConfig(product.content, product.price_pence);
+        const ownerCertified = ownerCertifiedPilotTermsReady(product);
+        return {
+          ...product,
+          consumer_rights: product.slug === FULL_CURRICULUM_SLUG ? {
+            ready: consumerRights.ok && ownerCertified,
+            disclosure_version: CONSUMER_RIGHTS_DISCLOSURE_VERSION,
+            checkout_acknowledgement: CHECKOUT_ACKNOWLEDGEMENT,
+            early_start_request: EARLY_START_REQUEST,
+            deferred_start_request: DEFERRED_START_REQUEST,
+          } : null,
+          eligibility: buildCatalogueEligibility(product, {
           purchasingEnabled,
           sameSchoolLearner: !!sameSchoolLearner,
           testBookingStatus: latestTestBooking?.verification_status || 'missing',
           testBookingFuture: latestTestBooking?.is_future === true,
           hasActiveEnrolment,
-        }),
-      })),
+          pilotAccessApproved,
+          consumerRightsReady: consumerRights.ok && ownerCertified,
+          }),
+        };
+      }),
       full_curriculum_eligibility: {
         test_booking: latestTestBooking,
         has_active_enrolment: hasActiveEnrolment,
+        controlled_pilot_access: pilotAccessApproved,
       },
     });
   } catch (err) {
@@ -492,6 +542,12 @@ async function handleCreateVersion(req, res) {
     const termsVersion = String(req.body?.customer_terms_version || product.customer_terms_version || '').trim();
     if (!content || !termsVersion || termsVersion.length > 120) {
       return errorResponse(res, 400, 'INVALID_VERSION_CONTENT', 'Valid version content and customer terms version are required');
+    }
+    if (product.slug === FULL_CURRICULUM_SLUG) {
+      const consumerRights = normaliseConsumerRightsConfig(content, pricePence);
+      if (!consumerRights.ok) {
+        return errorResponse(res, 400, consumerRights.code, 'Full Curriculum versions require approved purchase-price teaching, retake and assessment allocations whose caps do not exceed the package price');
+      }
     }
 
     const rows = await sql`
@@ -753,28 +809,41 @@ async function handleAttemptStatus(req, res) {
 
 async function findExistingAttempt(sql, { clientRequestId, learnerId, schoolId, productId }) {
   const byRequest = await sql`
-    SELECT * FROM package_purchase_attempts
-     WHERE school_id = ${schoolId}
-       AND learner_id = ${learnerId}
-       AND client_request_id = ${clientRequestId}::uuid
+    SELECT a.*, evidence.early_start_requested, evidence.disclosure_version,
+           evidence.adult_age_confirmed
+      FROM package_purchase_attempts a
+      LEFT JOIN full_curriculum_consumer_contract_evidence evidence
+        ON evidence.attempt_id = a.id AND evidence.school_id = ${schoolId}
+     WHERE a.school_id = ${schoolId}
+       AND a.learner_id = ${learnerId}
+       AND a.client_request_id = ${clientRequestId}::uuid
      LIMIT 1
   `;
   if (byRequest[0]) return byRequest[0];
   const active = await sql`
-    SELECT * FROM package_purchase_attempts
-     WHERE school_id = ${schoolId}
-       AND learner_id = ${learnerId}
-       AND product_id = ${productId}
-        AND status IN ('created', 'submitting', 'pending', 'paid', 'review_required')
-     ORDER BY created_at DESC
+    SELECT a.*, evidence.early_start_requested, evidence.disclosure_version,
+           evidence.adult_age_confirmed
+      FROM package_purchase_attempts a
+      LEFT JOIN full_curriculum_consumer_contract_evidence evidence
+        ON evidence.attempt_id = a.id AND evidence.school_id = ${schoolId}
+     WHERE a.school_id = ${schoolId}
+       AND a.learner_id = ${learnerId}
+       AND a.product_id = ${productId}
+       AND a.status IN ('created', 'submitting', 'pending', 'paid', 'review_required')
+     ORDER BY a.created_at DESC
      LIMIT 1
   `;
   return active[0] || null;
 }
 
-function existingAttemptResponse(res, attempt, requestedProductId) {
+function existingAttemptResponse(res, attempt, requestedProductId, earlyStartRequested, disclosureVersion, adultAgeConfirmed) {
   if (Number(attempt.product_id) !== Number(requestedProductId)) {
     return errorResponse(res, 409, 'IDEMPOTENCY_SCOPE_MISMATCH', 'This request identity belongs to another package');
+  }
+  if (attempt.early_start_requested !== earlyStartRequested
+      || attempt.adult_age_confirmed !== adultAgeConfirmed
+      || attempt.disclosure_version !== disclosureVersion) {
+    return errorResponse(res, 409, 'IDEMPOTENCY_CONSENT_MISMATCH', 'This checkout identity belongs to a different recorded start choice or disclosure version');
   }
   const response = { ok: true, reused: true, attempt: safeAttempt(attempt) };
   if (attempt.status === 'pending' && attempt.stripe_checkout_url) {
@@ -799,8 +868,16 @@ async function handleCreateCheckout(req, res) {
   if (!scope) return;
   const productId = parsePositiveInteger(req.body?.product_id);
   const clientRequestId = String(req.body?.client_request_id || '').trim().toLowerCase();
+  const termsAccepted = req.body?.consumer_terms_accepted === true;
+  const adultAgeConfirmed = req.body?.adult_age_confirmed === true;
+  const earlyStartRequested = req.body?.early_start_requested;
+  const disclosureVersion = String(req.body?.disclosure_version || '').trim();
   if (!productId || !isUuid(clientRequestId)) {
     return errorResponse(res, 400, 'INVALID_CHECKOUT_REQUEST', 'product_id and a valid client_request_id are required');
+  }
+  if (!termsAccepted || !adultAgeConfirmed || typeof earlyStartRequested !== 'boolean'
+      || disclosureVersion !== CONSUMER_RIGHTS_DISCLOSURE_VERSION) {
+    return errorResponse(res, 400, 'CONSUMER_RIGHTS_ACKNOWLEDGEMENT_REQUIRED', 'Confirm you are 18 or over, accept the current terms and make an explicit programme-start choice');
   }
 
   let stripe;
@@ -886,6 +963,21 @@ async function handleCreateCheckout(req, res) {
     if (!content || !productName) {
       return errorResponse(res, 409, 'PACKAGE_VERSION_INVALID', 'The active package version is incomplete');
     }
+    const consumerRights = normaliseConsumerRightsConfig(content, amountPence);
+    if (!consumerRights.ok) {
+      return errorResponse(res, 409, consumerRights.code, 'Full Curriculum purchasing is blocked until the approved consumer-rights values are configured in an immutable product version');
+    }
+    if (!ownerCertifiedPilotTermsReady({ ...product, content })) {
+      return errorResponse(res, 409, 'OWNER_CERTIFIED_TERMS_REQUIRED', 'Full Curriculum controlled-pilot purchasing requires the exact owner-certified prospective terms version');
+    }
+    const contractEvidence = buildConsumerContractSnapshot({
+      amountPence,
+      currency: product.currency,
+      customerTermsVersion: product.customer_terms_version,
+      config: consumerRights.config,
+      earlyStartRequested,
+      adultAgeConfirmed,
+    });
     const schoolTimezone = operationalTimeZone(school.config);
 
     const verifiedBookings = await sql`
@@ -913,6 +1005,17 @@ async function handleCreateCheckout(req, res) {
     `;
     if (activeEnrolments[0]) {
       return errorResponse(res, 409, 'ACTIVE_FULL_CURRICULUM_EXISTS', 'This learner already has an active Full Curriculum enrolment');
+    }
+    const pilotAccess = await sql`
+      SELECT id FROM full_curriculum_pilot_access
+       WHERE school_id = ${scope.schoolId}
+         AND learner_id = ${scope.learner.id}
+         AND certification_version = ${PILOT_CERTIFICATION_VERSION}
+         AND active = TRUE
+       LIMIT 1
+    `;
+    if (!pilotAccess[0]) {
+      return errorResponse(res, 403, 'CONTROLLED_PILOT_ACCESS_REQUIRED', 'Full Curriculum purchasing is limited to the learner approved for the controlled pilot');
     }
 
     const attemptId = crypto.randomUUID();
@@ -954,7 +1057,7 @@ async function handleCreateCheckout(req, res) {
         productId,
       });
       if (!existing) throw new Error('Purchase attempt conflict could not be resolved safely');
-      return existingAttemptResponse(res, existing, productId);
+      return existingAttemptResponse(res, existing, productId, earlyStartRequested, disclosureVersion, adultAgeConfirmed);
     }
     await recordAttemptState(sql, {
       attemptId: attempt.id,
@@ -964,6 +1067,41 @@ async function handleCreateCheckout(req, res) {
       source: 'checkout_api',
       detail: { test_mode: true },
     });
+    await sql`
+      WITH evidence AS (
+        INSERT INTO full_curriculum_consumer_contract_evidence (
+          school_id, attempt_id, learner_id, customer_terms_version,
+          policy_version, disclosure_version, refund_calculation_version,
+          disclosure_snapshot, disclosure_sha256,
+          checkout_acknowledgement_sha256, early_start_requested,
+          adult_age_confirmed, start_request_text, start_request_sha256, actor_type, actor_id,
+          acknowledged_at
+        ) VALUES (
+          ${scope.schoolId}, ${attempt.id}::uuid, ${scope.learner.id},
+          ${product.customer_terms_version}, ${consumerRights.config.policyVersion},
+          ${consumerRights.config.disclosureVersion},
+          ${consumerRights.config.refundCalculationVersion},
+          ${JSON.stringify(contractEvidence.snapshot)}::jsonb,
+          ${contractEvidence.snapshotSha256},
+          ${contractEvidence.acknowledgementSha256}, ${earlyStartRequested}, TRUE,
+          ${contractEvidence.snapshot.start_request_text},
+          ${contractEvidence.startRequestSha256}, 'learner', ${scope.learner.id}, NOW()
+        )
+        ON CONFLICT (school_id, attempt_id) DO NOTHING
+        RETURNING id
+      )
+      INSERT INTO full_curriculum_contract_events (
+        school_id, attempt_id, event_type, actor_type, actor_id, detail, occurred_at
+      )
+      SELECT ${scope.schoolId}, ${attempt.id}::uuid, 'checkout_evidence_recorded',
+             'system', NULL,
+             jsonb_build_object(
+               'disclosure_version', ${consumerRights.config.disclosureVersion}::text,
+               'early_start_requested', ${earlyStartRequested}::boolean
+             ), NOW()
+        FROM evidence
+      ON CONFLICT DO NOTHING
+    `;
 
     const claimed = await sql`
       UPDATE package_purchase_attempts
@@ -979,7 +1117,7 @@ async function handleCreateCheckout(req, res) {
         learnerId: scope.learner.id,
         schoolId: scope.schoolId,
       });
-      return existingAttemptResponse(res, existing, productId);
+      return existingAttemptResponse(res, existing, productId, earlyStartRequested, disclosureVersion, adultAgeConfirmed);
     }
     await recordAttemptState(sql, {
       attemptId: attempt.id,
@@ -1079,7 +1217,7 @@ async function handleCreateCheckout(req, res) {
           schoolId: scope.schoolId,
           productId,
         });
-        if (existing) return existingAttemptResponse(res, existing, productId);
+        if (existing) return existingAttemptResponse(res, existing, productId, earlyStartRequested, disclosureVersion, adultAgeConfirmed);
       } catch (_) {}
     }
     if (attempt && attempt.status === 'submitting') {
@@ -1091,6 +1229,16 @@ async function handleCreateCheckout(req, res) {
           failureMessage: 'Checkout may exist but local evidence could not be completed.',
         });
         return res.status(202).json({ ok: true, attempt: safeAttempt(attempt) });
+      } catch (_) {}
+    }
+    if (attempt && attempt.status === 'created') {
+      try {
+        attempt = await setAttemptStatus(sql, {
+          attempt,
+          status: 'failed',
+          failureCode: 'CONTRACT_EVIDENCE_WRITE_FAILED',
+          failureMessage: 'The required consumer-contract evidence could not be completed.',
+        });
       } catch (_) {}
     }
     reportError('/api/packages?action=create-checkout', err);

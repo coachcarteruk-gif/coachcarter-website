@@ -104,6 +104,23 @@ async function fullCurriculumMatchingTablesExist(sql) {
   return Boolean(row?.has_matching && row?.has_assignments && row?.has_availability && row?.has_windows);
 }
 
+async function fullCurriculumConsumerRightsTablesExist(sql) {
+  const [row] = await sql`
+    SELECT
+      to_regclass('public.full_curriculum_consumer_contract_evidence') IS NOT NULL AS has_contract_evidence,
+      to_regclass('public.full_curriculum_termination_requests') IS NOT NULL AS has_termination_requests,
+      to_regclass('public.full_curriculum_refund_cases') IS NOT NULL AS has_refund_cases
+  `;
+  return Boolean(row?.has_contract_evidence && row?.has_termination_requests && row?.has_refund_cases);
+}
+
+async function fullCurriculumPilotAccessTableExists(sql) {
+  const [row] = await sql`
+    SELECT to_regclass('public.full_curriculum_pilot_access') IS NOT NULL AS has_pilot_access
+  `;
+  return Boolean(row?.has_pilot_access);
+}
+
 async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (!sql || !learnerId) {
     throw new Error('deleteLearnerCascade: sql and learnerId required');
@@ -123,6 +140,8 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasPackagePurchaseAttempts = await packagePurchaseAttemptsTableExists(sql);
   const hasFullCurriculum = await fullCurriculumTablesExist(sql);
   const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
+  const hasFullCurriculumConsumerRights = await fullCurriculumConsumerRightsTablesExist(sql);
+  const hasFullCurriculumPilotAccess = await fullCurriculumPilotAccessTableExists(sql);
 
   const txn = [
     // 1. Anonymise financial records (7-year retention).
@@ -176,6 +195,19 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   }
   if (hasFullCurriculum) {
     retainedAnonymisation.push(
+      ...(hasFullCurriculumConsumerRights
+        ? [
+            sql`UPDATE full_curriculum_refund_cases SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+            sql`UPDATE full_curriculum_termination_requests
+                   SET learner_id = NULL,
+                       actor_id = CASE WHEN actor_type = 'learner' THEN NULL ELSE actor_id END
+                 WHERE learner_id = ${learnerId}`,
+            sql`UPDATE full_curriculum_consumer_contract_evidence
+                   SET learner_id = NULL,
+                       actor_id = CASE WHEN actor_type = 'learner' THEN NULL ELSE actor_id END
+                 WHERE learner_id = ${learnerId}`,
+          ]
+        : []),
       sql`UPDATE learner_package_purchases SET learner_id = NULL WHERE learner_id = ${learnerId}`,
       ...(hasFullCurriculumMatching
         ? [sql`UPDATE full_curriculum_matching_records
@@ -208,6 +240,10 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   }
   txn.splice(2, 0, ...retainedAnonymisation);
 
+  if (hasFullCurriculumPilotAccess) {
+    txn.push(sql`DELETE FROM full_curriculum_pilot_access WHERE learner_id = ${learnerId}`);
+  }
+
   // Magic-link tokens key on email, not learner_id. Append conditionally.
   if (email) {
     txn.push(sql`DELETE FROM magic_link_tokens WHERE email = ${email}`);
@@ -230,4 +266,6 @@ module.exports = {
   packagePurchaseAttemptsTableExists,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
+  fullCurriculumConsumerRightsTablesExist,
+  fullCurriculumPilotAccessTableExists,
 };

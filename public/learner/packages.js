@@ -53,7 +53,16 @@
   function actionButton(product, locked, describedBy) {
     var eligibility = product.eligibility || {};
     if (eligibility.checkout_available) {
-      return '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" aria-describedby="' + describedBy + '">Start test Pay by Bank</button>';
+      var rights = product.consumer_rights || {};
+      return '<div class="consumer-checkout" data-consumer-checkout="' + escapeHtml(product.id) + '">' +
+        '<p><strong>14-day cancellation right.</strong> Choose when matching may begin. Matching and administration have no deductible value, and CoachCarter absorbs Stripe fees.</p>' +
+        '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="after" checked> Begin matching after my 14-day cancellation period</label>' +
+        '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="now"> Begin matching now</label>' +
+        '<p class="consumer-choice-detail">' + escapeHtml(rights.early_start_request || '') + '</p>' +
+        '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
+        '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
+        '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' and enrol</button>' +
+      '</div>';
     }
     if (eligibility.state === 'authentication_required') {
       return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">Sign in for test checkout</button>';
@@ -66,6 +75,12 @@
     }
     if (eligibility.state === 'already_enrolled') {
       return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Already enrolled</button>';
+    }
+    if (eligibility.state === 'controlled_pilot_access_required') {
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Controlled pilot access required</button>';
+    }
+    if (eligibility.state === 'consumer_terms_not_ready') {
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Consumer terms not approved</button>';
     }
     return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Fulfilment not in this pass</button>';
   }
@@ -202,6 +217,14 @@
     var productId = Number(button.getAttribute('data-package-checkout'));
     if (!productId) return;
     var original = button.textContent;
+    var consumerCheckout = button.closest('[data-consumer-checkout]');
+    var termsAccepted = Boolean(consumerCheckout && consumerCheckout.querySelector('[name="consumer_terms_accepted"]:checked'));
+    var adultAgeConfirmed = Boolean(consumerCheckout && consumerCheckout.querySelector('[name="adult_age_confirmed"]:checked'));
+    var startChoice = consumerCheckout && consumerCheckout.querySelector('input[type="radio"]:checked');
+    if (!termsAccepted || !adultAgeConfirmed || !startChoice) {
+      showPurchaseStatus('Confirm your choices', 'Confirm you are 18 or over, read the cancellation and withdrawal terms, then choose when matching may begin.', 'is-failed', true);
+      return;
+    }
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     button.textContent = 'Starting secure test checkout…';
@@ -209,7 +232,14 @@
       var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
       var response = await fetcher(apiUrl('create-checkout'), {
         method: 'POST',
-        body: JSON.stringify({ product_id: productId, client_request_id: requestIdentity(productId) }),
+        body: JSON.stringify({
+          product_id: productId,
+          client_request_id: requestIdentity(productId),
+          consumer_terms_accepted: true,
+          adult_age_confirmed: true,
+          early_start_requested: startChoice.value === 'now',
+          disclosure_version: button.getAttribute('data-disclosure-version')
+        }),
         credentials: 'include'
       });
       var data = await response.json();
@@ -321,12 +351,15 @@
         ? (availability.windows || []).map(function (window) { return weekdayNames[window.weekday] + ' ' + window.local_start_time + '–' + window.local_end_time; }).join(', ') + ' (' + availability.timezone + ')'
         : 'No recurring weekly window was recorded (' + availability.timezone + ')';
     var hasStarted = Boolean(programme.programme_start_at);
+    var latestRefund = programme.refund_cases && programme.refund_cases[0];
+    var contract = programme.consumer_contract || {};
     var programmeWindow = hasStarted
       ? escapeHtml(formatDate(programme.programme_start_at)) + ' to ' + escapeHtml(formatDate(programme.approved_entitlement_end_at))
       : 'Awaiting the programme start agreed by your instructor or admin';
     programmeStatusContentEl.innerHTML =
       '<dl class="programme-facts">' +
         '<div><dt>Payment</dt><dd>Confirmed in Stripe test mode</dd></div>' +
+        '<div><dt>Cooling-off</dt><dd>' + escapeHtml(programme.status === 'cooling_off_hold' ? 'Matching begins after ' + formatDate(programme.service_may_start_at) : (contract.early_start_requested === true ? 'Early start requested and recorded' : 'Cooling-off hold released')) + '</dd></div>' +
         '<div><dt>Matching</dt><dd>' + escapeHtml(programme.status) + ' · deadline ' + escapeHtml(formatDate(programme.matching_deadline)) + '</dd></div>' +
         '<div><dt>Matching status</dt><dd>' + escapeHtml(matching.status || 'pending') + '</dd></div>' +
         '<div><dt>Matched instructor</dt><dd>' + escapeHtml(matching.instructor_name || 'Not yet assigned') + '</dd></div>' +
@@ -336,9 +369,55 @@
         '<div><dt>Base programme</dt><dd>' + programmeWindow + '</dd></div>' +
         '<div><dt>Weekly opportunities</dt><dd>' + escapeHtml((programme.weeks || []).length) + ' records · one 90-minute opportunity per programme week</dd></div>' +
         '<div><dt>Retake</dt><dd>' + (retake ? escapeHtml(retake.consumed_minutes) + ' of 600 minutes used; expires ' + escapeHtml(formatDate(retake.expires_at)) : 'Not activated') + '</dd></div>' +
-      '</dl>';
+      '</dl>' +
+      (latestRefund
+        ? '<section class="termination-panel"><h3>Cancellation and refund review</h3><p>Your request was received ' + escapeHtml(formatDate(latestRefund.received_at)) + '. The calculated refund is <strong>' + escapeHtml(formatPrice(latestRefund.refund_due_pence, programme.currency)) + '</strong>. Status: ' + escapeHtml(latestRefund.status) + '. No browser action issues a Stripe refund.</p></section>'
+        : programme.status === 'completed' || programme.status === 'withdrawn'
+          ? ''
+          : '<form class="termination-panel" id="programme-termination-form"><h3>Cancel or withdraw</h3><p>You can send a clear cancellation request here. We record the time immediately, stop further programme activity and prepare an itemised manual refund review.</p><label>Reason (optional)<textarea name="reason" maxlength="1000"></textarea></label><button type="submit">Record my cancellation request</button></form>');
     programmeStatusEl.hidden = false;
   }
+
+  function terminationRequestKey(enrolmentId) { return 'cc_programme_termination_' + String(enrolmentId); }
+  function terminationRequestIdentity(enrolmentId) {
+    var key = terminationRequestKey(enrolmentId);
+    var value = sessionStorage.getItem(key);
+    if (!value) {
+      value = window.crypto.randomUUID();
+      sessionStorage.setItem(key, value);
+    }
+    return value;
+  }
+
+  programmeStatusContentEl.addEventListener('submit', async function (event) {
+    if (event.target.id !== 'programme-termination-form') return;
+    event.preventDefault();
+    var form = event.target;
+    var button = form.querySelector('button[type="submit"]');
+    var programmeResponse;
+    try {
+      button.disabled = true;
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var statusResponse = await fetcher(apiUrl('programme-status'), { credentials: 'include' });
+      programmeResponse = await statusResponse.json();
+      if (!statusResponse.ok || !programmeResponse.programme) throw new Error('Programme status is unavailable.');
+      var programme = programmeResponse.programme;
+      var response = await fetcher(apiUrl('request-programme-termination'), {
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({
+          enrolment_id: Number(programme.id),
+          request_id: terminationRequestIdentity(programme.id),
+          reason: form.elements.reason.value
+        })
+      });
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'The request could not be recorded.');
+      showPurchaseStatus('Cancellation recorded', data.message, 'is-review', true);
+      await loadProgrammeStatus();
+    } catch (error) {
+      showPurchaseStatus('Cancellation not recorded', error.message || 'Please contact support by email.', 'is-failed', true);
+    } finally { button.disabled = false; }
+  });
 
   async function loadProgrammeStatus() {
     try {

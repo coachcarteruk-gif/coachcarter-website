@@ -15,6 +15,7 @@ const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const { deleteLearnerCascade } = require('../api/_gdpr');
+const { requestProgrammeTermination } = require('../api/_full-curriculum-refunds');
 
 (function loadDatabaseEnv() {
   const envPath = path.resolve(__dirname, '..', '.env.local');
@@ -71,6 +72,8 @@ const packageMigrationFiles = [
   '045_learner_packages_payment_foundation.sql',
   '046_full_curriculum_foundation.sql',
   '047_full_curriculum_matching.sql',
+  '048_full_curriculum_consumer_rights.sql',
+  '049_full_curriculum_controlled_pilot.sql',
 ];
 const packageMigrations = packageMigrationFiles.map((file) => ({
   file,
@@ -172,6 +175,52 @@ function isoDateAfterDays(days) {
   return date.toISOString().slice(0, 10);
 }
 
+async function insertConsumerContractEvidence(client, {
+  attemptId,
+  schoolId,
+  learnerId,
+  customerTermsVersion,
+  earlyStartRequested = true,
+}) {
+  const digest = 'a'.repeat(64);
+  const startText = earlyStartRequested
+    ? 'Please begin matching and programme services during my 14-day cancellation period.'
+    : 'Do not begin matching or programme services until my 14-day cancellation period has ended.';
+  await client.query(`
+    INSERT INTO full_curriculum_consumer_contract_evidence (
+      school_id, attempt_id, learner_id, customer_terms_version,
+      policy_version, disclosure_version, refund_calculation_version,
+      disclosure_snapshot, disclosure_sha256, checkout_acknowledgement_sha256,
+      early_start_requested, start_request_text, start_request_sha256,
+      adult_age_confirmed, actor_type, actor_id, acknowledged_at
+    ) VALUES (
+      $1, $2::uuid, $3, $4,
+      'full-curriculum-consumer-rights-v1',
+      'full-curriculum-checkout-disclosure-v1',
+      'full-curriculum-refund-v1',
+      '{"integration_fixture":true}'::jsonb, $5, $5,
+      $6, $7, $5, TRUE, 'learner', $3, NOW() - INTERVAL '2 days'
+    )
+  `, [schoolId, attemptId, learnerId, customerTermsVersion, digest, earlyStartRequested, startText]);
+}
+
+async function insertDurableConfirmationEvent(client, { attemptId, schoolId }) {
+  await client.query(`
+    INSERT INTO full_curriculum_contract_events (
+      school_id, attempt_id, purchase_id, enrolment_id, event_type,
+      actor_type, detail, occurred_at
+    )
+    SELECT p.school_id, p.attempt_id, p.id, e.id,
+           'durable_confirmation_delivered', 'system',
+           '{"integration_fixture":true}'::jsonb, NOW()
+      FROM learner_package_purchases p
+      JOIN full_curriculum_enrolments e
+        ON e.purchase_id = p.id AND e.school_id = p.school_id
+     WHERE p.attempt_id = $1::uuid AND p.school_id = $2
+    ON CONFLICT DO NOTHING
+  `, [attemptId, schoolId]);
+}
+
 function loadWorkflowModules(sqlTags) {
   const neonModulePath = require.resolve('@neondatabase/serverless');
   const errorModulePath = require.resolve('../api/_error-alert');
@@ -252,6 +301,7 @@ test.describe('Full Curriculum matching/start database integration', () => {
   let otherSchoolInstructorId;
   let attemptId;
   let enrolmentId;
+  let overrideEnrolmentId;
   let matchingRecordId;
 
   async function callAction(action, {
@@ -370,9 +420,30 @@ test.describe('Full Curriculum matching/start database integration', () => {
     attemptId = crypto.randomUUID();
     const clientRequestId = crypto.randomUUID();
     const snapshot = {
+      ...(product.rows[0].content || {}),
       slug: product.rows[0].slug,
-      content: product.rows[0].content,
       integration_fixture: true,
+      consumer_rights: {
+        policy_version: 'full-curriculum-consumer-rights-v1',
+        disclosure_version: 'full-curriculum-checkout-disclosure-v1',
+        refund_calculation_version: 'full-curriculum-refund-v1',
+        cooling_off_days: 14,
+        valuation_basis: 'purchase_price_allocation',
+        rounding_rule: 'whole_pence_deductions_down',
+        matching_admin_deduction_pence: 0,
+        stripe_fee_customer_deduction_pence: 0,
+        teaching_deductions: {
+          base_90_minutes_pence: 5000,
+          base_cap_pence: 120000,
+          retake_90_minutes_pence: 5000,
+          retake_120_minutes_pence: 6666,
+          retake_cap_pence: 40000,
+        },
+        assessment_deductions: {
+          each_completed_pence: 5000,
+          cap_pence: 40000,
+        },
+      },
     };
     await primaryClient.query(`
       INSERT INTO package_purchase_attempts (
@@ -404,6 +475,12 @@ test.describe('Full Curriculum matching/start database integration', () => {
       `pi_fullcurriculum${attemptId.replace(/-/g, '')}`,
       testBooking.rows[0].id,
     ]);
+    await insertConsumerContractEvidence(primaryClient, {
+      attemptId,
+      schoolId: schoolAId,
+      learnerId: learnerAId,
+      customerTermsVersion: product.rows[0].customer_terms_version,
+    });
   }
 
   test.beforeAll(async () => {
@@ -445,7 +522,7 @@ test.describe('Full Curriculum matching/start database integration', () => {
     }
   });
 
-  test('applies migrations 044-047 in order to a disposable schema', async () => {
+  test('applies migrations 044-049 in order to a disposable schema', async () => {
     await expect(primaryClient.query(baseMigrationSql)).resolves.toBeTruthy();
     for (const migration of packageMigrations) {
       await expect(primaryClient.query(migration.sql), migration.file).resolves.toBeTruthy();
@@ -515,6 +592,7 @@ test.describe('Full Curriculum matching/start database integration', () => {
     const repeated = await workflowModules.webhook._test.fulfilFullCurriculum(primarySql, { attempt });
     expect(fulfilments.filter((result) => result.created).length).toBe(1);
     expect(repeated.created).toBe(false);
+    await insertDurableConfirmationEvent(primaryClient, { attemptId, schoolId: schoolAId });
 
     const counts = await primaryClient.query(`
       SELECT
@@ -989,6 +1067,16 @@ test.describe('Full Curriculum matching/start database integration', () => {
       attemptId,
       schoolAId,
     ]);
+    const overrideTermsVersion = (await primaryClient.query(
+      'SELECT customer_terms_version FROM package_purchase_attempts WHERE id = $1::uuid AND school_id = $2',
+      [overrideAttemptId, schoolAId]
+    )).rows[0].customer_terms_version;
+    await insertConsumerContractEvidence(primaryClient, {
+      attemptId: overrideAttemptId,
+      schoolId: schoolAId,
+      learnerId: overrideLearnerId,
+      customerTermsVersion: overrideTermsVersion,
+    });
     const overrideAttempt = (await primaryClient.query(
       'SELECT * FROM package_purchase_attempts WHERE id = $1::uuid AND school_id = $2',
       [overrideAttemptId, schoolAId]
@@ -997,6 +1085,10 @@ test.describe('Full Curriculum matching/start database integration', () => {
       attempt: overrideAttempt,
     });
     expect(fulfilment.created).toBe(true);
+    await insertDurableConfirmationEvent(primaryClient, {
+      attemptId: overrideAttemptId,
+      schoolId: schoolAId,
+    });
 
     const identity = await primaryClient.query(`
       SELECT e.id AS enrolment_id
@@ -1005,7 +1097,7 @@ test.describe('Full Curriculum matching/start database integration', () => {
           ON p.id = e.purchase_id AND p.school_id = e.school_id
        WHERE p.attempt_id = $1::uuid AND e.school_id = $2
     `, [overrideAttemptId, schoolAId]);
-    const overrideEnrolmentId = Number(identity.rows[0].enrolment_id);
+    overrideEnrolmentId = Number(identity.rows[0].enrolment_id);
 
     const assigned = await callAction('assign-instructor', {
       body: {
@@ -1114,6 +1206,134 @@ test.describe('Full Curriculum matching/start database integration', () => {
     `, [schoolAId, overrideEnrolmentId]);
     expect(extendedWeeks.rowCount).toBe(26);
     expect(extendedWeeks.rows.every((week) => week.local_start === 'Mon 10:00')).toBe(true);
+  });
+
+  test('manual refund evidence requires two admins and records provider outcome without executing it', async () => {
+    const secondAdmin = await primaryClient.query(`
+      INSERT INTO admin_users (name, email, password_hash, role, active, school_id)
+      VALUES ('Full Curriculum Refund Approver', $1, 'integration-only', 'admin', TRUE, $2)
+      RETURNING id
+    `, [`refund-approver-${schemaName}@example.test`, schoolAId]);
+    const secondAdminId = Number(secondAdmin.rows[0].id);
+    const requestId = crypto.randomUUID();
+    const transactionRunner = async (work) => {
+      await primaryClient.query('BEGIN');
+      try {
+        const result = await work(primarySql);
+        await primaryClient.query('COMMIT');
+        return result;
+      } catch (error) {
+        await primaryClient.query('ROLLBACK');
+        throw error;
+      }
+    };
+    const termination = await requestProgrammeTermination({
+      schoolId: schoolAId,
+      actorId: adminAId,
+      actorType: 'admin',
+      enrolmentId: overrideEnrolmentId,
+      requestId,
+      requestKind: 'provider_nonfulfilment',
+      channel: 'admin_recorded',
+      reason: 'Provider cannot supply the remaining programme',
+      receivedAt: new Date(),
+      transactionRunner,
+    });
+    expect(termination.idempotent).toBe(false);
+    expect(Number(termination.refundCase.refund_due_pence)).toBe(200000);
+    expect(termination.calculation.lines.find(line => line.line_type === 'stripe_fee').deduction_pence).toBe(0);
+
+    const repeated = await requestProgrammeTermination({
+      schoolId: schoolAId,
+      actorId: adminAId,
+      actorType: 'admin',
+      enrolmentId: overrideEnrolmentId,
+      requestId,
+      requestKind: 'provider_nonfulfilment',
+      channel: 'admin_recorded',
+      reason: 'Provider cannot supply the remaining programme',
+      receivedAt: new Date(),
+      transactionRunner,
+    });
+    expect(repeated.idempotent).toBe(true);
+    expect(repeated.refundCase.id).toBe(termination.refundCase.id);
+
+    const review = await callAction('review-programme-refund', {
+      body: {
+        refund_case_id: termination.refundCase.id,
+        stripe_fee_absorbed_pence: 1200,
+        reason: 'Matched against the original PaymentIntent and fee evidence',
+      },
+    });
+    expect(review.statusCode).toBe(200);
+    expect(review.body.stripe_refund_issued).toBe(false);
+
+    const sameAdminApproval = await callAction('approve-programme-refund', {
+      body: {
+        refund_case_id: termination.refundCase.id,
+        reason: 'Same reviewer must not be able to approve',
+      },
+    });
+    expect(sameAdminApproval.statusCode).toBe(409);
+
+    const approval = await callAction('approve-programme-refund', {
+      actorId: secondAdminId,
+      body: {
+        refund_case_id: termination.refundCase.id,
+        reason: 'Independent second-admin approval of exact amount',
+      },
+    });
+    expect(approval.statusCode).toBe(200);
+    expect(approval.body.stripe_refund_issued).toBe(false);
+
+    const providerRefundId = `re_integration_${requestId.replace(/-/g, '')}`;
+    const recorded = await callAction('record-programme-refund-result', {
+      actorId: secondAdminId,
+      body: {
+        refund_case_id: termination.refundCase.id,
+        provider_refund_id: providerRefundId,
+        provider_status: 'succeeded',
+        reason: 'Recorded from the manually issued Stripe Dashboard refund',
+      },
+    });
+    expect(recorded.statusCode).toBe(200);
+    expect(recorded.body.provider_call_made_by_application).toBe(false);
+
+    const evidence = await primaryClient.query(`
+      SELECT e.status AS enrolment_status, c.status AS refund_status,
+             c.provider_refund_id, c.reviewed_by_admin_id, c.approved_by_admin_id,
+             COUNT(events.id)::int AS event_count
+        FROM full_curriculum_enrolments e
+        JOIN full_curriculum_refund_cases c
+          ON c.enrolment_id = e.id AND c.school_id = e.school_id
+        JOIN full_curriculum_refund_case_events events
+          ON events.refund_case_id = c.id AND events.school_id = c.school_id
+       WHERE e.id = $1 AND e.school_id = $2
+       GROUP BY e.status, c.status, c.provider_refund_id,
+                c.reviewed_by_admin_id, c.approved_by_admin_id
+    `, [overrideEnrolmentId, schoolAId]);
+    expect(evidence.rows[0]).toMatchObject({
+      enrolment_status: 'withdrawn',
+      refund_status: 'provider_succeeded',
+      provider_refund_id: providerRefundId,
+      reviewed_by_admin_id: adminAId,
+      approved_by_admin_id: secondAdminId,
+      event_count: 4,
+    });
+    const refundAudits = await primaryClient.query(`
+      SELECT COUNT(*)::int AS audit_count
+        FROM audit_log
+       WHERE school_id = $1
+         AND target_type = 'full_curriculum_enrolment'
+         AND target_id = $2
+         AND action IN (
+           'package.review_programme_refund',
+           'package.approve_programme_refund',
+           'package.record_programme_refund_result'
+         )
+         AND details->>'refund_case_id' = $3
+    `, [schoolAId, overrideEnrolmentId, termination.refundCase.id]);
+    expect(refundAudits.rows[0].audit_count).toBe(3);
   });
 
   test('concurrent retake allocations cannot reserve more than 600 minutes', async () => {

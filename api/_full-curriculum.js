@@ -7,6 +7,7 @@ const INTERNAL_PHASE_SLUGS = Object.freeze([
   'phase-3-independent',
 ]);
 const ACTIVE_ENROLMENT_STATUSES = Object.freeze([
+  'cooling_off_hold',
   'paid_matching',
   'active',
   'assessment_pending',
@@ -192,6 +193,12 @@ function catalogueEligibility(product, options = {}) {
       reason: 'This learner already has an active Full Curriculum enrolment.',
     };
   }
+  if (options.pilotAccessApproved !== true) {
+    return {
+      state: 'controlled_pilot_access_required', purchase_eligible: false, checkout_available: false,
+      reason: 'Full Curriculum purchasing is limited to the one learner approved for the controlled pilot.',
+    };
+  }
   if (options.testBookingStatus !== 'verified' || options.testBookingFuture !== true) {
     return {
       state: options.testBookingStatus === 'pending' ? 'verification_pending' : 'test_booking_required',
@@ -200,6 +207,12 @@ function catalogueEligibility(product, options = {}) {
       reason: options.testBookingStatus === 'pending'
         ? 'An admin must manually verify the supplied DVSA practical car test details before checkout.'
         : 'A verified future DVSA practical car test booking belonging to this learner is required.',
+    };
+  }
+  if (options.consumerRightsReady !== true) {
+    return {
+      state: 'consumer_terms_not_ready', purchase_eligible: false, checkout_available: false,
+      reason: 'Full Curriculum purchasing remains blocked until an immutable consumer-rights and valuation version is approved.',
     };
   }
   return {

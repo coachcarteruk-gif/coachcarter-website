@@ -44,6 +44,8 @@ button:disabled { opacity:.58; cursor:wait; }
 .version-panel { padding:22px 26px 26px; border-top:1px solid var(--line); }
 .version-panel summary { cursor:pointer; font-family:"Bricolage Grotesque",sans-serif; font-weight:700; }
 .version-form { display:grid; grid-template-columns:repeat(3,minmax(150px,1fr)) auto; gap:14px; align-items:end; margin-top:20px; }
+.consumer-values { grid-column:1/-1; display:grid; grid-template-columns:repeat(4,minmax(140px,1fr)); gap:14px; margin:4px 0; padding:18px; border:1px solid var(--line); border-radius:12px; }
+.consumer-values legend { padding:0 8px; color:var(--orange); font-size:.7rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
 .version-history { margin:22px 0 0; padding:0; list-style:none; border-top:1px solid var(--line); }
 .version-history li { display:grid; grid-template-columns:70px 110px 1fr 130px; gap:15px; padding:10px 2px; border-bottom:1px solid var(--line); color:var(--muted); font-size:.74rem; }
 .version-history strong { color:var(--ink); }
@@ -66,7 +68,14 @@ button:disabled { opacity:.58; cursor:wait; }
 .extension-form { margin-top:14px; grid-template-columns:1fr 1fr!important; }
 .extension-form label:last-of-type,.extension-form button { grid-column:1/-1; }
 .empty-state { padding:24px; border:1px dashed var(--line); border-radius:14px; color:var(--muted); }
+.refund-case { align-items:start; }
+.refund-case ul { color:var(--muted); font-size:.76rem; line-height:1.6; }
+.refund-total { color:var(--ink)!important; font:800 1.25rem/1.1 "Bricolage Grotesque",sans-serif; }
+.refund-case form { grid-template-columns:1fr 1fr; }
+.refund-case form p,.refund-case form button { grid-column:1/-1; }
 @media(max-width:820px){.admin-packages-header{grid-template-columns:1fr;gap:20px}.feature-control,.section-heading,.product-summary{grid-template-columns:1fr}.feature-action{justify-items:start}.current-version{justify-content:start;text-align:left}.product-controls,.version-form{grid-template-columns:1fr 1fr}.version-history li{grid-template-columns:60px 90px 1fr}.version-history li span:last-child{grid-column:1/-1}}
 @media(max-width:820px){.operation-card{grid-template-columns:1fr}}
 @media(max-width:520px){.admin-packages-header,main{padding-left:18px;padding-right:18px}.product-controls,.version-form,.operation-card form,.extension-form{grid-template-columns:1fr!important}.operation-card form>*{grid-column:1!important}.version-history li{grid-template-columns:1fr 1fr}.version-history li span:nth-child(3),.version-history li span:last-child{grid-column:1/-1}}
 @media(max-width:620px){.availability-window-row{grid-template-columns:1fr}}
+@media(max-width:820px){.consumer-values{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.consumer-values{grid-template-columns:1fr}}

@@ -1,7 +1,7 @@
 # Learner Packages Product Decision Record
 
-Status: Revised Full Curriculum test-mode foundation and matching slice implemented in code; migrations/configuration not applied, live payments and launch remain unapproved
-Date: 2026-08-13
+Status: Full Curriculum controlled-pilot foundation and owner-certified consumer-rights policy implemented in code; migrations/configuration not applied and purchasing remains disabled
+Date: 2026-08-15
 Proposed learner route: `/learner/packages.html`
 
 This document records the product decisions from the learner Packages interview. The attached 13 August 2026 implementation request separately authorised the scoped production code, additive migration and tests in test mode only; it did not authorise migration execution, Stripe configuration, live payments, deployment or rollout.
@@ -26,7 +26,16 @@ Migration 047 adds the approved matching slice: webhook fulfilment creates a pen
 - An authorised admin may use an exceptional override only by sending the exact Boolean `instructor_acceptance_override: true` with the required audit reason. The effective override is recorded in both the start audit and append-only programme progress evidence; ordinary instructors cannot request it.
 - The 24-week cap, initial weekly opportunities and later extension weeks are generated in the school's validated IANA timezone. An agreed Monday 10:00 Europe/London boundary therefore remains 10:00 after the clocks change, even though the corresponding UTC instant changes.
 
-The implementation still creates no automated refund, instructor earning, Stripe Connect transfer, payout, flexible-hours fulfilment, Manoeuvres fulfilment/reward, test-document storage, automated DVSA verification, third-attempt protection or live Stripe behaviour. Both feature flags remain absent/off unless separately enabled, and the dedicated test Stripe configuration is still an external prerequisite.
+### Consumer-rights and manual-refund record (2026-08-15)
+
+- Migration 048 and the application code record versioned checkout disclosure, explicit unticked early-start choice, contract/cooling timestamps, cancellation requests and immutable refund calculations.
+- Deferred-start purchases remain in `cooling_off_hold`; matching and the seven-day promise begin only after the exclusive 14-day boundary. A valid optional early-start request permits the existing matching/start workflow to begin sooner.
+- Full Curriculum Checkout is additionally fail-closed until a prospective product version contains complete approved purchase-price allocations for base teaching, retake teaching and completed assessments. No values are inferred or hardcoded.
+- Matching/admin and the original Stripe fee have zero learner-deductible value. CoachCarter absorbs the fee. The initial workflow requires first review, a different second approver, and manual original-payment-method execution in the Stripe Dashboard.
+- The application does not call Stripe's refund API. It records a manual Refund identity/outcome for reconciliation and does not alter Lesson Credit, booking refund, BCS, earning, payout, Connect or platform-balance behaviour.
+- The controlling specification is [`docs/full-curriculum-consumer-rights-refund-spec.md`](full-curriculum-consumer-rights-refund-spec.md). Fraser elected to proceed on cited official guidance without professional sign-off; the accepted values, below-VAT-threshold statement, retention policy and DPIA screen are recorded in [`docs/full-curriculum-owner-self-certification-v1.md`](full-curriculum-owner-self-certification-v1.md).
+
+The implementation still creates no automatic/provider refund, instructor earning, Stripe Connect transfer, payout, flexible-hours fulfilment, Manoeuvres fulfilment/reward, test-document storage, automated DVSA verification, third-attempt protection or live Stripe behaviour. Both feature flags remain absent/off unless separately enabled. Migration 049 prospectively records the approved allocation, adult declaration and one-active-learner pilot gate; it is inert until separately applied and grants nobody access.
 
 ### Phase 1 implementation record (2026-08-13)
 
@@ -147,7 +156,7 @@ Programme rules:
 - Further teaching continues within the programme's remaining weekly entitlement; internal phase movement does not create a new purchase or extend the programme end date.
 - Internal phases appear in progress views, not as customer-facing purchasable package cards.
 - Assessment activity and assessor earnings are separate from ordinary teaching lessons.
-- Exact assessment duration, internal value, payout rate, and refund treatment are deliberately unresolved and must not be inferred as £82.50.
+- Assessment duration and payout rate remain unresolved and must not be inferred from customer value. The owner-certified refund allocation is £50 per completed assessment, capped at £150.
 
 ### 2.4 Full Curriculum Enrolment
 
@@ -415,14 +424,15 @@ If payment is unresolved after 24 hours:
 
 ### 6.2 Statutory cooling-off
 
-Final terms require legal review. The current design assumption is:
+The owner-certified implementation policy, following the cited official guidance without professional sign-off, is:
 
-- online service purchases receive the applicable 14-day cancellation rights;
-- a wholly unstarted purchase cancelled within the applicable period receives the legally required refund without deducting a Stripe fee;
-- learners can request that services start during the cooling-off period, with that request recorded in a durable form;
-- if services begin following that request, legally permitted delivered-service deductions may apply.
+- online service purchases receive a contractual 14-day cancellation period using the school timezone and an exclusive following-midnight boundary;
+- no service begins by default; matching and its seven-day deadline begin after the boundary;
+- an optional unticked early-start request is captured with exact disclosure, version, choice, learner actor, timestamp and hashes;
+- cancellation during cooling-off is full unless valid early-start evidence exists and teaching or assessment was actually supplied;
+- permitted deductions use only immutable purchase-price allocations; matching, admin, missed/late-cancelled cooling-off weeks and the original Stripe fee deduct £0.
 
-The product direction is to let learners start promptly. Implementation must provide compliant disclosure/evidence without making the learner wait by default through ambiguous wording.
+See [`docs/full-curriculum-consumer-rights-refund-spec.md`](full-curriculum-consumer-rights-refund-spec.md) for the exact wording, scenario table, evidence and operator workflow.
 
 ### 6.3 Flexible package refunds
 
@@ -433,11 +443,11 @@ The product direction is to let learners start promptly. Implementation must pro
 
 ### 6.4 Guaranteed-course withdrawal
 
-- Learner voluntary withdrawal uses course price paid minus completed instructor-led teaching at the frozen standard Pay As You Go rate, floored at zero.
+- Learner voluntary withdrawal uses price paid minus delivered Full Curriculum teaching opportunities, valid post-cooling late-cancelled base opportunities and completed assessments at the frozen purchased allocations, floored at zero.
 - Do not bill a withdrawing learner for a negative result.
-- Assessment deductions remain unresolved until assessment value is configured.
+- Migration 049 adds a prospective immutable owner-certified version with the approved base, retake and assessment customer-deduction values; payout values remain separate and unresolved.
 - Failure to match within seven days permits a full original-method refund with CoachCarter absorbing the fee.
-- Policy for CoachCarter becoming unable to fulfil after teaching begins remains a launch blocker requiring a fair, learner-protective rule.
+- CoachCarter/instructor non-fulfilment refunds all undelivered value, deducts no fee/admin/late-cancellation value and enters owner review where some service was delivered, subject to any stronger statutory remedy on the facts.
 
 ### 6.5 Manoeuvres refunds and rewards
 
@@ -620,7 +630,8 @@ No phase starts until implementation is explicitly approved.
 - **Implemented in repository code, test mode only:** prospective Phase 1/2/3 product deactivation with historical identity/version retention and one revised Full Curriculum version.
 - **Implemented in repository code, test mode only:** minimal test-booking facts/manual verification, immutable purchase/enrolment identity, payment-separated matching, instructor/admin-agreed programme start, bounded weekly opportunities, actual booking allocation, append-only progress/assessment, audited test/extension events and retake activation/consumption.
 - **Implemented in repository code, test mode only:** signed-webhook-only transactional/idempotent fulfilment and learner/admin/instructor exercise surfaces.
-- **Still deferred:** automated matching/scheduling, teaching/assessment earning attribution, withdrawals/refunds and live rollout. Manual structured matching availability is implemented.
+- **Implemented in repository code, manual provider execution only:** cooling-off hold/early-start evidence, termination receipt, trusted server refund calculation, immutable lines/events, two-person review/approval and recording of a manually issued original-method Stripe refund.
+- **Still deferred:** automatic matching/scheduling, durable confirmation delivery, teaching/assessment earning attribution, Stripe refund API execution and live rollout. Manual structured matching availability is implemented.
 
 ### Phase 5: Manoeuvres and promotion
 
@@ -660,22 +671,22 @@ At minimum:
 
 ## 10. Remaining decisions and launch blockers
 
-These are deliberately unresolved. Implementation must not guess them.
+These are the remaining product/operating decisions after the owner-certified consumer-rights policy. They do not reinstate a professional-sign-off requirement, but implementation must not guess unresolved payout values or broaden the pilot.
 
 1. **Programme participation conditions:** concise fair conditions covering attendance, cooperation, practice, safety, missed weekly opportunities, and repeated disengagement without implying an unlimited-until-pass promise.
 2. **Internal phase definition:** the minimum competency/progress record needed for Phase 1/2/3 assessment. The full curriculum content can remain deferred, but internal movement cannot be an undefined free-text decision.
-3. **Assessment commercial rule:** normal duration, assessor payout, course accounting value, and whether/how it affects voluntary-withdrawal calculations.
+3. **Assessment commercial values:** the customer deduction is resolved at £50 per completed assessment, capped at £150 in the owner-certified prospective version. Normal duration and separately configured assessor payout remain unresolved and must not be derived from that deduction.
 4. **Course teaching payout:** exact admin-configurable per-lesson instructor rate and how existing commission/franchise rules consume it.
-5. **CoachCarter non-fulfilment after teaching starts:** fair refund/transfer/remedy policy.
+5. **CoachCarter non-fulfilment:** the owner accepts the approved default of refunding undelivered value with no fee/admin/late-cancellation deduction, subject to any stronger statutory remedy on the facts.
 6. **Flexible-package late cancellation:** whether an under-48-hour cancellation consumes the full booked package units, a different amount, or another rule.
-7. **Voluntary refund fee treatment:** final lawful wording and automation rule for non-returned Stripe fees outside statutory/CoachCarter-fault/Challenge refunds.
-8. **Cooling-off implementation:** final disclosure, durable early-start request, cancellation channel, and delivered-service calculation.
+7. **Voluntary refund fee treatment:** resolved for Full Curriculum: learner deduction is £0 and CoachCarter absorbs the original non-returned Stripe fee. Other products remain unresolved.
+8. **Cooling-off implementation:** implemented for Full Curriculum with default hold, optional express early start, adult declaration, durable versioned evidence, awaited exact-terms confirmation and frozen delivered-service calculation. Disposable-database and email-delivery verification remain activation checks.
 9. **Manoeuvres Challenge definition:** final hashtag, exact evidence, reflection criteria, any driving-performance criterion, deadlines, proof retention, registration-plate rule, reward turnaround, and eligibility exclusions.
 10. **Under-18 Challenge safeguards:** final consent form, privacy notice, DPIA/safeguarding review, evidence retention, and learner withdrawal mechanism.
 11. **Full Curriculum test evidence:** acceptable booking/failure evidence, evidence retention, and treatment when a scheduled first test is cancelled rather than failed. The 28-day retake window, 90-minute/two-hour lesson lengths, 10-hour cap, second-test expiry, and DVSA-postponement rule are decided.
 12. **Availability form:** resolved for this slice: no minimum window count; store only agreed recurring local windows and timezone in append-only versions. Conflict resolution and automated scheduling remain deferred.
-13. **Tax/accounting review:** VAT status, revenue recognition, protected unused-value liability, course guarantee reserves, promotional refund treatment, and instructor earning classification.
-14. **Final customer terms and marketing claims:** solicitor/consumer-law review before using `guaranteed`, `win your money back`, cancellation charges, or refund-fee wording publicly.
+13. **Tax/accounting operation:** Fraser confirmed the business is not near the current VAT registration threshold and will monitor rolling taxable turnover. Revenue, refund liability, payment fees and delivery costs remain manual accounting records; the application makes no accounting classification.
+14. **Marketing claims:** the owner-certified wording may be used for the controlled pilot. Do not introduce `guaranteed`, `win your money back` or materially different cancellation/refund claims without a new recorded review.
 
 Commercial pricing is not a launch blocker: £2,000 is an intentionally lean introductory pilot price. Pilot reporting must still measure instructor and assessor cost, programme weeks used, first-test outcomes, retake-hour use, refunds, payment fees, and contribution margin before each prospective price review.
 
