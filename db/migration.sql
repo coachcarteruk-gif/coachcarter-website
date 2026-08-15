@@ -9684,7 +9684,7 @@ SELECT e.school_id, e.id, e.learner_id, 'pending', e.created_at, NOW()
   FROM full_curriculum_enrolments e
  WHERE e.programme_start_at IS NULL
 ON CONFLICT (school_id, enrolment_id) DO NOTHING;
-+-- Full Curriculum consumer-rights, withdrawal and manual-refund evidence.
+-- Full Curriculum consumer-rights, withdrawal and manual-refund evidence.
 --
 -- This migration is additive and inert. It does not enable purchasing, issue
 -- a refund, call Stripe, create Lesson Credit, or change payout behaviour.
