@@ -306,13 +306,14 @@ test.describe('Full Curriculum matching/start database integration', () => {
 
   async function callAction(action, {
     body = {},
+    method = 'POST',
     role = 'admin',
     actorId = adminAId,
     schoolId = schoolAId,
     isAdmin = false,
   } = {}) {
     const req = {
-      method: 'POST',
+      method,
       url: `/api/packages?action=${action}`,
       query: { action },
       body,
@@ -639,6 +640,54 @@ test.describe('Full Curriculum matching/start database integration', () => {
     });
     expect(identity.rows[0].original_first_test_at.getTime())
       .toBe(identity.rows[0].expected_first_test_at.getTime());
+  });
+
+  test('retained pre-pilot enrolment does not block a separate verified pilot learner', async () => {
+    const retainedTerms = (await primaryClient.query(
+      'SELECT customer_terms_version FROM package_purchase_attempts WHERE id = $1::uuid AND school_id = $2',
+      [attemptId, schoolAId]
+    )).rows[0].customer_terms_version;
+    expect(retainedTerms).not.toBe('full-curriculum-owner-certified-v1');
+
+    const candidate = await primaryClient.query(`
+      INSERT INTO learner_users (name, email, email_verified, school_id)
+      VALUES ('Controlled Pilot Candidate', $1, TRUE, $2)
+      RETURNING id
+    `, [`pilot-candidate-${schemaName}@example.test`, schoolAId]);
+    const candidateLearnerId = Number(candidate.rows[0].id);
+
+    const listed = await callAction('programme-pilot-access', { method: 'GET' });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.body.eligible_learners.map(learner => Number(learner.id)))
+      .toContain(candidateLearnerId);
+    expect(listed.body.eligible_learners.map(learner => Number(learner.id)))
+      .not.toContain(learnerAId);
+
+    const granted = await callAction('grant-programme-pilot-access', {
+      body: {
+        learner_id: candidateLearnerId,
+        reason: 'Disposable integration proof for retained pre-pilot evidence',
+      },
+    });
+    expect(
+      granted.statusCode,
+      workflowModules.reportedErrors.at(-1)?.error?.message || 'pilot grant returned no SQL diagnostic'
+    ).toBe(201);
+    expect(Number(granted.body.access.learner_id)).toBe(candidateLearnerId);
+
+    const retained = await primaryClient.query(`
+      SELECT attempt.status AS attempt_status, enrolment.status AS enrolment_status
+        FROM package_purchase_attempts attempt
+        JOIN learner_package_purchases purchase
+          ON purchase.attempt_id = attempt.id AND purchase.school_id = attempt.school_id
+        JOIN full_curriculum_enrolments enrolment
+          ON enrolment.purchase_id = purchase.id AND enrolment.school_id = purchase.school_id
+       WHERE attempt.id = $1::uuid AND attempt.school_id = $2
+    `, [attemptId, schoolAId]);
+    expect(retained.rows[0]).toEqual({
+      attempt_status: 'paid',
+      enrolment_status: 'paid_matching',
+    });
   });
 
   test('assignment, acceptance and reassignment enforce eligibility, tenancy and append-only history', async () => {

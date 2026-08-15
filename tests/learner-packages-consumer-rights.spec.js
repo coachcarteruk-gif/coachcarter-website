@@ -230,6 +230,18 @@ test.describe('Full Curriculum consumer-rights and manual-refund policy', () => 
     expect(api).not.toContain('stripe.refunds.create');
   });
 
+  test('pilot eligibility ignores retained pre-pilot evidence without weakening the one-live-pilot guard', () => {
+    const api = read('api/_full-curriculum-api.js');
+    const migration = read('db/migrations/049_full_curriculum_controlled_pilot.sql');
+
+    expect(api.match(/attempt\.customer_terms_version = \$\{OWNER_CERTIFIED_TERMS_VERSION\}/g)).toHaveLength(2);
+    expect(api.match(/active_purchase\.customer_terms_version = \$\{OWNER_CERTIFIED_TERMS_VERSION\}/g)).toHaveLength(2);
+    expect(api.match(/active_purchase\.id = active_enrolment\.purchase_id/g)).toHaveLength(2);
+    expect(api.match(/enrolment\.learner_id = learner\.id/g)).toHaveLength(2);
+    expect(migration).toContain('uq_full_curriculum_one_active_pilot_learner');
+    expect(migration).toContain('WHERE active = TRUE');
+  });
+
   test('learner copy uses an unambiguous payment button and optional early start', () => {
     const learner = read('public/learner/packages.js');
     expect(learner).toContain("Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' and enrol");

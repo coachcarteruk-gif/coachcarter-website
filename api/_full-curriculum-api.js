@@ -20,7 +20,10 @@ const {
   requestProgrammeTermination,
   validUuid,
 } = require('./_full-curriculum-refunds');
-const { PILOT_CERTIFICATION_VERSION } = require('./_full-curriculum-consumer-rights');
+const {
+  OWNER_CERTIFIED_TERMS_VERSION,
+  PILOT_CERTIFICATION_VERSION,
+} = require('./_full-curriculum-consumer-rights');
 
 const ACTIONS = new Set([
   'submit-test-booking', 'test-bookings', 'verify-test-booking',
@@ -344,11 +347,16 @@ async function programmePilotAccess(req, res) {
                SELECT 1 FROM package_purchase_attempts attempt
                 WHERE attempt.school_id = ${scope.schoolId}
                   AND attempt.product_slug = 'full-curriculum'
+                  AND attempt.customer_terms_version = ${OWNER_CERTIFIED_TERMS_VERSION}
                   AND attempt.status IN ('created', 'submitting', 'pending', 'paid', 'review_required')
              )
              AND NOT EXISTS (
                SELECT 1 FROM full_curriculum_enrolments active_enrolment
+               JOIN learner_package_purchases active_purchase
+                 ON active_purchase.id = active_enrolment.purchase_id
+                AND active_purchase.school_id = active_enrolment.school_id
                 WHERE active_enrolment.school_id = ${scope.schoolId}
+                  AND active_purchase.customer_terms_version = ${OWNER_CERTIFIED_TERMS_VERSION}
                   AND active_enrolment.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
              )
              AND NOT EXISTS (
@@ -400,11 +408,16 @@ async function grantProgrammePilotAccess(req, res) {
            SELECT 1 FROM package_purchase_attempts attempt
             WHERE attempt.school_id = ${scope.schoolId}
               AND attempt.product_slug = 'full-curriculum'
+              AND attempt.customer_terms_version = ${OWNER_CERTIFIED_TERMS_VERSION}
               AND attempt.status IN ('created', 'submitting', 'pending', 'paid', 'review_required')
          )
          AND NOT EXISTS (
            SELECT 1 FROM full_curriculum_enrolments active_enrolment
+           JOIN learner_package_purchases active_purchase
+             ON active_purchase.id = active_enrolment.purchase_id
+            AND active_purchase.school_id = active_enrolment.school_id
             WHERE active_enrolment.school_id = ${scope.schoolId}
+              AND active_purchase.customer_terms_version = ${OWNER_CERTIFIED_TERMS_VERSION}
               AND active_enrolment.status = ANY(${ACTIVE_ENROLMENT_STATUSES}::text[])
          )
          AND NOT EXISTS (
