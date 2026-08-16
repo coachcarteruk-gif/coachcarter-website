@@ -52,7 +52,7 @@ async function processVerifiedFlexibleEvent({ connectionString, event, rawBody }
         WHERE id = $1::uuid AND school_id = $2 FOR UPDATE`,
       [attemptId, schoolId]
     );
-    const attempt = attempts.rows[0];
+    let attempt = attempts.rows[0];
     if (!attempt) {
       const error = new Error('Flexible Hours attempt not found');
       error.code = 'FLEXIBLE_PACKAGE_ATTEMPT_NOT_FOUND';
@@ -125,6 +125,24 @@ async function processVerifiedFlexibleEvent({ connectionString, event, rawBody }
       );
       return { duplicate: false, status, sourceCreated: false, sourceId: null, reviewRequired: true };
     }
+
+    const providerIdentity = await client.query(
+      `UPDATE flexible_package_purchase_attempts
+          SET stripe_checkout_session_id = COALESCE(stripe_checkout_session_id, $1),
+              stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $2),
+              updated_at = NOW()
+        WHERE id = $3::uuid AND school_id = $4
+          AND (stripe_checkout_session_id IS NULL OR stripe_checkout_session_id = $1)
+          AND (stripe_payment_intent_id IS NULL OR $2 IS NULL OR stripe_payment_intent_id = $2)
+        RETURNING *`,
+      [object.id, validation.paymentIntentId, attemptId, schoolId]
+    );
+    if (!providerIdentity.rowCount) {
+      const error = new Error('Verified Flexible Hours provider identity could not be persisted safely');
+      error.code = 'FLEXIBLE_PACKAGE_PROVIDER_IDENTITY_CONTRADICTION';
+      throw error;
+    }
+    attempt = providerIdentity.rows[0];
 
     const target = targetStatus(event.type, object);
     let status = attempt.status;

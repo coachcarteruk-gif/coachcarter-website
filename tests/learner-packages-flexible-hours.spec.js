@@ -15,6 +15,7 @@ const {
   validateFlexibleProviderObject,
 } = require('../api/_flexible-package-payments');
 const {
+  hoursUntilFlexibleLesson,
   planFlexiblePackageFifo,
   unitsForDuration,
 } = require('../api/_flexible-package-ledger');
@@ -164,6 +165,40 @@ test.describe('school-wide Flexible Hours packages', () => {
     expect(allowedTransition('failed', 'paid')).toBe(true);
     expect(allowedTransition('paid', 'expired')).toBe(false);
     expect(allowedTransition('paid', 'failed')).toBe(false);
+  });
+
+  test('uses the school timezone for the exact 48-hour Flexible Hours return boundary', () => {
+    const schoolConfig = { timezone: 'Europe/London' };
+    expect(hoursUntilFlexibleLesson({
+      scheduledDate: '2027-01-15', startTime: '10:00:00', schoolConfig,
+      now: new Date('2027-01-13T10:00:00.000Z'),
+    })).toBe(48);
+    expect(hoursUntilFlexibleLesson({
+      scheduledDate: '2027-07-15', startTime: '10:00:00', schoolConfig,
+      now: new Date('2027-07-13T09:00:00.000Z'),
+    })).toBe(48);
+    expect(hoursUntilFlexibleLesson({
+      scheduledDate: '2027-07-15', startTime: '10:00:00', schoolConfig,
+      now: new Date('2027-07-13T10:00:00.000Z'),
+    })).toBe(47);
+    expect(hoursUntilFlexibleLesson({
+      scheduledDate: 'not-a-date', startTime: '10:00:00', schoolConfig,
+    })).toBeNull();
+  });
+
+  test('persists verified webhook identity before fulfilment and tolerates webhook-first Checkout ordering', () => {
+    const endpoint = read('api/flexible-packages.js');
+    const webhook = read('api/flexible-package-webhook.js');
+    expect(validateFlexibleProviderObject(
+      attempt({ stripe_checkout_session_id: null, stripe_payment_intent_id: null }),
+      providerObject()
+    )).toMatchObject({ ok: true, paymentIntentId: 'pi_flexible' });
+    expect(webhook.indexOf('SET stripe_checkout_session_id = COALESCE(stripe_checkout_session_id, $1)'))
+      .toBeLessThan(webhook.indexOf('INSERT INTO flexible_package_purchases'));
+    expect(webhook).toContain('stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $2)');
+    expect(endpoint).toContain("status IN ('submitting','pending','paid')");
+    expect(endpoint).toContain("status = CASE WHEN status = 'submitting' THEN 'pending' ELSE status END");
+    expect(endpoint).toContain('if (!pending)');
   });
 
   test('allocates multiple immutable sources FIFO and preserves each frozen contribution', () => {

@@ -83,6 +83,7 @@ const { transferBookingFunding } = require('./_instructor-switch-transfer');
 const {
   bookFlexiblePackageSlotTransaction,
   cancelFlexiblePackageBookingTransaction,
+  hoursUntilFlexibleLesson,
   unitsForDuration: flexibleUnitsForDuration,
 } = require('./_flexible-package-ledger');
 
@@ -6451,8 +6452,23 @@ async function handleCancel(req, res) {
           message: 'Flexible Hours bookings are cancelled individually.'
         });
       }
-      const packageLessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
-      const packageHoursUntil = (packageLessonDateTime - Date.now()) / 3600000;
+      const [flexibleSchool] = await sql`
+        SELECT config FROM schools
+         WHERE id = ${schoolId} AND active = TRUE
+         LIMIT 1
+      `;
+      const packageHoursUntil = hoursUntilFlexibleLesson({
+        scheduledDate: booking.scheduled_date,
+        startTime: booking.start_time,
+        schoolConfig: flexibleSchool?.config,
+      });
+      if (packageHoursUntil === null) {
+        return res.status(409).json({
+          error: true,
+          code: 'FLEXIBLE_PACKAGE_LESSON_TIME_INVALID',
+          message: 'This Flexible Hours booking time could not be validated safely.'
+        });
+      }
       const eligibleReturn = packageHoursUntil >= CANCEL_HOURS_CUTOFF;
       const cancelled = await cancelFlexiblePackageBookingTransaction({
         connectionString: process.env.POSTGRES_URL,

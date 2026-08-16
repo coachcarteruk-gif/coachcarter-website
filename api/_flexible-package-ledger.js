@@ -2,6 +2,7 @@
 
 const { withNeonTransaction } = require('./_db-transaction');
 const { SCHEDULED, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
+const { operationalTimeZone, zonedDateTimeToDate } = require('./_full-curriculum');
 
 const FLEXIBLE_UNIT_MINUTES = 30;
 
@@ -25,6 +26,17 @@ function unitsForDuration(durationMinutes) {
   const duration = Number(durationMinutes);
   if (!Number.isSafeInteger(duration) || duration <= 0 || duration % FLEXIBLE_UNIT_MINUTES !== 0) return null;
   return duration / FLEXIBLE_UNIT_MINUTES;
+}
+
+function hoursUntilFlexibleLesson({ scheduledDate, startTime, schoolConfig, now = new Date() }) {
+  const lessonAt = zonedDateTimeToDate(
+    String(scheduledDate || '').slice(0, 10),
+    String(startTime || '').slice(0, 5),
+    operationalTimeZone(schoolConfig)
+  );
+  const nowAt = now instanceof Date ? now : new Date(now);
+  if (!lessonAt || Number.isNaN(nowAt.getTime())) return null;
+  return (lessonAt.getTime() - nowAt.getTime()) / 3600000;
 }
 
 function planFlexiblePackageFifo(sources, unitsRequired) {
@@ -345,6 +357,7 @@ module.exports = {
   FLEXIBLE_UNIT_MINUTES,
   bookFlexiblePackageSlotTransaction,
   cancelFlexiblePackageBookingTransaction,
+  hoursUntilFlexibleLesson,
   planFlexiblePackageFifo,
   unitsForDuration,
 };
