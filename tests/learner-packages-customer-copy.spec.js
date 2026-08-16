@@ -99,7 +99,7 @@ function catalogue({ signedIn }) {
   };
 }
 
-async function preparePage(page, { signedIn, viewport }) {
+async function preparePage(page, { signedIn, viewport, productTypes, productSlugs }) {
   await page.setViewportSize(viewport);
   await page.addInitScript(({ signedIn: isSignedIn }) => {
     localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
@@ -110,10 +110,13 @@ async function preparePage(page, { signedIn, viewport }) {
     contentType: 'application/json',
     body: JSON.stringify({ ok: true, enabled: true }),
   }));
+  const catalogueResponse = catalogue({ signedIn });
+  if (productTypes) catalogueResponse.products = catalogueResponse.products.filter(product => productTypes.includes(product.product_type));
+  if (productSlugs) catalogueResponse.products = catalogueResponse.products.filter(product => productSlugs.includes(product.slug));
   await page.route('**/api/packages?action=catalogue**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify(catalogue({ signedIn })),
+    body: JSON.stringify(catalogueResponse),
   }));
   await page.route('**/api/packages?action=programme-status**', route => route.fulfill({
     status: 404,
@@ -130,6 +133,53 @@ async function preparePage(page, { signedIn, viewport }) {
 }
 
 test.describe('Learner Packages customer copy', () => {
+  test('renders a production-shaped Flexible Hours-only catalogue', async ({ page }) => {
+    await preparePage(page, {
+      signedIn: true,
+      viewport: { width: 1280, height: 900 },
+      productTypes: ['flexible_hours'],
+    });
+
+    await expect(page.locator('#catalogue-content')).toBeVisible();
+    await expect(page.locator('#catalogue-status')).toBeHidden();
+    await expect(page.getByRole('heading', { name: '15 Flexible Hours', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '30 Flexible Hours', exact: true })).toBeVisible();
+    await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(2);
+    await expect(page.locator('#full-curriculum-section')).toBeHidden();
+    await expect(page.locator('#manoeuvres-section')).toBeHidden();
+    await expect(page.locator('#flexible-truth-panel')).toBeVisible();
+    await expect(page.getByText('Catalogue not ready')).toHaveCount(0);
+    const desktopLayout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+    expect(desktopLayout.scrollWidth).toBeLessThanOrEqual(desktopLayout.width);
+    if (process.env.CC_PACKAGES_SCREENSHOT_DIR) {
+      await page.screenshot({
+        path: path.join(process.env.CC_PACKAGES_SCREENSHOT_DIR, 'packages-flexible-only-desktop.png'),
+        fullPage: true,
+      });
+    }
+  });
+
+  test('renders whichever individual Flexible Hours products are visible', async ({ page }) => {
+    await preparePage(page, {
+      signedIn: false,
+      viewport: { width: 390, height: 844 },
+      productSlugs: ['flexible-15-hours'],
+    });
+
+    await expect(page.getByRole('heading', { name: '15 Flexible Hours', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '30 Flexible Hours', exact: true })).toHaveCount(0);
+    await expect(page.locator('#packages-availability-copy')).toHaveText('Choose 15 Flexible Hours and pay securely by bank.');
+    await expect(page.locator('#flexible-section-copy')).toContainText('Buy 15 hours upfront.');
+    const mobileLayout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+    expect(mobileLayout.scrollWidth).toBeLessThanOrEqual(mobileLayout.width);
+    if (process.env.CC_PACKAGES_SCREENSHOT_DIR) {
+      await page.screenshot({
+        path: path.join(process.env.CC_PACKAGES_SCREENSHOT_DIR, 'packages-single-flexible-mobile.png'),
+        fullPage: true,
+      });
+    }
+  });
+
   test('signed-out visitors can understand the live choice without implementation language', async ({ page }) => {
     await preparePage(page, { signedIn: false, viewport: { width: 390, height: 844 } });
 
