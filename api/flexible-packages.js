@@ -260,12 +260,28 @@ async function handleCreateCheckout(req, res) {
       ? new Date(Number(session.expires_at) * 1000).toISOString() : null;
     const [pending] = await sql`
       UPDATE flexible_package_purchase_attempts
-         SET status = 'pending', stripe_checkout_session_id = ${session.id},
-             stripe_payment_intent_id = ${validation.paymentIntentId}, stripe_checkout_url = ${session.url},
-             provider_expires_at = ${expiresAt}::timestamptz, checkout_created_at = NOW(), updated_at = NOW()
-       WHERE id = ${attempt.id}::uuid AND school_id = ${scope.schoolId} AND status = 'submitting'
+         SET status = CASE WHEN status = 'submitting' THEN 'pending' ELSE status END,
+             stripe_checkout_session_id = COALESCE(stripe_checkout_session_id, ${session.id}),
+             stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, ${validation.paymentIntentId}),
+             stripe_checkout_url = COALESCE(stripe_checkout_url, ${session.url}),
+             provider_expires_at = COALESCE(provider_expires_at, ${expiresAt}::timestamptz),
+             checkout_created_at = COALESCE(checkout_created_at, NOW()), updated_at = NOW()
+       WHERE id = ${attempt.id}::uuid AND school_id = ${scope.schoolId}
+         AND status IN ('submitting','pending','paid')
+         AND (stripe_checkout_session_id IS NULL OR stripe_checkout_session_id = ${session.id})
+         AND (stripe_payment_intent_id IS NULL OR ${validation.paymentIntentId}::text IS NULL
+           OR stripe_payment_intent_id = ${validation.paymentIntentId})
        RETURNING *
     `;
+    if (!pending) {
+      const [current] = await sql`
+        SELECT * FROM flexible_package_purchase_attempts
+         WHERE id = ${attempt.id}::uuid AND school_id = ${scope.schoolId}
+         LIMIT 1
+      `;
+      if (current) return res.status(202).json({ ok: true, attempt: publicAttempt(current) });
+      throw new Error('Flexible Hours Checkout attempt disappeared before local persistence');
+    }
     return res.status(201).json({ ok: true, url: session.url, attempt: publicAttempt(pending) });
   } catch (error) {
     if (attempt?.id) {
