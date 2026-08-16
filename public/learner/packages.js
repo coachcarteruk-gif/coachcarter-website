@@ -11,6 +11,7 @@
   var testBookingResultEl = document.getElementById('test-booking-result');
   var pollTimer = null;
   var pollStartedAt = 0;
+  var catalogueViewer = null;
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -43,6 +44,12 @@
     return '/api/packages?' + query.toString();
   }
 
+  function flexibleApiUrl(action, extra) {
+    var query = new URLSearchParams(extra || {});
+    query.set('action', action);
+    return '/api/flexible-packages?' + query.toString();
+  }
+
   function renderList(items) {
     if (!Array.isArray(items) || !items.length) return '';
     return '<ul class="product-details">' + items.map(function (item) {
@@ -54,6 +61,18 @@
     var eligibility = product.eligibility || {};
     if (eligibility.checkout_available) {
       var rights = product.consumer_rights || {};
+      if (product.product_type === 'flexible_hours') {
+        var entitlement = product.content && product.content.entitlement || {};
+        return '<div class="consumer-checkout flexible-checkout" data-flexible-checkout-panel="' + escapeHtml(product.id) + '">' +
+          '<p><strong>Buying for:</strong> ' + escapeHtml(catalogueViewer && catalogueViewer.learner_name || 'your signed-in learner account') + '</p>' +
+          '<p><strong>' + escapeHtml(entitlement.hours || '') + ' hours, ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ', Pay by Bank.</strong> No expiry and no transfer to another learner.</p>' +
+          '<p>You retain your 14-day cancellation right. Unused value is refundable at this immutable version\'s frozen rate; properly used or under-48-hour cancelled value may be deducted. CoachCarter absorbs the original Stripe fee.</p>' +
+          '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
+          '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
+          '<label class="consumer-choice consumer-terms"><input type="checkbox" name="immediate_access_requested"> ' + escapeHtml(rights.immediate_access_request || '') + '</label>' +
+          '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' by bank</button>' +
+        '</div>';
+      }
       return '<div class="consumer-checkout" data-consumer-checkout="' + escapeHtml(product.id) + '">' +
         '<p><strong>14-day cancellation right.</strong> Choose when matching may begin. Matching and administration have no deductible value, and CoachCarter absorbs Stripe fees.</p>' +
         '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="after" checked> Begin matching after my 14-day cancellation period</label>' +
@@ -65,7 +84,7 @@
       '</div>';
     }
     if (eligibility.state === 'authentication_required') {
-      return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">Sign in for test checkout</button>';
+      return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">' + (product.product_type === 'flexible_hours' ? 'Sign in to buy Flexible Hours' : 'Sign in for test checkout') + '</button>';
     }
     if (eligibility.state === 'verification_pending') {
       return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Verification pending</button>';
@@ -99,7 +118,9 @@
     var describedBy = locked ? lockId + ' ' + descriptionId : descriptionId;
     var disclosure = content.checkout_disclosure || eligibility.reason || 'Checkout is not available.';
     if (eligibility.checkout_available) {
-      disclosure = 'Test mode only. A verified Stripe webhook creates the Full Curriculum enrolment; this return page cannot.';
+      disclosure = product.product_type === 'flexible_hours'
+        ? 'Live Pay by Bank is isolated behind the School 1 gate. A verified signed webhook creates hours; this return page cannot.'
+        : 'Test mode only. A verified Stripe webhook creates the Full Curriculum enrolment; this return page cannot.';
     }
 
     return '<article class="product-shell' + (locked ? ' locked' : '') + '">' +
@@ -129,7 +150,7 @@
   function showPurchaseStatus(title, message, tone, focus) {
     purchaseStatusEl.hidden = false;
     purchaseStatusEl.className = 'purchase-status ' + (tone || 'is-pending');
-    purchaseStatusEl.innerHTML = '<p class="section-kicker">Test payment status</p><h2>' + escapeHtml(title) + '</h2><p>' + escapeHtml(message) + '</p>';
+    purchaseStatusEl.innerHTML = '<p class="section-kicker">Payment status</p><h2>' + escapeHtml(title) + '</h2><p>' + escapeHtml(message) + '</p>';
     if (focus) purchaseStatusEl.focus();
   }
 
@@ -162,6 +183,7 @@
   }
 
   function renderCatalogue(data) {
+    catalogueViewer = data.viewer || null;
     var products = Array.isArray(data.products) ? data.products : [];
     var flexible = products.filter(function (product) { return product.product_type === 'flexible_hours'; });
     var curriculum = products.filter(function (product) { return product.product_type === 'full_curriculum'; });
@@ -263,6 +285,120 @@
     }
   }
 
+  async function startFlexibleCheckout(button) {
+    var productId = Number(button.getAttribute('data-flexible-checkout'));
+    var panel = button.closest('[data-flexible-checkout-panel]');
+    var termsAccepted = Boolean(panel && panel.querySelector('[name="consumer_terms_accepted"]:checked'));
+    var adultAgeConfirmed = Boolean(panel && panel.querySelector('[name="adult_age_confirmed"]:checked'));
+    var immediateAccessRequested = Boolean(panel && panel.querySelector('[name="immediate_access_requested"]:checked'));
+    if (!termsAccepted || !adultAgeConfirmed || !immediateAccessRequested) {
+      showPurchaseStatus('Confirm your choices', 'Confirm you are 18 or over, accept the current terms, and expressly request immediate access before Checkout.', 'is-failed', true);
+      return;
+    }
+    var original = button.textContent;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Starting secure Pay by Bank Checkout…';
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(flexibleApiUrl('create-checkout'), {
+        method: 'POST', credentials: 'include',
+        body: JSON.stringify({
+          product_id: productId,
+          client_request_id: requestIdentity(productId),
+          consumer_terms_accepted: true,
+          adult_age_confirmed: true,
+          immediate_access_requested: true,
+          disclosure_version: button.getAttribute('data-disclosure-version')
+        })
+      });
+      var data = await response.json();
+      if (response.status === 401) {
+        if (window.ccAuth) window.ccAuth.requireAuth();
+        return;
+      }
+      if (data.attempt) renderFlexibleAttempt(data.attempt, true, data.entitlement_created === true);
+      if (response.ok && data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'Flexible Hours Checkout could not be started.');
+      if (data.attempt && data.attempt.status === 'pending') startFlexiblePolling(data.attempt.id);
+    } catch (error) {
+      showPurchaseStatus('Checkout not started', error.message || 'Please try again.', 'is-failed', true);
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = original;
+    }
+  }
+
+  function renderFlexibleAttempt(attempt, focus, entitlementCreated) {
+    if (attempt.status === 'paid') {
+      showPurchaseStatus(
+        entitlementCreated ? 'Flexible Hours available' : 'Payment confirmed',
+        entitlementCreated
+          ? 'Stripe confirmed the bank payment and the signed webhook created your school-wide Flexible Hours.'
+          : 'Stripe confirmed payment. The browser cannot create hours; signed-webhook fulfilment is still being checked.',
+        'is-paid', focus
+      );
+      clearPolling();
+      clearAttemptRequest(attempt.product && attempt.product.id);
+      loadFlexibleBalance();
+    } else if (attempt.status === 'review_required') {
+      showPurchaseStatus('Payment review required', 'Do not pay again. Support must reconcile this exact Checkout identity.', 'is-review', focus);
+      clearPolling();
+    } else if (attempt.status === 'failed' || attempt.status === 'expired') {
+      showPurchaseStatus('No Flexible Hours created', attempt.message, 'is-failed', focus);
+      clearPolling();
+      clearAttemptRequest(attempt.product && attempt.product.id);
+    } else {
+      showPurchaseStatus('Confirming your bank payment', 'Only the dedicated signed Stripe webhook can create your Flexible Hours.', 'is-pending', focus);
+    }
+  }
+
+  async function pollFlexibleAttempt(attemptId, focus) {
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(flexibleApiUrl('attempt-status', { attempt_id: attemptId }), { credentials: 'include' });
+      var data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Payment status is unavailable.');
+      renderFlexibleAttempt(data.attempt, focus, data.entitlement_created === true);
+      return data.attempt;
+    } catch (error) {
+      showPurchaseStatus('Status check unavailable', 'Do not start another payment. Reopen this return link or contact support.', 'is-review', focus);
+      clearPolling();
+      return null;
+    }
+  }
+
+  function startFlexiblePolling(attemptId) {
+    clearPolling();
+    pollStartedAt = Date.now();
+    pollTimer = window.setInterval(function () {
+      if (Date.now() - pollStartedAt > 10 * 60 * 1000) {
+        clearPolling();
+        showPurchaseStatus('Still confirming', 'Do not pay again. This bank payment requires review if it remains unresolved.', 'is-review', false);
+        return;
+      }
+      pollFlexibleAttempt(attemptId, false);
+    }, 3000);
+  }
+
+  async function loadFlexibleBalance() {
+    var target = document.getElementById('flexible-balance-status');
+    if (!target || !(catalogueViewer && catalogueViewer.signed_in_as_learner)) return;
+    try {
+      var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
+      var response = await fetcher(flexibleApiUrl('balance'), { credentials: 'include' });
+      if (!response.ok) return;
+      var data = await response.json();
+      var hours = Number(data.remaining_minutes || 0) / 60;
+      target.hidden = false;
+      target.innerHTML = '<strong>Your Flexible Hours:</strong> ' + escapeHtml(hours.toFixed(1).replace(/\.0$/, '')) + ' hours remaining across ' + escapeHtml((data.sources || []).length) + ' immutable purchase source(s).';
+    } catch (_) {}
+  }
+
   async function pollAttempt(attemptId, focus) {
     try {
       var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
@@ -301,6 +437,17 @@
     var params = new URLSearchParams(window.location.search);
     var attemptId = params.get('attempt_id');
     if (!attemptId) return;
+    if (params.get('flexible_return') === '1' || params.get('flexible_cancelled') === '1') {
+      showPurchaseStatus(
+        params.get('flexible_cancelled') === '1' ? 'Checking the closed checkout' : 'Confirming your bank payment',
+        'This return page cannot create Flexible Hours. It checks the owned durable attempt only.',
+        'is-pending', true
+      );
+      pollFlexibleAttempt(attemptId, false).then(function (attempt) {
+        if (attempt && attempt.status === 'pending') startFlexiblePolling(attemptId);
+      });
+      return;
+    }
     showPurchaseStatus(
       params.get('package_cancelled') === '1' ? 'Checking the closed checkout' : 'Confirming your bank payment',
       'This return page cannot activate a package. It is checking the durable server-side attempt.',
@@ -328,6 +475,7 @@
         throw new Error(data.message || 'The catalogue could not be loaded.');
       }
       renderCatalogue(data);
+      loadFlexibleBalance();
     } catch (error) {
       showMessage('We could not load Packages', error.message || 'Please try again.', true);
     }
@@ -451,6 +599,8 @@
   });
 
   contentEl.addEventListener('click', function (event) {
+    var flexibleCheckout = event.target.closest('[data-flexible-checkout]');
+    if (flexibleCheckout) { startFlexibleCheckout(flexibleCheckout); return; }
     var checkout = event.target.closest('[data-package-checkout]');
     if (checkout) { startCheckout(checkout); return; }
     if (event.target.closest('[data-package-sign-in]') && window.ccAuth) window.ccAuth.requireAuth();

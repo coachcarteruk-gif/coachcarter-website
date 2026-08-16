@@ -47,6 +47,7 @@
     <div id="catalogue-content" hidden>
       <section class="intent-section" aria-labelledby="flexible-heading">
         <div class="section-intro"><p class="section-kicker">I want flexible hours</p><h2 id="flexible-heading">Hours without a named-instructor tie.</h2><p>Designed as separate school-wide value, not a revival of the retired Lesson Credit checkout.</p></div>
+        <p id="flexible-balance-status" class="flexible-balance-status" role="status" aria-live="polite" hidden></p>
         <div id="flexible-products" class="featured-product"></div>
       </section>
 
@@ -74,9 +75,9 @@
       <section class="truth-panel" aria-labelledby="before-you-choose-heading">
         <div><p class="section-kicker">Payment foundation</p><h2 id="before-you-choose-heading">How confirmation works.</h2></div>
         <div class="truth-list">
-          <p><strong>Test mode only.</strong> A school must separately enable the dedicated purchasing test gate before Full Curriculum checkout appears.</p>
+          <p><strong>Purchasing stays gated.</strong> Full Curriculum uses its separate test gate. Flexible Hours uses a School 1-only exact Boolean live gate that is absent and false by default.</p>
           <p><strong>Stripe confirms payment.</strong> Returning to this page never activates value; only verified signed webhook evidence can create the programme.</p>
-          <p><strong>Programme value is separate.</strong> Full Curriculum creates weekly programme opportunities and actual booking allocations, never general Lesson Credit.</p>
+          <p><strong>Programme value is separate.</strong> Flexible Hours uses 30-minute school-wide source units; Full Curriculum uses weekly programme opportunities. Neither creates Lesson Credit.</p>
           <p><strong>Old credit stays separate.</strong> Your existing Lesson Credit remains readable and usable under its current rules.</p>
         </div>
       </section>

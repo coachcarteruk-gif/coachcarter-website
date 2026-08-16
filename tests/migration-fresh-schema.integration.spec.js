@@ -210,6 +210,117 @@ test.describe('fresh-schema migration bootstrap', () => {
     });
   });
 
+  test('creates and enforces the Flexible Hours source/allocation/return ledger', async () => {
+    const products = await client.query(`
+      SELECT p.slug, p.id AS product_id, v.id AS version_id, v.price_pence, v.content
+        FROM package_products p
+        JOIN LATERAL (
+          SELECT * FROM package_product_versions candidate
+           WHERE candidate.school_id = p.school_id AND candidate.product_id = p.id
+           ORDER BY candidate.effective_from DESC, candidate.version_number DESC LIMIT 1
+        ) v ON TRUE
+       WHERE p.school_id = 1 AND p.slug IN ('flexible-15-hours','flexible-30-hours')
+       ORDER BY p.slug
+    `);
+    expect(products.rows.map(row => [row.slug, row.price_pence])).toEqual([
+      ['flexible-15-hours', 81000], ['flexible-30-hours', 159000],
+    ]);
+    const learner = await client.query(`
+      INSERT INTO learner_users (name, email, school_id)
+      VALUES ('Flexible Integration Learner', 'flexible-ledger@integration.test', 1) RETURNING id
+    `);
+    const instructor = await client.query(`
+      INSERT INTO instructors (name, email, school_id, active)
+      VALUES ('Flexible Integration Instructor', 'flexible-instructor@integration.test', 1, TRUE) RETURNING id
+    `);
+    const fifteen = products.rows.find(row => row.slug === 'flexible-15-hours');
+    const attemptId = '018f47b0-1a2b-4c3d-8e9f-0123456789ab';
+    await client.query(`
+      INSERT INTO flexible_package_purchase_attempts (
+        id, school_id, learner_id, product_id, product_version_id, product_slug,
+        product_snapshot, amount_pence, currency, total_units, unit_minutes,
+        rate_pence_per_unit, customer_terms_version, disclosure_version,
+        adult_age_confirmed, terms_accepted, immediate_access_requested,
+        stripe_mode, status, client_request_id, idempotency_key,
+        stripe_payment_method_configuration_id, stripe_checkout_session_id,
+        stripe_payment_intent_id, paid_at
+      ) VALUES (
+        $1::uuid,1,$2,$3,$4,'flexible-15-hours',$5::jsonb,81000,'GBP',30,30,2700,
+        'flexible-hours-v1','flexible-hours-consumer-rights-v1',TRUE,TRUE,TRUE,
+        'live','paid','118f47b0-1a2b-4c3d-8e9f-0123456789ab'::uuid,
+        'cc-flexible-package-live-018f47b0-1a2b-4c3d-8e9f-0123456789ab',
+        'pmc_FlexibleIntegration','cs_live_flexibleintegration','pi_flexibleintegration',NOW()
+      )
+    `, [attemptId, learner.rows[0].id, fifteen.product_id, fifteen.version_id, JSON.stringify(fifteen.content)]);
+    const purchase = await client.query(`
+      INSERT INTO flexible_package_purchases (
+        school_id, learner_id, attempt_id, product_id, product_version_id,
+        product_slug, product_snapshot, amount_pence, currency, total_units,
+        unit_minutes, rate_pence_per_unit, customer_terms_version,
+        stripe_checkout_session_id, stripe_payment_intent_id, paid_at
+      ) VALUES (1,$1,$2::uuid,$3,$4,'flexible-15-hours',$5::jsonb,81000,'GBP',30,30,2700,
+        'flexible-hours-v1','cs_live_flexibleintegration','pi_flexibleintegration',NOW()) RETURNING id
+    `, [learner.rows[0].id, attemptId, fifteen.product_id, fifteen.version_id, JSON.stringify(fifteen.content)]);
+    const source = await client.query(`
+      INSERT INTO flexible_package_sources (
+        school_id, learner_id, purchase_id, product_version_id, initial_units,
+        unit_minutes, rate_pence_per_unit, original_value_pence, available_at
+      ) VALUES (1,$1,$2,$3,30,30,2700,81000,NOW()) RETURNING id
+    `, [learner.rows[0].id, purchase.rows[0].id, fifteen.version_id]);
+    const booking = await client.query(`
+      INSERT INTO lesson_bookings (
+        learner_id, instructor_id, scheduled_date, start_time, end_time,
+        status, school_id, payment_method, minutes_deducted,
+        list_price_pence, list_price_source, stripe_fee_pence, stripe_fee_source,
+        flexible_package_booking_request_id
+      ) VALUES ($1,$2,CURRENT_DATE + 30,'09:00','10:00','scheduled',1,
+        'flexible_package',60,5400,'flexible_package_frozen_rate',0,'platform_absorbed_package_fee',
+        '218f47b0-1a2b-4c3d-8e9f-0123456789ab'::uuid)
+      RETURNING id
+    `, [learner.rows[0].id, instructor.rows[0].id]);
+    await client.query('SAVEPOINT flexible_duplicate_booking_request');
+    await expect(client.query(`
+      INSERT INTO lesson_bookings (
+        learner_id, instructor_id, scheduled_date, start_time, end_time,
+        status, school_id, payment_method, minutes_deducted,
+        list_price_pence, list_price_source, stripe_fee_pence, stripe_fee_source,
+        flexible_package_booking_request_id
+      ) VALUES ($1,$2,CURRENT_DATE + 31,'11:00','12:00','scheduled',1,
+        'flexible_package',60,5400,'flexible_package_frozen_rate',0,'platform_absorbed_package_fee',
+        '218f47b0-1a2b-4c3d-8e9f-0123456789ab'::uuid)
+    `, [learner.rows[0].id, instructor.rows[0].id])).rejects.toMatchObject({ code: '23505' });
+    await client.query('ROLLBACK TO SAVEPOINT flexible_duplicate_booking_request');
+    const allocation = await client.query(`
+      INSERT INTO flexible_package_booking_allocations (
+        school_id, learner_id, source_id, booking_id, instructor_id,
+        units_allocated, unit_minutes, rate_pence_per_unit, contribution_pence
+      ) VALUES (1,$1,$2,$3,$4,2,30,2700,5400) RETURNING id
+    `, [learner.rows[0].id, source.rows[0].id, booking.rows[0].id, instructor.rows[0].id]);
+    const spent = await client.query(`SELECT remaining_units FROM flexible_package_balances WHERE school_id = 1 AND learner_id = $1`, [learner.rows[0].id]);
+    expect(spent.rows[0].remaining_units).toBe(28);
+    await client.query('SAVEPOINT flexible_partial_return');
+    await expect(client.query(`
+      INSERT INTO flexible_package_allocation_returns (
+        school_id, allocation_id, booking_id, units_returned, reason
+      ) VALUES (1,$1,$2,1,'learner_cancelled_48h_plus')
+    `, [allocation.rows[0].id, booking.rows[0].id])).rejects.toMatchObject({ code: '23514' });
+    await client.query('ROLLBACK TO SAVEPOINT flexible_partial_return');
+    await client.query(`
+      INSERT INTO flexible_package_allocation_returns (
+        school_id, allocation_id, booking_id, units_returned, reason
+      ) VALUES (1,$1,$2,2,'learner_cancelled_48h_plus')
+    `, [allocation.rows[0].id, booking.rows[0].id]);
+    const returned = await client.query(`SELECT remaining_units FROM flexible_package_balances WHERE school_id = 1 AND learner_id = $1`, [learner.rows[0].id]);
+    expect(returned.rows[0].remaining_units).toBe(30);
+    await client.query('SAVEPOINT flexible_double_return');
+    await expect(client.query(`
+      INSERT INTO flexible_package_allocation_returns (
+        school_id, allocation_id, booking_id, units_returned, reason
+      ) VALUES (1,$1,$2,2,'learner_cancelled_48h_plus')
+    `, [allocation.rows[0].id, booking.rows[0].id])).rejects.toMatchObject({ code: '23505' });
+    await client.query('ROLLBACK TO SAVEPOINT flexible_double_return');
+  });
+
   test('keeps the moved school foundation idempotent', async () => {
     const before = await client.query('SELECT COUNT(*)::INTEGER AS count FROM schools');
     await expect(client.query(schoolFoundationSql)).resolves.toBeTruthy();

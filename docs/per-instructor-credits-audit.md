@@ -361,3 +361,11 @@ No hard blockers remain for Thread A closeout.
   to Fraser / instructor `1` through shared helper fallback branches. Treat
   those branches as compatibility only; all new learner-facing purchase UI
   requires an explicit instructor before checkout.
+
+## Flexible Hours boundary (2026-08-16)
+
+Flexible Hours do not weaken or replace the per-instructor Lesson Credit model. Their authority is the separate school-scoped `flexible_package_sources` ledger and its allocation/return/reduction evidence; they never write `learner_credit_balances` or the aggregate `learner_users.balance_minutes` shadow.
+
+The instructor dimension is introduced only when actual package units are allocated to a booking. The booking stores the delivering same-school active `instructor_id`, the sum of its immutable source contributions in `list_price_pence`, `list_price_source='flexible_package_frozen_rate'`, and zero booking Stripe fee because CoachCarter absorbs the original purchase fee. Existing scheduled/chargeable/refunded payout eligibility then applies normally. Entitlement creation alone has no instructor and creates no earning or payout entry.
+
+Cancellation at 48+ hours appends one return per allocation and restores those exact sources. Under 48 hours appends no return, leaves the booking scheduled/payable, and therefore cannot manufacture Lesson Credit or move value to a different instructor. The 30-minute unit model rejects incompatible durations instead of rounding.

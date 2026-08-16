@@ -678,8 +678,8 @@ These are the remaining product/operating decisions after the owner-certified co
 3. **Assessment commercial values:** the customer deduction is resolved at £50 per completed assessment, capped at £150 in the owner-certified prospective version. Normal duration and separately configured assessor payout remain unresolved and must not be derived from that deduction.
 4. **Course teaching payout:** exact admin-configurable per-lesson instructor rate and how existing commission/franchise rules consume it.
 5. **CoachCarter non-fulfilment:** the owner accepts the approved default of refunding undelivered value with no fee/admin/late-cancellation deduction, subject to any stronger statutory remedy on the facts.
-6. **Flexible-package late cancellation:** whether an under-48-hour cancellation consumes the full booked package units, a different amount, or another rule.
-7. **Voluntary refund fee treatment:** resolved for Full Curriculum: learner deduction is £0 and CoachCarter absorbs the original non-returned Stripe fee. Other products remain unresolved.
+6. **Flexible-package late cancellation:** resolved. A learner cancellation/no-show under 48 hours consumes the exact source units allocated to that booking and leaves the booking scheduled/payable under the existing lifecycle. At 48+ hours the exact allocations return once.
+7. **Voluntary refund fee treatment:** resolved for Full Curriculum and, separately in section 11, Flexible Hours: learner deduction is £0 and CoachCarter absorbs the original non-returned Stripe fee. Other products remain unresolved.
 8. **Cooling-off implementation:** implemented for Full Curriculum with default hold, optional express early start, adult declaration, durable versioned evidence, awaited exact-terms confirmation and frozen delivered-service calculation. Disposable-database and email-delivery verification remain activation checks.
 9. **Manoeuvres Challenge definition:** final hashtag, exact evidence, reflection criteria, any driving-performance criterion, deadlines, proof retention, registration-plate rule, reward turnaround, and eligibility exclusions.
 10. **Under-18 Challenge safeguards:** final consent form, privacy notice, DPIA/safeguarding review, evidence retention, and learner withdrawal mechanism.
@@ -690,7 +690,17 @@ These are the remaining product/operating decisions after the owner-certified co
 
 Commercial pricing is not a launch blocker: £2,000 is an intentionally lean introductory pilot price. Pilot reporting must still measure instructor and assessor cost, programme weeks used, first-test outcomes, retake-hour use, refunds, payment fees, and contribution margin before each prospective price review.
 
-## 11. External payment and consumer guidance used
+## 11. Flexible Hours implementation decision (2026-08-16)
+
+Flexible Hours are a separate school-wide Learner Packages ledger, not Lesson Credit. The approved immutable offers are 15 hours for £810 (30 half-hour units at £27) and 30 hours for £1,590 (60 half-hour units at £26.50). They do not expire, cannot be transferred to another learner, and may fund a representable lesson with any active instructor in the learner's school.
+
+Multiple purchases remain separate immutable sources and are consumed FIFO. Every booking freezes its exact source allocations and pence contribution; the delivering instructor receives the normal booking-lifecycle attribution from that frozen value. Purchase/webhook fulfilment creates no instructor earning, transfer or payout by itself. Durations not divisible by 30 minutes, including the currently offered 165-minute lesson, fail closed pending an owner decision.
+
+The statutory 14-day cancellation right is retained without a mandatory service hold. Checkout requires adult/terms acknowledgement and the learner's express request for immediate access. Used and properly late-cancelled units may be deducted; unused units remain refundable at each source's immutable rate. CoachCarter absorbs the original Stripe fee. Provider refunds remain manual and the application records source-scoped evidence only after the original-method refund has been completed.
+
+Live purchasing is isolated behind exact Boolean `schools.config.features.learner_flexible_package_purchasing_live_enabled === true` and is additionally pinned to School 1. It defaults absent/false, has no admin setter, and uses dedicated live restricted-key, Pay-by-Bank-only Payment Method Configuration and webhook-secret environment identities. Browser return pages only poll owned status; a verified signed live webhook is the sole entitlement creator. See `docs/flexible-hours-packages-runbook.md`.
+
+## 12. External payment and consumer guidance used
 
 - Stripe Pay by Bank: <https://docs.stripe.com/payments/pay-by-bank>
 - Stripe Payment Method Configurations: <https://docs.stripe.com/payments/payment-method-configurations>

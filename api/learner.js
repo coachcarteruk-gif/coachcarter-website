@@ -81,6 +81,7 @@ const {
   refundLedgerTablesExist,
   learnerBroadcastTablesExist,
   packagePurchaseAttemptsTableExists,
+  flexiblePackageTablesExist,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
   fullCurriculumConsumerRightsTablesExist,
@@ -1710,6 +1711,57 @@ async function handleExportData(req, res) {
            ORDER BY created_at DESC`
       : null;
 
+    const hasFlexiblePackages = await flexiblePackageTablesExist(sql);
+    let flexibleHours = null;
+    if (hasFlexiblePackages) {
+      const [attempts, purchases, sources, allocations, returns, reductions, events] = await Promise.all([
+        sql`SELECT product_slug, product_snapshot, amount_pence, currency, total_units,
+                   unit_minutes, rate_pence_per_unit, customer_terms_version,
+                   disclosure_version, adult_age_confirmed, terms_accepted,
+                   immediate_access_requested, status, paid_at, failed_at,
+                   expired_at, review_required_at, failure_code, created_at
+              FROM flexible_package_purchase_attempts
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at`,
+        sql`SELECT id, product_slug, product_snapshot, amount_pence, currency,
+                   total_units, unit_minutes, rate_pence_per_unit,
+                   customer_terms_version, paid_at, created_at
+              FROM flexible_package_purchases
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at`,
+        sql`SELECT id, purchase_id, product_version_id, initial_units, unit_minutes,
+                   rate_pence_per_unit, original_value_pence, available_at, created_at
+              FROM flexible_package_sources
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY available_at, id`,
+        sql`SELECT id, source_id, booking_id, instructor_id, units_allocated,
+                   unit_minutes, rate_pence_per_unit, contribution_pence, created_at
+              FROM flexible_package_booking_allocations
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at, id`,
+        sql`SELECT returned.allocation_id, returned.booking_id, returned.units_returned,
+                   returned.reason, returned.created_at
+              FROM flexible_package_allocation_returns returned
+              JOIN flexible_package_booking_allocations allocation
+                ON allocation.id = returned.allocation_id AND allocation.school_id = ${schoolId}
+             WHERE allocation.learner_id = ${user.id} AND returned.school_id = ${schoolId}
+             ORDER BY returned.created_at, returned.id`,
+        sql`SELECT id, source_id, units_reduced, rate_pence_per_unit,
+                   gross_refund_pence, stripe_fee_deduction_pence,
+                   learner_refund_pence, kind, provider_refund_id,
+                   evidence_reference, created_at
+              FROM flexible_package_source_reductions
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at, id`,
+        sql`SELECT event_type, attempt_id, purchase_id, source_id, booking_id, detail, created_at
+              FROM flexible_package_state_events
+             WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+             ORDER BY created_at, id`,
+      ]);
+      flexibleHours = { attempts, purchases, sources, booking_allocations: allocations,
+        allocation_returns: returns, source_reductions: reductions, state_events: events };
+    }
+
     const hasFullCurriculum = await fullCurriculumTablesExist(sql);
     const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
     const hasFullCurriculumConsumerRights = hasFullCurriculum
@@ -1947,6 +1999,7 @@ async function handleExportData(req, res) {
           'test_swap_listings', 'test_swap_requests',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
           ...(hasPackagePurchaseAttempts ? ['package_purchase_attempts'] : []),
+          ...(hasFlexiblePackages ? ['flexible_hours'] : []),
           ...(hasFullCurriculum ? ['full_curriculum'] : []),
           ...(hasRefundLedger ? ['refund_events'] : []),
           ...(hasLearnerBroadcasts ? ['broadcasts_received'] : [])
@@ -1978,6 +2031,7 @@ async function handleExportData(req, res) {
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,
       ...(hasPackagePurchaseAttempts ? { package_purchase_attempts: packagePurchaseAttempts } : {}),
+      ...(hasFlexiblePackages ? { flexible_hours: flexibleHours } : {}),
       ...(hasFullCurriculum ? { full_curriculum: fullCurriculum } : {}),
       ...(hasRefundLedger ? { refund_events: refundEvents } : {}),
       ...(hasLearnerBroadcasts ? { broadcasts_received: broadcastsReceived } : {}),

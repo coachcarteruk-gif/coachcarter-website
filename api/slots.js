@@ -80,6 +80,11 @@ const {
   copyRefundedBookingCreditSources,
 } = require('./_bcs-refund-marker');
 const { transferBookingFunding } = require('./_instructor-switch-transfer');
+const {
+  bookFlexiblePackageSlotTransaction,
+  cancelFlexiblePackageBookingTransaction,
+  unitsForDuration: flexibleUnitsForDuration,
+} = require('./_flexible-package-ledger');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -3878,6 +3883,8 @@ async function handleBook(req, res) {
     transmission_type,
     social_video_consent,
     social_video_age_confirmed,
+    funding_method,
+    client_request_id,
   } = req.body;
   if (!instructor_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'instructor_id, date, start_time and end_time are required' });
@@ -3891,6 +3898,20 @@ async function handleBook(req, res) {
   if (weeks < 1 || weeks > 8 || isNaN(weeks))
     return res.status(400).json({ error: 'repeat_weeks must be between 1 and 8' });
   const isRecurring = weeks > 1;
+  const flexiblePackageRequested = funding_method === 'flexible_package';
+  if (funding_method && !['lesson_credit', 'flexible_package'].includes(funding_method)) {
+    return res.status(400).json({ error: 'funding_method must be lesson_credit or flexible_package' });
+  }
+  if (flexiblePackageRequested && isRecurring) {
+    return res.status(400).json({
+      error: true,
+      code: 'FLEXIBLE_PACKAGE_SINGLE_BOOKING_ONLY',
+      message: 'Book Flexible Hours one lesson at a time so each delivering instructor is attributed exactly.'
+    });
+  }
+  if (flexiblePackageRequested && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(client_request_id || ''))) {
+    return res.status(400).json({ error: true, code: 'FLEXIBLE_BOOKING_REQUEST_ID_REQUIRED', message: 'A secure Flexible Hours booking request identity is required.' });
+  }
 
   // Validate date is not in the past and within booking window
   const bookingDate = parseDate(date);
@@ -3936,6 +3957,13 @@ async function handleBook(req, res) {
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     if (isFreeTrialLessonType(lessonType)) return rejectFreeTrialOnPaidPath(res);
     const durationMins = lessonType.duration_minutes;
+    if (flexiblePackageRequested && !flexibleUnitsForDuration(durationMins)) {
+      return res.status(409).json({
+        error: true,
+        code: 'FLEXIBLE_DURATION_INCOMPATIBLE',
+        message: `${lessonType.name} cannot use Flexible Hours because ${durationMins} minutes is not representable in exact 30-minute units.`
+      });
+    }
 
     // Validate slot duration matches lesson type
     if (endMins - startMins !== durationMins)
@@ -3970,6 +3998,13 @@ async function handleBook(req, res) {
     }
     if (socialVideo.ageRejected) {
       return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });
+    }
+    if (flexiblePackageRequested && socialVideo.selected) {
+      return res.status(409).json({
+        error: true,
+        code: 'FLEXIBLE_PACKAGE_SOCIAL_DISCOUNT_INCOMPATIBLE',
+        message: 'The social filming cash discount cannot be combined with immutable Flexible Hours value.'
+      });
     }
     if (!isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)) {
       return rejectLessonTypeNotOffered(res);
@@ -4012,6 +4047,13 @@ async function handleBook(req, res) {
     const [schoolRow] = await sql`SELECT config FROM schools WHERE id = ${schoolId}`;
     const schoolConfig = schoolRow?.config || {};
     const skipPayments = isDemoInstructor || !schoolConfig.payments_enabled;
+    if (flexiblePackageRequested && skipPayments) {
+      return res.status(409).json({
+        error: true,
+        code: 'FLEXIBLE_PACKAGE_NOT_REQUIRED',
+        message: 'Flexible Hours cannot fund a free booking.'
+      });
+    }
 
     // 2b. Travel time check between pickup postcodes (warning only, not blocking)
     let travelWarnings = null;
@@ -4115,13 +4157,56 @@ async function handleBook(req, res) {
     const minsPerBooking = skipPayments ? 0 : chargeMins;
     let createdBookings = [];
     let transactionBalanceMinutes = null;
+    let flexiblePackageBookingReused = false;
 
     // Credit-funded list_price_pence is computed inside the transaction from
     // planned payable BCS contribution. skipPayments paths snapshot 0 because
     // no credit source was consumed and no list price is owed.
     const listPricePence = 0;
 
-    if (!skipPayments) {
+    let flexiblePackageRemainingUnits = null;
+    if (flexiblePackageRequested) {
+      const booked = await bookFlexiblePackageSlotTransaction({
+        connectionString: process.env.POSTGRES_URL,
+        learnerId: user.id,
+        instructorId: Number(instructor_id),
+        schoolId,
+        date,
+        startTime: start_time,
+        endTime: end_time,
+        lessonTypeId: lessonType.id,
+        durationMinutes: durationMins,
+        pickupAddress: bookingPickup,
+        dropoffAddress: bookingDropoff,
+        transmissionType: bookingTransmissionType,
+        clientRequestId: client_request_id,
+      });
+      if (!booked.ok && booked.code === 'INSUFFICIENT_FLEXIBLE_UNITS') {
+        return res.status(402).json({
+          error: true,
+          code: booked.code,
+          message: `Not enough Flexible Hours. You need ${formatHours(totalMins)}.`
+        });
+      }
+      if (!booked.ok && booked.code === 'FLEXIBLE_DURATION_INCOMPATIBLE') {
+        return res.status(409).json({ error: true, code: booked.code, message: 'This lesson duration cannot use 30-minute Flexible Hours units.' });
+      }
+      if (!booked.ok && booked.code === 'SLOTS_UNAVAILABLE') {
+        return res.status(409).json({ error: true, code: booked.code, message: 'That slot is no longer available.' });
+      }
+      if (!booked.ok && booked.code === 'FLEXIBLE_BOOKING_REQUEST_MISMATCH') {
+        return res.status(409).json({
+          error: true,
+          code: booked.code,
+          message: 'This retry identity belongs to a different Flexible Hours booking. Reopen the slot and try again.'
+        });
+      }
+      if (!booked.ok) throw new Error(`Flexible Hours booking transaction failed: ${booked.code || 'UNKNOWN'}`);
+      createdBookings = [booked.booking];
+      flexiblePackageRemainingUnits = booked.remainingUnits;
+      transactionBalanceMinutes = booked.remainingUnits * 30;
+      flexiblePackageBookingReused = booked.reused === true;
+    } else if (!skipPayments) {
       const booked = await bookCreditFundedSlotsTransaction({
         connectionString: process.env.POSTGRES_URL,
         learnerId: user.id,
@@ -4226,10 +4311,12 @@ async function handleBook(req, res) {
     const durationStr = formatHours(durationMins);
     const balanceStr  = formatHours(responseBalanceMinutes);
 
-    // 7. Send notifications
-    const mailer = createTransporter();
+    // 7. Send notifications. An idempotent Flexible Hours replay returns the
+    // original booking and must not notify the learner/instructor twice.
+    if (!flexiblePackageBookingReused) {
+      const mailer = createTransporter();
 
-    if (isRecurring) {
+      if (isRecurring) {
       // Send summary email + ICS for each booking in the series
       const dateList = bookingDates.map(bd => {
         const display = formatDateDisplay(bd.date);
@@ -4314,6 +4401,10 @@ async function handleBook(req, res) {
     } else {
       // Single booking — existing notification flow
       const lessonDateStr = formatDateDisplay(date);
+      const balanceLabel = flexiblePackageRequested ? 'Flexible Hours remaining' : 'Hours remaining';
+      const cancellationCopy = flexiblePackageRequested
+        ? 'Cancel at least 48 hours before and the exact Flexible Hours allocation returns automatically.'
+        : 'Cancel at least 48 hours before and the lesson credit returns to your balance.';
       const lessonTime    = `${start_time} – ${end_time}`;
 
       const icsContent = generateICS({
@@ -4338,10 +4429,10 @@ async function handleBook(req, res) {
             <tr><td><strong>Instructor:</strong></td><td>${instructor.name}</td></tr>
             <tr><td><strong>Type:</strong></td><td>${lessonType.name}</td></tr>
             <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
-            <tr><td><strong>Hours remaining:</strong></td><td>${balanceStr}</td></tr>
+            <tr><td><strong>${balanceLabel}:</strong></td><td>${balanceStr}</td></tr>
           </table>
           <p style="margin-top:16px;font-size:0.875rem;color:#797879">
-            Need to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.
+            Need to cancel? ${cancellationCopy}
           </p>
           <p>
             <a href="https://coachcarter.uk/learner/"
@@ -4383,12 +4474,13 @@ async function handleBook(req, res) {
       }
 
       await sendWhatsApp(learner.phone,
-        `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? Do so at least 48 hours before and the lesson credit returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+        `✅ Lesson confirmed!\n\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n📋 ${lessonType.name} (${durationStr})\n\nNeed to cancel? ${cancellationCopy}\n\nView bookings: https://coachcarter.uk/learner/`
       );
       if (!isDemoInstructor) {
         await sendWhatsApp(instructor.phone,
           `📋 New booking!\n\n👤 ${learner.name}\n📅 ${lessonDateStr}\n⏰ ${lessonTime}\n📋 ${lessonType.name} (${durationStr})\n\nView schedule: https://coachcarter.uk/instructor/`
         );
+      }
       }
     }
 
@@ -4401,6 +4493,12 @@ async function handleBook(req, res) {
       credit_balance:  updated.credit_balance,
       payments_enabled: !!schoolConfig.payments_enabled
     };
+    if (flexiblePackageRequested) {
+      response.funding_method = 'flexible_package';
+      response.flexible_package_remaining_units = flexiblePackageRemainingUnits;
+      response.flexible_package_remaining_minutes = flexiblePackageRemainingUnits * 30;
+      response.idempotent = flexiblePackageBookingReused;
+    }
     if (isRecurring) {
       response.series_id   = seriesId;
       response.booking_ids = createdBookings.map(b => b.id);
@@ -6332,10 +6430,77 @@ async function handleCancel(req, res) {
 
     if (!booking)
       return res.status(404).json({ error: 'Booking not found' });
+    const isDemoBooking = booking.instructor_email === 'demo@coachcarter.uk';
+
+    let flexibleAllocations = [];
+    try {
+      flexibleAllocations = await sql`
+        SELECT COALESCE(SUM(units_allocated), 0)::int AS units
+          FROM flexible_package_booking_allocations
+         WHERE booking_id = ${booking_id} AND school_id = ${schoolId}
+      `;
+    } catch (error) {
+      if (error?.code !== '42P01') throw error;
+    }
+    const flexibleUnits = Number(flexibleAllocations[0]?.units || 0);
+    if (flexibleUnits > 0) {
+      if (cancel_series) {
+        return res.status(400).json({
+          error: true,
+          code: 'FLEXIBLE_PACKAGE_SINGLE_BOOKING_ONLY',
+          message: 'Flexible Hours bookings are cancelled individually.'
+        });
+      }
+      const packageLessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
+      const packageHoursUntil = (packageLessonDateTime - Date.now()) / 3600000;
+      const eligibleReturn = packageHoursUntil >= CANCEL_HOURS_CUTOFF;
+      const cancelled = await cancelFlexiblePackageBookingTransaction({
+        connectionString: process.env.POSTGRES_URL,
+        learnerId: user.id,
+        schoolId,
+        bookingId: Number(booking_id),
+        eligibleReturn,
+      });
+      if (!cancelled.ok) {
+        return res.status(cancelled.code === 'BOOKING_NOT_FOUND' ? 404 : 409).json({
+          error: true,
+          code: cancelled.code,
+          message: 'This Flexible Hours booking could not be cancelled safely.'
+        });
+      }
+      const packageValueReturned = cancelled.eligibleReturn === true;
+      if (packageValueReturned && !cancelled.idempotent) {
+        notifyAvailableLearners({
+          instructor_id: booking.instructor_id,
+          instructor_name: booking.instructor_name,
+          scheduled_date: String(booking.scheduled_date).slice(0, 10),
+          start_time: booking.start_time,
+          end_time: booking.end_time,
+          lesson_type_id: booking.lesson_type_id,
+          school_id: schoolId,
+        }).catch(err => {
+          console.warn('availability notify (flexible package) failed:', err.message);
+          reportError('/api/slots:availability-flexible-package', err);
+        });
+      }
+      return res.json({
+        success: true,
+        funding_method: 'flexible_package',
+        package_units_returned: packageValueReturned ? cancelled.units : 0,
+        minutes_returned: cancelled.minutesReturned,
+        flexible_package_remaining_units: cancelled.remainingUnits,
+        flexible_package_remaining_minutes: cancelled.remainingUnits * 30,
+        credit_returned: false,
+        package_value_returned: packageValueReturned,
+        idempotent: cancelled.idempotent === true,
+        message: packageValueReturned
+          ? `${formatHours(cancelled.minutesReturned)} returned to your Flexible Hours.`
+          : `Booking cancelled. Flexible Hours consumed because less than ${CANCEL_HOURS_CUTOFF} hours' notice was given.`,
+      });
+    }
+
     if (booking.status !== SCHEDULED)
       return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
-
-    const isDemoBooking = booking.instructor_email === 'demo@coachcarter.uk';
 
     // ── Series cancellation ─────────────────────────────────────────────────
     if (cancel_series && booking.series_id) {
@@ -7316,6 +7481,25 @@ async function handleReschedule(req, res) {
 
     if (!booking)
       return res.status(404).json({ error: 'Booking not found' });
+
+    let flexiblePackageFunding = null;
+    try {
+      [flexiblePackageFunding] = await sql`
+        SELECT 1 AS funded
+          FROM flexible_package_booking_allocations
+         WHERE booking_id = ${booking_id} AND school_id = ${schoolId}
+         LIMIT 1
+      `;
+    } catch (error) {
+      if (error?.code !== '42P01') throw error;
+    }
+    if (flexiblePackageFunding) {
+      return res.status(409).json({
+        error: true,
+        code: 'FLEXIBLE_PACKAGE_RESCHEDULE_REQUIRES_SUPPORT',
+        message: 'Please contact CoachCarter to move a Flexible Hours lesson so its immutable source attribution stays intact.'
+      });
+    }
 
     const targetInstructorId = requestedInstructorId || Number(booking.instructor_id);
     const instructorChanged = targetInstructorId !== Number(booking.instructor_id);

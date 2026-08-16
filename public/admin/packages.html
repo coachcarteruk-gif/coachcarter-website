@@ -14,7 +14,7 @@
   <header class="admin-packages-header">
     <a href="/admin/portal.html" class="back-link">Back to Admin Portal</a>
     <div><p class="eyebrow">Catalogue operations</p><h1>Learner Packages</h1></div>
-    <p class="header-note">Test mode only. Consumer-contract and manual refund evidence can be recorded here, but the application never issues a Stripe refund, creates instructor earnings, transfers or payouts.</p>
+    <p class="header-note">Full Curriculum remains test-only. Flexible Hours purchasing has a separate default-off live gate; this page never enables it or issues a Stripe refund, transfer or payout.</p>
   </header>
 
   <main>
@@ -61,6 +61,11 @@
     <section class="programme-admin" aria-labelledby="refund-heading">
       <div class="section-heading"><div><p class="control-index">06 / Refunds</p><h2 id="refund-heading">Manual Full Curriculum refund cases</h2></div><p>Calculation evidence is immutable. One admin verifies the Stripe fee and calculation; a different admin approves. A named operator then acts in Stripe Dashboard and records only the resulting refund identity and outcome.</p></div>
       <div id="programme-refund-list" class="operation-list"></div>
+    </section>
+
+    <section class="programme-admin" aria-labelledby="flexible-operations-heading">
+      <div class="section-heading"><div><p class="control-index">07 / Flexible Hours</p><h2 id="flexible-operations-heading">Purchases, allocation and refunds</h2></div><p>Read-only reconciliation uses immutable 30-minute source units. Refunds are performed manually against the original Stripe payment; this page records the resulting evidence and reduces only unused source value.</p></div>
+      <div id="flexible-package-operations" class="operation-list"></div>
     </section>
   </main>
   <script src="/admin/packages.js"></script>

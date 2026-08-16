@@ -1351,7 +1351,7 @@ Learner Packages is separate from historical Lesson Credit. Migrations 044-045 p
 | `allocate-programme-booking` / `record-week-outcome` | POST | Instructor or admin | Links actual same-school lessons and records cancellation/replacement outcomes without Lesson Credit. |
 | `activate-retake` / `record-retake-test-change` | POST | Admin | Activates one 600-minute allowance or moves its 28-day window for verified DVSA/exception evidence. |
 
-**`package_products`** stores stable school-owned identities, product type, same-school prerequisite, visibility, activation, and display order. Seeded choices are the 30-hour flexible package, Phases 1â€“3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge.
+**`package_products`** stores stable school-owned identities, product type, same-school prerequisite, visibility, activation, and display order. Seeded choices are the 15-hour and 30-hour Flexible Hours packages, Phases 1â€“3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge.
 
 **`package_product_versions`** stores immutable numbered commercial/catalogue snapshots: same-school product identity, GBP pence price, JSONB content, customer terms identity, effective timestamp, and creating actor evidence. A database trigger rejects update/delete so changes are prospective new versions.
 
@@ -1371,9 +1371,15 @@ See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-p
 
 ---
 
+## Flexible Hours package addendum (2026-08-16)
+
+This addendum supersedes earlier references to a lone 30-hour draft or to Flexible Hours fulfilment being wholly deferred. Migration 050 adds the approved stable 15-hour (£810) identity, a prospective approved 30-hour (£1,590) version, and a separate append-only school-wide attempt/payment, purchase/source, booking allocation, eligible return, manual source reduction and state-event ledger. It never writes `learner_credit_balances` or `learner_users.balance_minutes`.
+
+`/api/flexible-packages` exposes owned balances/status plus school-admin reconciliation and manual refund evidence. `/api/flexible-package-webhook` is the sole entitlement fulfiller. Required production identities are `STRIPE_FLEXIBLE_PACKAGES_LIVE_RESTRICTED_KEY`, `STRIPE_FLEXIBLE_PACKAGES_LIVE_PAYMENT_METHOD_CONFIGURATION`, and `STRIPE_FLEXIBLE_PACKAGES_LIVE_WEBHOOK_SECRET`, with no shared/test fallback. The exact School 1 live gate is default-off and intentionally has no admin UI setter. Code and operator read models are implemented; production migration, Stripe configuration, gate activation and Checkout creation remain separate approved operations. See `docs/flexible-hours-packages-runbook.md`.
+
 ## What's still to build
 
-- **Learner Packages operational setup and remaining fulfilment** - migrations 048-049, owner-certified immutable customer-deduction values, adult pilot access and durable confirmation are implemented and rehearsed locally; applying migrations, verifying real email delivery, naming the two refund operators, granting one learner and activating a feature remain separate operations. Flexible Hours and Manoeuvres fulfilment, automated matching, automatic Stripe refunds, rewards, instructor/assessor earnings, payouts, production/live configuration and broader rollout remain deferred.
+- **Learner Packages operational setup** - Full Curriculum pilot activation and Flexible Hours production migration, dedicated live Stripe configuration and exact gate activation remain separate approved operations. Flexible Hours code and fulfilment are implemented but inactive. Manoeuvres fulfilment, automated matching, automatic Stripe refunds, rewards and broader rollout remain deferred.
 
 - **Refund flow polish** — backend preview, tightly gated execute, admin execute UI, manual bank-refund ledger recording, admin refund-event discovery/detail, admin refund notes timeline, and read-only incident readiness classification exist. Learner request UI, richer approval workflow, and actual incident repair mutation tooling are still to build.
 - **Automated reminders** — 24-hour email/SMS before lessons (Vercel cron)

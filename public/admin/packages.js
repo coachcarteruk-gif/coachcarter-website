@@ -8,6 +8,7 @@
   var programmeListEl = document.getElementById('programme-admin-list');
   var refundListEl = document.getElementById('programme-refund-list');
   var pilotAccessEl = document.getElementById('programme-pilot-access');
+  var flexibleOperationsEl = document.getElementById('flexible-package-operations');
   var schoolScopeControlEl = document.getElementById('school-scope-control');
   var schoolScopeEl = document.getElementById('school-scope');
   var selectedSchoolId = null;
@@ -109,8 +110,23 @@
     pilotAccessEl.innerHTML='<article class="operation-card"><div><h3>No active pilot learner</h3><p class="operation-note">This grant is only an access safeguard. Purchasing remains controlled by the separate default-off feature gate.</p></div><form class="pilot-grant-form"><label>Verified learner<select name="learner_id" required><option value="">Choose one learner</option>'+options+'</select></label><label>Grant reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit"'+(options?'':' disabled')+'>Grant controlled-pilot access</button></form></article>'+(historyRows?'<details><summary>Access history</summary><ul>'+historyRows+'</ul></details>':'');
   }
 
+  function renderFlexibleOperations(data){
+    var contradictions=(data.reconciliation||[]).filter(function(row){return row.contradictory;});
+    var summary='<article class="operation-card"><div><h3>Reconciliation</h3><p>'+esc((data.purchases||[]).length)+' retained purchase(s) · '+esc((data.allocations||[]).length)+' recent allocation(s) · '+esc((data.reductions||[]).length)+' refund evidence row(s)</p><p class="operation-note">'+(contradictions.length?'<strong>'+esc(contradictions.length)+' contradiction(s) require investigation.</strong>':'No source over-allocation contradictions detected.')+'</p></div></article>';
+    var purchases=(data.purchases||[]).map(function(row){
+      var refundForm=Number(row.remaining_units)>0?'<details><summary>Record completed original-method refund</summary><form class="flexible-refund-evidence-form"><p class="operation-note">This records a refund already completed in Stripe. It does not call Stripe. One unit is exactly 30 minutes at the immutable source rate.</p><label>Units refunded<input name="units" type="number" min="1" max="'+esc(row.remaining_units)+'" step="1" required></label><label>Stripe refund ID<input name="provider_refund_id" pattern="re_[A-Za-z0-9_]+" required></label><label>Evidence reference<input name="evidence_reference" minlength="2" maxlength="500" required></label><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">Record refund evidence</button></form></details>':'';
+      return '<article class="operation-card" data-flexible-source-id="'+esc(row.source_id)+'"><div><h3>'+esc(row.learner_name||'Anonymised learner')+'</h3><p>'+esc(row.product_slug)+' · paid '+esc(pounds(row.amount_pence))+'</p><p class="refund-total">Unused value '+esc(pounds(row.refundable_value_pence))+'</p><p class="operation-note">Source #'+esc(row.source_id)+' · '+esc(row.remaining_units)+' × 30-minute unit(s) remaining · frozen rate '+esc(pounds(row.rate_pence_per_unit))+' per unit</p></div><div>'+refundForm+'</div></article>';
+    }).join('');
+    var attemptExceptions=data.attempt_exceptions||[];
+    var ledgerExceptions=data.exceptions||[];
+    var exceptionRows=attemptExceptions.map(function(row){return '<li>'+esc(row.learner_name||'Anonymised learner')+' / '+esc(row.product_slug)+' / '+esc(row.operational_status)+' / '+esc(row.failure_code||'confirmation overdue')+' / attempt '+esc(row.id)+'</li>';}).join('');
+    var ledgerExceptionRows=ledgerExceptions.map(function(row){return '<li>'+esc(row.event_type)+' / '+esc(row.detail&&row.detail.contradictions?row.detail.contradictions.join(', '):'manual review')+' / '+esc(new Date(row.created_at).toLocaleString('en-GB'))+'</li>';}).join('');
+    var reviewQueue='<article class="operation-card"><div><h3>Checkout review queue</h3><p class="operation-note">'+(attemptExceptions.length?'<strong>'+esc(attemptExceptions.length)+' overdue or ambiguous attempt(s) require manual provider review.</strong>':'No overdue or ambiguous Checkout attempts.')+'</p>'+(exceptionRows?'<details><summary>Review attempts</summary><ul>'+exceptionRows+'</ul></details>':'')+(ledgerExceptionRows?'<details><summary>Ledger exceptions</summary><ul>'+ledgerExceptionRows+'</ul></details>':'')+'</div></article>';
+    flexibleOperationsEl.innerHTML=summary+reviewQueue+(purchases||'<p class="empty-state">No Flexible Hours purchases.</p>');
+  }
+
   async function loadOperations(){
-    try{var results=await Promise.all([api('/api/packages?action=test-bookings'),api('/api/packages?action=programme-list'),api('/api/packages?action=programme-refund-cases'),api('/api/packages?action=programme-pilot-access')]);renderTestBookings(results[0].test_bookings||[]);renderProgrammes(results[1].programmes||[],results[1].eligible_instructors||[]);renderRefundCases(results[2].refund_cases||[]);renderPilotAccess(results[3]);}catch(e){testBookingListEl.innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';programmeListEl.innerHTML='';refundListEl.innerHTML='';pilotAccessEl.innerHTML='';}
+    try{var results=await Promise.all([api('/api/packages?action=test-bookings'),api('/api/packages?action=programme-list'),api('/api/packages?action=programme-refund-cases'),api('/api/packages?action=programme-pilot-access'),api('/api/flexible-packages?action=admin-overview')]);renderTestBookings(results[0].test_bookings||[]);renderProgrammes(results[1].programmes||[],results[1].eligible_instructors||[]);renderRefundCases(results[2].refund_cases||[]);renderPilotAccess(results[3]);renderFlexibleOperations(results[4]);}catch(e){testBookingListEl.innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';programmeListEl.innerHTML='';refundListEl.innerHTML='';pilotAccessEl.innerHTML='';flexibleOperationsEl.innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';}
   }
 
   async function load(){try{show('Loading catalogue…');var data=await api('/api/packages?action=admin-list');render(data);await loadOperations();show(data.products.length+' retained products loaded for '+data.school.name+'.');}catch(e){show(e.message,true);}}
@@ -155,6 +171,12 @@
       else return;
       show('Manual refund evidence updated. The application made no Stripe call.');await loadOperations();
     }catch(e){show(e.message,true);}finally{button.disabled=false;}
+  });
+
+  flexibleOperationsEl.addEventListener('submit',async function(event){
+    if(!event.target.classList.contains('flexible-refund-evidence-form'))return;
+    event.preventDefault();var form=event.target;var button=form.querySelector('button[type="submit"]');var card=form.closest('[data-flexible-source-id]');
+    try{button.disabled=true;await api('/api/flexible-packages?action=record-refund-evidence',{method:'POST',body:JSON.stringify({source_id:Number(card.dataset.flexibleSourceId),units:Number(form.elements.units.value),provider_refund_id:form.elements.provider_refund_id.value,evidence_reference:form.elements.evidence_reference.value,reason:form.elements.reason.value})});show('Manual Flexible Hours refund evidence recorded. The application made no Stripe call.');await loadOperations();}catch(e){show(e.message,true);}finally{button.disabled=false;}
   });
 
   pilotAccessEl.addEventListener('submit',async function(event){
