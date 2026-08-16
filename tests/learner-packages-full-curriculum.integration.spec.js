@@ -2,7 +2,8 @@
 // matching and programme-start workflow.
 //
 // Run only against an explicitly confirmed non-production database:
-//   CC_TEST_DB=1 CC_TEST_DB_CONFIRMED_NON_PRODUCTION=1 npm.cmd test -- \
+//   CC_TEST_DB=1 CC_TEST_DB_CONFIRMED_NON_PRODUCTION=1 \
+//     CC_TEST_DB_EXPECTED_HOSTNAME=<confirmed-disposable-endpoint> npm.cmd test -- \
 //     tests/learner-packages-full-curriculum.integration.spec.js
 
 'use strict';
@@ -42,7 +43,10 @@ const configuredAppUrl = normaliseConnectionString(process.env.POSTGRES_URL);
 const ENABLED = process.env.CC_TEST_DB === '1'
   && !!testDatabaseUrl
   && process.env.CC_TEST_DB_CONFIRMED_NON_PRODUCTION === '1';
-const EXPECTED_TEST_HOSTNAME = 'ep-royal-dream-abnzo838.eu-west-2.aws.neon.tech';
+const EXPECTED_TEST_HOSTNAME = String(
+  process.env.CC_TEST_DB_EXPECTED_HOSTNAME
+  || 'ep-royal-dream-abnzo838.eu-west-2.aws.neon.tech'
+).trim();
 
 if (ENABLED && new URL(testDatabaseUrl).hostname !== EXPECTED_TEST_HOSTNAME) {
   throw new Error('REFUSING TO RUN: POSTGRES_URL_TEST is not the confirmed disposable Neon test branch.');
