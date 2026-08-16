@@ -62,6 +62,13 @@ const path = require('path');
   }
 })();
 
+if (process.env.CC_TEST_DB === '1') {
+  // Direct handler calls must never use locally configured Twilio credentials.
+  process.env.TWILIO_SID = '';
+  process.env.TWILIO_AUTH = '';
+  process.env.TWILIO_WHATSAPP_FROM = '';
+}
+
 if (!process.env.MIGRATION_SECRET) {
   process.env.MIGRATION_SECRET = 'test-secret-' + crypto.randomBytes(8).toString('hex');
 }
@@ -83,6 +90,8 @@ let RETRO_MARKER_KEY;
 let createdLearnerIds = [];
 let createdBookingIds = [];
 let createdCreditTxIds = [];
+let targetInstructorTransmissionType = 'manual';
+let targetInstructorMaxBookingDaysAhead = 84;
 
 // CSRF double-submit value. Used in both the JWT-bearing cookie string
 // (cc_csrf=...) AND the matching `x-csrf-token` header so api/_csrf.js's
@@ -122,6 +131,10 @@ function fakeRes() {
   return r;
 }
 
+function compatibleBookingTransmission() {
+  return targetInstructorTransmissionType === 'automatic' ? 'automatic' : 'manual';
+}
+
 async function makeLearner(label) {
   const email = `c3-${label}-${crypto.randomBytes(5).toString('hex')}@coachcarter.test`;
   const [row] = await sql`
@@ -141,6 +154,7 @@ async function makeBooking(learnerId, instructorId, opts = {}) {
     minutesDeducted = 90,
     rescheduleCount = 0,
     dateOffset = 0, // days from today
+    transmissionType = compatibleBookingTransmission(),
   } = opts;
   for (let attempt = 0; attempt < 30; attempt++) {
     const baseDate = new Date(Date.now() + (dateOffset + attempt) * 86400000);
@@ -153,12 +167,12 @@ async function makeBooking(learnerId, instructorId, opts = {}) {
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            credit_returned, credit_forfeited, minutes_deducted, reschedule_count,
-           school_id, created_by, payment_method)
+           school_id, created_by, payment_method, transmission_type)
         VALUES
           (${learnerId}, ${instructorId}, ${futureDate}::date,
            ${startTime}::time, ${endTime}::time, ${status},
            ${creditReturned}, ${creditForfeited}, ${minutesDeducted},
-           ${rescheduleCount}, ${SCHOOL_ID}, 'learner', 'credit')
+           ${rescheduleCount}, ${SCHOOL_ID}, 'learner', 'credit', ${transmissionType})
         RETURNING id, scheduled_date::text AS scheduled_date,
                   start_time::text AS start_time, end_time::text AS end_time
       `;
@@ -186,32 +200,88 @@ async function makeCreditSource(learnerId, instructorId, minutes = 180) {
   return row.id;
 }
 
-async function insertClashBookingWithRetry(learnerId, instructorId, dateOffset) {
-  const booking = await makeBooking(learnerId, instructorId, { dateOffset });
+async function insertClashBooking(learnerId, instructorId, dateOffset) {
+  const { newDate, newStartTime } = await findFreeRescheduleSlot(instructorId, dateOffset);
+  const newEndTime = minutesToTime(timeToMinutes(newStartTime) + 90);
+  const [booking] = await sql`
+    INSERT INTO lesson_bookings
+      (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+       credit_returned, credit_forfeited, minutes_deducted, reschedule_count,
+       school_id, created_by, payment_method, transmission_type)
+    VALUES
+      (${learnerId}, ${instructorId}, ${newDate}::date,
+       ${newStartTime}::time, ${newEndTime}::time, 'scheduled',
+       FALSE, FALSE, 90, 0,
+       ${SCHOOL_ID}, 'learner', 'credit', ${compatibleBookingTransmission()})
+    RETURNING id
+  `;
+  createdBookingIds.push(booking.id);
   return {
     id: booking.id,
-    newDate: String(booking.scheduled_date).slice(0, 10),
-    newStartTime: String(booking.start_time).slice(0, 5),
+    newDate,
+    newStartTime,
   };
 }
 
+function timeToMinutes(value) {
+  const [hours, minutes] = String(value || '').slice(0, 5).split(':').map(Number);
+  return (hours * 60) + minutes;
+}
+
+function minutesToTime(value) {
+  return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+}
+
 async function findFreeRescheduleSlot(instructorId, dateOffset) {
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < 60 && dateOffset + attempt <= targetInstructorMaxBookingDaysAhead; attempt++) {
     const baseDate = new Date(Date.now() + (dateOffset + attempt) * 86400000);
     const newDate = baseDate.toISOString().slice(0, 10);
-    for (let hour = 15; hour <= 18; hour++) {
-      const newStartTime = `${String(hour).padStart(2, '0')}:00`;
-      const [existing] = await sql`
-        SELECT id
-          FROM lesson_bookings
-         WHERE instructor_id = ${instructorId}
-           AND school_id = ${SCHOOL_ID}
-           AND scheduled_date = ${newDate}
-           AND start_time = ${newStartTime}::time
-           AND status IN ('scheduled', 'chargeable')
-         LIMIT 1
-      `;
-      if (!existing) return { newDate, newStartTime };
+    const dayOfWeek = baseDate.getUTCDay();
+    const windows = await sql`
+      SELECT start_time::text AS start_time, end_time::text AS end_time,
+             COALESCE(transmission_type, 'both') AS transmission_type
+        FROM instructor_availability_overrides
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${SCHOOL_ID}
+         AND override_date = ${newDate}::date
+         AND active = TRUE
+      UNION ALL
+      SELECT start_time::text AS start_time, end_time::text AS end_time,
+             COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
+        FROM instructor_availability
+       WHERE instructor_id = ${instructorId}
+         AND school_id = ${SCHOOL_ID}
+         AND day_of_week = ${dayOfWeek}
+         AND active = TRUE
+         AND NOT EXISTS (
+           SELECT 1
+             FROM instructor_blackout_dates
+            WHERE instructor_id = ${instructorId}
+              AND school_id = ${SCHOOL_ID}
+              AND blackout_date <= ${newDate}::date
+              AND end_date >= ${newDate}::date
+         )
+    `;
+    for (const window of windows) {
+      if (!['both', compatibleBookingTransmission()].includes(window.transmission_type)) continue;
+      const windowStart = timeToMinutes(window.start_time);
+      const windowEnd = timeToMinutes(window.end_time);
+      for (let start = windowStart; start + 90 <= windowEnd; start += 30) {
+        const newStartTime = minutesToTime(start);
+        const newEndTime = minutesToTime(start + 90);
+        const [conflict] = await sql`
+          SELECT 1
+            FROM lesson_bookings
+           WHERE instructor_id = ${instructorId}
+             AND school_id = ${SCHOOL_ID}
+             AND scheduled_date = ${newDate}::date
+             AND start_time < ${newEndTime}::time
+             AND end_time > ${newStartTime}::time
+             AND status IN ('scheduled', 'chargeable')
+           LIMIT 1
+        `;
+        if (!conflict) return { newDate, newStartTime };
+      }
     }
   }
   throw new Error('findFreeRescheduleSlot could not find a free slot');
@@ -384,13 +454,19 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
 
     const [target] = await sql`
-      SELECT id FROM instructors
+      SELECT id, COALESCE(transmission_type, 'manual') AS transmission_type,
+             COALESCE(max_booking_days_ahead, 84)::int AS max_booking_days_ahead
+        FROM instructors
        WHERE id = ${TARGET_INSTRUCTOR_ID}
          AND school_id = ${SCHOOL_ID}
     `;
     if (!target) {
       throw new Error(`Test branch lacks instructors.id = ${TARGET_INSTRUCTOR_ID} — required.`);
     }
+    // The branch fixture may legitimately be automatic-only. Generate a
+    // compatible booking instead of mutating the instructor's profile.
+    targetInstructorTransmissionType = target.transmission_type;
+    targetInstructorMaxBookingDaysAhead = target.max_booking_days_ahead;
     const [hasBcsSchoolId] = await sql`
       SELECT 1 FROM information_schema.columns
        WHERE table_schema = 'public'
@@ -456,7 +532,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 30 });
 
     // Reschedule to a slot far enough away to avoid uq_instructor_slot collision.
-    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 60);
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 14);
 
     const instructorHandler = require('../api/instructor');
     const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
@@ -470,7 +546,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const res = fakeRes();
     await instructorHandler(req, res);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode, JSON.stringify(res.body)).toBe(200);
     expect(res.body.ok).toBe(true);
 
     const old = await getBooking(oldBooking.id);
@@ -499,7 +575,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
       absorbedBy: 'platform',
     });
 
-    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 64);
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 16);
 
     const instructorHandler = require('../api/instructor');
     const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
@@ -513,7 +589,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const res = fakeRes();
     await instructorHandler(req, res);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode, JSON.stringify(res.body)).toBe(200);
     expect(res.body.ok).toBe(true);
     if (res.body.new_booking_id) createdBookingIds.push(res.body.new_booking_id);
 
@@ -554,10 +630,10 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
     // Pre-seed a CLASH at the target slot to force the INSERT to 23505.
     const clashLearnerId = await makeLearner('c2-clash');
-    const { newDate, newStartTime } = await insertClashBookingWithRetry(
+    const { newDate, newStartTime } = await insertClashBooking(
       clashLearnerId,
       TARGET_INSTRUCTOR_ID,
-      62
+      18
     );
 
     const instructorHandler = require('../api/instructor');
@@ -705,7 +781,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
     // Pre-seed a clash to force INSERT failure.
     const clashLearnerId = await makeLearner('c4-clash');
-    const { newDate, newStartTime } = await insertClashBookingWithRetry(
+    const { newDate, newStartTime } = await insertClashBooking(
       clashLearnerId,
       TARGET_INSTRUCTOR_ID,
       22
