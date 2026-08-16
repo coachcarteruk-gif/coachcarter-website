@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Compare CoachCarter learner packages, curriculum pathways and focused manoeuvres choices.">
+  <meta name="description" content="Compare CoachCarter Flexible Hours, structured learning and focused manoeuvres packages.">
   <title>Packages | CoachCarter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,14 +21,14 @@
   <main class="packages-page" id="main-content">
     <section class="packages-hero" aria-labelledby="packages-title">
       <div class="packages-hero-copy">
-        <p class="eyebrow">Compare your routes</p>
-        <h1 id="packages-title">Choose how you want to learn.</h1>
-        <p class="hero-intro">Book individual lessons when you want flexibility, or compare school-wide hours, the complete structured curriculum, and focused manoeuvres practice.</p>
-        <a class="lessons-link" href="/learner/book.html"><span>Prefer one lesson at a time?</span><strong>Explore Pay As You Go Lessons</strong></a>
+        <p class="eyebrow">Lesson packages</p>
+        <h1 id="packages-title">Find the package that fits.</h1>
+        <p class="hero-intro">Buy Flexible Hours upfront and use them with any available CoachCarter instructor. You can also see the other learning packages we are developing.</p>
+        <a class="lessons-link" href="/learner/book.html"><span>Not ready to buy a block?</span><strong>Book a Pay As You Go lesson</strong></a>
       </div>
-      <aside class="comparison-note" aria-label="Lessons and Packages comparison">
-        <div><span class="comparison-index">01</span><h2>Lessons</h2><p>Choose a real slot, lesson length and instructor. Pay As You Go or use eligible existing Lesson Credit.</p></div>
-        <div><span class="comparison-index">02</span><h2>Packages</h2><p>Compare prepaid school-wide hours, one complete Full Curriculum programme and specialist Manoeuvres choices.</p></div>
+      <aside class="comparison-note" aria-label="Package availability at a glance">
+        <div><span class="comparison-index">01</span><h2>Available now</h2><p>Choose 15 or 30 Flexible Hours and pay securely by bank.</p></div>
+        <div><span class="comparison-index">02</span><h2>Prefer one-off lessons?</h2><p>Choose a time, lesson length and instructor, then pay for that lesson only.</p></div>
       </aside>
     </section>
 
@@ -46,17 +46,16 @@
 
     <div id="catalogue-content" hidden>
       <section class="intent-section" aria-labelledby="flexible-heading">
-        <div class="section-intro"><p class="section-kicker">I want flexible hours</p><h2 id="flexible-heading">Hours without a named-instructor tie.</h2><p>Designed as separate school-wide value, not a revival of the retired Lesson Credit checkout.</p></div>
+        <div class="section-intro"><p class="section-kicker">Available now</p><h2 id="flexible-heading">Flexible Hours</h2><p>Buy 15 or 30 hours upfront. Use them with any available CoachCarter instructor, book in 30-minute steps and take as long as you need.</p></div>
         <p id="flexible-balance-status" class="flexible-balance-status" role="status" aria-live="polite" hidden></p>
         <div id="flexible-products" class="featured-product"></div>
       </section>
 
       <section class="intent-section" aria-labelledby="pathway-heading">
-        <div class="section-intro"><p class="section-kicker">I want a structured route</p><h2 id="pathway-heading">One programme. Three internal stages.</h2><p>Phase 1, Phase 2 and Phase 3 are progress stages inside Full Curriculum. They are not separately purchasable products.</p></div>
-        <ol class="internal-phases" aria-label="Internal Full Curriculum stages"><li><strong>Phase 1</strong><span>Foundation teaching and readiness</span></li><li><strong>Phase 2</strong><span>Intermediate progress and independent assessment</span></li><li><strong>Phase 3</strong><span>Independent driving preparation</span></li></ol>
+        <div class="section-intro"><p class="section-kicker">Not currently available</p><h2 id="pathway-heading">Full Curriculum</h2><p>A structured weekly programme for learners with a booked practical test. It combines regular lessons, independent progress checks and extra support for one retake.</p></div>
         <div id="full-curriculum-product" class="curriculum-feature"></div>
         <section id="test-booking-panel" class="test-booking-panel" aria-labelledby="test-booking-heading" hidden>
-          <div><p class="section-kicker">Eligibility</p><h3 id="test-booking-heading">Your practical test booking</h3><p>Supply only the date, time and test centre. An admin manually verifies those details after reviewing evidence outside this application. CoachCarter cannot book, change or cancel your test.</p></div>
+          <div><p class="section-kicker">Check your eligibility</p><h3 id="test-booking-heading">Tell us about your practical test</h3><p>Enter the date, time and test centre. We will review the details before you can enrol. CoachCarter cannot book, change or cancel your test.</p></div>
           <form id="test-booking-form">
             <label>Test date<input name="test_date" type="date" required></label>
             <label>Test time<input name="test_time" type="time" required></label>
@@ -68,23 +67,24 @@
       </section>
 
       <section class="intent-section" aria-labelledby="manoeuvres-heading">
-        <div class="section-intro"><p class="section-kicker">I want focused manoeuvre practice</p><h2 id="manoeuvres-heading">Same three sessions. Two clear choices.</h2><p>The Challenge remains optional. Its campaign rules, safeguards and evidence standards must be final before it can open.</p></div>
+        <div class="section-intro"><p class="section-kicker">Not currently available</p><h2 id="manoeuvres-heading">Focused manoeuvre practice</h2><p>Three one-hour specialist sessions, with a straightforward option and a separate optional Challenge. These packages are shown for comparison but cannot be booked yet.</p></div>
         <div id="manoeuvres-products" class="manoeuvres-grid"></div>
       </section>
 
       <section class="truth-panel" aria-labelledby="before-you-choose-heading">
-        <div><p class="section-kicker">Payment foundation</p><h2 id="before-you-choose-heading">How confirmation works.</h2></div>
+        <div><p class="section-kicker">Good to know</p><h2 id="before-you-choose-heading">Before you buy Flexible Hours</h2></div>
         <div class="truth-list">
-          <p><strong>Purchasing stays gated.</strong> Full Curriculum uses its separate test gate. Flexible Hours uses a School 1-only exact Boolean live gate that is absent and false by default.</p>
-          <p><strong>Stripe confirms payment.</strong> Returning to this page never activates value; only verified signed webhook evidence can create the programme.</p>
-          <p><strong>Programme value is separate.</strong> Flexible Hours uses 30-minute school-wide source units; Full Curriculum uses weekly programme opportunities. Neither creates Lesson Credit.</p>
-          <p><strong>Old credit stays separate.</strong> Your existing Lesson Credit remains readable and usable under its current rules.</p>
+          <p><strong>Pay by Bank only.</strong> You will leave CoachCarter briefly to approve the payment with your bank.</p>
+          <p><strong>We will confirm your payment.</strong> This is normally quick, but please allow up to 24 hours. If it is still pending, do not pay again&mdash;contact us and we will check it.</p>
+          <p><strong>Your hours are flexible.</strong> They do not expire and can be used with any available CoachCarter instructor, but they cannot be transferred to another learner.</p>
+          <p><strong>Your cancellation rights still apply.</strong> You have 14 days to cancel. Once you ask for immediate access, hours you use or lose through a late cancellation may be deducted; unused hours are refunded at the rate paid.</p>
+          <p><strong>Existing Lesson Credit is unchanged.</strong> Any Lesson Credit already on your account remains available under its current rules.</p>
         </div>
       </section>
 
       <footer class="packages-footer-cta">
-        <div><p class="section-kicker">Need a date in the diary?</p><h2>Book an individual lesson instead.</h2></div>
-        <a href="/learner/book.html">Browse Pay As You Go Lessons</a>
+        <div><p class="section-kicker">Want to keep it simple?</p><h2>Book one lesson at a time.</h2></div>
+        <a href="/learner/book.html">Book a Pay As You Go lesson</a>
       </footer>
     </div>
   </main>
