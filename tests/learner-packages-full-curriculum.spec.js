@@ -173,8 +173,8 @@ test.describe('Full Curriculum revised foundation', () => {
     expect(learnerApi).toContain('full_curriculum_availability_windows');
     expect(gdpr).toContain('UPDATE full_curriculum_matching_records');
     expect(gdpr).toContain('SET learner_id = NULL');
-    expect(learnerUi).toContain('Matched instructor');
-    expect(learnerUi).toContain('Agreed availability');
+    expect(learnerUi).toContain('Your instructor');
+    expect(learnerUi).toContain('Your usual weekly time');
     expect(read('public/instructor/programmes.js')).toContain('These windows are not reservations or lesson bookings');
     expect(read('public/admin/packages.js')).toContain('Save an empty version if no recurring window was agreed');
     expect(read('public/admin/packages.js')).toContain('Override missing instructor acceptance');
@@ -272,7 +272,7 @@ test.describe('Full Curriculum revised foundation', () => {
   test('success/return page cannot fulfil and signed live events remain rejected', () => {
     const learnerJs = read('public/learner/packages.js');
     const webhook = read('api/package-webhook.js');
-    expect(learnerJs).toContain('This return page cannot activate a package');
+    expect(learnerJs).toContain('Please do not start another payment');
     expect(learnerJs).not.toContain('learner_package_purchases');
     expect(webhook.indexOf('constructEvent')).toBeLessThan(webhook.indexOf('neon(process.env.POSTGRES_URL)'));
     expect(webhook).toContain('LIVE_STRIPE_EVENT_REJECTED');
@@ -309,12 +309,12 @@ test.describe('Full Curriculum revised foundation', () => {
     const instructorHtml = read('public/instructor/programmes.html');
     expect(learnerHtml).toContain('id="test-booking-form"');
     expect(learnerHtml).toContain('id="programme-status"');
-    expect(learnerHtml).toContain('Three internal stages');
+    expect(learnerHtml).toContain('regular lessons, independent progress checks');
     expect(learnerHtml).not.toContain('id="phase-products"');
     expect(adminHtml).toContain('Manual test-booking verification');
     expect(read('public/admin/packages.js')).toContain('start-programme-form');
     expect(read('public/instructor/programmes.js')).toContain('start-programme-form');
-    expect(read('public/learner/packages.js')).toContain('Awaiting the programme start agreed by your instructor or admin');
+    expect(read('public/learner/packages.js')).toContain('We will confirm this after your weekly schedule is agreed');
     expect(instructorHtml).toContain('role="status" aria-live="polite"');
     expect(instructorHtml).toContain('/cookie-consent.js');
     expect(instructorHtml).toContain('/posthog-loader.js');

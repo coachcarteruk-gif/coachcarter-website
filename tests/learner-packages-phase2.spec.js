@@ -779,7 +779,7 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
     expect(js).toContain("apiUrl('create-checkout')");
     expect(js).toContain('window.crypto.randomUUID()');
     expect(js).toContain('button.setAttribute(\'aria-busy\', \'true\')');
-    expect(js).toContain('return page cannot activate a package');
+    expect(js).toContain('Please do not start another payment');
     expect(js).not.toContain('/api/credits');
     expect(js).not.toContain('checkout-slot');
     expect(css).toContain('.product-action.is-purchasable:focus-visible');
@@ -868,12 +868,13 @@ test.describe('Learner Packages Phase 2 page states', () => {
       });
     });
     await page.goto('/learner/packages.html', { waitUntil: 'domcontentloaded' });
+    await page.getByText('Review and enrol', { exact: true }).click();
     const button = page.getByRole('button', { name: 'Pay £2,000 and enrol' }).first();
     await expect(button).toBeVisible();
     await page.getByLabel(/I confirm that I am 18 or over/i).check();
     await page.getByLabel(/I have read the Full Curriculum terms/i).check();
     await button.click();
-    await expect(page.getByRole('heading', { name: 'Payment review required' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'We need to check your payment' })).toBeVisible();
     expect(checkoutBody.product_id).toBe(5);
     expect(checkoutBody.client_request_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(checkoutBody).toMatchObject({
@@ -887,7 +888,7 @@ test.describe('Learner Packages Phase 2 page states', () => {
       'adult_age_confirmed', 'client_request_id', 'consumer_terms_accepted', 'disclosure_version',
       'early_start_requested', 'product_id',
     ]);
-    await expect(page.getByText(/Three internal stages/i)).toBeVisible();
+    await expect(page.locator('#full-curriculum-product h3')).toHaveText('Full Curriculum');
     const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
   });
@@ -909,8 +910,8 @@ test.describe('Learner Packages Phase 2 page states', () => {
       });
     });
     await page.goto('/learner/packages?package_return=1&attempt_id=018f47b0-1a2b-4c3d-8e9f-0123456789ab', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Test payment confirmed' })).toBeVisible();
-    await expect(page.getByText(/browser page cannot create it/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Payment confirmed' })).toBeVisible();
+    await expect(page.getByText(/finishing the final account checks/i)).toBeVisible();
     expect(statusRequests).toBe(1);
   });
 });

@@ -28,6 +28,110 @@
     }).format(Number(pence || 0) / 100);
   }
 
+  function formatHours(minutes) {
+    return (Number(minutes || 0) / 60).toFixed(1).replace(/\.0$/, '');
+  }
+
+  function customerProductCopy(product) {
+    var content = product.content || {};
+    var entitlement = content.entitlement || {};
+    var hours = Number(entitlement.hours || 0);
+
+    if (product.product_type === 'flexible_hours' && hours > 0) {
+      var hourlyPence = Math.round(Number(product.price_pence || 0) / hours);
+      return {
+        name: hours + ' Flexible Hours',
+        summary: hours === 15
+          ? 'A smaller block for learners who want to build confidence without committing to 30 hours.'
+          : 'A larger block for learners planning regular lessons and looking for the lowest hourly price.',
+        highlights: [
+          hours + ' lesson hours',
+          formatPrice(hourlyPence, product.currency) + ' per hour',
+          'Use with any available CoachCarter instructor',
+          'No expiry',
+          'Book in 30-minute steps',
+          'Cannot be transferred to another learner'
+        ]
+      };
+    }
+
+    if (product.product_type === 'full_curriculum') {
+      return {
+        name: 'Full Curriculum',
+        summary: 'For learners with a verified practical test booking who want a structured weekly route to their test.',
+        highlights: [
+          'One 90-minute lesson in each programme week',
+          'Runs until your first test or for up to 24 weeks',
+          'Progress checks with a different instructor',
+          'Up to 10 extra lesson hours for one eligible retake',
+          'DVSA test fees and use of an instructor car are not included'
+        ]
+      };
+    }
+
+    if (product.slug === 'manoeuvres-challenge') {
+      return {
+        name: 'Manoeuvres Challenge',
+        summary: 'The same three specialist sessions, with optional promotional tasks and a possible reward if you meet the published criteria.',
+        highlights: [
+          'Three one-hour specialist sessions',
+          'Promotional tasks are optional',
+          'Choose a refund or Full Curriculum credit if you qualify'
+        ]
+      };
+    }
+
+    if (product.product_type === 'manoeuvres') {
+      return {
+        name: 'Manoeuvres',
+        summary: 'Three focused sessions for practising the manoeuvres you want more help with.',
+        highlights: [
+          'Three one-hour specialist sessions',
+          'No promotional tasks',
+          'Book each session directly when the package opens'
+        ]
+      };
+    }
+
+    return {
+      name: content.name || product.slug,
+      summary: content.short_description || '',
+      highlights: content.highlights || []
+    };
+  }
+
+  function customerAvailability(product) {
+    var eligibility = product.eligibility || {};
+    if (eligibility.checkout_available) {
+      return {
+        label: 'Available now', tone: 'is-available',
+        note: product.product_type === 'flexible_hours'
+          ? 'Available now with Pay by Bank. Your hours will appear after your bank confirms the payment.'
+          : 'Available to eligible learners after the checks shown below.'
+      };
+    }
+    if (eligibility.state === 'authentication_required' && product.product_type === 'flexible_hours') {
+      return {
+        label: 'Available now', tone: 'is-available',
+        note: 'Available now with Pay by Bank. Sign in as the learner who will use the hours.'
+      };
+    }
+    if (eligibility.state === 'already_enrolled') {
+      return {
+        label: 'You are enrolled', tone: 'is-enrolled',
+        note: 'You already have an active Full Curriculum programme. Your current details are shown above.'
+      };
+    }
+    return {
+      label: 'Not currently available', tone: 'is-unavailable',
+      note: product.product_type === 'full_curriculum'
+        ? 'Full Curriculum is not currently open to new learners.'
+        : product.product_type === 'manoeuvres'
+          ? 'This package is shown for comparison but cannot be booked yet.'
+          : 'This package is not currently available to buy.'
+    };
+  }
+
   function schoolQuery() {
     var source = new URLSearchParams(window.location.search);
     var target = new URLSearchParams();
@@ -63,28 +167,33 @@
       var rights = product.consumer_rights || {};
       if (product.product_type === 'flexible_hours') {
         var entitlement = product.content && product.content.entitlement || {};
-        return '<div class="consumer-checkout flexible-checkout" data-flexible-checkout-panel="' + escapeHtml(product.id) + '">' +
-          '<p><strong>Buying for:</strong> ' + escapeHtml(catalogueViewer && catalogueViewer.learner_name || 'your signed-in learner account') + '</p>' +
-          '<p><strong>' + escapeHtml(entitlement.hours || '') + ' hours, ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ', Pay by Bank.</strong> No expiry and no transfer to another learner.</p>' +
-          '<p>You retain your 14-day cancellation right. Unused value is refundable at this immutable version\'s frozen rate; properly used or under-48-hour cancelled value may be deducted. CoachCarter absorbs the original Stripe fee.</p>' +
+        return '<details class="purchase-review"><summary>Review and buy</summary>' +
+          '<div class="consumer-checkout flexible-checkout" data-flexible-checkout-panel="' + escapeHtml(product.id) + '">' +
+            '<p class="checkout-owner"><strong>Buying for:</strong> ' + escapeHtml(catalogueViewer && catalogueViewer.learner_name || 'your signed-in learner account') + '</p>' +
+            '<p><strong>' + escapeHtml(entitlement.hours || '') + ' hours for ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '.</strong> Pay by Bank only. The hours do not expire and cannot be transferred.</p>' +
+            '<p>You have 14 days to cancel. If you ask for immediate access, we may deduct hours you use or lose through a cancellation with less than 48 hours\' notice. Any unused hours are refunded at the rate paid, and CoachCarter absorbs the original payment fee.</p>' +
+            '<p class="checkout-prompt"><strong>Please confirm each point before paying:</strong></p>' +
+            '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
+            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
+            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="immediate_access_requested"> ' + escapeHtml(rights.immediate_access_request || '') + '</label>' +
+            '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' by bank</button>' +
+          '</div>' +
+        '</details>';
+      }
+      return '<details class="purchase-review"><summary>Review and enrol</summary>' +
+        '<div class="consumer-checkout" data-consumer-checkout="' + escapeHtml(product.id) + '">' +
+          '<p><strong>14-day cancellation right.</strong> Choose when matching may begin. Matching and administration have no deductible value, and CoachCarter absorbs payment fees.</p>' +
+          '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="after" checked> Begin matching after my 14-day cancellation period</label>' +
+          '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="now"> Begin matching now</label>' +
+          '<p class="consumer-choice-detail">' + escapeHtml(rights.early_start_request || '') + '</p>' +
           '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
           '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
-          '<label class="consumer-choice consumer-terms"><input type="checkbox" name="immediate_access_requested"> ' + escapeHtml(rights.immediate_access_request || '') + '</label>' +
-          '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' by bank</button>' +
-        '</div>';
-      }
-      return '<div class="consumer-checkout" data-consumer-checkout="' + escapeHtml(product.id) + '">' +
-        '<p><strong>14-day cancellation right.</strong> Choose when matching may begin. Matching and administration have no deductible value, and CoachCarter absorbs Stripe fees.</p>' +
-        '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="after" checked> Begin matching after my 14-day cancellation period</label>' +
-        '<label class="consumer-choice"><input type="radio" name="programme_start_' + escapeHtml(product.id) + '" value="now"> Begin matching now</label>' +
-        '<p class="consumer-choice-detail">' + escapeHtml(rights.early_start_request || '') + '</p>' +
-        '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
-        '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
-        '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' and enrol</button>' +
-      '</div>';
+          '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' and enrol</button>' +
+        '</div>' +
+      '</details>';
     }
     if (eligibility.state === 'authentication_required') {
-      return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">' + (product.product_type === 'flexible_hours' ? 'Sign in to buy Flexible Hours' : 'Sign in for test checkout') + '</button>';
+      return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">' + (product.product_type === 'flexible_hours' ? 'Sign in to buy' : 'Sign in to check eligibility') + '</button>';
     }
     if (eligibility.state === 'verification_pending') {
       return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Verification pending</button>';
@@ -93,43 +202,39 @@
       return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Verify test booking first</button>';
     }
     if (eligibility.state === 'already_enrolled') {
-      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Already enrolled</button>';
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">You are already enrolled</button>';
     }
     if (eligibility.state === 'controlled_pilot_access_required') {
-      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Controlled pilot access required</button>';
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Not available yet</button>';
     }
     if (eligibility.state === 'consumer_terms_not_ready') {
-      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Consumer terms not approved</button>';
+      return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Not available yet</button>';
     }
-    return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Fulfilment not in this pass</button>';
+    return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Not available yet</button>';
   }
 
   function renderProduct(product, options) {
     options = options || {};
-    var content = product.content || {};
+    var content = customerProductCopy(product);
     var eligibility = product.eligibility || {};
+    var availability = customerAvailability(product);
     var locked = false;
     var descriptionId = 'product-disclosure-' + escapeHtml(product.slug);
     var lockId = 'product-lock-' + escapeHtml(product.slug);
-    var label = options.label || (locked ? 'Locked phase' : 'Catalogue version ' + product.version_number);
+    var label = options.label || 'Package option';
     var lockCopy = locked
       ? '<p class="lock-explanation" id="' + lockId + '"><strong>Why this is locked:</strong> ' + escapeHtml(eligibility.reason) + '</p>'
       : '';
     var describedBy = locked ? lockId + ' ' + descriptionId : descriptionId;
-    var disclosure = content.checkout_disclosure || eligibility.reason || 'Checkout is not available.';
-    if (eligibility.checkout_available) {
-      disclosure = product.product_type === 'flexible_hours'
-        ? 'Live Pay by Bank is isolated behind the School 1 gate. A verified signed webhook creates hours; this return page cannot.'
-        : 'Test mode only. A verified Stripe webhook creates the Full Curriculum enrolment; this return page cannot.';
-    }
+    var disclosure = availability.note;
 
     return '<article class="product-shell' + (locked ? ' locked' : '') + '">' +
       '<div class="product-main">' +
         '<div class="product-topline"><div>' +
           '<p class="product-label">' + escapeHtml(label) + '</p>' +
           '<h3>' + escapeHtml(content.name || product.slug) + '</h3>' +
-          '<p class="product-summary">' + escapeHtml(content.short_description || '') + '</p>' +
-        '</div><div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '<small>version ' + escapeHtml(product.version_number) + '</small></div></div>' +
+          '<p class="product-summary">' + escapeHtml(content.summary || '') + '</p>' +
+        '</div><div class="product-price-group"><div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '</div><span class="availability-pill ' + escapeHtml(availability.tone) + '">' + escapeHtml(availability.label) + '</span></div></div>' +
         renderList(content.highlights) + lockCopy +
       '</div>' +
       '<div class="product-footer">' +
@@ -158,27 +263,27 @@
     var status = attempt && attempt.status;
     if (status === 'paid') {
       showPurchaseStatus(
-        fulfilmentCreated ? 'Full Curriculum created' : 'Test payment confirmed',
+        fulfilmentCreated ? 'Your Full Curriculum is ready' : 'Payment confirmed',
         fulfilmentCreated
-          ? 'Stripe confirmed the test payment and the webhook created one school-scoped programme enrolment. Matching is now pending.'
-          : 'Stripe has confirmed the payment. Fulfilment is still being checked; this browser page cannot create it.',
+          ? 'Your payment is confirmed. We will now begin arranging your programme.'
+          : 'Your payment is confirmed. We are finishing the final account checks now.',
         'is-paid', focus
       );
       clearPolling();
       clearAttemptRequest(attempt.product && attempt.product.id);
     } else if (status === 'failed') {
-      showPurchaseStatus('Test payment failed', attempt.message || 'No package was activated. You can start a new test attempt.', 'is-failed', focus);
+      showPurchaseStatus('Payment not completed', attempt.message || 'No payment was taken. You can try again when you are ready.', 'is-failed', focus);
       clearPolling();
       clearAttemptRequest(attempt.product && attempt.product.id);
     } else if (status === 'expired') {
-      showPurchaseStatus('Test checkout expired', attempt.message || 'No package was activated. You can start a new test attempt.', 'is-failed', focus);
+      showPurchaseStatus('Payment window closed', attempt.message || 'No payment was taken. You can start again when you are ready.', 'is-failed', focus);
       clearPolling();
       clearAttemptRequest(attempt.product && attempt.product.id);
     } else if (status === 'review_required') {
-      showPurchaseStatus('Payment review required', 'The result is ambiguous or has remained unresolved. Do not pay again; support must reconcile the exact test Checkout identity.', 'is-review', focus);
+      showPurchaseStatus('We need to check your payment', 'Please do not pay again. Contact us and we will check the payment with your bank.', 'is-review', focus);
       clearPolling();
     } else {
-      showPurchaseStatus('Confirming your bank payment', 'Stripe has not yet proved payment success. This page is only checking the durable attempt; it cannot activate anything.', 'is-pending', focus);
+      showPurchaseStatus('Confirming your bank payment', 'We are waiting for confirmation from your bank. This can take up to 24 hours, so please do not pay again.', 'is-pending', focus);
     }
   }
 
@@ -194,10 +299,11 @@
     }
 
     document.getElementById('flexible-products').innerHTML = flexible.map(function (product) {
-      return renderProduct(product, { label: 'School-wide flexible hours' });
+      var hours = Number(product.content && product.content.entitlement && product.content.entitlement.hours || 0);
+      return renderProduct(product, { label: hours === 15 ? 'A smaller upfront block' : 'The lowest hourly price' });
     }).join('');
     document.getElementById('full-curriculum-product').innerHTML = curriculum.map(function (product) {
-      return renderProduct(product, { label: 'Whole-path option' });
+      return renderProduct(product, { label: 'For learners with a booked test' });
     }).join('');
     document.getElementById('manoeuvres-products').innerHTML = manoeuvres.map(function (product) {
       var variant = product.content && product.content.variant === 'challenge' ? 'Optional Challenge' : 'No promotional tasks';
@@ -205,15 +311,18 @@
     }).join('');
     statusEl.hidden = true;
     contentEl.hidden = false;
-    if (data.viewer && data.viewer.signed_in_as_learner) {
-      testBookingPanelEl.hidden = false;
+    var curriculumEligibility = curriculum[0] && curriculum[0].eligibility || {};
+    var needsTestBooking = curriculumEligibility.state === 'test_booking_required'
+      || curriculumEligibility.state === 'verification_pending';
+    testBookingPanelEl.hidden = !(data.viewer && data.viewer.signed_in_as_learner && needsTestBooking);
+    if (!testBookingPanelEl.hidden) {
       var evidence = data.full_curriculum_eligibility && data.full_curriculum_eligibility.test_booking;
       if (evidence) {
         testBookingResultEl.textContent = evidence.verification_status === 'verified'
           ? 'Your future test details are verified.'
           : evidence.verification_status === 'pending'
-            ? 'Your details are waiting for manual admin verification.'
-            : 'The latest details were not verified. Submit current future test details for review.';
+            ? 'We are reviewing your test details.'
+            : 'We could not verify the latest details. Submit your current test information for another review.';
       }
     }
   }
@@ -244,12 +353,12 @@
     var adultAgeConfirmed = Boolean(consumerCheckout && consumerCheckout.querySelector('[name="adult_age_confirmed"]:checked'));
     var startChoice = consumerCheckout && consumerCheckout.querySelector('input[type="radio"]:checked');
     if (!termsAccepted || !adultAgeConfirmed || !startChoice) {
-      showPurchaseStatus('Confirm your choices', 'Confirm you are 18 or over, read the cancellation and withdrawal terms, then choose when matching may begin.', 'is-failed', true);
+      showPurchaseStatus('Please complete the checks', 'Confirm you are 18 or over, accept the cancellation and withdrawal terms, and choose when matching may begin.', 'is-failed', true);
       return;
     }
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
-    button.textContent = 'Starting secure test checkout…';
+    button.textContent = 'Opening secure payment…';
     try {
       var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
       var response = await fetcher(apiUrl('create-checkout'), {
@@ -274,7 +383,7 @@
         window.location.assign(data.url);
         return;
       }
-      if (!response.ok) throw new Error(data.message || 'Test checkout could not be started.');
+      if (!response.ok) throw new Error(data.message || 'We could not open the payment page.');
       if (data.attempt && data.attempt.status === 'pending') startPolling(data.attempt.id);
     } catch (error) {
       showPurchaseStatus('Checkout not started', error.message || 'Please try again.', 'is-failed', true);
@@ -292,13 +401,13 @@
     var adultAgeConfirmed = Boolean(panel && panel.querySelector('[name="adult_age_confirmed"]:checked'));
     var immediateAccessRequested = Boolean(panel && panel.querySelector('[name="immediate_access_requested"]:checked'));
     if (!termsAccepted || !adultAgeConfirmed || !immediateAccessRequested) {
-      showPurchaseStatus('Confirm your choices', 'Confirm you are 18 or over, accept the current terms, and expressly request immediate access before Checkout.', 'is-failed', true);
+      showPurchaseStatus('Please complete the checks', 'Confirm you are 18 or over, accept the terms and request immediate access before paying.', 'is-failed', true);
       return;
     }
     var original = button.textContent;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
-    button.textContent = 'Starting secure Pay by Bank Checkout…';
+    button.textContent = 'Opening Pay by Bank…';
     try {
       var fetcher = window.ccAuth && window.ccAuth.fetchAuthed ? window.ccAuth.fetchAuthed : fetch;
       var response = await fetcher(flexibleApiUrl('create-checkout'), {
@@ -322,7 +431,7 @@
         window.location.assign(data.url);
         return;
       }
-      if (!response.ok) throw new Error(data.message || 'Flexible Hours Checkout could not be started.');
+      if (!response.ok) throw new Error(data.message || 'We could not open Pay by Bank.');
       if (data.attempt && data.attempt.status === 'pending') startFlexiblePolling(data.attempt.id);
     } catch (error) {
       showPurchaseStatus('Checkout not started', error.message || 'Please try again.', 'is-failed', true);
@@ -338,22 +447,22 @@
       showPurchaseStatus(
         entitlementCreated ? 'Flexible Hours available' : 'Payment confirmed',
         entitlementCreated
-          ? 'Stripe confirmed the bank payment and the signed webhook created your school-wide Flexible Hours.'
-          : 'Stripe confirmed payment. The browser cannot create hours; signed-webhook fulfilment is still being checked.',
+          ? 'Your bank payment is confirmed and your Flexible Hours are ready to use.'
+          : 'Your bank payment is confirmed. We are adding the hours to your account now.',
         'is-paid', focus
       );
       clearPolling();
       clearAttemptRequest(attempt.product && attempt.product.id);
       loadFlexibleBalance();
     } else if (attempt.status === 'review_required') {
-      showPurchaseStatus('Payment review required', 'Do not pay again. Support must reconcile this exact Checkout identity.', 'is-review', focus);
+      showPurchaseStatus('We need to check your payment', 'Please do not pay again. Contact us and we will check the payment with your bank.', 'is-review', focus);
       clearPolling();
     } else if (attempt.status === 'failed' || attempt.status === 'expired') {
-      showPurchaseStatus('No Flexible Hours created', attempt.message, 'is-failed', focus);
+      showPurchaseStatus('Payment not completed', attempt.message || 'No payment was taken and no hours were added.', 'is-failed', focus);
       clearPolling();
       clearAttemptRequest(attempt.product && attempt.product.id);
     } else {
-      showPurchaseStatus('Confirming your bank payment', 'Only the dedicated signed Stripe webhook can create your Flexible Hours.', 'is-pending', focus);
+      showPurchaseStatus('Confirming your bank payment', 'We are waiting for confirmation from your bank. This can take up to 24 hours, so please do not pay again.', 'is-pending', focus);
     }
   }
 
@@ -366,7 +475,7 @@
       renderFlexibleAttempt(data.attempt, focus, data.entitlement_created === true);
       return data.attempt;
     } catch (error) {
-      showPurchaseStatus('Status check unavailable', 'Do not start another payment. Reopen this return link or contact support.', 'is-review', focus);
+      showPurchaseStatus('We cannot check the payment yet', 'Please do not pay again. Reopen this page in a few minutes or contact us.', 'is-review', focus);
       clearPolling();
       return null;
     }
@@ -378,7 +487,7 @@
     pollTimer = window.setInterval(function () {
       if (Date.now() - pollStartedAt > 10 * 60 * 1000) {
         clearPolling();
-        showPurchaseStatus('Still confirming', 'Do not pay again. This bank payment requires review if it remains unresolved.', 'is-review', false);
+        showPurchaseStatus('Still waiting for confirmation', 'Please do not pay again. If 24 hours have passed, contact us and we will check the payment.', 'is-review', false);
         return;
       }
       pollFlexibleAttempt(attemptId, false);
@@ -394,8 +503,12 @@
       if (!response.ok) return;
       var data = await response.json();
       var hours = Number(data.remaining_minutes || 0) / 60;
+      if (hours <= 0) {
+        target.hidden = true;
+        return;
+      }
       target.hidden = false;
-      target.innerHTML = '<strong>Your Flexible Hours:</strong> ' + escapeHtml(hours.toFixed(1).replace(/\.0$/, '')) + ' hours remaining across ' + escapeHtml((data.sources || []).length) + ' immutable purchase source(s).';
+      target.innerHTML = '<strong>Your Flexible Hours:</strong> ' + escapeHtml(hours.toFixed(1).replace(/\.0$/, '')) + ' hours remaining.';
     } catch (_) {}
   }
 
@@ -409,7 +522,7 @@
       if (data.fulfilment_created) loadProgrammeStatus();
       return data.attempt;
     } catch (error) {
-      showPurchaseStatus('Status check unavailable', 'We could not confirm the result. Do not start another payment; try this status check again.', 'is-review', focus);
+      showPurchaseStatus('We cannot check the payment yet', 'Please do not pay again. Reopen this page in a few minutes or contact us.', 'is-review', focus);
       clearPolling();
       return null;
     }
@@ -426,7 +539,7 @@
     pollTimer = window.setInterval(function () {
       if (Date.now() - pollStartedAt > 10 * 60 * 1000) {
         clearPolling();
-        showPurchaseStatus('Still confirming', 'This is taking longer than expected. Do not pay again; reopen this return link to check the same attempt.', 'is-review', false);
+        showPurchaseStatus('Still waiting for confirmation', 'Please do not pay again. If 24 hours have passed, contact us and we will check the payment.', 'is-review', false);
         return;
       }
       pollAttempt(attemptId, false);
@@ -439,8 +552,8 @@
     if (!attemptId) return;
     if (params.get('flexible_return') === '1' || params.get('flexible_cancelled') === '1') {
       showPurchaseStatus(
-        params.get('flexible_cancelled') === '1' ? 'Checking the closed checkout' : 'Confirming your bank payment',
-        'This return page cannot create Flexible Hours. It checks the owned durable attempt only.',
+        params.get('flexible_cancelled') === '1' ? 'Checking your payment' : 'Confirming your bank payment',
+        'We are checking the same payment with your bank. Please do not start another payment while this check is running.',
         'is-pending', true
       );
       pollFlexibleAttempt(attemptId, false).then(function (attempt) {
@@ -449,8 +562,8 @@
       return;
     }
     showPurchaseStatus(
-      params.get('package_cancelled') === '1' ? 'Checking the closed checkout' : 'Confirming your bank payment',
-      'This return page cannot activate a package. It is checking the durable server-side attempt.',
+      params.get('package_cancelled') === '1' ? 'Checking your payment' : 'Confirming your bank payment',
+      'We are checking the same payment with your bank. Please do not start another payment while this check is running.',
       'is-pending',
       true
     );
@@ -487,6 +600,28 @@
     return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
   }
 
+  function programmeStatusLabel(status) {
+    return {
+      cooling_off_hold: 'Waiting for your cancellation period to end',
+      paid_matching: 'We are arranging your weekly lessons',
+      matching: 'We are arranging your weekly lessons',
+      active: 'Your programme is under way',
+      completed: 'Your programme is complete',
+      withdrawn: 'Your programme has ended'
+    }[status] || 'We are updating your programme';
+  }
+
+  function refundStatusLabel(status) {
+    return {
+      requested: 'received',
+      calculated: 'being reviewed',
+      reviewed: 'awaiting approval',
+      approved: 'approved',
+      provider_succeeded: 'refunded',
+      provider_failed: 'waiting for us to contact you'
+    }[status] || 'being reviewed';
+  }
+
   function renderProgramme(programme) {
     if (!programme) { programmeStatusEl.hidden = true; return; }
     var retake = programme.retake;
@@ -501,28 +636,31 @@
     var hasStarted = Boolean(programme.programme_start_at);
     var latestRefund = programme.refund_cases && programme.refund_cases[0];
     var contract = programme.consumer_contract || {};
+    var cancellationPeriod = programme.status === 'cooling_off_hold'
+      ? 'Ends ' + formatDate(programme.service_may_start_at)
+      : contract.early_start_requested === true
+        ? 'You asked us to begin early'
+        : 'Ended';
     var programmeWindow = hasStarted
       ? escapeHtml(formatDate(programme.programme_start_at)) + ' to ' + escapeHtml(formatDate(programme.approved_entitlement_end_at))
-      : 'Awaiting the programme start agreed by your instructor or admin';
+      : 'We will confirm this after your weekly schedule is agreed';
     programmeStatusContentEl.innerHTML =
       '<dl class="programme-facts">' +
-        '<div><dt>Payment</dt><dd>Confirmed in Stripe test mode</dd></div>' +
-        '<div><dt>Cooling-off</dt><dd>' + escapeHtml(programme.status === 'cooling_off_hold' ? 'Matching begins after ' + formatDate(programme.service_may_start_at) : (contract.early_start_requested === true ? 'Early start requested and recorded' : 'Cooling-off hold released')) + '</dd></div>' +
-        '<div><dt>Matching</dt><dd>' + escapeHtml(programme.status) + ' · deadline ' + escapeHtml(formatDate(programme.matching_deadline)) + '</dd></div>' +
-        '<div><dt>Matching status</dt><dd>' + escapeHtml(matching.status || 'pending') + '</dd></div>' +
-        '<div><dt>Matched instructor</dt><dd>' + escapeHtml(matching.instructor_name || 'Not yet assigned') + '</dd></div>' +
-        '<div><dt>Agreed availability</dt><dd>' + escapeHtml(availabilitySummary) + '</dd></div>' +
-        '<div><dt>Programme start</dt><dd>' + escapeHtml(hasStarted ? formatDate(programme.programme_start_at) : 'Pending agreement') + '</dd></div>' +
-        '<div><dt>Internal progress</dt><dd>Phase ' + escapeHtml(programme.current_phase) + ' of 3</dd></div>' +
-        '<div><dt>Base programme</dt><dd>' + programmeWindow + '</dd></div>' +
-        '<div><dt>Weekly opportunities</dt><dd>' + escapeHtml((programme.weeks || []).length) + ' records · one 90-minute opportunity per programme week</dd></div>' +
-        '<div><dt>Retake</dt><dd>' + (retake ? escapeHtml(retake.consumed_minutes) + ' of 600 minutes used; expires ' + escapeHtml(formatDate(retake.expires_at)) : 'Not activated') + '</dd></div>' +
+        '<div><dt>Payment</dt><dd>Confirmed</dd></div>' +
+        '<div><dt>Programme status</dt><dd>' + escapeHtml(programmeStatusLabel(programme.status)) + '</dd></div>' +
+        '<div><dt>14-day cancellation period</dt><dd>' + escapeHtml(cancellationPeriod) + '</dd></div>' +
+        '<div><dt>Your instructor</dt><dd>' + escapeHtml(matching.instructor_name || 'We are finding the right instructor') + '</dd></div>' +
+        '<div><dt>Your usual weekly time</dt><dd>' + escapeHtml(availabilitySummary) + '</dd></div>' +
+        '<div><dt>Programme starts</dt><dd>' + escapeHtml(hasStarted ? formatDate(programme.programme_start_at) : 'To be agreed with you') + '</dd></div>' +
+        '<div><dt>Programme dates</dt><dd>' + programmeWindow + '</dd></div>' +
+        '<div><dt>Weekly lessons</dt><dd>' + escapeHtml((programme.weeks || []).length) + ' weeks planned, with one 90-minute lesson each week</dd></div>' +
+        '<div><dt>Extra retake support</dt><dd>' + (retake ? escapeHtml(formatHours(retake.consumed_minutes)) + ' of 10 hours used; available until ' + escapeHtml(formatDate(retake.expires_at)) : 'Not needed') + '</dd></div>' +
       '</dl>' +
       (latestRefund
-        ? '<section class="termination-panel"><h3>Cancellation and refund review</h3><p>Your request was received ' + escapeHtml(formatDate(latestRefund.received_at)) + '. The calculated refund is <strong>' + escapeHtml(formatPrice(latestRefund.refund_due_pence, programme.currency)) + '</strong>. Status: ' + escapeHtml(latestRefund.status) + '. No browser action issues a Stripe refund.</p></section>'
+        ? '<section class="termination-panel"><h3>Your cancellation and refund</h3><p>We received your request on ' + escapeHtml(formatDate(latestRefund.received_at)) + '. Your calculated refund is <strong>' + escapeHtml(formatPrice(latestRefund.refund_due_pence, programme.currency)) + '</strong> and is currently ' + escapeHtml(refundStatusLabel(latestRefund.status)) + '.</p></section>'
         : programme.status === 'completed' || programme.status === 'withdrawn'
           ? ''
-          : '<form class="termination-panel" id="programme-termination-form"><h3>Cancel or withdraw</h3><p>You can send a clear cancellation request here. We record the time immediately, stop further programme activity and prepare an itemised manual refund review.</p><label>Reason (optional)<textarea name="reason" maxlength="1000"></textarea></label><button type="submit">Record my cancellation request</button></form>');
+          : '<form class="termination-panel" id="programme-termination-form"><h3>Cancel or leave the programme</h3><p>Send your request here and we will record it straight away, stop future programme activity and contact you about any refund due.</p><label>Reason (optional)<textarea name="reason" maxlength="1000"></textarea></label><button type="submit">Send my cancellation request</button></form>');
     programmeStatusEl.hidden = false;
   }
 
@@ -591,7 +729,7 @@
       });
       var data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Details could not be saved.');
-      testBookingResultEl.textContent = 'Saved. An admin must manually verify the details before checkout becomes available.';
+      testBookingResultEl.textContent = 'Saved. We will review your test details before enrolment becomes available.';
       await loadCatalogue();
     } catch (error) {
       testBookingResultEl.textContent = error.message || 'Details could not be saved.';

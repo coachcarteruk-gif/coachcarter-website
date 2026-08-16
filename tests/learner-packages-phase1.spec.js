@@ -92,6 +92,7 @@ function product(id, slug, productType, name, pricePence, prerequisiteId, prereq
       highlights: ['Server-provided condition one', 'Server-provided condition two'],
       checkout_disclosure: 'Comparison only. Checkout is not available in Phase 1.',
       variant: variant || undefined,
+      entitlement: productType === 'flexible_hours' ? { hours: 30, units: 60, unit_minutes: 30, scope: 'school' } : undefined,
     },
     customer_terms_version: 'learner-packages-catalogue-v1-draft',
     effective_from: '2026-08-13T00:00:00.000Z',
@@ -341,8 +342,8 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(html).toContain('/cookie-consent.js');
     expect(html).toContain('/posthog-loader.js');
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i);
-    expect(html).toContain('Explore Pay As You Go Lessons');
-    expect(html).toContain('Programme value is separate.');
+    expect(html).toContain('Book a Pay As You Go lesson');
+    expect(html).toContain('Before you buy Flexible Hours');
     expect(js).toContain("fetch(apiUrl('catalogue'), { credentials: 'include' })");
     expect(js).toContain("disabled aria-describedby=\"");
     expect(js).toContain("apiUrl('submit-test-booking')");
@@ -389,14 +390,14 @@ test.describe('Learner Packages Phase 1 page', () => {
     }));
     await page.goto('/learner/packages.html', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByRole('heading', { name: 'Choose how you want to learn.' })).toBeVisible();
-    for (const name of [
-      '30-hour flexible package', 'Full Curriculum Enrolment', 'Manoeuvres', 'Manoeuvres Challenge',
-    ]) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Find the package that fits.' })).toBeVisible();
+    await expect(page.locator('.product-shell h3')).toHaveText([
+      '30 Flexible Hours', 'Full Curriculum', 'Manoeuvres', 'Manoeuvres Challenge',
+    ]);
     await expect(page.locator('.product-price').filter({ hasText: '£1,650' })).toBeVisible();
     await expect(page.locator('.product-price').filter({ hasText: '£2,000' })).toBeVisible();
-    await expect(page.getByText(/Three internal stages/i)).toBeVisible();
-    await expect(page.getByRole('link', { name: /Explore Pay As You Go Lessons/ })).toBeVisible();
+    await expect(page.getByText(/structured weekly programme/i)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Book a Pay As You Go lesson', exact: true })).toBeVisible();
     await expect(page.locator('[data-cc-feature="learner_packages"]')).toBeVisible();
 
     const layout = await page.evaluate(() => ({ width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth }));
