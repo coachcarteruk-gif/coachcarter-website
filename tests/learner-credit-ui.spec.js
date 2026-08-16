@@ -65,10 +65,11 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
   test('booking modal uses selected instructor balance for credit eligibility and copy', () => {
     const js = read('public/learner/book.js');
 
-    expect(js).toContain('const hasCreds = selectedInstructorBalanceMinutes >= chargeMins;');
-    expect(js).toContain('const hasCreds = selectedInstructorBalanceMinutes >= totalMins;');
-    expect(js).toContain('const balance = selectedInstructorBalanceMinutes || 0;');
-    expect(js).toContain('` with ${pendingSlot.instructor_name}`');
+    expect(js).toContain('const hasLessonCredit = selectedInstructorBalanceMinutes >= chargeMins;');
+    expect(js).toContain('const hasLessonCredit = selectedInstructorBalanceMinutes >= totalMins;');
+    expect(js).toContain("const usingFlexible = selectedFundingMethod === 'flexible_package';");
+    expect(js).toContain('const balance = usingFlexible ? flexiblePackageBalanceMinutes : (selectedInstructorBalanceMinutes || 0);');
+    expect(js).toContain("const instructor = !usingFlexible && pendingSlot && pendingSlot.instructor_name ? ` with ${pendingSlot.instructor_name}` : '';");
     expect(js).not.toContain('const hasCreds = balanceMinutes >= ltDuration;');
     expect(js).not.toContain('const hasCreds = balanceMinutes >= totalMins;');
   });
