@@ -493,10 +493,13 @@ async function getEligibleSchoolBookings(sql, schoolId) {
     SELECT lb.id AS booking_id,
            lb.scheduled_date,
            lb.instructor_id,
-           CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
-             THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
-             ELSE COALESCE(lt.price_pence, 8250)
-           END AS price_pence,
+           COALESCE(
+             lb.list_price_pence,
+             CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
+               THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
+               ELSE COALESCE(lt.price_pence, 8250)
+             END
+           ) AS price_pence,
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id

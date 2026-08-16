@@ -23,6 +23,11 @@ const {
   validateProviderObject,
 } = require('./_learner-package-payments');
 const {
+  FLEXIBLE_HOURS_DISCLOSURE_VERSION,
+  isFlexiblePackageLivePurchasingEnabled,
+  productTerms: flexibleProductTerms,
+} = require('./_flexible-package-payments');
+const {
   ACTIVE_ENROLMENT_STATUSES,
   FULL_CURRICULUM_SLUG,
   INTERNAL_PHASE_SLUGS,
@@ -304,11 +309,22 @@ async function handleCatalogue(req, res) {
       ? session
       : null;
     const purchasingEnabled = isLearnerPackagePurchasingEnabled(schoolRow.config);
+    const flexibleLivePurchasingEnabled = isFlexiblePackageLivePurchasingEnabled(
+      schoolRow.config,
+      school.schoolId
+    );
     const schoolTimezone = operationalTimeZone(schoolRow.config);
     let latestTestBooking = null;
     let hasActiveEnrolment = false;
     let pilotAccessApproved = false;
+    let learnerDisplayName = null;
     if (sameSchoolLearner) {
+      const [learnerViewer] = await sql`
+        SELECT name FROM learner_users
+         WHERE id = ${sameSchoolLearner.id} AND school_id = ${school.schoolId}
+         LIMIT 1
+      `;
+      learnerDisplayName = learnerViewer?.name || null;
       const testBookings = await sql`
         SELECT id, verification_status, test_date, test_time, test_centre, verified_at,
                (((test_date + test_time) AT TIME ZONE ${schoolTimezone}) > NOW()) AS is_future
@@ -347,6 +363,7 @@ async function handleCatalogue(req, res) {
       viewer: {
         signed_in_as_learner: !!sameSchoolLearner,
         learner_id: sameSchoolLearner?.id || null,
+        learner_name: learnerDisplayName,
       },
       checkout_available: purchasingEnabled && !!sameSchoolLearner
         && latestTestBooking?.verification_status === 'verified'
@@ -357,20 +374,51 @@ async function handleCatalogue(req, res) {
           && normaliseConsumerRightsConfig(product.content, product.price_pence).ok
           && ownerCertifiedPilotTermsReady(product)),
       purchasing_test_enabled: purchasingEnabled,
-      payment_method: purchasingEnabled ? 'pay_by_bank_test' : null,
+      flexible_live_purchasing_enabled: flexibleLivePurchasingEnabled,
+      payment_method: purchasingEnabled ? 'pay_by_bank_test' : (flexibleLivePurchasingEnabled ? 'pay_by_bank' : null),
       products: products.map((product) => {
         const consumerRights = normaliseConsumerRightsConfig(product.content, product.price_pence);
         const ownerCertified = ownerCertifiedPilotTermsReady(product);
+        const isFlexible = product.product_type === 'flexible_hours';
+        const flexibleTerms = isFlexible ? flexibleProductTerms({
+          ...product,
+          product_slug: product.slug,
+        }) : null;
+        const flexibleEligibility = !isFlexible ? null
+          : !flexibleLivePurchasingEnabled
+            ? {
+                state: 'available_to_compare', purchase_eligible: false, checkout_available: false,
+                reason: 'Flexible Hours live purchasing is disabled. No Checkout can be created.',
+              }
+            : !sameSchoolLearner
+              ? {
+                  state: 'authentication_required', purchase_eligible: false, checkout_available: false,
+                  reason: 'Sign in as the learner who will own these school-wide hours.',
+                }
+              : !flexibleTerms
+                ? {
+                    state: 'consumer_terms_not_ready', purchase_eligible: false, checkout_available: false,
+                    reason: 'This immutable Flexible Hours version is not approved for Checkout.',
+                  }
+                : {
+                    state: 'live_checkout_available', purchase_eligible: true, checkout_available: true,
+                    reason: 'Eligible for the dedicated Pay by Bank Flexible Hours Checkout.',
+                  };
         return {
           ...product,
-          consumer_rights: product.slug === FULL_CURRICULUM_SLUG ? {
-            ready: consumerRights.ok && ownerCertified,
-            disclosure_version: CONSUMER_RIGHTS_DISCLOSURE_VERSION,
-            checkout_acknowledgement: CHECKOUT_ACKNOWLEDGEMENT,
-            early_start_request: EARLY_START_REQUEST,
-            deferred_start_request: DEFERRED_START_REQUEST,
-          } : null,
-          eligibility: buildCatalogueEligibility(product, {
+          consumer_rights: isFlexible ? {
+            ready: !!flexibleTerms,
+            disclosure_version: FLEXIBLE_HOURS_DISCLOSURE_VERSION,
+            checkout_acknowledgement: product.content?.consumer_rights?.checkout_acknowledgement || '',
+            immediate_access_request: product.content?.consumer_rights?.immediate_access_request || '',
+          } : product.slug === FULL_CURRICULUM_SLUG ? {
+              ready: consumerRights.ok && ownerCertified,
+              disclosure_version: CONSUMER_RIGHTS_DISCLOSURE_VERSION,
+              checkout_acknowledgement: CHECKOUT_ACKNOWLEDGEMENT,
+              early_start_request: EARLY_START_REQUEST,
+              deferred_start_request: DEFERRED_START_REQUEST,
+            } : null,
+          eligibility: flexibleEligibility || buildCatalogueEligibility(product, {
           purchasingEnabled,
           sameSchoolLearner: !!sameSchoolLearner,
           testBookingStatus: latestTestBooking?.verification_status || 'missing',
@@ -413,10 +461,11 @@ async function handleFeatureState(req, res) {
       ok: true,
       enabled: isLearnerPackagesEnabled(row?.config),
       purchasing_test_enabled: isLearnerPackagePurchasingEnabled(row?.config),
+      flexible_live_purchasing_enabled: isFlexiblePackageLivePurchasingEnabled(row?.config, school.schoolId),
     });
   } catch (err) {
     reportError('/api/packages?action=feature-state', err);
-    return res.json({ ok: true, enabled: false, purchasing_test_enabled: false });
+    return res.json({ ok: true, enabled: false, purchasing_test_enabled: false, flexible_live_purchasing_enabled: false });
   }
 }
 

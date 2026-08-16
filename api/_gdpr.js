@@ -83,6 +83,21 @@ async function packagePurchaseAttemptsTableExists(sql) {
   return Boolean(row?.has_package_purchase_attempts);
 }
 
+async function flexiblePackageTablesExist(sql) {
+  const [row] = await sql`
+    SELECT
+      to_regclass('public.flexible_package_purchase_attempts') IS NOT NULL AS has_attempts,
+      to_regclass('public.flexible_package_purchases') IS NOT NULL AS has_purchases,
+      to_regclass('public.flexible_package_sources') IS NOT NULL AS has_sources,
+      to_regclass('public.flexible_package_booking_allocations') IS NOT NULL AS has_allocations,
+      to_regclass('public.flexible_package_allocation_returns') IS NOT NULL AS has_returns,
+      to_regclass('public.flexible_package_source_reductions') IS NOT NULL AS has_reductions,
+      to_regclass('public.flexible_package_state_events') IS NOT NULL AS has_events
+  `;
+  return Boolean(row?.has_attempts && row?.has_purchases && row?.has_sources
+    && row?.has_allocations && row?.has_returns && row?.has_reductions && row?.has_events);
+}
+
 async function fullCurriculumTablesExist(sql) {
   const [row] = await sql`
     SELECT
@@ -138,6 +153,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasRefundLedger = await refundLedgerTablesExist(sql);
   const hasLearnerBroadcasts = await learnerBroadcastTablesExist(sql);
   const hasPackagePurchaseAttempts = await packagePurchaseAttemptsTableExists(sql);
+  const hasFlexiblePackages = await flexiblePackageTablesExist(sql);
   const hasFullCurriculum = await fullCurriculumTablesExist(sql);
   const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
   const hasFullCurriculumConsumerRights = await fullCurriculumConsumerRightsTablesExist(sql);
@@ -223,6 +239,16 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (hasPackagePurchaseAttempts) {
     retainedAnonymisation.push(sql`UPDATE package_purchase_attempts SET learner_id = NULL WHERE learner_id = ${learnerId}`);
   }
+  if (hasFlexiblePackages) {
+    retainedAnonymisation.push(
+      sql`UPDATE flexible_package_purchase_attempts SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+      sql`UPDATE flexible_package_purchases SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+      sql`UPDATE flexible_package_sources SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+      sql`UPDATE flexible_package_booking_allocations SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+      sql`UPDATE flexible_package_source_reductions SET learner_id = NULL WHERE learner_id = ${learnerId}`,
+      sql`UPDATE flexible_package_state_events SET learner_id = NULL WHERE learner_id = ${learnerId}`
+    );
+  }
   if (hasFullCurriculum) {
     retainedAnonymisation.push(
       sql`UPDATE full_curriculum_test_bookings SET learner_id = NULL, test_centre = NULL WHERE learner_id = ${learnerId}`
@@ -264,6 +290,7 @@ module.exports = {
   refundLedgerTablesExist,
   learnerBroadcastTablesExist,
   packagePurchaseAttemptsTableExists,
+  flexiblePackageTablesExist,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
   fullCurriculumConsumerRightsTablesExist,

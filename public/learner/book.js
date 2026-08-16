@@ -17,6 +17,9 @@ let auth          = null; // null when browsing as guest; { user, ... } when log
 let creditBalance = 0;
 let balanceMinutes = 0;
 let selectedInstructorBalanceMinutes = 0;
+let flexiblePackageBalanceMinutes = 0;
+let selectedFundingMethod = 'lesson_credit';
+let flexibleBookingRequestId = null;
 let paymentsEnabled = true; // assume true until balance API tells us otherwise
 let incompatibleProductsRetired = false; // strict school feature state; absent defaults inactive
 let instructors   = [];
@@ -168,6 +171,12 @@ function init() {
   const socialInfoCloseX = document.getElementById('socialVideoInfoCloseX');
   if (socialInfoClose) socialInfoClose.onclick = closeSocialInfo;
   if (socialInfoCloseX) socialInfoCloseX.onclick = closeSocialInfo;
+  document.getElementById('fundingChoice')?.addEventListener('change', event => {
+    if (!event.target.matches('[name="booking_funding_method"]')) return;
+    selectedFundingMethod = event.target.value;
+    const duration = Number(selectedLessonType?.duration_minutes || 0);
+    updateFundingPresentation(duration * getRepeatWeeks());
+  });
   const successRecurringBtn = document.getElementById('btnOpenRecurringFromSuccess');
   if (successRecurringBtn) successRecurringBtn.onclick = () => openRecurringBlockModal('success');
   const paidRecurringBtn = document.getElementById('btnOpenRecurringFromPaid');
@@ -248,7 +257,7 @@ function init() {
   // postcode (which changes the travel-filtered results). Balance, upcoming
   // lessons, pending requests and test-date availability load in parallel
   // without blocking the first slot render.
-  const secondaryLoads = Promise.all([loadBalance(), loadUpcoming(), loadPendingRequests()]);
+  const secondaryLoads = Promise.all([loadBalance(), loadFlexiblePackageBalance(), loadUpcoming(), loadPendingRequests()]);
   Promise.all([loadInstructors(), loadLearnerProfile(), loadLearnerAvailability(), loadLessonTypes()])
     .then(async () => {
       preselectInstructor();
@@ -334,6 +343,20 @@ async function loadBalance() {
   } catch {}
 }
 
+async function loadFlexiblePackageBalance() {
+  flexiblePackageBalanceMinutes = 0;
+  if (!auth) return;
+  try {
+    const res = await ccAuth.fetchAuthed('/api/flexible-packages?action=balance');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.error);
+    flexiblePackageBalanceMinutes = Number(data.remaining_minutes || 0);
+  } catch {
+    flexiblePackageBalanceMinutes = 0;
+  }
+  updateCreditBadge();
+}
+
 async function loadSelectedInstructorBalance(slot) {
   selectedInstructorBalanceMinutes = 0;
   if (!auth || !slot || !slot.instructor_id) return;
@@ -358,7 +381,7 @@ function formatBalanceHours(mins) {
 function updateCreditBadge() {
   // Hide credits banner for guests (they have no account - guestBanner covers this case)
   // and when payments are disabled.
-  document.getElementById('noCreditsBanner').style.display = (auth && paymentsEnabled && balanceMinutes === 0) ? 'flex' : 'none';
+  document.getElementById('noCreditsBanner').style.display = (auth && paymentsEnabled && balanceMinutes === 0 && flexiblePackageBalanceMinutes === 0) ? 'flex' : 'none';
 }
 
 function applyProductRetirementUi() {
@@ -1704,9 +1727,13 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
 
   // Credit-vs-pay path is duration-dependent for authed users.
   if (isGuest) {
+    selectedFundingMethod = null;
+    syncFundingChoice(false, false);
     document.getElementById('modalCreditPath').style.display = 'none';
     document.getElementById('modalPayPath').style.display = 'block';
   } else if (!paymentsEnabled) {
+    selectedFundingMethod = null;
+    syncFundingChoice(false, false);
     document.getElementById('modalCreditPath').style.display = 'block';
     document.getElementById('modalPayPath').style.display = 'none';
     document.getElementById('mdDeductHours').textContent = 'free - no credits required';
@@ -1714,18 +1741,23 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
     document.getElementById('bookSpinner').style.display = 'none';
     document.getElementById('btnConfirmBook').disabled = false;
   } else {
-    const hasCreds = selectedInstructorBalanceMinutes >= chargeMins;
-    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
-    document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
-    if (hasCreds) {
+    const hasLessonCredit = selectedInstructorBalanceMinutes >= chargeMins;
+    const hasFlexibleHours = !slotRequestMode && ltDuration % 30 === 0 && flexiblePackageBalanceMinutes >= chargeMins;
+    const hasFundedValue = hasLessonCredit || hasFlexibleHours;
+    selectedFundingMethod = hasLessonCredit ? 'lesson_credit' : (hasFlexibleHours ? 'flexible_package' : null);
+    syncFundingChoice(hasLessonCredit, hasFlexibleHours);
+    document.getElementById('modalCreditPath').style.display = hasFundedValue ? 'block' : 'none';
+    document.getElementById('modalPayPath').style.display = hasFundedValue ? 'none' : 'block';
+    if (hasFundedValue) {
       document.getElementById('bookBtnLabel').textContent = 'Confirm booking';
       document.getElementById('bookSpinner').style.display = 'none';
       document.getElementById('btnConfirmBook').disabled = false;
     }
-    updateBalanceLine(chargeMins);
+    updateFundingPresentation(chargeMins);
   }
 
   applyRequestModeUi(isGuest, ltPriceStr, chargeMins);
+  if (!slotRequestMode) updateFundingPresentation(chargeMins);
 }
 
 // Request-to-book modal chrome: swap the book/pay copy for hold copy and hide
@@ -1810,6 +1842,9 @@ function openBookModal(el) {
     transmission_type: el.dataset.transmissionType,
     instructor_name: el.dataset.instructorName
   };
+  // A new slot gets a new booking identity. Retain this value across retries
+  // within the same modal so ambiguous responses cannot spend twice.
+  flexibleBookingRequestId = null;
   slotRequestMode = el.dataset.requestToBook === '1' || el.dataset.requestToBook === true;
   socialVideoOption = { available: false, discountPct: 5 };
   const socialVideoCheckbox = document.getElementById('mdSocialVideoConsent');
@@ -2384,10 +2419,45 @@ function updateDeductDisplay() {
     // Update deduction text to indicate free booking
     document.getElementById('mdDeductHours').textContent = 'free - no credits required';
   } else {
-    const hasCreds = selectedInstructorBalanceMinutes >= totalMins;
-    document.getElementById('modalCreditPath').style.display = hasCreds ? 'block' : 'none';
-    document.getElementById('modalPayPath').style.display = hasCreds ? 'none' : 'block';
-    updateBalanceLine(totalMins);
+    const hasLessonCredit = selectedInstructorBalanceMinutes >= totalMins;
+    const hasFlexibleHours = weeks === 1 && !slotRequestMode && ltDuration % 30 === 0 && flexiblePackageBalanceMinutes >= totalMins;
+    const hasFundedValue = hasLessonCredit || hasFlexibleHours;
+    if (selectedFundingMethod === 'lesson_credit' && !hasLessonCredit) selectedFundingMethod = null;
+    if (selectedFundingMethod === 'flexible_package' && !hasFlexibleHours) selectedFundingMethod = null;
+    if (!selectedFundingMethod) selectedFundingMethod = hasLessonCredit ? 'lesson_credit' : (hasFlexibleHours ? 'flexible_package' : null);
+    syncFundingChoice(hasLessonCredit, hasFlexibleHours);
+    document.getElementById('modalCreditPath').style.display = hasFundedValue ? 'block' : 'none';
+    document.getElementById('modalPayPath').style.display = hasFundedValue ? 'none' : 'block';
+    updateFundingPresentation(totalMins);
+  }
+}
+
+function syncFundingChoice(hasLessonCredit, hasFlexibleHours) {
+  const fieldset = document.getElementById('fundingChoice');
+  if (!fieldset) return;
+  fieldset.hidden = !(hasLessonCredit && hasFlexibleHours);
+  fieldset.querySelectorAll('[name="booking_funding_method"]').forEach(input => {
+    input.disabled = input.value === 'lesson_credit' ? !hasLessonCredit : !hasFlexibleHours;
+    input.checked = input.value === selectedFundingMethod;
+  });
+}
+
+function updateFundingPresentation(deductMins) {
+  updateBalanceLine(deductMins);
+  const flexible = selectedFundingMethod === 'flexible_package';
+  const creditNote = document.getElementById('mdCreditNote');
+  if (creditNote) {
+    creditNote.innerHTML = flexible
+      ? `This will use <strong id="mdDeductHours">${esc(formatHours(deductMins))}</strong> from your school-wide Flexible Hours. Cancel 48+ hours before and the exact source units return automatically.`
+      : `This will use <strong id="mdDeductHours">${esc(formatHours(deductMins))}</strong> from your instructor Lesson Credit. Cancel 48+ hours before and it returns automatically.`;
+  }
+  const socialWrap = document.getElementById('socialVideoOption');
+  const socialCheckbox = document.getElementById('mdSocialVideoConsent');
+  if (flexible) {
+    if (socialCheckbox) socialCheckbox.checked = false;
+    if (socialWrap) socialWrap.style.display = 'none';
+  } else {
+    refreshSocialVideoOption();
   }
 }
 
@@ -2395,10 +2465,13 @@ function updateBalanceLine(deductMins) {
   const el = document.getElementById('mdBalanceLine');
   if (!el) return;
   const fmt = m => (m / 60).toFixed(1).replace(/\.0$/, '') + 'h';
-  const balance = selectedInstructorBalanceMinutes || 0;
+  const usingFlexible = selectedFundingMethod === 'flexible_package';
+  const balance = usingFlexible ? flexiblePackageBalanceMinutes : (selectedInstructorBalanceMinutes || 0);
   const after = Math.max(0, balance - deductMins);
-  const instructor = pendingSlot && pendingSlot.instructor_name ? ` with ${pendingSlot.instructor_name}` : '';
-  el.textContent = `You have ${fmt(balance)}${instructor} - ${fmt(after)} remaining after this booking.`;
+  const instructor = !usingFlexible && pendingSlot && pendingSlot.instructor_name ? ` with ${pendingSlot.instructor_name}` : '';
+  el.textContent = usingFlexible
+    ? `Using school-wide Flexible Hours: ${fmt(balance)} available - ${fmt(after)} remaining after this booking.`
+    : `Using Lesson Credit: ${fmt(balance)}${instructor} - ${fmt(after)} remaining after this booking.`;
 }
 
 function updateBookButtonState() {
@@ -2478,6 +2551,11 @@ async function confirmBookWithCredit() {
 
   try {
     const bookBody = { ...pendingSlot, pickup_address: locations.pickup_address };
+    bookBody.funding_method = selectedFundingMethod || 'lesson_credit';
+    if (bookBody.funding_method === 'flexible_package') {
+      flexibleBookingRequestId ||= window.crypto.randomUUID();
+      bookBody.client_request_id = flexibleBookingRequestId;
+    }
     bookBody.social_video_consent = socialVideoConsentChecked();
     bookBody.social_video_age_confirmed = socialVideoAgeConfirmed();
     if (locations.dropoff_address) bookBody.dropoff_address = locations.dropoff_address;
@@ -2498,16 +2576,21 @@ async function confirmBookWithCredit() {
         }).join(', ');
         throw new Error(`Some slots are unavailable: ${conflictDates}`);
       }
-      throw new Error(data.error);
+      throw new Error(data.message || data.error || 'Booking failed');
     }
 
-    creditBalance = data.credit_balance;
-    balanceMinutes = data.balance_minutes || 0;
-    selectedInstructorBalanceMinutes = data.balance_minutes || 0;
+    if (data.funding_method === 'flexible_package') {
+      flexiblePackageBalanceMinutes = Number(data.flexible_package_remaining_minutes || 0);
+      flexibleBookingRequestId = null;
+    } else {
+      creditBalance = data.credit_balance;
+      balanceMinutes = data.balance_minutes || 0;
+      selectedInstructorBalanceMinutes = data.balance_minutes || 0;
+    }
     lastBookingId = data.booking_id;
     updateCreditBadge();
     setLastLessonType(selectedLessonType);
-    window.posthog && posthog.capture('booking_confirmed', { method: 'credit', lesson_type_slug: selectedLessonType?.slug });
+    window.posthog && posthog.capture('booking_confirmed', { method: data.funding_method || 'lesson_credit', lesson_type_slug: selectedLessonType?.slug });
     showBookSuccess(weeks, data.dates);
     refreshAfterBooking();
   } catch (err) {
@@ -3332,11 +3415,15 @@ async function confirmCancel() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    creditBalance = data.credit_balance;
-    balanceMinutes = data.balance_minutes || 0;
+    if (data.funding_method === 'flexible_package') {
+      flexiblePackageBalanceMinutes = Number(data.flexible_package_remaining_minutes || 0);
+    } else {
+      creditBalance = data.credit_balance;
+      balanceMinutes = data.balance_minutes || 0;
+    }
     updateCreditBadge();
     document.getElementById('cancelModal').classList.remove('open');
-    showToast(data.message, data.credit_returned !== false ? 'success' : '');
+    showToast(data.message, (data.credit_returned !== false || data.package_value_returned === true) ? 'success' : '');
     loadedRanges = []; slotCache = {};
     selectedDate = null;
     clearSelectedSlot();
