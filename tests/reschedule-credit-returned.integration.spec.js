@@ -781,7 +781,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
     // Pre-seed a clash to force INSERT failure.
     const clashLearnerId = await makeLearner('c4-clash');
-    const { newDate, newStartTime } = await insertClashBookingWithRetry(
+    const { newDate, newStartTime } = await insertClashBooking(
       clashLearnerId,
       TARGET_INSTRUCTOR_ID,
       22
