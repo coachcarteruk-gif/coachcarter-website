@@ -293,10 +293,39 @@
     var flexible = products.filter(function (product) { return product.product_type === 'flexible_hours'; });
     var curriculum = products.filter(function (product) { return product.product_type === 'full_curriculum'; });
     var manoeuvres = products.filter(function (product) { return product.product_type === 'manoeuvres'; });
-    if (!flexible.length || !curriculum.length || !manoeuvres.length) {
-      showMessage('Catalogue not ready', 'This school catalogue is incomplete. No package can be purchased; please use Pay As You Go Lessons for now.', false);
+    if (!products.length) {
+      showMessage('No packages available', 'There are no packages to show at the moment. You can still book Pay As You Go Lessons.', false);
       return;
     }
+
+    var flexibleHours = flexible.map(function (product) {
+      return Number(product.content && product.content.entitlement && product.content.entitlement.hours || 0);
+    }).filter(function (hours) { return hours > 0; }).sort(function (a, b) { return a - b; });
+    var flexibleChoice = flexibleHours.length > 1
+      ? flexibleHours.slice(0, -1).join(', ') + ' or ' + flexibleHours[flexibleHours.length - 1]
+      : String(flexibleHours[0] || 'Flexible');
+    var flexibleLive = data.flexible_live_purchasing_enabled === true;
+
+    document.getElementById('packages-hero-intro').textContent = flexible.length
+      ? 'Buy Flexible Hours upfront and use them with any available CoachCarter instructor. You can also see any other learning packages currently in the catalogue.'
+      : 'Compare the CoachCarter learning packages currently shown below.';
+    document.getElementById('packages-availability-heading').textContent = flexible.length && flexibleLive
+      ? 'Available now'
+      : 'Current catalogue';
+    document.getElementById('packages-availability-copy').textContent = flexible.length
+      ? (flexibleLive
+          ? 'Choose ' + flexibleChoice + ' Flexible Hours and pay securely by bank.'
+          : flexibleChoice + ' Flexible Hours are shown below for comparison.')
+      : 'See the package options currently shown below.';
+    document.getElementById('flexible-section-kicker').textContent = flexibleLive ? 'Available now' : 'Not currently available';
+    document.getElementById('flexible-section-copy').textContent = flexible.length
+      ? 'Buy ' + flexibleChoice + ' hours upfront. Use them with any available CoachCarter instructor, book in 30-minute steps and take as long as you need.'
+      : '';
+
+    document.getElementById('flexible-section').hidden = !flexible.length;
+    document.getElementById('full-curriculum-section').hidden = !curriculum.length;
+    document.getElementById('manoeuvres-section').hidden = !manoeuvres.length;
+    document.getElementById('flexible-truth-panel').hidden = !flexible.length;
 
     document.getElementById('flexible-products').innerHTML = flexible.map(function (product) {
       var hours = Number(product.content && product.content.entitlement && product.content.entitlement.hours || 0);
@@ -314,7 +343,8 @@
     var curriculumEligibility = curriculum[0] && curriculum[0].eligibility || {};
     var needsTestBooking = curriculumEligibility.state === 'test_booking_required'
       || curriculumEligibility.state === 'verification_pending';
-    testBookingPanelEl.hidden = !(data.viewer && data.viewer.signed_in_as_learner && needsTestBooking);
+    testBookingPanelEl.hidden = !curriculum.length
+      || !(data.viewer && data.viewer.signed_in_as_learner && needsTestBooking);
     if (!testBookingPanelEl.hidden) {
       var evidence = data.full_curriculum_eligibility && data.full_curriculum_eligibility.test_booking;
       if (evidence) {
