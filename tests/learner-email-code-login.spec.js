@@ -268,7 +268,17 @@ test.describe('learner email-code login', () => {
       const token = learnerCookie.split(';')[0].split('=')[1];
       const claims = jwt.verify(token, process.env.JWT_SECRET);
       expect(claims).toMatchObject({ id: 10, email: 'dhanya@example.test', role: 'learner', school_id: 3 });
-      expect(sql.calls.some((call) => /UPDATE learner_users SET last_activity_at = NOW\(\)/i.test(call.text))).toBe(true);
+      const verificationUpdate = sql.calls.find((call) =>
+        /UPDATE learner_users\s+SET email_verified = TRUE,\s+last_activity_at = NOW\(\)/i.test(call.text)
+      );
+      expect(verificationUpdate).toBeTruthy();
+      expect(verificationUpdate.values).toEqual([10, 3]);
+
+      const learnerLookup = sql.calls.find((call) =>
+        /SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at/i.test(call.text)
+      );
+      expect(learnerLookup.text).toMatch(/AND school_id = \?/i);
+      expect(learnerLookup.values).toEqual(['dhanya@example.test', 3]);
     });
   });
 

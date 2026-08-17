@@ -327,14 +327,16 @@ async function handleCatalogue(req, res) {
     let hasActiveEnrolment = false;
     let pilotAccessApproved = false;
     let learnerDisplayName = null;
+    let learnerEmailVerified = false;
     let flexibleRemainingMinutes = 0;
     if (sameSchoolLearner) {
       const [learnerViewer] = await sql`
-        SELECT name FROM learner_users
+        SELECT name, email, email_verified FROM learner_users
          WHERE id = ${sameSchoolLearner.id} AND school_id = ${school.schoolId}
          LIMIT 1
       `;
       learnerDisplayName = learnerViewer?.name || null;
+      learnerEmailVerified = !!learnerViewer?.email && learnerViewer.email_verified === true;
       try {
         const [flexibleBalance] = await sql`
           SELECT remaining_minutes
@@ -387,9 +389,10 @@ async function handleCatalogue(req, res) {
         signed_in_as_learner: !!sameSchoolLearner,
         learner_id: sameSchoolLearner?.id || null,
         learner_name: learnerDisplayName,
+        email_verified: learnerEmailVerified,
         flexible_hours_remaining_minutes: flexibleRemainingMinutes,
       },
-      checkout_available: purchasingEnabled && !!sameSchoolLearner
+      checkout_available: purchasingEnabled && !!sameSchoolLearner && learnerEmailVerified
         && latestTestBooking?.verification_status === 'verified'
         && latestTestBooking?.is_future === true
         && !hasActiveEnrolment
@@ -419,6 +422,11 @@ async function handleCatalogue(req, res) {
                   state: 'authentication_required', purchase_eligible: false, checkout_available: false,
                   reason: 'Sign in as the learner who will own these school-wide hours.',
                 }
+              : !learnerEmailVerified
+                ? {
+                    state: 'email_verification_required', purchase_eligible: false, checkout_available: false,
+                    reason: 'Verify your account email with a one-time sign-in code before buying Flexible Hours.',
+                  }
               : flexibleRemainingMinutes > 0
                 ? {
                     state: 'existing_flexible_balance', purchase_eligible: false, checkout_available: false,
@@ -451,6 +459,7 @@ async function handleCatalogue(req, res) {
           eligibility: flexibleEligibility || buildCatalogueEligibility(product, {
           purchasingEnabled,
           sameSchoolLearner: !!sameSchoolLearner,
+          learnerEmailVerified,
           testBookingStatus: latestTestBooking?.verification_status || 'missing',
           testBookingFuture: latestTestBooking?.is_future === true,
           hasActiveEnrolment,

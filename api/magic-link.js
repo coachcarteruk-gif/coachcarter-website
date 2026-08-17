@@ -9,6 +9,7 @@ const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } 
 const { reportError } = require('./_error-alert');
 const { logAuditRequired } = require('./_audit');
 const { lockBalanceAndMutate } = require('./_credit-grant');
+const { resolveSchoolFromRequest } = require('./_tenant');
 
 const FREE_TRIAL_CREDITS = 0;
 
@@ -22,6 +23,18 @@ function normalizeUKPhone(phone) {
   return null; // not a valid UK mobile
 }
 const TOKEN_EXPIRY_MINUTES = 15;
+
+async function resolveEmailCodeSchoolId(req, sql) {
+  const explicitSchoolId = parseInt(req.body?.school_id || req.query?.school_id, 10) || null;
+  const tenantRequest = explicitSchoolId && !req.query?.school_id
+    ? { ...req, query: { ...req.query, school_id: explicitSchoolId } }
+    : req;
+  const tenant = await resolveSchoolFromRequest(tenantRequest, {
+    sql,
+    allowLegacySchoolIdQuery: true,
+  });
+  return tenant?.schoolId || explicitSchoolId || 1;
+}
 
 // Generate a 6-digit numeric code for SMS verification
 function generateSmsCode() {
@@ -326,15 +339,13 @@ async function handleSendEmailCode(req, res) {
 
     // Existing-account actions keep an enumeration-safe outward response.
     // Signup may report a conflict, matching the public learner signup contract.
-    const schoolId = parseInt(req.body?.school_id || req.query.school_id, 10) || 1;
+    const schoolId = await resolveEmailCodeSchoolId(req, sql);
     let shouldSend = true;
     if (role === 'learner') {
-      const [acct] = purpose === 'signup'
-        ? await sql`
-            SELECT id, password_hash FROM learner_users
-             WHERE LOWER(email) = LOWER(${cleanEmail})
-               AND school_id = ${schoolId}`
-        : await sql`SELECT id, password_hash FROM learner_users WHERE LOWER(email) = LOWER(${cleanEmail})`;
+      const [acct] = await sql`
+        SELECT id, password_hash FROM learner_users
+         WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND school_id = ${schoolId}`;
       if (purpose === 'signup') {
         const [instr] = await sql`
           SELECT id FROM instructors
@@ -441,7 +452,7 @@ async function handleVerifyEmailCode(req, res) {
 
     const sql = neon(process.env.POSTGRES_URL);
 
-    const requestedSchoolId = parseInt(req.body?.school_id || req.query.school_id, 10) || 1;
+    const requestedSchoolId = await resolveEmailCodeSchoolId(req, sql);
     const rows = role === 'instructor' ? await sql`
       SELECT id, school_id FROM magic_link_tokens
        WHERE email = ${cleanEmail}
@@ -475,7 +486,8 @@ async function handleVerifyEmailCode(req, res) {
       const [user] = await sql`
         SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
           FROM learner_users
-         WHERE LOWER(email) = LOWER(${cleanEmail})`;
+         WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND school_id = ${linkRecord.school_id}`;
 
       if (!user) {
         await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
@@ -489,7 +501,12 @@ async function handleVerifyEmailCode(req, res) {
       const jwtToken = jwt.sign(jwtPayload, secret, { expiresIn: '180d' });
 
       await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
-      try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch {}
+      await sql`
+        UPDATE learner_users
+           SET email_verified = TRUE,
+               last_activity_at = NOW()
+         WHERE id = ${user.id}
+           AND school_id = ${linkRecord.school_id}`;
 
       appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.learner, jwtToken, SESSION_MAX_AGE_SEC.learner));
       appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
