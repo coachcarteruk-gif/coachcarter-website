@@ -10666,3 +10666,21 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- ============================================================
+-- Migration 051: Flexible Hours credit-flow alignment
+-- ============================================================
+DROP INDEX IF EXISTS uq_flexible_attempt_active_product;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_flexible_attempt_active_learner
+  ON flexible_package_purchase_attempts(school_id, learner_id)
+  WHERE status IN ('created','submitting','pending','review_required');
+
+ALTER TABLE flexible_package_allocation_returns
+  DROP CONSTRAINT IF EXISTS flexible_package_allocation_returns_reason_check;
+ALTER TABLE flexible_package_allocation_returns
+  ADD CONSTRAINT flexible_package_allocation_returns_reason_check
+  CHECK (reason IN (
+    'learner_cancelled_48h_plus',
+    'admin_eligible_cancellation',
+    'rescheduled_48h_plus'
+  ));

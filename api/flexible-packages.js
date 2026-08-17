@@ -183,7 +183,7 @@ async function handleCreateCheckout(req, res) {
       SELECT * FROM flexible_package_purchase_attempts
        WHERE school_id = ${scope.schoolId} AND learner_id = ${scope.learner.id}
          AND (client_request_id = ${clientRequestId}::uuid
-           OR (product_id = ${productId} AND status IN ('created','submitting','pending','review_required')))
+           OR status IN ('created','submitting','pending','review_required'))
        ORDER BY created_at DESC LIMIT 1
     `;
     if (existing[0]) {
@@ -192,6 +192,22 @@ async function handleCreateCheckout(req, res) {
         return res.json({ ok: true, reused: true, url: existing[0].stripe_checkout_url, attempt: safe });
       }
       return res.status(202).json({ ok: true, reused: true, attempt: safe });
+    }
+
+    const [balance] = await sql`
+      SELECT remaining_units, remaining_minutes
+        FROM flexible_package_balances
+       WHERE school_id = ${scope.schoolId} AND learner_id = ${scope.learner.id}
+       LIMIT 1
+    `;
+    if (Number(balance?.remaining_units || 0) > 0) {
+      return res.status(409).json({
+        error: true,
+        code: 'FLEXIBLE_BALANCE_MUST_BE_USED_FIRST',
+        message: 'Use your existing Flexible Hours before buying another package.',
+        remaining_units: Number(balance.remaining_units),
+        remaining_minutes: Number(balance.remaining_minutes),
+      });
     }
 
     let stripe;
@@ -205,24 +221,42 @@ async function handleCreateCheckout(req, res) {
 
     const attemptId = crypto.randomUUID();
     const idempotencyKey = `cc-flexible-package-live-${attemptId}`;
-    const inserted = await sql`
-      INSERT INTO flexible_package_purchase_attempts (
-        id, school_id, learner_id, product_id, product_version_id, product_slug,
-        product_snapshot, amount_pence, currency, total_units, unit_minutes,
-        rate_pence_per_unit, customer_terms_version, disclosure_version,
-        adult_age_confirmed, terms_accepted, immediate_access_requested,
-        stripe_mode, status, client_request_id, idempotency_key,
-        stripe_payment_method_configuration_id
-      ) VALUES (
-        ${attemptId}::uuid, ${scope.schoolId}, ${scope.learner.id},
-        ${product.product_id}, ${product.product_version_id}, ${product.product_slug},
-        ${JSON.stringify(product.content)}::jsonb, ${terms.amountPence}, 'GBP',
-        ${terms.totalUnits}, ${terms.unitMinutes}, ${terms.ratePencePerUnit},
-        ${product.customer_terms_version}, ${FLEXIBLE_HOURS_DISCLOSURE_VERSION},
-        TRUE, TRUE, TRUE, 'live', 'submitting', ${clientRequestId}::uuid,
-        ${idempotencyKey}, ${paymentConfiguration}
-      ) RETURNING *
-    `;
+    let inserted;
+    try {
+      inserted = await sql`
+        INSERT INTO flexible_package_purchase_attempts (
+          id, school_id, learner_id, product_id, product_version_id, product_slug,
+          product_snapshot, amount_pence, currency, total_units, unit_minutes,
+          rate_pence_per_unit, customer_terms_version, disclosure_version,
+          adult_age_confirmed, terms_accepted, immediate_access_requested,
+          stripe_mode, status, client_request_id, idempotency_key,
+          stripe_payment_method_configuration_id
+        ) VALUES (
+          ${attemptId}::uuid, ${scope.schoolId}, ${scope.learner.id},
+          ${product.product_id}, ${product.product_version_id}, ${product.product_slug},
+          ${JSON.stringify(product.content)}::jsonb, ${terms.amountPence}, 'GBP',
+          ${terms.totalUnits}, ${terms.unitMinutes}, ${terms.ratePencePerUnit},
+          ${product.customer_terms_version}, ${FLEXIBLE_HOURS_DISCLOSURE_VERSION},
+          TRUE, TRUE, TRUE, 'live', 'submitting', ${clientRequestId}::uuid,
+          ${idempotencyKey}, ${paymentConfiguration}
+        ) RETURNING *
+      `;
+    } catch (insertError) {
+      if (insertError?.code !== '23505') throw insertError;
+      const [current] = await sql`
+        SELECT * FROM flexible_package_purchase_attempts
+         WHERE school_id = ${scope.schoolId} AND learner_id = ${scope.learner.id}
+           AND (client_request_id = ${clientRequestId}::uuid
+             OR status IN ('created','submitting','pending','review_required'))
+         ORDER BY created_at DESC LIMIT 1
+      `;
+      if (!current) throw insertError;
+      const safe = publicAttempt(current);
+      if (current.status === 'pending' && current.stripe_checkout_url) {
+        return res.json({ ok: true, reused: true, url: current.stripe_checkout_url, attempt: safe });
+      }
+      return res.status(202).json({ ok: true, reused: true, attempt: safe });
+    }
     attempt = inserted[0];
     let session;
     try {

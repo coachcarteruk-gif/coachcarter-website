@@ -19,9 +19,11 @@ function product({ id, slug, type, price, content, eligibility, rights = null })
   };
 }
 
-function catalogue({ signedIn }) {
+function catalogue({ signedIn, flexibleBalanceMinutes = 0 }) {
   const flexibleEligibility = signedIn
-    ? { state: 'live_checkout_available', purchase_eligible: true, checkout_available: true }
+    ? flexibleBalanceMinutes > 0
+      ? { state: 'existing_flexible_balance', purchase_eligible: false, checkout_available: false, remaining_minutes: flexibleBalanceMinutes }
+      : { state: 'live_checkout_available', purchase_eligible: true, checkout_available: true }
     : { state: 'authentication_required', purchase_eligible: false, checkout_available: false };
   const unavailable = { state: 'available_to_compare', purchase_eligible: false, checkout_available: false };
   const flexibleRights = {
@@ -34,10 +36,12 @@ function catalogue({ signedIn }) {
     ok: true,
     phase: 'catalogue_only',
     flexible_live_purchasing_enabled: true,
+    pricing: { pay_as_you_go_hourly_pence: 5500 },
     viewer: {
       signed_in_as_learner: signedIn,
       learner_id: signedIn ? 41 : null,
       learner_name: signedIn ? 'Alex Taylor' : null,
+      flexible_hours_remaining_minutes: flexibleBalanceMinutes,
     },
     full_curriculum_eligibility: { test_booking: null, has_active_enrolment: false },
     products: [
@@ -99,18 +103,19 @@ function catalogue({ signedIn }) {
   };
 }
 
-async function preparePage(page, { signedIn, viewport, productTypes, productSlugs }) {
+async function preparePage(page, { signedIn, viewport, productTypes, productSlugs, flexibleBalanceMinutes = 0, theme = 'auto' }) {
   await page.setViewportSize(viewport);
-  await page.addInitScript(({ signedIn: isSignedIn }) => {
+  await page.addInitScript(({ signedIn: isSignedIn, selectedTheme }) => {
     localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+    localStorage.setItem('cc_dark_mode', selectedTheme);
     if (isSignedIn) localStorage.setItem('cc_learner', JSON.stringify({ user: { id: 41, name: 'Alex Taylor', school_id: 1 } }));
-  }, { signedIn });
+  }, { signedIn, selectedTheme: theme });
   await page.route('**/api/packages?action=feature-state**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ ok: true, enabled: true }),
   }));
-  const catalogueResponse = catalogue({ signedIn });
+  const catalogueResponse = catalogue({ signedIn, flexibleBalanceMinutes });
   if (productTypes) catalogueResponse.products = catalogueResponse.products.filter(product => productTypes.includes(product.product_type));
   if (productSlugs) catalogueResponse.products = catalogueResponse.products.filter(product => productSlugs.includes(product.slug));
   await page.route('**/api/packages?action=catalogue**', route => route.fulfill({
@@ -126,7 +131,7 @@ async function preparePage(page, { signedIn, viewport, productTypes, productSlug
   await page.route('**/api/flexible-packages?action=balance**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ ok: true, remaining_minutes: 0, sources: [] }),
+    body: JSON.stringify({ ok: true, remaining_minutes: flexibleBalanceMinutes, sources: [] }),
   }));
   await page.goto('/learner/packages.html', { waitUntil: 'domcontentloaded' });
   await page.locator('#catalogue-content').waitFor({ state: 'visible' });
@@ -144,7 +149,17 @@ test.describe('Learner Packages customer copy', () => {
     await expect(page.locator('#catalogue-status')).toBeHidden();
     await expect(page.getByRole('heading', { name: '15 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '30 Flexible Hours', exact: true })).toBeVisible();
-    await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(2);
+    await expect(page.getByText('Book in 30-minute steps', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Cannot be transferred to another learner', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Available now with Pay by Bank. Your hours will appear after your bank confirms the payment.', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.price-was s')).toHaveText(['£825', '£1,650']);
+    await expect(page.locator('.price-saving')).toHaveText(['Save £15', 'Save £60']);
+    await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.purchase-review summary')).toHaveText(['Book 15hrs', 'Book 30hrs']);
+    await expect(page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Book 30hrs Flexible Hours package' })).toBeVisible();
+    await page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' }).click();
+    await expect(page.locator('[data-flexible-purchase-panel="8"]')).toHaveAttribute('open', '');
     await expect(page.locator('#full-curriculum-section')).toBeHidden();
     await expect(page.locator('#manoeuvres-section')).toBeHidden();
     await expect(page.locator('#flexible-truth-panel')).toBeVisible();
@@ -168,8 +183,10 @@ test.describe('Learner Packages customer copy', () => {
 
     await expect(page.getByRole('heading', { name: '15 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '30 Flexible Hours', exact: true })).toHaveCount(0);
-    await expect(page.locator('#packages-availability-copy')).toHaveText('Choose 15 Flexible Hours and pay securely by bank.');
+    await expect(page.getByRole('complementary', { name: 'Package availability at a glance' })).toHaveCount(0);
     await expect(page.locator('#flexible-section-copy')).toContainText('Buy 15 hours upfront.');
+    await expect(page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Book 30hrs Flexible Hours package' })).toHaveCount(0);
     const mobileLayout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
     expect(mobileLayout.scrollWidth).toBeLessThanOrEqual(mobileLayout.width);
     if (process.env.CC_PACKAGES_SCREENSHOT_DIR) {
@@ -218,12 +235,12 @@ test.describe('Learner Packages customer copy', () => {
       });
     }
 
-    const review = page.getByText('Review and buy', { exact: true }).first();
+    const review = page.locator('.purchase-review summary').filter({ hasText: 'Book 15hrs' });
     await expect(review).toBeVisible();
     await review.click();
     await expect(page.locator('.purchase-review[open] .checkout-owner')).toHaveText('Buying for: Alex Taylor');
-    await expect(page.getByLabel(FLEXIBLE_ACKNOWLEDGEMENT, { exact: true }).first()).toBeVisible();
-    await expect(page.getByLabel(FLEXIBLE_IMMEDIATE_ACCESS, { exact: true }).first()).toBeVisible();
+    await expect(page.getByLabel(FLEXIBLE_ACKNOWLEDGEMENT + ' ' + FLEXIBLE_IMMEDIATE_ACCESS, { exact: true }).first()).toBeVisible();
+    await expect(page.locator('[name="immediate_access_requested"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pay £810 by bank' })).toBeVisible();
     await expect(page.locator('#test-booking-panel')).toBeHidden();
 
@@ -231,5 +248,71 @@ test.describe('Learner Packages customer copy', () => {
     expect(visibleCopy).not.toMatch(/immutable|fulfilment|School 1|signed webhook|test foundation|product version|source units|test mode/i);
     const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
+  });
+
+  test('shows the booking route and hides repeat purchase while Flexible Hours remain', async ({ page }) => {
+    await preparePage(page, {
+      signedIn: true,
+      viewport: { width: 1280, height: 900 },
+      productTypes: ['flexible_hours'],
+      flexibleBalanceMinutes: 150,
+    });
+
+    await expect(page.locator('#flexible-balance-status')).toContainText('2.5 hours remaining');
+    await expect(page.getByRole('link', { name: 'Book with your Flexible Hours' })).toHaveCount(3);
+    await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(0);
+    await expect(page.locator('#flexible-purchase-shortcuts')).toBeHidden();
+    await expect(page.getByText('Hours ready to use', { exact: true })).toHaveCount(2);
+  });
+
+  test('keeps the mobile package hierarchy readable in explicit dark mode', async ({ page }) => {
+    await preparePage(page, {
+      signedIn: true,
+      viewport: { width: 375, height: 844 },
+      productTypes: ['flexible_hours'],
+      theme: 'dark',
+    });
+
+    await expect(page.locator('html')).toHaveClass(/dark-mode/);
+    const colours = await page.evaluate(() => {
+      function rgb(value) {
+        const parts = value.match(/[\d.]+/g).slice(0, 3).map(Number);
+        return parts.map(channel => {
+          const normal = channel / 255;
+          return normal <= 0.04045 ? normal / 12.92 : Math.pow((normal + 0.055) / 1.055, 2.4);
+        });
+      }
+      function contrast(foreground, background) {
+        const fg = rgb(foreground);
+        const bg = rgb(background);
+        const luminance = channels => 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+        const lighter = Math.max(luminance(fg), luminance(bg));
+        const darker = Math.min(luminance(fg), luminance(bg));
+        return (lighter + 0.05) / (darker + 0.05);
+      }
+      const body = getComputedStyle(document.body).backgroundColor;
+      const title = getComputedStyle(document.querySelector('.packages-hero h1')).color;
+      const intro = getComputedStyle(document.querySelector('.hero-intro')).color;
+      const card = document.querySelector('.product-shell');
+      const cardStyle = getComputedStyle(card);
+      const summaryStyle = getComputedStyle(card.querySelector('.product-summary'));
+      const shortcut = document.querySelector('.flexible-purchase-shortcuts a');
+      const shortcutStyle = getComputedStyle(shortcut);
+      return {
+        titleContrast: contrast(title, body),
+        introContrast: contrast(intro, body),
+        cardSummaryContrast: contrast(summaryStyle.color, cardStyle.backgroundColor),
+        shortcutContrast: contrast(shortcutStyle.color, shortcutStyle.backgroundColor),
+        shortcutHeight: shortcut.getBoundingClientRect().height,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth,
+      };
+    });
+    expect(colours.titleContrast).toBeGreaterThanOrEqual(4.5);
+    expect(colours.introContrast).toBeGreaterThanOrEqual(4.5);
+    expect(colours.cardSummaryContrast).toBeGreaterThanOrEqual(4.5);
+    expect(colours.shortcutContrast).toBeGreaterThanOrEqual(4.5);
+    expect(colours.shortcutHeight).toBeGreaterThanOrEqual(44);
+    expect(colours.scrollWidth).toBeLessThanOrEqual(colours.viewportWidth);
   });
 });

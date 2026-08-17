@@ -79,6 +79,8 @@ Why not just set `chargeable` immediately on the late-cancel? Because the calend
 
 For instructor-managed cross-instructor reschedules, the old-row transition, replacement booking, and migration 042 funding/BCS transfer are one transaction. The old booking is terminal and cannot become payable; the replacement booking's `instructor_id` identifies the delivering instructor and therefore owns normal Friday payout eligibility after it becomes `chargeable`.
 
+For learner-managed Flexible Hours reschedules at 48+ hours, the old-row transition, exact append-only allocation returns, identical replacement allocations, and replacement booking are one transaction. The frozen pence contribution is not repriced. Flexible Hours are school-wide, so the replacement may use another eligible same-school instructor; active Lesson Credit attribution on the same booking is rejected as mixed funding.
+
 **`credit_forfeited = TRUE` (writes):**
 - `api/slots.js` — learner cancel <48h (only writer)
 

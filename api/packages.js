@@ -57,6 +57,10 @@ function errorResponse(res, status, code, message) {
   return res.status(status).json({ error: true, code, message });
 }
 
+function isMissingFlexibleSchemaError(error) {
+  return error?.code === '42P01' || error?.code === '42703';
+}
+
 function requireMethod(req, res, method) {
   if (req.method === method) return true;
   errorResponse(res, 405, 'METHOD_NOT_ALLOWED', `${method} required`);
@@ -301,6 +305,11 @@ async function handleCatalogue(req, res) {
     if (!isLearnerPackagesEnabled(schoolRow.config)) {
       return errorResponse(res, 404, FEATURE_DISABLED_CODE, 'Packages are not available for this school');
     }
+    const configuredPayAsYouGoHourlyPence = Number(schoolRow.config?.pricing?.bulk_hourly_pence);
+    const payAsYouGoHourlyPence = Number.isInteger(configuredPayAsYouGoHourlyPence)
+      && configuredPayAsYouGoHourlyPence > 0
+      ? configuredPayAsYouGoHourlyPence
+      : null;
 
     const products = await loadPublicProducts(sql, school.schoolId);
     const session = decodeToken(req, { preferredCookies: [SESSION_COOKIE_NAMES.learner] });
@@ -318,6 +327,7 @@ async function handleCatalogue(req, res) {
     let hasActiveEnrolment = false;
     let pilotAccessApproved = false;
     let learnerDisplayName = null;
+    let flexibleRemainingMinutes = 0;
     if (sameSchoolLearner) {
       const [learnerViewer] = await sql`
         SELECT name FROM learner_users
@@ -325,6 +335,18 @@ async function handleCatalogue(req, res) {
          LIMIT 1
       `;
       learnerDisplayName = learnerViewer?.name || null;
+      try {
+        const [flexibleBalance] = await sql`
+          SELECT remaining_minutes
+            FROM flexible_package_balances
+           WHERE school_id = ${school.schoolId}
+             AND learner_id = ${sameSchoolLearner.id}
+           LIMIT 1
+        `;
+        flexibleRemainingMinutes = Number(flexibleBalance?.remaining_minutes || 0);
+      } catch (error) {
+        if (!isMissingFlexibleSchemaError(error)) throw error;
+      }
       const testBookings = await sql`
         SELECT id, verification_status, test_date, test_time, test_centre, verified_at,
                (((test_date + test_time) AT TIME ZONE ${schoolTimezone}) > NOW()) AS is_future
@@ -360,10 +382,12 @@ async function handleCatalogue(req, res) {
       ok: true,
       phase: purchasingEnabled ? 'full_curriculum_test_foundation' : 'catalogue_only',
       school: { id: schoolRow.id, slug: schoolRow.slug, name: schoolRow.name },
+      pricing: { pay_as_you_go_hourly_pence: payAsYouGoHourlyPence },
       viewer: {
         signed_in_as_learner: !!sameSchoolLearner,
         learner_id: sameSchoolLearner?.id || null,
         learner_name: learnerDisplayName,
+        flexible_hours_remaining_minutes: flexibleRemainingMinutes,
       },
       checkout_available: purchasingEnabled && !!sameSchoolLearner
         && latestTestBooking?.verification_status === 'verified'
@@ -395,6 +419,12 @@ async function handleCatalogue(req, res) {
                   state: 'authentication_required', purchase_eligible: false, checkout_available: false,
                   reason: 'Sign in as the learner who will own these school-wide hours.',
                 }
+              : flexibleRemainingMinutes > 0
+                ? {
+                    state: 'existing_flexible_balance', purchase_eligible: false, checkout_available: false,
+                    reason: 'Use the existing Flexible Hours balance before buying another package.',
+                    remaining_minutes: flexibleRemainingMinutes,
+                  }
               : !flexibleTerms
                 ? {
                     state: 'consumer_terms_not_ready', purchase_eligible: false, checkout_available: false,

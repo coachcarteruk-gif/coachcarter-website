@@ -12,6 +12,7 @@
   var pollTimer = null;
   var pollStartedAt = 0;
   var catalogueViewer = null;
+  var cataloguePricing = {};
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -48,9 +49,7 @@
           hours + ' lesson hours',
           formatPrice(hourlyPence, product.currency) + ' per hour',
           'Use with any available CoachCarter instructor',
-          'No expiry',
-          'Book in 30-minute steps',
-          'Cannot be transferred to another learner'
+          'No expiry'
         ]
       };
     }
@@ -106,14 +105,20 @@
       return {
         label: 'Available now', tone: 'is-available',
         note: product.product_type === 'flexible_hours'
-          ? 'Available now with Pay by Bank. Your hours will appear after your bank confirms the payment.'
+          ? ''
           : 'Available to eligible learners after the checks shown below.'
       };
     }
     if (eligibility.state === 'authentication_required' && product.product_type === 'flexible_hours') {
       return {
         label: 'Available now', tone: 'is-available',
-        note: 'Available now with Pay by Bank. Sign in as the learner who will use the hours.'
+        note: ''
+      };
+    }
+    if (eligibility.state === 'existing_flexible_balance') {
+      return {
+        label: 'Hours ready to use', tone: 'is-available',
+        note: 'Use your current Flexible Hours before buying another package. This keeps each package price and refund value clear.'
       };
     }
     if (eligibility.state === 'already_enrolled') {
@@ -161,21 +166,55 @@
     }).join('') + '</ul>';
   }
 
+  function renderProductPrice(product) {
+    var price = '<div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '</div>';
+    if (product.product_type !== 'flexible_hours') return price;
+
+    var entitlement = product.content && product.content.entitlement || {};
+    var hours = Number(entitlement.hours || 0);
+    var payAsYouGoHourlyPence = Number(cataloguePricing.pay_as_you_go_hourly_pence || 0);
+    var payAsYouGoTotalPence = Math.round(hours * payAsYouGoHourlyPence);
+    var savingPence = payAsYouGoTotalPence - Number(product.price_pence || 0);
+    if (!(hours > 0 && payAsYouGoHourlyPence > 0 && savingPence > 0)) return price;
+
+    return price + '<div class="product-price-comparison">' +
+      '<span class="price-was">Pay As You Go <s>' + escapeHtml(formatPrice(payAsYouGoTotalPence, product.currency)) + '</s></span>' +
+      '<strong class="price-saving">Save ' + escapeHtml(formatPrice(savingPence, product.currency)) + '</strong>' +
+    '</div>';
+  }
+
+  function flexibleBookLabel(product) {
+    var entitlement = product.content && product.content.entitlement || {};
+    var hours = Number(entitlement.hours || 0);
+    return hours > 0 ? 'Book ' + formatHours(hours * 60) + 'hrs' : 'Book Flexible Hours';
+  }
+
+  function canStartFlexiblePurchase(product) {
+    var eligibility = product.eligibility || {};
+    return eligibility.checkout_available === true || eligibility.state === 'authentication_required';
+  }
+
+  function renderFlexiblePurchaseShortcuts(products) {
+    return products.filter(canStartFlexiblePurchase).map(function (product) {
+      var label = flexibleBookLabel(product);
+      return '<a href="#product-card-' + escapeHtml(product.id) + '" data-flexible-shortcut="' + escapeHtml(product.id) + '" aria-label="' + escapeHtml(label + ' Flexible Hours package') + '">' + escapeHtml(label) + '</a>';
+    }).join('');
+  }
+
   function actionButton(product, locked, describedBy) {
     var eligibility = product.eligibility || {};
     if (eligibility.checkout_available) {
       var rights = product.consumer_rights || {};
       if (product.product_type === 'flexible_hours') {
         var entitlement = product.content && product.content.entitlement || {};
-        return '<details class="purchase-review"><summary>Review and buy</summary>' +
+        return '<details class="purchase-review" id="flexible-purchase-' + escapeHtml(product.id) + '" data-flexible-purchase-panel="' + escapeHtml(product.id) + '"><summary>' + escapeHtml(flexibleBookLabel(product)) + '</summary>' +
           '<div class="consumer-checkout flexible-checkout" data-flexible-checkout-panel="' + escapeHtml(product.id) + '">' +
             '<p class="checkout-owner"><strong>Buying for:</strong> ' + escapeHtml(catalogueViewer && catalogueViewer.learner_name || 'your signed-in learner account') + '</p>' +
             '<p><strong>' + escapeHtml(entitlement.hours || '') + ' hours for ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '.</strong> Pay by Bank only. The hours do not expire and cannot be transferred.</p>' +
-            '<p>You have 14 days to cancel. If you ask for immediate access, we may deduct hours you use or lose through a cancellation with less than 48 hours\' notice. Any unused hours are refunded at the rate paid, and CoachCarter absorbs the original payment fee.</p>' +
-            '<p class="checkout-prompt"><strong>Please confirm each point before paying:</strong></p>' +
+            '<p>You have 14 days to cancel. Your hours become available as soon as payment is confirmed. We may deduct hours you use or lose through a cancellation with less than 48 hours\' notice. Any unused hours are refunded at the rate paid, and CoachCarter absorbs the original payment fee.</p>' +
+            '<p class="checkout-prompt"><strong>Please confirm before paying:</strong></p>' +
             '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
-            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
-            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="immediate_access_requested"> ' + escapeHtml(rights.immediate_access_request || '') + '</label>' +
+            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml((rights.checkout_acknowledgement || '') + ' ' + (rights.immediate_access_request || '')) + '</label>' +
             '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' by bank</button>' +
           '</div>' +
         '</details>';
@@ -194,6 +233,9 @@
     }
     if (eligibility.state === 'authentication_required') {
       return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">' + (product.product_type === 'flexible_hours' ? 'Sign in to buy' : 'Sign in to check eligibility') + '</button>';
+    }
+    if (eligibility.state === 'existing_flexible_balance') {
+      return '<a class="product-action is-purchasable" href="/learner/book.html" aria-describedby="' + describedBy + '">Book with your Flexible Hours</a>';
     }
     if (eligibility.state === 'verification_pending') {
       return '<button type="button" class="product-action" disabled aria-describedby="' + describedBy + '">Verification pending</button>';
@@ -220,25 +262,29 @@
     var availability = customerAvailability(product);
     var locked = false;
     var descriptionId = 'product-disclosure-' + escapeHtml(product.slug);
+    var summaryId = 'product-summary-' + escapeHtml(product.slug);
     var lockId = 'product-lock-' + escapeHtml(product.slug);
     var label = options.label || 'Package option';
     var lockCopy = locked
       ? '<p class="lock-explanation" id="' + lockId + '"><strong>Why this is locked:</strong> ' + escapeHtml(eligibility.reason) + '</p>'
       : '';
-    var describedBy = locked ? lockId + ' ' + descriptionId : descriptionId;
     var disclosure = availability.note;
+    var describedBy = [summaryId, locked ? lockId : '', disclosure ? descriptionId : ''].filter(Boolean).join(' ');
+    var disclosureCopy = disclosure
+      ? '<p class="version-note" id="' + descriptionId + '">' + escapeHtml(disclosure) + '</p>'
+      : '';
 
-    return '<article class="product-shell' + (locked ? ' locked' : '') + '">' +
+    return '<article class="product-shell' + (locked ? ' locked' : '') + '" id="product-card-' + escapeHtml(product.id) + '">' +
       '<div class="product-main">' +
         '<div class="product-topline"><div>' +
           '<p class="product-label">' + escapeHtml(label) + '</p>' +
           '<h3>' + escapeHtml(content.name || product.slug) + '</h3>' +
-          '<p class="product-summary">' + escapeHtml(content.summary || '') + '</p>' +
-        '</div><div class="product-price-group"><div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '</div><span class="availability-pill ' + escapeHtml(availability.tone) + '">' + escapeHtml(availability.label) + '</span></div></div>' +
+          '<p class="product-summary" id="' + summaryId + '">' + escapeHtml(content.summary || '') + '</p>' +
+        '</div><div class="product-price-group">' + renderProductPrice(product) + '<span class="availability-pill ' + escapeHtml(availability.tone) + '">' + escapeHtml(availability.label) + '</span></div></div>' +
         renderList(content.highlights) + lockCopy +
       '</div>' +
       '<div class="product-footer">' +
-        '<p class="version-note" id="' + descriptionId + '">' + escapeHtml(disclosure) + '</p>' +
+        disclosureCopy +
         actionButton(product, locked, describedBy) +
       '</div>' +
     '</article>';
@@ -289,6 +335,7 @@
 
   function renderCatalogue(data) {
     catalogueViewer = data.viewer || null;
+    cataloguePricing = data.pricing || {};
     var products = Array.isArray(data.products) ? data.products : [];
     var flexible = products.filter(function (product) { return product.product_type === 'flexible_hours'; });
     var curriculum = products.filter(function (product) { return product.product_type === 'full_curriculum'; });
@@ -309,14 +356,6 @@
     document.getElementById('packages-hero-intro').textContent = flexible.length
       ? 'Buy Flexible Hours upfront and use them with any available CoachCarter instructor. You can also see any other learning packages currently in the catalogue.'
       : 'Compare the CoachCarter learning packages currently shown below.';
-    document.getElementById('packages-availability-heading').textContent = flexible.length && flexibleLive
-      ? 'Available now'
-      : 'Current catalogue';
-    document.getElementById('packages-availability-copy').textContent = flexible.length
-      ? (flexibleLive
-          ? 'Choose ' + flexibleChoice + ' Flexible Hours and pay securely by bank.'
-          : flexibleChoice + ' Flexible Hours are shown below for comparison.')
-      : 'See the package options currently shown below.';
     document.getElementById('flexible-section-kicker').textContent = flexibleLive ? 'Available now' : 'Not currently available';
     document.getElementById('flexible-section-copy').textContent = flexible.length
       ? 'Buy ' + flexibleChoice + ' hours upfront. Use them with any available CoachCarter instructor, book in 30-minute steps and take as long as you need.'
@@ -326,6 +365,9 @@
     document.getElementById('full-curriculum-section').hidden = !curriculum.length;
     document.getElementById('manoeuvres-section').hidden = !manoeuvres.length;
     document.getElementById('flexible-truth-panel').hidden = !flexible.length;
+    var flexibleShortcuts = document.getElementById('flexible-purchase-shortcuts');
+    flexibleShortcuts.innerHTML = renderFlexiblePurchaseShortcuts(flexible);
+    flexibleShortcuts.hidden = !flexibleShortcuts.innerHTML;
 
     document.getElementById('flexible-products').innerHTML = flexible.map(function (product) {
       var hours = Number(product.content && product.content.entitlement && product.content.entitlement.hours || 0);
@@ -429,9 +471,8 @@
     var panel = button.closest('[data-flexible-checkout-panel]');
     var termsAccepted = Boolean(panel && panel.querySelector('[name="consumer_terms_accepted"]:checked'));
     var adultAgeConfirmed = Boolean(panel && panel.querySelector('[name="adult_age_confirmed"]:checked'));
-    var immediateAccessRequested = Boolean(panel && panel.querySelector('[name="immediate_access_requested"]:checked'));
-    if (!termsAccepted || !adultAgeConfirmed || !immediateAccessRequested) {
-      showPurchaseStatus('Please complete the checks', 'Confirm you are 18 or over, accept the terms and request immediate access before paying.', 'is-failed', true);
+    if (!termsAccepted || !adultAgeConfirmed) {
+      showPurchaseStatus('Please complete the checks', 'Confirm you are 18 or over and accept the Flexible Hours terms before paying.', 'is-failed', true);
       return;
     }
     var original = button.textContent;
@@ -538,7 +579,8 @@
         return;
       }
       target.hidden = false;
-      target.innerHTML = '<strong>Your Flexible Hours:</strong> ' + escapeHtml(hours.toFixed(1).replace(/\.0$/, '')) + ' hours remaining.';
+      target.innerHTML = '<span><strong>Your Flexible Hours:</strong> ' + escapeHtml(hours.toFixed(1).replace(/\.0$/, '')) + ' hours remaining.</span>' +
+        '<a href="/learner/book.html">Book with your Flexible Hours</a>';
     } catch (_) {}
   }
 
@@ -767,6 +809,22 @@
   });
 
   contentEl.addEventListener('click', function (event) {
+    var flexibleShortcut = event.target.closest('[data-flexible-shortcut]');
+    if (flexibleShortcut) {
+      event.preventDefault();
+      var productId = flexibleShortcut.getAttribute('data-flexible-shortcut');
+      var productCard = document.getElementById('product-card-' + productId);
+      if (!productCard) return;
+      var purchasePanel = productCard.querySelector('[data-flexible-purchase-panel]');
+      if (purchasePanel) purchasePanel.open = true;
+      productCard.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center'
+      });
+      var focusTarget = purchasePanel ? purchasePanel.querySelector('summary') : productCard.querySelector('button, a');
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
+      return;
+    }
     var flexibleCheckout = event.target.closest('[data-flexible-checkout]');
     if (flexibleCheckout) { startFlexibleCheckout(flexibleCheckout); return; }
     var checkout = event.target.closest('[data-package-checkout]');

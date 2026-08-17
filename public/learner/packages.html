@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/shared/brand-tokens.css">
   <link rel="stylesheet" href="/shared/learner.css">
   <link rel="stylesheet" href="/learner/packages.css">
+  <script src="/shared/dark-mode.js"></script>
   <script src="/cookie-consent.js"></script>
   <script src="/posthog-loader.js"></script>
   <script src="/shared/branding.js"></script>
@@ -26,10 +27,6 @@
         <p class="hero-intro" id="packages-hero-intro">Buy Flexible Hours upfront and use them with any available CoachCarter instructor. You can also see the other learning packages we are developing.</p>
         <a class="lessons-link" href="/learner/book.html"><span>Not ready to buy a block?</span><strong>Book a Pay As You Go lesson</strong></a>
       </div>
-      <aside class="comparison-note" aria-label="Package availability at a glance">
-        <div><span class="comparison-index">01</span><h2 id="packages-availability-heading">Available now</h2><p id="packages-availability-copy">Choose 15 or 30 Flexible Hours and pay securely by bank.</p></div>
-        <div><span class="comparison-index">02</span><h2>Prefer one-off lessons?</h2><p>Choose a time, lesson length and instructor, then pay for that lesson only.</p></div>
-      </aside>
     </section>
 
     <section id="catalogue-status" class="catalogue-status" role="status" aria-live="polite" aria-atomic="true">
@@ -77,10 +74,11 @@
           <p><strong>Pay by Bank only.</strong> You will leave CoachCarter briefly to approve the payment with your bank.</p>
           <p><strong>We will confirm your payment.</strong> This is normally quick, but please allow up to 24 hours. If it is still pending, do not pay again&mdash;contact us and we will check it.</p>
           <p><strong>Your hours are flexible.</strong> They do not expire and can be used with any available CoachCarter instructor, but they cannot be transferred to another learner.</p>
-          <p><strong>Your cancellation rights still apply.</strong> You have 14 days to cancel. Once you ask for immediate access, hours you use or lose through a late cancellation may be deducted; unused hours are refunded at the rate paid.</p>
+          <p><strong>Your cancellation rights still apply.</strong> You have 14 days to cancel and your hours become available as soon as payment is confirmed. Hours you use or lose through a late cancellation may be deducted; unused hours are refunded at the rate paid.</p>
           <p><strong>Existing Lesson Credit is unchanged.</strong> Any Lesson Credit already on your account remains available under its current rules.</p>
         </div>
       </section>
+      <nav id="flexible-purchase-shortcuts" class="flexible-purchase-shortcuts" aria-label="Book Flexible Hours" hidden></nav>
 
       <footer class="packages-footer-cta">
         <div><p class="section-kicker">Want to keep it simple?</p><h2>Book one lesson at a time.</h2></div>

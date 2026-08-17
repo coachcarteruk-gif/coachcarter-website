@@ -353,11 +353,118 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
   });
 }
 
+async function moveFlexiblePackageBookingAllocations(client, {
+  learnerId,
+  schoolId,
+  oldBookingId,
+  newBookingId,
+  newInstructorId,
+}) {
+  const oldBooking = await client.query(
+    `SELECT id, instructor_id, minutes_deducted, status
+       FROM lesson_bookings
+      WHERE id = $1 AND learner_id = $2 AND school_id = $3
+      FOR UPDATE`,
+    [oldBookingId, learnerId, schoolId]
+  );
+  const newBooking = await client.query(
+    `SELECT id, instructor_id, minutes_deducted, status
+       FROM lesson_bookings
+      WHERE id = $1 AND learner_id = $2 AND school_id = $3`,
+    [newBookingId, learnerId, schoolId]
+  );
+  const mixedFunding = await client.query(
+    `SELECT 1
+       FROM booking_credit_sources
+      WHERE booking_id = $1 AND school_id = $2 AND refunded_at IS NULL
+      LIMIT 1`,
+    [oldBookingId, schoolId]
+  );
+  if (!oldBooking.rowCount || oldBooking.rows[0].status !== SCHEDULED) {
+    abort({ code: 'BOOKING_CHANGED', message: 'This lesson is no longer available to reschedule.' });
+  }
+  if (!newBooking.rowCount
+      || Number(newBooking.rows[0].instructor_id) !== Number(newInstructorId)
+      || newBooking.rows[0].status !== SCHEDULED) {
+    abort({ code: 'FLEXIBLE_REPLACEMENT_BOOKING_MISMATCH', message: 'The replacement lesson could not be verified safely.' });
+  }
+  if (mixedFunding.rowCount) {
+    abort({ code: 'FLEXIBLE_MIXED_FUNDING_CONTRADICTION', message: 'A Flexible Hours lesson cannot also use Lesson Credit.' });
+  }
+
+  const allocations = await client.query(
+    `SELECT a.id, a.source_id, a.units_allocated, a.unit_minutes,
+            a.rate_pence_per_unit, a.contribution_pence
+       FROM flexible_package_booking_allocations a
+      WHERE a.booking_id = $1 AND a.school_id = $2 AND a.learner_id = $3
+        AND NOT EXISTS (
+          SELECT 1 FROM flexible_package_allocation_returns returned
+           WHERE returned.allocation_id = a.id AND returned.school_id = a.school_id
+        )
+      ORDER BY a.id
+      FOR SHARE OF a`,
+    [oldBookingId, schoolId, learnerId]
+  );
+  if (!allocations.rowCount) {
+    abort({ code: 'NOT_FLEXIBLE_PACKAGE_BOOKING', message: 'No active Flexible Hours allocation was found.' });
+  }
+
+  const units = allocations.rows.reduce((sum, row) => sum + Number(row.units_allocated), 0);
+  const minutes = allocations.rows.reduce(
+    (sum, row) => sum + Number(row.units_allocated) * Number(row.unit_minutes),
+    0
+  );
+  const contributionPence = allocations.rows.reduce(
+    (sum, row) => sum + Number(row.contribution_pence),
+    0
+  );
+  if (minutes !== Number(oldBooking.rows[0].minutes_deducted)
+      || minutes !== Number(newBooking.rows[0].minutes_deducted)) {
+    abort({ code: 'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION', message: 'The Flexible Hours value does not match the lesson duration.' });
+  }
+
+  for (const allocation of allocations.rows) {
+    await client.query(
+      `INSERT INTO flexible_package_allocation_returns (
+         school_id, allocation_id, booking_id, units_returned, reason
+       ) VALUES ($1,$2,$3,$4,'rescheduled_48h_plus')`,
+      [schoolId, allocation.id, oldBookingId, allocation.units_allocated]
+    );
+    await client.query(
+      `INSERT INTO flexible_package_booking_allocations (
+         school_id, learner_id, source_id, booking_id, instructor_id,
+         units_allocated, unit_minutes, rate_pence_per_unit, contribution_pence
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        schoolId, learnerId, allocation.source_id, newBookingId, newInstructorId,
+        allocation.units_allocated, allocation.unit_minutes,
+        allocation.rate_pence_per_unit, allocation.contribution_pence,
+      ]
+    );
+  }
+  await client.query(
+    `INSERT INTO flexible_package_state_events (
+       school_id, learner_id, event_type, booking_id, detail
+     ) VALUES ($1,$2,'booking_rescheduled',$3,$4::jsonb)`,
+    [schoolId, learnerId, newBookingId, JSON.stringify({
+      old_booking_id: Number(oldBookingId),
+      old_instructor_id: Number(oldBooking.rows[0].instructor_id),
+      new_instructor_id: Number(newInstructorId),
+      units,
+      unit_minutes: FLEXIBLE_UNIT_MINUTES,
+      contribution_pence: contributionPence,
+      notice_rule: '48h_plus',
+    })]
+  );
+  return { units, minutes, contributionPence };
+}
+
 module.exports = {
   FLEXIBLE_UNIT_MINUTES,
   bookFlexiblePackageSlotTransaction,
   cancelFlexiblePackageBookingTransaction,
   hoursUntilFlexibleLesson,
+  moveFlexiblePackageBookingAllocations,
   planFlexiblePackageFifo,
   unitsForDuration,
 };
