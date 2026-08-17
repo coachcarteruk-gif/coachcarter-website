@@ -21,26 +21,27 @@ test.describe('learner booking availability filter', () => {
     expect(html).toContain('id="availabilityFilterWrap" hidden');
     expect(html).toContain('id="availabilityFilter"');
     expect(html).toContain('Only show times I&rsquo;m usually free');
-    expect(html).toContain('href="/learner/availability.html"');
+    expect(html).toContain('href="/learner/profile.html#availability"');
     expect(js).toContain("let availabilityFilterMode = localStorage.getItem('cc_booking_availability_filter') === '1';");
     expect(js).toContain("if (availabilityFilter) availabilityFilter.addEventListener('change', onAvailabilityFilterChange);");
   });
 
-  test('exposes availability as its own learner page and top-level nav item', () => {
+  test('keeps availability inside Profile and out of top-level navigation', () => {
     const availabilityHtml = read('public/learner/availability.html');
     const availabilityJs = read('public/learner/availability.js');
     const profileHtml = read('public/learner/profile.html');
     const sidebar = read('public/sidebar.js');
 
-    expect(availabilityHtml).toContain('<title>My Availability - CoachCarter</title>');
-    expect(availabilityHtml).toContain('id="availDays"');
-    expect(availabilityHtml).toContain('id="btnSaveAvail"');
+    expect(availabilityHtml).toContain('/learner/profile.html#availability');
     expect(availabilityJs).toContain('/api/learner?action=my-availability');
     expect(availabilityJs).toContain('/api/learner?action=set-availability');
-    expect(profileHtml).not.toContain('href="/learner/availability.html"');
-    expect(profileHtml).not.toContain('id="availDays"');
-    expect(sidebar).toContain("label: 'Availability', href: '/learner/availability.html', authOnly: true");
-    expect(sidebar).toContain("{ icon: 'clock', label: 'Availability', href: '/learner/availability.html'");
+    expect(profileHtml).toContain('id="availability"');
+    expect(profileHtml).toContain('id="availDays"');
+    expect(profileHtml).toContain('id="btnSaveAvail"');
+    expect(profileHtml).toContain('src="/learner/availability.js"');
+    expect(sidebar).not.toContain("label: 'Availability', href: '/learner/availability.html', authOnly: true");
+    expect(sidebar).toContain("label: 'Profile', href: '/learner/profile.html'");
+    expect(sidebar).toContain("activeOn: ['/learner/availability']");
   });
 
   test('filters only the client-side slot cache and keeps the server request contract unchanged', () => {

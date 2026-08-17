@@ -10,13 +10,13 @@ The site is designed as an app experience.
 
 ## Mobile layout
 
-Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that never change.
+Top header bar with hamburger to open the sidebar. Each role has a fixed bottom bar for its primary destinations.
 
 ## Learner — fixed bottom tabs
 
-**Home | Lessons | Practice | Learn | Profile**
+**Lessons | Driving Test | Profile**
 
-- Each tab links to the first page in that group (Home → dashboard, Lessons → book, Practice → log-session, Learn → videos)
+- Availability is managed inside the Profile page rather than taking a separate tab.
 - Active tab highlights orange based on which section the current page belongs to
 - Subsection navigation (e.g. Book vs Upcoming) via the sidebar collapsible groups
 
@@ -25,12 +25,11 @@ Top header bar with hamburger to open sidebar. Fixed bottom bar with 5 tabs that
 - Dashboard (standalone)
 - Lessons → Book, Upcoming
 - Packages (top-level public comparison page; rendered only when the resolved school's strict `learner_packages_enabled` Boolean is true)
-- Practice → Log Session, Mock Test, My Progress
-- Learn → Videos, Examiner AI, Quiz
-- My Profile (standalone, auth-gated)
+- Driving Test (standalone, auth-gated)
+- My Profile (standalone, auth-gated; includes the learner's usual availability)
 - Accordion behaviour — one group open at a time; auto-expands to current section on page load
 
-`Packages` opens `/learner/packages.html`. It is deliberately separate from Lessons and from the read-only `/learner/buy-credits.html` compatibility page. Lessons and Packages cross-link prominently. The fixed learner bottom bar is unchanged; Packages remains a hamburger/sidebar destination on mobile.
+`Packages` opens `/learner/packages.html`. It is deliberately separate from Lessons and from the read-only `/learner/buy-credits.html` compatibility page. Lessons and Packages cross-link prominently. Packages remains a hamburger/sidebar destination on mobile.
 
 ## Instructor — fixed bottom tabs
 

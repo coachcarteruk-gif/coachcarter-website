@@ -1639,7 +1639,7 @@ function renderFeed() {
           <p>Show all slots or update your usual free times.</p>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px">
             <button class="btn-primary" type="button" data-action="clear-availability-filter">Show all slots</button>
-            <a class="availability-filter-link" href="/learner/availability.html">Update availability</a>
+            <a class="availability-filter-link" href="/learner/profile.html#availability">Update availability</a>
           </div>
         </div>`;
       updateFeedFooter(0);
