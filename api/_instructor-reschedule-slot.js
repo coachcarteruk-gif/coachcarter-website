@@ -241,10 +241,9 @@ async function validateInstructorRescheduleSlot(sql, {
 
   const startDateTime = slotDateTime(newDate, newStartTime);
   if (startDateTime <= now) conflict('SLOT_ALREADY_STARTED', 'That slot has already started.', 400);
-  const noticeHours = (startDateTime.getTime() - now.getTime()) / 3600000;
-  if (noticeHours < Math.max(0, Number(targetInstructor.min_booking_notice_hours || 0))) {
-    conflict('MINIMUM_NOTICE', 'That slot is inside the selected instructor\'s minimum booking notice.', 409);
-  }
+  // This validator is exclusive to authenticated instructor reschedules.
+  // Minimum booking notice controls learner self-service, not an instructor
+  // deliberately moving an existing lesson into a nearer future slot.
 
   const oldDate = String(booking.scheduled_date || '').slice(0, 10);
   const oldStart = String(booking.start_time || '').slice(0, 5);
