@@ -132,6 +132,32 @@ test.describe('instructor lesson transfer', () => {
     }
   });
 
+  test('instructor reschedules can override the destination instructor minimum booking notice', async () => {
+    const { validateInstructorRescheduleSlot } = require('../api/_instructor-reschedule-slot');
+    const sql = mockSql(query => {
+      if (query.includes('FROM instructors')) {
+        return [targetInstructor({ min_booking_notice_hours: 48 })];
+      }
+      if (query.includes('FROM instructor_availability') && !query.includes('overrides')) {
+        return [{ start_time: '08:00:00', end_time: '18:00:00', transmission_type: 'both' }];
+      }
+      return [];
+    });
+
+    const result = await validateInstructorRescheduleSlot(sql, {
+      schoolId: 1,
+      booking: booking(),
+      targetInstructorId: 6,
+      newDate: '2026-08-11',
+      newStartTime: '10:00',
+      now: new Date('2026-08-10T08:00:00Z'),
+      geocode: async () => ({}),
+    });
+
+    expect(result.newEndTime).toBe('11:30');
+    expect(result.targetInstructor.min_booking_notice_hours).toBe(48);
+  });
+
   test('reserved weekly lessons cannot switch instructor', async () => {
     const { validateInstructorRescheduleSlot } = require('../api/_instructor-reschedule-slot');
     const sql = mockSql(query => query.includes('FROM instructors') ? [targetInstructor()] : []);
