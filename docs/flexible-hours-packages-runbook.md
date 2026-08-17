@@ -13,9 +13,11 @@ Full Curriculum remains test-only and isolated. Do not reuse its restricted key,
 | 15-hour Flexible Hours | £810 | 30 × 30 minutes | £27.00 |
 | 30-hour Flexible Hours | £1,590 | 60 × 30 minutes | £26.50 |
 
-Hours are school-wide, do not expire and cannot transfer to another learner. FIFO allocation preserves the immutable source. A booking carries its delivering instructor and frozen allocated value into the normal scheduled/chargeable/refunded payout lifecycle. Purchase alone creates no earning or payout.
+Hours are school-wide, do not expire and cannot transfer to another learner. Learners must use their spendable balance before starting another package Checkout. FIFO allocation still preserves every immutable source if historical returns or late payment success make sources coexist. A booking carries its delivering instructor and frozen allocated value into the normal scheduled/chargeable/refunded payout lifecycle. Purchase alone creates no earning or payout.
 
-At 48+ hours, learner cancellation returns each exact allocation once. Under 48 hours/no-show consumes it and leaves the booking payable. Durations not divisible by 30 minutes fail closed. Unused source units are refunded at their frozen rate; CoachCarter absorbs the original Stripe fee.
+Each booking uses Flexible Hours, Lesson Credit or Pay As You Go, never a blend. At 48+ hours, learner cancellation returns each exact allocation once. A 48+ hour reschedule atomically moves the exact allocation and frozen value to the replacement lesson, including a different active same-school instructor. Under 48 hours/no-show consumes it and leaves the booking payable. Durations not divisible by 30 minutes fail closed. Unused source units are refunded at their frozen rate; CoachCarter absorbs the original Stripe fee.
+
+Every learner receives access as soon as signed payment confirmation creates the entitlement. The checkout page presents the immediate-access request inside the single combined terms acceptance and records `terms_accepted = TRUE` plus `immediate_access_requested = TRUE`; do not remove that wording or evidence when simplifying the UI.
 
 ## Separate live Stripe prerequisites
 
@@ -33,16 +35,18 @@ The code rejects absent identities and known shared/test identities. It omits `p
 
 ## Approved rollout order
 
-1. Review migration 050 and the money-flow diff.
-2. Apply and verify it only on the confirmed disposable Neon branch.
+1. Review migrations 050 and 051 and the money-flow diff.
+2. Apply and verify them only on the confirmed disposable Neon branch.
 3. Run syntax, focused unit/contract tests and the gated fresh-schema integration suite.
 4. Configure and inspect the three dedicated live Stripe resources while the school gate remains false.
 5. Confirm current immutable versions, School 1 scope, signature rejection, replay, late success, failure/expiry and return-page non-fulfilment.
 6. Confirm a purchase creates exactly one purchase/source and no earning/payout row.
 7. Confirm a same-school instructor booking consumes FIFO units, stores frozen `list_price_pence`, and rejects another school/inactive instructor and incompatible duration.
 8. Confirm 48+ cancellation returns exact allocations once and under-48 cancellation remains scheduled/payable.
-9. Confirm admin reconciliation, GDPR export/anonymisation and manual original-method refund evidence.
-10. Only after separate explicit approval, set exact Boolean School 1 feature `learner_flexible_package_purchasing_live_enabled` to `true` through a controlled configuration change. There is intentionally no admin-page setter.
+9. Confirm a 48+ reschedule moves the exact allocation to the replacement booking, including a same-school instructor switch, and refuses mixed Lesson Credit funding.
+10. Confirm a positive spendable balance blocks another Checkout while the learner can still open the booking calendar.
+11. Confirm admin reconciliation, GDPR export/anonymisation and manual original-method refund evidence.
+12. Only after separate explicit approval, set exact Boolean School 1 feature `learner_flexible_package_purchasing_live_enabled` to `true` through a controlled configuration change. There is intentionally no admin-page setter.
 
 ## Refund operation
 

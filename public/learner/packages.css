@@ -9,7 +9,7 @@
 body { background: var(--packages-paper); color: var(--packages-ink); overflow-x: hidden; }
 .packages-page [hidden] { display: none !important; }
 .packages-page { max-width: 1240px; margin: 0 auto; padding: 44px 46px 90px; }
-.packages-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, .78fr); gap: 72px; align-items: end; padding: 24px 0 52px; border-bottom: 1px solid var(--packages-line); }
+.packages-hero { display: grid; grid-template-columns: 1fr; padding: 24px 0 52px; border-bottom: 1px solid var(--packages-line); }
 .packages-hero-copy { max-width: 710px; }
 .eyebrow, .section-kicker { color: var(--packages-orange); font-size: .72rem; line-height: 1; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .packages-hero h1 { max-width: 680px; margin: 14px 0 22px; font-family: var(--font-head); font-size: clamp(3.1rem, 6.5vw, 5.8rem); line-height: .92; letter-spacing: -.06em; text-wrap: balance; }
@@ -19,11 +19,6 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
 .lessons-link strong { font-family: var(--font-head); font-size: .96rem; }
 .lessons-link:hover { transform: translateY(-2px); border-color: var(--packages-orange); background: #fffaf5; }
 .lessons-link:active, .packages-footer-cta a:active { transform: translateY(1px); }
-.comparison-note { border-top: 3px solid var(--packages-ink); }
-.comparison-note > div { display: grid; grid-template-columns: 36px 1fr; column-gap: 14px; padding: 22px 4px; border-bottom: 1px solid var(--packages-line); }
-.comparison-index { grid-row: 1 / 3; color: var(--packages-orange); font: 700 .69rem/1 var(--font-head); letter-spacing: .08em; }
-.comparison-note h2 { font: 700 1.05rem/1.15 var(--font-head); }
-.comparison-note p { margin-top: 7px; color: var(--packages-muted); font-size: .84rem; line-height: 1.55; }
 .catalogue-status { min-height: 210px; display: grid; align-content: center; gap: 14px; margin: 34px 0; padding: 34px; border: 1px solid var(--packages-line); border-radius: 18px; background: rgba(255,255,255,.42); }
 .catalogue-status.is-message { min-height: 0; }
 .catalogue-status h2 { font: 700 1.45rem/1.15 var(--font-head); }
@@ -59,7 +54,8 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
 @keyframes package-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-line { animation: none; } }
 .intent-section { padding: 92px 0; border-bottom: 1px solid var(--packages-line); }
-.flexible-balance-status { margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; background: #fff4e8; color: #4b2a0b; line-height: 1.5; }
+.flexible-balance-status { margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; background: #fff4e8; color: #4b2a0b; line-height: 1.5; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.flexible-balance-status a { color: inherit; font-weight: 800; text-underline-offset: 3px; }
 .featured-product { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
 .section-intro { display: grid; grid-template-columns: minmax(220px,.65fr) minmax(360px,1.35fr); gap: 24px 70px; align-items: start; margin-bottom: 42px; }
 .section-intro .section-kicker { grid-column: 1; }
@@ -72,6 +68,10 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
 .product-label { color: var(--packages-muted); font-size: .71rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .product-price { flex: 0 0 auto; font: 800 clamp(2rem,4vw,3.5rem)/.9 var(--font-head); letter-spacing: -.055em; }
 .product-price-group { display: grid; justify-items: end; gap: 12px; flex: 0 0 auto; }
+.product-price-comparison { display: flex; justify-content: flex-end; align-items: baseline; gap: 9px; margin-top: -4px; font-variant-numeric: tabular-nums; }
+.price-was { color: var(--packages-muted); font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.price-was s { text-decoration-thickness: 1.5px; text-decoration-color: currentColor; }
+.price-saving { color: #a33e00; font-size: .78rem; white-space: nowrap; }
 .product-price small { display: block; margin-top: 7px; color: var(--packages-muted); font: 700 .66rem/1 var(--font-body); letter-spacing: .08em; text-align: right; text-transform: uppercase; }
 .availability-pill { display: inline-flex; width: fit-content; padding: 7px 10px; border: 1px solid currentColor; border-radius: 999px; font-size: .68rem; font-weight: 800; line-height: 1; text-align: center; }
 .availability-pill.is-available { color: #17663d; background: #edf8f1; }
@@ -134,6 +134,11 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
 .truth-list { display: grid; gap: 18px; }
 .truth-list p { color: #55514c; font-size: .88rem; line-height: 1.6; }
 .truth-list strong { color: var(--packages-ink); }
+.flexible-purchase-shortcuts { display: grid; grid-template-columns: repeat(2,minmax(0,180px)); justify-content: end; gap: 12px; margin-top: 18px; }
+.flexible-purchase-shortcuts a { min-height: 48px; display: inline-flex; align-items: center; justify-content: center; padding: 11px 20px; border: 1px solid var(--packages-dark); border-radius: 999px; color: #fff; background: var(--packages-dark); font-size: .86rem; font-weight: 800; text-decoration: none; transition: transform .2s, color .2s, background .2s, border-color .2s; }
+.flexible-purchase-shortcuts a:hover { transform: translateY(-1px); color: #21150b; background: var(--packages-orange); border-color: var(--packages-orange); }
+.flexible-purchase-shortcuts a:active { transform: translateY(1px); }
+.flexible-purchase-shortcuts a:focus-visible { outline: 3px solid rgba(245,131,33,.35); outline-offset: 3px; }
 .termination-panel { display:grid; gap:12px; margin-top:20px; padding:20px; border:1px solid var(--packages-line); border-radius:14px; background:#fff; }
 .termination-panel h3 { margin:0; font:700 1.15rem/1.1 var(--font-head); }
 .termination-panel p { margin:0; color:var(--packages-muted); line-height:1.55; }
@@ -164,6 +169,7 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
   .product-main { padding: 28px 23px 26px 27px; }
   .product-price { margin-top: 16px; }
   .product-price-group { justify-items: start; }
+  .product-price-comparison { justify-content: flex-start; }
   .product-price small { text-align: left; }
   .product-details { grid-template-columns: 1fr; }
   .product-footer { padding: 17px 22px 18px 27px; }
@@ -175,8 +181,121 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
   .manoeuvres-grid .product-shell:nth-child(2) { margin-top: 0; }
   .manoeuvres-grid .product-main { min-height: 0; }
   .truth-panel { margin-top: 68px; padding: 28px 24px; }
+  .flexible-purchase-shortcuts { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .internal-phases, .programme-facts { grid-template-columns: 1fr; }
   .test-booking-panel form { grid-template-columns: 1fr; }
   .test-booking-panel label:last-of-type, .test-booking-panel button { grid-column: 1; }
   .packages-footer-cta { padding-top: 68px; }
 }
+
+/* Package-page theme pairing. The shared learner shell switches its own
+   tokens, while this page has a separate editorial palette that must switch
+   with it rather than leaving light surfaces and ink colours behind. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light-mode) {
+    --packages-ink: #f5f2ee;
+    --packages-muted: #bdb6ae;
+    --packages-paper: #181818;
+    --packages-line: #736d65;
+    --packages-dark: #302e2b;
+  }
+}
+:root.dark-mode {
+  --packages-ink: #f5f2ee;
+  --packages-muted: #bdb6ae;
+  --packages-paper: #181818;
+  --packages-line: #736d65;
+  --packages-dark: #302e2b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light-mode) .lessons-link,
+  :root:not(.light-mode) .catalogue-status,
+  :root:not(.light-mode) .programme-status,
+  :root:not(.light-mode) .test-booking-panel,
+  :root:not(.light-mode) .product-shell,
+  :root:not(.light-mode) .internal-phases li,
+  :root:not(.light-mode) .programme-facts div,
+  :root:not(.light-mode) .termination-panel { background: #242321; }
+  :root:not(.light-mode) .lessons-link:hover { background: #302a25; }
+  :root:not(.light-mode) .product-footer { background: #2b2926; }
+  :root:not(.light-mode) .product-details li { color: #ddd7d0; }
+  :root:not(.light-mode) .price-saving { color: #ffb270; }
+  :root:not(.light-mode) .truth-panel { background: #282623; }
+  :root:not(.light-mode) .truth-list p { color: #c9c2ba; }
+  :root:not(.light-mode) .manoeuvres-grid .product-shell:nth-child(2) { background: #2b2722; }
+  :root:not(.light-mode) .purchase-status { background: #242321; }
+  :root:not(.light-mode) .purchase-status.is-paid { background: #17271d; }
+  :root:not(.light-mode) .purchase-status.is-failed { background: #2b1b18; }
+  :root:not(.light-mode) .purchase-status.is-review { background: #2b2518; }
+  :root:not(.light-mode) .flexible-balance-status { color: #ffe4c8; background: #3b2817; }
+  :root:not(.light-mode) .availability-pill.is-available { color: #9ee8ba; background: #173424; }
+  :root:not(.light-mode) .availability-pill.is-unavailable { color: #d2cbc3; background: #3a3733; }
+  :root:not(.light-mode) .availability-pill.is-enrolled { color: #b9d8f8; background: #213348; }
+  :root:not(.light-mode) .locked .product-action,
+  :root:not(.light-mode) .lock-explanation { color: #f3d38e; background: #382f1b; border-color: #8f7131; }
+  :root:not(.light-mode) .test-booking-panel input,
+  :root:not(.light-mode) .termination-panel textarea { color: var(--packages-ink); background: #1d1c1a; border-color: var(--packages-line); }
+  :root:not(.light-mode) .skeleton-line { background: linear-gradient(90deg, #2b2926 20%, #3a3733 50%, #2b2926 80%); background-size: 220% 100%; }
+}
+
+:root.dark-mode .lessons-link,
+:root.dark-mode .catalogue-status,
+:root.dark-mode .programme-status,
+:root.dark-mode .test-booking-panel,
+:root.dark-mode .product-shell,
+:root.dark-mode .internal-phases li,
+:root.dark-mode .programme-facts div,
+:root.dark-mode .termination-panel { background: #242321; }
+:root.dark-mode .lessons-link:hover { background: #302a25; }
+:root.dark-mode .product-footer { background: #2b2926; }
+:root.dark-mode .product-details li { color: #ddd7d0; }
+:root.dark-mode .price-saving { color: #ffb270; }
+:root.dark-mode .truth-panel { background: #282623; }
+:root.dark-mode .truth-list p { color: #c9c2ba; }
+:root.dark-mode .manoeuvres-grid .product-shell:nth-child(2) { background: #2b2722; }
+:root.dark-mode .purchase-status { background: #242321; }
+:root.dark-mode .purchase-status.is-paid { background: #17271d; }
+:root.dark-mode .purchase-status.is-failed { background: #2b1b18; }
+:root.dark-mode .purchase-status.is-review { background: #2b2518; }
+:root.dark-mode .flexible-balance-status { color: #ffe4c8; background: #3b2817; }
+:root.dark-mode .availability-pill.is-available { color: #9ee8ba; background: #173424; }
+:root.dark-mode .availability-pill.is-unavailable { color: #d2cbc3; background: #3a3733; }
+:root.dark-mode .availability-pill.is-enrolled { color: #b9d8f8; background: #213348; }
+:root.dark-mode .locked .product-action,
+:root.dark-mode .lock-explanation { color: #f3d38e; background: #382f1b; border-color: #8f7131; }
+:root.dark-mode .test-booking-panel input,
+:root.dark-mode .termination-panel textarea { color: var(--packages-ink); background: #1d1c1a; border-color: var(--packages-line); }
+:root.dark-mode .skeleton-line { background: linear-gradient(90deg, #2b2926 20%, #3a3733 50%, #2b2926 80%); background-size: 220% 100%; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light-mode) .catalogue-status a,
+  :root:not(.light-mode) .catalogue-status button,
+  :root:not(.light-mode) .purchase-review summary,
+  :root:not(.light-mode) .flexible-purchase-shortcuts a,
+  :root:not(.light-mode) .product-action.is-purchasable,
+  :root:not(.light-mode) .test-booking-panel button,
+  :root:not(.light-mode) .termination-panel button,
+  :root:not(.light-mode) .packages-footer-cta a {
+    color: #21150b;
+    background: var(--packages-orange);
+    border-color: var(--packages-orange);
+  }
+}
+:root.dark-mode .catalogue-status a,
+:root.dark-mode .catalogue-status button,
+:root.dark-mode .purchase-review summary,
+:root.dark-mode .flexible-purchase-shortcuts a,
+:root.dark-mode .product-action.is-purchasable,
+:root.dark-mode .test-booking-panel button,
+:root.dark-mode .termination-panel button,
+:root.dark-mode .packages-footer-cta a {
+  color: #21150b;
+  background: var(--packages-orange);
+  border-color: var(--packages-orange);
+}
+
+.purchase-review summary:hover,
+.product-action.is-purchasable:hover,
+.flexible-purchase-shortcuts a:hover,
+.packages-footer-cta a:hover { color: #21150b; }

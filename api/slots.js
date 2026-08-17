@@ -84,6 +84,7 @@ const {
   bookFlexiblePackageSlotTransaction,
   cancelFlexiblePackageBookingTransaction,
   hoursUntilFlexibleLesson,
+  moveFlexiblePackageBookingAllocations,
   unitsForDuration: flexibleUnitsForDuration,
 } = require('./_flexible-package-ledger');
 
@@ -6669,8 +6670,29 @@ async function handleCancel(req, res) {
     // ── Single booking cancellation (existing logic) ────────────────────────
 
     // Calculate hours until lesson
-    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
-    const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
+    let hoursUntil;
+    if (flexiblePackageFunding) {
+      const [flexibleSchool] = await sql`
+        SELECT config FROM schools
+         WHERE id = ${schoolId} AND active = TRUE
+         LIMIT 1
+      `;
+      hoursUntil = hoursUntilFlexibleLesson({
+        scheduledDate: booking.scheduled_date,
+        startTime: booking.start_time,
+        schoolConfig: flexibleSchool?.config,
+      });
+      if (hoursUntil === null) {
+        return res.status(409).json({
+          error: true,
+          code: 'FLEXIBLE_PACKAGE_LESSON_TIME_INVALID',
+          message: 'This Flexible Hours booking time could not be validated safely.'
+        });
+      }
+    } else {
+      const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
+      hoursUntil = (lessonDateTime - Date.now()) / 3600000;
+    }
     // Demo bookings are free, so no hours to return
     const minsToReturn   = booking.minutes_deducted != null ? booking.minutes_deducted : DEFAULT_SLOT_MINUTES;
     const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);
@@ -7502,21 +7524,18 @@ async function handleReschedule(req, res) {
     try {
       [flexiblePackageFunding] = await sql`
         SELECT 1 AS funded
-          FROM flexible_package_booking_allocations
-         WHERE booking_id = ${booking_id} AND school_id = ${schoolId}
+          FROM flexible_package_booking_allocations allocation
+         WHERE allocation.booking_id = ${booking_id} AND allocation.school_id = ${schoolId}
+           AND NOT EXISTS (
+             SELECT 1 FROM flexible_package_allocation_returns returned
+              WHERE returned.allocation_id = allocation.id
+                AND returned.school_id = allocation.school_id
+           )
          LIMIT 1
       `;
     } catch (error) {
       if (error?.code !== '42P01') throw error;
     }
-    if (flexiblePackageFunding) {
-      return res.status(409).json({
-        error: true,
-        code: 'FLEXIBLE_PACKAGE_RESCHEDULE_REQUIRES_SUPPORT',
-        message: 'Please contact CoachCarter to move a Flexible Hours lesson so its immutable source attribution stays intact.'
-      });
-    }
-
     const targetInstructorId = requestedInstructorId || Number(booking.instructor_id);
     const instructorChanged = targetInstructorId !== Number(booking.instructor_id);
     let targetInstructor = {
@@ -7562,8 +7581,29 @@ async function handleReschedule(req, res) {
       return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
 
     // Check 48-hour reschedule window (same as cancellation policy)
-    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
-    const hoursUntil     = (lessonDateTime - Date.now()) / 3600000;
+    let hoursUntil;
+    if (flexiblePackageFunding) {
+      const [flexibleSchool] = await sql`
+        SELECT config FROM schools
+         WHERE id = ${schoolId} AND active = TRUE
+         LIMIT 1
+      `;
+      hoursUntil = hoursUntilFlexibleLesson({
+        scheduledDate: booking.scheduled_date,
+        startTime: booking.start_time,
+        schoolConfig: flexibleSchool?.config,
+      });
+      if (hoursUntil === null) {
+        return res.status(409).json({
+          error: true,
+          code: 'FLEXIBLE_PACKAGE_LESSON_TIME_INVALID',
+          message: 'This Flexible Hours booking time could not be validated safely.'
+        });
+      }
+    } else {
+      const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
+      hoursUntil = (lessonDateTime - Date.now()) / 3600000;
+    }
     if (booking.is_reserved_weekly_slot) {
       if (hoursUntil < RESERVED_MOVE_NOTICE_HOURS) {
         return res.status(409).json({
@@ -7693,7 +7733,91 @@ async function handleReschedule(req, res) {
     // memory/project_step_4_5_shipped.md chip #3 entry for the three
     // historical bookings affected: #117, #133, #214).
     let newBooking;
-    if (instructorChanged) {
+    if (flexiblePackageFunding) {
+      try {
+        newBooking = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+          const locked = await client.query(
+            `SELECT id
+               FROM lesson_bookings
+              WHERE id = $1
+                AND learner_id = $2
+                AND school_id = $3
+                AND status = $4
+              FOR UPDATE`,
+            [booking_id, user.id, schoolId, SCHEDULED]
+          );
+          if (!locked.rowCount) {
+            const conflict = new Error('This lesson is no longer available to reschedule.');
+            conflict.code = 'BOOKING_CHANGED';
+            throw conflict;
+          }
+
+          const inserted = await client.query(
+            `INSERT INTO lesson_bookings
+               (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+                rescheduled_from, reschedule_count, pickup_address, dropoff_address,
+                lesson_type_id, minutes_deducted, school_id, created_by, payment_method,
+                stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source,
+                transmission_type, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
+             VALUES
+               ($1, $2, $3::date, $4::time, $5::time, $6,
+                $7, $8, $9, $10,
+                $11, $12, $13, 'learner', 'flexible_package',
+                $14, $15, $16, $17,
+                $18, FALSE, FALSE, 0)
+             RETURNING id, scheduled_date::text, start_time::text, end_time::text, status,
+                       rescheduled_from, reschedule_count`,
+            [
+              user.id, targetInstructorId, new_date, new_start_time, new_end_time, SCHEDULED,
+              booking_id, booking.reschedule_count + 1, newPickupAddress, newDropoffAddress,
+              booking.lesson_type_id || null,
+              booking.minutes_deducted != null ? booking.minutes_deducted : null,
+              schoolId,
+              booking.stripe_fee_pence != null ? booking.stripe_fee_pence : 0,
+              booking.stripe_fee_source || 'platform_absorbed_package_fee',
+              booking.list_price_pence != null ? booking.list_price_pence : null,
+              booking.list_price_source || 'flexible_package_frozen_rate',
+              booking.transmission_type || 'manual',
+            ]
+          );
+          const replacement = inserted.rows[0];
+          const moved = await moveFlexiblePackageBookingAllocations(client, {
+            learnerId: user.id,
+            schoolId,
+            oldBookingId: booking_id,
+            newBookingId: replacement.id,
+            newInstructorId: targetInstructorId,
+          });
+          if (moved.minutes !== Number(booking.minutes_deducted || 0)) {
+            const fundingError = new Error('The Flexible Hours value does not match this lesson.');
+            fundingError.code = 'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION';
+            throw fundingError;
+          }
+          await client.query(
+            `UPDATE lesson_bookings
+                SET status = $1, credit_returned = TRUE, cancelled_at = NOW()
+              WHERE id = $2
+                AND learner_id = $3
+                AND school_id = $4
+                AND status = $5`,
+            [REFUNDED, booking_id, user.id, schoolId, SCHEDULED]
+          );
+          return replacement;
+        });
+      } catch (moveErr) {
+        const moveCode = moveErr?.result?.code || moveErr?.code;
+        const moveMessage = moveErr?.result?.message || moveErr?.message;
+        if (moveErr.code === '23505' || moveErr.message?.includes('uq_booking_slot')) {
+          return res.status(409).json({ error: 'That slot was just booked by someone else. Please choose another.' });
+        }
+        if (['BOOKING_CHANGED', 'FLEXIBLE_REPLACEMENT_BOOKING_MISMATCH',
+          'FLEXIBLE_MIXED_FUNDING_CONTRADICTION', 'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION',
+          'NOT_FLEXIBLE_PACKAGE_BOOKING'].includes(moveCode)) {
+          return res.status(409).json({ error: moveMessage, code: moveCode });
+        }
+        throw moveErr;
+      }
+    } else if (instructorChanged) {
       try {
         newBooking = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
           const locked = await client.query(
@@ -7877,7 +8001,7 @@ async function handleReschedule(req, res) {
         </table>
         <p style="margin-top:16px;font-size:0.875rem;color:#797879">
           You can reschedule ${MAX_RESCHEDULES - newBooking.reschedule_count} more time${MAX_RESCHEDULES - newBooking.reschedule_count !== 1 ? 's' : ''}.
-          Cancel at least 48 hours before and the lesson credit returns to your balance.
+          Cancel at least 48 hours before and the original booking value returns to your balance.
         </p>
         <p>
           <a href="https://coachcarter.uk/learner/"
@@ -7964,6 +8088,7 @@ async function handleReschedule(req, res) {
       new_end_time,
       new_instructor_id: targetInstructorId,
       instructor_changed: instructorChanged,
+      funding_method: flexiblePackageFunding ? 'flexible_package' : (booking.payment_method || null),
       reschedule_count: newBooking.reschedule_count,
       message: instructorChanged
         ? `Lesson moved from ${booking.instructor_name} to ${targetInstructor.name} on ${newDateStr} at ${newTime}.`

@@ -16,6 +16,7 @@ const {
 } = require('../api/_flexible-package-payments');
 const {
   hoursUntilFlexibleLesson,
+  moveFlexiblePackageBookingAllocations,
   planFlexiblePackageFifo,
   unitsForDuration,
 } = require('../api/_flexible-package-ledger');
@@ -222,6 +223,75 @@ test.describe('school-wide Flexible Hours packages', () => {
     expect(unitsForDuration(0)).toBeNull();
   });
 
+  test('moves the exact Flexible Hours allocation on a 48h+ reschedule without changing its value', async () => {
+    const calls = [];
+    const client = {
+      query: async (query, params) => {
+        calls.push({ query, params });
+        if (query.includes('FROM lesson_bookings') && query.includes('FOR UPDATE')) {
+          return { rowCount: 1, rows: [{ id: 101, instructor_id: 7, minutes_deducted: 90, status: 'scheduled' }] };
+        }
+        if (query.includes('FROM lesson_bookings')) {
+          return { rowCount: 1, rows: [{ id: 202, instructor_id: 8, minutes_deducted: 90, status: 'scheduled' }] };
+        }
+        if (query.includes('FROM booking_credit_sources')) return { rowCount: 0, rows: [] };
+        if (query.includes('FROM flexible_package_booking_allocations')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: 301, source_id: 401, units_allocated: 3, unit_minutes: 30,
+              rate_pence_per_unit: 2700, contribution_pence: 8100,
+            }],
+          };
+        }
+        return { rowCount: 1, rows: [] };
+      },
+    };
+
+    await expect(moveFlexiblePackageBookingAllocations(client, {
+      learnerId: 41,
+      schoolId: 1,
+      oldBookingId: 101,
+      newBookingId: 202,
+      newInstructorId: 8,
+    })).resolves.toEqual({ units: 3, minutes: 90, contributionPence: 8100 });
+
+    const returned = calls.find(call => call.query.includes('INSERT INTO flexible_package_allocation_returns'));
+    const replaced = calls.find(call => call.query.includes('INSERT INTO flexible_package_booking_allocations'));
+    const event = calls.find(call => call.query.includes("'booking_rescheduled'"));
+    expect(returned.query).toContain("'rescheduled_48h_plus'");
+    expect(returned.params).toEqual([1, 301, 101, 3]);
+    expect(replaced.params).toEqual([1, 41, 401, 202, 8, 3, 30, 2700, 8100]);
+    expect(JSON.parse(event.params[3])).toMatchObject({
+      old_booking_id: 101,
+      old_instructor_id: 7,
+      new_instructor_id: 8,
+      units: 3,
+      contribution_pence: 8100,
+      notice_rule: '48h_plus',
+    });
+  });
+
+  test('rejects a lesson that mixes active Lesson Credit with Flexible Hours', async () => {
+    const client = {
+      query: async (query) => {
+        if (query.includes('FROM lesson_bookings') && query.includes('FOR UPDATE')) {
+          return { rowCount: 1, rows: [{ id: 101, instructor_id: 7, minutes_deducted: 90, status: 'scheduled' }] };
+        }
+        if (query.includes('FROM lesson_bookings')) {
+          return { rowCount: 1, rows: [{ id: 202, instructor_id: 8, minutes_deducted: 90, status: 'scheduled' }] };
+        }
+        if (query.includes('FROM booking_credit_sources')) return { rowCount: 1, rows: [{ exists: 1 }] };
+        return { rowCount: 0, rows: [] };
+      },
+    };
+    await expect(moveFlexiblePackageBookingAllocations(client, {
+      learnerId: 41, schoolId: 1, oldBookingId: 101, newBookingId: 202, newInstructorId: 8,
+    })).rejects.toMatchObject({
+      result: { code: 'FLEXIBLE_MIXED_FUNDING_CONTRADICTION' },
+    });
+  });
+
   test('ships the additive ledger in both migrations with tenant and append-only controls', () => {
     for (const source of [read('db/migrations/050_flexible_hours_packages.sql'), read('db/migration.sql')]) {
       for (const table of [
@@ -240,6 +310,10 @@ test.describe('school-wide Flexible Hours packages', () => {
       expect(source).toContain('validate_flexible_package_allocation_return');
       expect(source).not.toMatch(/UPDATE package_product_versions\s+SET/i);
     }
+    const creditFlowMigration = read('db/migrations/051_flexible_hours_credit_flow.sql');
+    expect(creditFlowMigration).toContain('uq_flexible_attempt_active_learner');
+    expect(creditFlowMigration).toContain("'rescheduled_48h_plus'");
+    expect(read('db/migration.sql')).toContain('uq_flexible_attempt_active_learner');
   });
 
   test('keeps booking and refund money separate from Lesson Credit and attributes frozen lesson value', () => {
@@ -309,5 +383,24 @@ test.describe('school-wide Flexible Hours packages', () => {
     expect(slots).toContain('flexiblePackageBookingReused');
     expect(endpoint).toContain('attempt_exceptions: attemptExceptions');
     expect(adminUi).toContain('Checkout review queue');
+  });
+
+  test('blocks a second package while spendable Flexible Hours remain and exposes booking instead', () => {
+    const endpoint = read('api/flexible-packages.js');
+    const catalogue = read('api/packages.js');
+    const packagesUi = read('public/learner/packages.js');
+    expect(endpoint).toContain("code: 'FLEXIBLE_BALANCE_MUST_BE_USED_FIRST'");
+    expect(endpoint).toContain('FROM flexible_package_balances');
+    expect(catalogue).toContain("state: 'existing_flexible_balance'");
+    expect(packagesUi).toContain('Book with your Flexible Hours');
+  });
+
+  test('reschedules Flexible Hours transactionally under the same 48-hour rule', () => {
+    const slots = read('api/slots.js');
+    expect(slots).toContain('moveFlexiblePackageBookingAllocations(client');
+    expect(slots).toContain("payment_method,\n                stripe_fee_pence");
+    expect(slots).toContain("'flexible_package'");
+    expect(slots).toContain("'FLEXIBLE_PACKAGE_LESSON_TIME_INVALID'");
+    expect(slots).not.toContain('FLEXIBLE_PACKAGE_RESCHEDULE_REQUIRES_SUPPORT');
   });
 });

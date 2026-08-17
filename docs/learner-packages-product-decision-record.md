@@ -112,13 +112,13 @@ All prices and commercial rules below are starting values. School admins can cha
 | Consumption | Exact half-hour units used by the booked lesson |
 | Custom learner rate | Does not apply; custom rates remain instructor-specific Pay As You Go rules |
 | Expiry | No expiry at launch |
-| Repeat purchases | Allowed without a balance threshold |
+| Repeat purchases | Existing spendable Flexible Hours must reach zero before another Checkout can start |
 | Transfer | Cannot be transferred or gifted to another learner |
 | Refund | Unused hours refundable pro rata at the purchase's frozen £55 hourly rate, subject to statutory rights and final fee-policy review |
 
 Although the learner sees hours, the safest internal unit is 30 minutes. One purchase creates 60 half-hour units. This avoids decimal arithmetic while enforcing the agreed product rule.
 
-Multiple purchases remain separate immutable sources. Booking consumption should be FIFO from the oldest eligible source so used and refundable value can always be reconstructed.
+Purchases remain separate immutable sources. The ordinary purchase path requires the current spendable balance to reach zero first; the ledger still consumes FIFO so returned historical hours and late provider success remain safely reconstructable if exceptional sources coexist.
 
 ### 2.2 Full Curriculum programme
 
@@ -694,9 +694,11 @@ Commercial pricing is not a launch blocker: £2,000 is an intentionally lean int
 
 Flexible Hours are a separate school-wide Learner Packages ledger, not Lesson Credit. The approved immutable offers are 15 hours for £810 (30 half-hour units at £27) and 30 hours for £1,590 (60 half-hour units at £26.50). They do not expire, cannot be transferred to another learner, and may fund a representable lesson with any active instructor in the learner's school.
 
-Multiple purchases remain separate immutable sources and are consumed FIFO. Every booking freezes its exact source allocations and pence contribution; the delivering instructor receives the normal booking-lifecycle attribution from that frozen value. Purchase/webhook fulfilment creates no instructor earning, transfer or payout by itself. Durations not divisible by 30 minutes, including the currently offered 165-minute lesson, fail closed pending an owner decision.
+Purchases remain separate immutable sources and are consumed FIFO. A learner cannot start another Flexible Hours Checkout while any spendable Flexible Hours remain; this prevents ordinary purchases at different prices from overlapping. The multi-source ledger remains necessary for returned historical allocations and valid late payment success. Every booking freezes its exact source allocations and pence contribution; the delivering instructor receives the normal booking-lifecycle attribution from that frozen value. Purchase/webhook fulfilment creates no instructor earning, transfer or payout by itself. Durations not divisible by 30 minutes, including the currently offered 165-minute lesson, fail closed pending an owner decision.
 
-The statutory 14-day cancellation right is retained without a mandatory service hold. Checkout requires adult/terms acknowledgement and the learner's express request for immediate access. Used and properly late-cancelled units may be deducted; unused units remain refundable at each source's immutable rate. CoachCarter absorbs the original Stripe fee. Provider refunds remain manual and the application records source-scoped evidence only after the original-method refund has been completed.
+Each lesson uses exactly one funding method: school-wide Flexible Hours, instructor-scoped Lesson Credit, or Pay As You Go. Flexible Hours and Lesson Credit must never be combined on the same booking. A learner may reschedule a Flexible Hours booking with at least 48 hours' notice, including to another eligible same-school instructor. The old allocation is returned and an identical allocation is attached to the replacement booking in one transaction, preserving the original frozen value without repricing.
+
+The statutory 14-day cancellation right is retained without a mandatory service hold. Hours become available immediately after verified payment. Checkout uses one combined terms acceptance containing the learner's express immediate-access request rather than a separate immediate-access checkbox, and stores both accepted facts in the attempt evidence. Used and properly late-cancelled units may be deducted; unused units remain refundable at each source's immutable rate. CoachCarter absorbs the original Stripe fee. Provider refunds remain manual and the application records source-scoped evidence only after the original-method refund has been completed.
 
 Live purchasing is isolated behind exact Boolean `schools.config.features.learner_flexible_package_purchasing_live_enabled === true` and is additionally pinned to School 1. It defaults absent/false, has no admin setter, and uses dedicated live restricted-key, Pay-by-Bank-only Payment Method Configuration and webhook-secret environment identities. Browser return pages only poll owned status; a verified signed live webhook is the sole entitlement creator. See `docs/flexible-hours-packages-runbook.md`.
 
