@@ -344,6 +344,7 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i);
     expect(html).toContain('Book a Pay As You Go lesson');
     expect(html).toContain('Before you buy Flexible Hours');
+    expect(html).toContain('You can cancel at any time. We will refund any unused hours at the rate you paid. Hours already used or lost through a late cancellation are not refundable.');
     expect(js).toContain("fetch(apiUrl('catalogue'), { credentials: 'include' })");
     expect(js).toContain("disabled aria-describedby=\"");
     expect(js).toContain("apiUrl('submit-test-booking')");

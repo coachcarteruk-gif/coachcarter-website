@@ -85,6 +85,8 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
 .product-footer { display: grid; gap: 14px; padding: 18px 36px 20px 40px; background: #f7f2eb; border-top: 1px solid var(--packages-line); }
 .purchase-review { border-top: 1px solid var(--packages-line); }
 .purchase-review summary { width: fit-content; margin-top: 2px; padding: 10px 16px; border-radius: 999px; color: #fff; background: var(--packages-dark); font-size: .78rem; font-weight: 800; cursor: pointer; list-style-position: inside; transition: transform .2s, background .2s; }
+#flexible-products .purchase-review summary,
+#flexible-products .product-action { min-height: 48px; padding: 13px 20px; font-size: .82rem; }
 .purchase-review summary:hover { transform: translateY(-1px); background: var(--packages-orange); }
 .purchase-review summary:focus-visible { outline: 3px solid rgba(245,131,33,.35); outline-offset: 3px; }
 .purchase-review[open] summary { margin-bottom: 4px; }
@@ -173,6 +175,23 @@ body { background: var(--packages-paper); color: var(--packages-ink); overflow-x
   .product-price small { text-align: left; }
   .product-details { grid-template-columns: 1fr; }
   .product-footer { padding: 17px 22px 18px 27px; }
+  #flexible-products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #flexible-products .product-shell { min-width: 0; border-radius: 16px; }
+  #flexible-products .product-shell::before { width: 3px; }
+  #flexible-products .product-main { padding: 20px 12px 18px 16px; }
+  #flexible-products .product-topline { gap: 6px; }
+  #flexible-products .product-label { font-size: .58rem; line-height: 1.35; letter-spacing: .08em; }
+  #flexible-products .product-shell h3 { margin: 10px 0 0; font-size: 1.14rem; line-height: 1.05; }
+  #flexible-products .product-price { margin-top: 5px; font-size: 1.7rem; }
+  #flexible-products .availability-pill { padding: 5px 7px; font-size: .58rem; }
+  #flexible-products .product-details { gap: 7px; margin-top: 18px; padding-top: 16px; }
+  #flexible-products .product-details li { padding-left: 14px; font-size: .7rem; line-height: 1.4; }
+  #flexible-products .product-details li::before { left: 0; width: 5px; height: 5px; border-width: 1px; }
+  #flexible-products .product-footer { gap: 10px; padding: 13px 12px 14px 16px; }
+  #flexible-products .version-note { font-size: .62rem; }
+  #flexible-products .purchase-review summary,
+  #flexible-products .product-action { display: grid; width: 100%; min-height: 48px; place-items: center; padding: 11px 9px; font-size: .73rem; line-height: 1.2; text-align: center; }
+  #flexible-products .product-shell:has(.purchase-review[open]) { grid-column: 1 / -1; }
   .phase-product { grid-template-columns: 1fr; gap: 8px; padding-left: 25px; }
   .phase-number { padding-top: 13px; }
   .phase-product::before { top: 18px; }

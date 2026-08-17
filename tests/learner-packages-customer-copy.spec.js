@@ -295,13 +295,13 @@ test.describe('Learner Packages customer copy', () => {
       const intro = getComputedStyle(document.querySelector('.hero-intro')).color;
       const card = document.querySelector('.product-shell');
       const cardStyle = getComputedStyle(card);
-      const summaryStyle = getComputedStyle(card.querySelector('.product-summary'));
+      const featureStyle = getComputedStyle(card.querySelector('.product-details li'));
       const shortcut = document.querySelector('.flexible-purchase-shortcuts a');
       const shortcutStyle = getComputedStyle(shortcut);
       return {
         titleContrast: contrast(title, body),
         introContrast: contrast(intro, body),
-        cardSummaryContrast: contrast(summaryStyle.color, cardStyle.backgroundColor),
+        cardFeatureContrast: contrast(featureStyle.color, cardStyle.backgroundColor),
         shortcutContrast: contrast(shortcutStyle.color, shortcutStyle.backgroundColor),
         shortcutHeight: shortcut.getBoundingClientRect().height,
         scrollWidth: document.documentElement.scrollWidth,
@@ -310,7 +310,7 @@ test.describe('Learner Packages customer copy', () => {
     });
     expect(colours.titleContrast).toBeGreaterThanOrEqual(4.5);
     expect(colours.introContrast).toBeGreaterThanOrEqual(4.5);
-    expect(colours.cardSummaryContrast).toBeGreaterThanOrEqual(4.5);
+    expect(colours.cardFeatureContrast).toBeGreaterThanOrEqual(4.5);
     expect(colours.shortcutContrast).toBeGreaterThanOrEqual(4.5);
     expect(colours.shortcutHeight).toBeGreaterThanOrEqual(44);
     expect(colours.scrollWidth).toBeLessThanOrEqual(colours.viewportWidth);
