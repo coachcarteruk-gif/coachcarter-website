@@ -140,11 +140,15 @@ test.describe('webhook slot booking regressions', () => {
     expect(body).toContain('hit uq_credit_tx_session with refunded booking');
   });
 
-  test('handleSlotBooking preserves orphan paid session behavior when existing CT has no booking', () => {
+  test('handleSlotBooking recovers a paid orphan only through the guarded recovery transaction', () => {
     const body = getSlotBookingBody();
 
-    expect(body).toContain('has slot_purchase CT but no matching booking');
-    expect(body).toContain('leaving orphan recovery to operator flow');
+    expect(body).toContain("bookingPurpose !== 'lesson'");
+    expect(body).toContain('const recovered = await recoverPaidBookingOrphan({');
+    expect(body).toContain("paymentType: 'slot_booking'");
+    expect(body).toContain('bookingId: recovered.bookingId');
+    expect(body).toContain('creditTransactionId: recovered.creditTransactionId');
+    expect(body).not.toContain('leaving orphan recovery to operator flow');
   });
 
   test('handleSlotBooking unique constraint race fetches existing CT before safe BCS repair', () => {
@@ -155,6 +159,7 @@ test.describe('webhook slot booking regressions', () => {
     expect(body).toContain('if (racedCreditTx && racedBooking && blocksSlot(racedBooking.status)) {');
     expect(body).toContain('bookingId: racedBooking.id');
     expect(body).toContain('creditTransaction: racedCreditTx');
+    expect(body).toContain('before a matching booking was visible; retry required');
   });
 
   test('findExistingSlotBooking uses the same slot identity and tenant as the webhook metadata', () => {

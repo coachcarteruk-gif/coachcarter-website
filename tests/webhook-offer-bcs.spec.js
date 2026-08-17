@@ -234,19 +234,24 @@ test.describe('webhook paid offer BCS attribution', () => {
     expect(body).toContain('refund_amount_pence=${amountPence * unused}');
   });
 
-  test('retry after mid-flight offer failure does not become a clean duplicate no-op', () => {
+  test('retry after a one-off offer mid-flight failure invokes guarded orphan recovery', () => {
     const body = getOfferBookingBody();
 
-    const duplicateIndex = body.indexOf("insertErr.message?.includes('uq_credit_tx_session')");
+    const existingIndex = body.indexOf('const [existingPendingOfferCreditTx] = await sql`');
+    const recoveryIndex = body.indexOf('const recovered = await recoverPaidBookingOrphan({', existingIndex);
+    const duplicateIndex = body.indexOf("insertErr.message?.includes('uq_credit_tx_session')", recoveryIndex);
     const errorIndex = body.indexOf('const duplicatePendingError = new Error(', duplicateIndex);
     const throwIndex = body.indexOf('throw duplicatePendingError;', duplicateIndex);
-    const offerAcceptedUpdateIndex = body.indexOf('UPDATE lesson_offers', duplicateIndex);
 
-    expect(duplicateIndex).toBeGreaterThanOrEqual(0);
+    expect(existingIndex).toBeGreaterThanOrEqual(0);
+    expect(recoveryIndex).toBeGreaterThan(existingIndex);
+    expect(body.slice(recoveryIndex, duplicateIndex)).toContain("paymentType: 'lesson_offer'");
+    expect(body.slice(recoveryIndex, duplicateIndex)).toContain('repeatWeeks,');
+    expect(body.slice(recoveryIndex, duplicateIndex)).toContain('offerId: offer.id');
+    expect(body.slice(recoveryIndex, duplicateIndex)).toContain('bookingId: recovered.bookingId');
     expect(errorIndex).toBeGreaterThan(duplicateIndex);
     expect(throwIndex).toBeGreaterThan(errorIndex);
-    expect(offerAcceptedUpdateIndex).toBeGreaterThan(throwIndex);
-    expect(body).toContain('previous webhook attempt likely failed mid-flight');
+    expect(body).toContain('before fulfilment was visible; retry required');
     expect(body).not.toContain('AS payout_source_exists');
     expect(body).not.toContain('resuming payout-v2 source ingestion');
   });
