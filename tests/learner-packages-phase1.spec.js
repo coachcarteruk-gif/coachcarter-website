@@ -140,6 +140,13 @@ test.describe('Learner Packages Phase 1 contracts', () => {
     })).toMatchObject({
       state: 'controlled_pilot_access_required', purchase_eligible: false, checkout_available: false,
     });
+    expect(buildCatalogueEligibility({ slug: 'full-curriculum' }, {
+      purchasingEnabled: true, sameSchoolLearner: true, learnerEmailVerified: false,
+      testBookingStatus: 'verified', testBookingFuture: true, hasActiveEnrolment: false,
+      consumerRightsReady: true, pilotAccessApproved: true,
+    })).toMatchObject({
+      state: 'email_verification_required', purchase_eligible: false, checkout_available: false,
+    });
   });
 
   test('schema is school-scoped, indexed, immutable by version, and seeds every approved choice', () => {

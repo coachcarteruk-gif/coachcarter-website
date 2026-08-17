@@ -121,6 +121,12 @@
         note: 'Use your current Flexible Hours before buying another package. This keeps each package price and refund value clear.'
       };
     }
+    if (eligibility.state === 'email_verification_required') {
+      return {
+        label: 'Email verification needed', tone: 'is-unavailable',
+        note: eligibility.reason || 'Verify your account email before starting checkout.'
+      };
+    }
     if (eligibility.state === 'already_enrolled') {
       return {
         label: 'You are enrolled', tone: 'is-enrolled',
@@ -233,6 +239,9 @@
     }
     if (eligibility.state === 'authentication_required') {
       return '<button type="button" class="product-action is-purchasable" data-package-sign-in="1" aria-describedby="' + describedBy + '">' + (product.product_type === 'flexible_hours' ? 'Sign in to buy' : 'Sign in to check eligibility') + '</button>';
+    }
+    if (eligibility.state === 'email_verification_required') {
+      return '<button type="button" class="product-action is-purchasable" data-package-verify-email="1" aria-describedby="' + describedBy + '">Verify email to buy</button>';
     }
     if (eligibility.state === 'existing_flexible_balance') {
       return '<a class="product-action is-purchasable" href="/learner/book.html" aria-describedby="' + describedBy + '">Book with your Flexible Hours</a>';
@@ -848,6 +857,11 @@
     if (flexibleCheckout) { startFlexibleCheckout(flexibleCheckout); return; }
     var checkout = event.target.closest('[data-package-checkout]');
     if (checkout) { startCheckout(checkout); return; }
+    if (event.target.closest('[data-package-verify-email]')) {
+      localStorage.removeItem('cc_learner');
+      window.location.href = '/learner/login.html?redirect=%2Flearner%2Fpackages.html';
+      return;
+    }
     if (event.target.closest('[data-package-sign-in]') && window.ccAuth) window.ccAuth.requireAuth();
   });
 

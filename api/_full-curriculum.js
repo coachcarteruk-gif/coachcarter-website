@@ -163,6 +163,7 @@ function catalogueEligibility(product, options = {}) {
   const slug = String(product?.slug || '');
   const purchasingEnabled = options.purchasingEnabled === true;
   const sameSchoolLearner = options.sameSchoolLearner === true;
+  const learnerEmailVerified = options.learnerEmailVerified !== false;
   if (isInternalPhaseProduct(slug)) {
     return {
       state: 'internal_stage', purchase_eligible: false, checkout_available: false,
@@ -185,6 +186,12 @@ function catalogueEligibility(product, options = {}) {
     return {
       state: 'authentication_required', purchase_eligible: false, checkout_available: false,
       reason: 'Sign in as the learner who will own the programme.',
+    };
+  }
+  if (!learnerEmailVerified) {
+    return {
+      state: 'email_verification_required', purchase_eligible: false, checkout_available: false,
+      reason: 'Verify the learner account email with a one-time sign-in code before checkout.',
     };
   }
   if (options.hasActiveEnrolment === true) {

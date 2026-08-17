@@ -19,9 +19,11 @@ function product({ id, slug, type, price, content, eligibility, rights = null })
   };
 }
 
-function catalogue({ signedIn, flexibleBalanceMinutes = 0 }) {
+function catalogue({ signedIn, flexibleBalanceMinutes = 0, emailVerified = true }) {
   const flexibleEligibility = signedIn
-    ? flexibleBalanceMinutes > 0
+    ? !emailVerified
+      ? { state: 'email_verification_required', purchase_eligible: false, checkout_available: false, reason: 'Verify your account email with a one-time sign-in code before buying Flexible Hours.' }
+      : flexibleBalanceMinutes > 0
       ? { state: 'existing_flexible_balance', purchase_eligible: false, checkout_available: false, remaining_minutes: flexibleBalanceMinutes }
       : { state: 'live_checkout_available', purchase_eligible: true, checkout_available: true }
     : { state: 'authentication_required', purchase_eligible: false, checkout_available: false };
@@ -41,6 +43,7 @@ function catalogue({ signedIn, flexibleBalanceMinutes = 0 }) {
       signed_in_as_learner: signedIn,
       learner_id: signedIn ? 41 : null,
       learner_name: signedIn ? 'Alex Taylor' : null,
+      email_verified: signedIn && emailVerified,
       flexible_hours_remaining_minutes: flexibleBalanceMinutes,
     },
     full_curriculum_eligibility: { test_booking: null, has_active_enrolment: false },
@@ -103,7 +106,7 @@ function catalogue({ signedIn, flexibleBalanceMinutes = 0 }) {
   };
 }
 
-async function preparePage(page, { signedIn, viewport, productTypes, productSlugs, flexibleBalanceMinutes = 0, theme = 'auto' }) {
+async function preparePage(page, { signedIn, viewport, productTypes, productSlugs, flexibleBalanceMinutes = 0, emailVerified = true, theme = 'auto' }) {
   await page.setViewportSize(viewport);
   await page.addInitScript(({ signedIn: isSignedIn, selectedTheme }) => {
     localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
@@ -115,7 +118,7 @@ async function preparePage(page, { signedIn, viewport, productTypes, productSlug
     contentType: 'application/json',
     body: JSON.stringify({ ok: true, enabled: true }),
   }));
-  const catalogueResponse = catalogue({ signedIn, flexibleBalanceMinutes });
+  const catalogueResponse = catalogue({ signedIn, flexibleBalanceMinutes, emailVerified });
   if (productTypes) catalogueResponse.products = catalogueResponse.products.filter(product => productTypes.includes(product.product_type));
   if (productSlugs) catalogueResponse.products = catalogueResponse.products.filter(product => productSlugs.includes(product.slug));
   await page.route('**/api/packages?action=catalogue**', route => route.fulfill({
@@ -195,6 +198,21 @@ test.describe('Learner Packages customer copy', () => {
         fullPage: true,
       });
     }
+  });
+
+  test('blocks an unverified signed-in learner before terms or Checkout are shown', async ({ page }) => {
+    await preparePage(page, {
+      signedIn: true,
+      emailVerified: false,
+      viewport: { width: 390, height: 844 },
+      productSlugs: ['flexible-15-hours'],
+    });
+
+    await expect(page.getByText('Email verification needed', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Verify email to buy' })).toBeVisible();
+    await expect(page.locator('[data-flexible-checkout]')).toHaveCount(0);
+    await expect(page.locator('.purchase-review')).toHaveCount(0);
+    await expect(page.locator('[data-flexible-shortcut]')).toHaveCount(0);
   });
 
   test('signed-out visitors can understand the live choice without implementation language', async ({ page }) => {
