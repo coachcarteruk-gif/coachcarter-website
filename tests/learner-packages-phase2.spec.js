@@ -795,10 +795,16 @@ test.describe('Learner Packages Phase 2 payment foundation', () => {
 });
 
 function uiProduct(id, slug, productType, name, pricePence, eligibility) {
+  const flexibleHours = productType === 'flexible_hours'
+    ? Number((slug.match(/(\d+)-hours/) || [])[1] || 0)
+    : 0;
   return {
     id, slug, product_type: productType, product_version_id: id * 100,
     version_number: 1, price_pence: pricePence, currency: 'GBP',
-    content: { name, short_description: `${name} description`, highlights: ['Server condition'] },
+    content: {
+      name, short_description: `${name} description`, highlights: ['Server condition'],
+      ...(flexibleHours ? { entitlement: { hours: flexibleHours } } : {}),
+    },
     consumer_rights: slug === 'full-curriculum' ? {
       ready: true,
       disclosure_version: 'full-curriculum-checkout-disclosure-v1',
@@ -820,6 +826,7 @@ function phase2UiCatalogue() {
     reason: 'Requires an independently assessed pass. No package assessment evidence is available in Phase 1.',
   };
   return [
+    uiProduct(2, 'flexible-15-hours', 'flexible_hours', '15-hour flexible package', 84000, { state: 'visible_not_fulfilled', purchase_eligible: false, checkout_available: false }),
     uiProduct(1, 'flexible-30-hours', 'flexible_hours', '30-hour flexible package', 165000, { state: 'visible_not_fulfilled', purchase_eligible: false, checkout_available: false }),
     uiProduct(5, 'full-curriculum', 'full_curriculum', 'Full Curriculum Enrolment', 200000, available),
     uiProduct(6, 'manoeuvres', 'manoeuvres', 'Manoeuvres', 15000, { state: 'visible_not_fulfilled', purchase_eligible: false, checkout_available: false }),
@@ -891,6 +898,41 @@ test.describe('Learner Packages Phase 2 page states', () => {
     await expect(page.locator('#full-curriculum-product h3')).toHaveText('Full Curriculum');
     const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
+  });
+
+  test('shows compact Flexible Hours choices first on mobile and hides them for an enrolled learner', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/learner/packages.html', { waitUntil: 'domcontentloaded' });
+
+    const flexibleCards = page.locator('#flexible-products .product-shell');
+    await expect(flexibleCards).toHaveCount(2);
+    await expect(flexibleCards.locator('h3')).toHaveText(['15 Flexible Hours', '30 Flexible Hours']);
+    await expect(flexibleCards.locator('.product-summary')).toHaveCount(0);
+    const mobileGrid = await page.locator('#flexible-products').evaluate(element => ({
+      columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
+      beforeCurriculum: Boolean(element.closest('#flexible-section')?.compareDocumentPosition(document.querySelector('#full-curriculum-section')) & Node.DOCUMENT_POSITION_FOLLOWING),
+      actionHeight: Number.parseFloat(getComputedStyle(element.querySelector('.product-action')).height),
+    }));
+    expect(mobileGrid).toMatchObject({ columns: 2, beforeCurriculum: true });
+    expect(mobileGrid.actionHeight).toBeGreaterThanOrEqual(48);
+
+    await page.unroute('**/api/packages?action=catalogue**');
+    await page.route('**/api/packages?action=catalogue**', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        viewer: { signed_in_as_learner: true, learner_id: 41 },
+        full_curriculum_eligibility: { test_booking: null, has_active_enrolment: true },
+        products: phase2UiCatalogue().map(product => product.product_type === 'full_curriculum'
+          ? { ...product, eligibility: { state: 'already_enrolled', purchase_eligible: false, checkout_available: false } }
+          : product),
+      }),
+    }));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#flexible-section')).toBeHidden();
+    await expect(page.locator('#flexible-truth-panel')).toBeHidden();
+    await expect(page.locator('#packages-hero-intro')).toHaveText('Your Full Curriculum programme and its current status are shown below.');
+    await expect(page.locator('#curriculum-section-kicker')).toHaveText('Your programme');
   });
 
   test('browser return polls the owned attempt and never fulfils from URL data', async ({ page }) => {

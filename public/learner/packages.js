@@ -269,7 +269,10 @@
       ? '<p class="lock-explanation" id="' + lockId + '"><strong>Why this is locked:</strong> ' + escapeHtml(eligibility.reason) + '</p>'
       : '';
     var disclosure = availability.note;
-    var describedBy = [summaryId, locked ? lockId : '', disclosure ? descriptionId : ''].filter(Boolean).join(' ');
+    var summaryCopy = options.hideSummary
+      ? ''
+      : '<p class="product-summary" id="' + summaryId + '">' + escapeHtml(content.summary || '') + '</p>';
+    var describedBy = [options.hideSummary ? '' : summaryId, locked ? lockId : '', disclosure ? descriptionId : ''].filter(Boolean).join(' ');
     var disclosureCopy = disclosure
       ? '<p class="version-note" id="' + descriptionId + '">' + escapeHtml(disclosure) + '</p>'
       : '';
@@ -279,7 +282,7 @@
         '<div class="product-topline"><div>' +
           '<p class="product-label">' + escapeHtml(label) + '</p>' +
           '<h3>' + escapeHtml(content.name || product.slug) + '</h3>' +
-          '<p class="product-summary" id="' + summaryId + '">' + escapeHtml(content.summary || '') + '</p>' +
+          summaryCopy +
         '</div><div class="product-price-group">' + renderProductPrice(product) + '<span class="availability-pill ' + escapeHtml(availability.tone) + '">' + escapeHtml(availability.label) + '</span></div></div>' +
         renderList(content.highlights) + lockCopy +
       '</div>' +
@@ -337,7 +340,11 @@
     catalogueViewer = data.viewer || null;
     cataloguePricing = data.pricing || {};
     var products = Array.isArray(data.products) ? data.products : [];
-    var flexible = products.filter(function (product) { return product.product_type === 'flexible_hours'; });
+    var flexible = products.filter(function (product) { return product.product_type === 'flexible_hours'; }).sort(function (a, b) {
+      var aHours = Number(a.content && a.content.entitlement && a.content.entitlement.hours || 0);
+      var bHours = Number(b.content && b.content.entitlement && b.content.entitlement.hours || 0);
+      return aHours - bHours;
+    });
     var curriculum = products.filter(function (product) { return product.product_type === 'full_curriculum'; });
     var manoeuvres = products.filter(function (product) { return product.product_type === 'manoeuvres'; });
     if (!products.length) {
@@ -352,26 +359,37 @@
       ? flexibleHours.slice(0, -1).join(', ') + ' or ' + flexibleHours[flexibleHours.length - 1]
       : String(flexibleHours[0] || 'Flexible');
     var flexibleLive = data.flexible_live_purchasing_enabled === true;
+    var hasActiveCurriculum = data.full_curriculum_eligibility
+      && data.full_curriculum_eligibility.has_active_enrolment === true;
+    var showFlexible = flexible.length > 0 && !hasActiveCurriculum;
 
-    document.getElementById('packages-hero-intro').textContent = flexible.length
-      ? 'Buy Flexible Hours upfront and use them with any available CoachCarter instructor. You can also see any other learning packages currently in the catalogue.'
-      : 'Compare the CoachCarter learning packages currently shown below.';
+    document.getElementById('packages-hero-intro').textContent = hasActiveCurriculum
+      ? 'Your Full Curriculum programme and its current status are shown below.'
+      : showFlexible
+        ? 'Buy Flexible Hours upfront and use them with any available CoachCarter instructor. You can also see any other learning packages currently in the catalogue.'
+        : 'Compare the CoachCarter learning packages currently shown below.';
     document.getElementById('flexible-section-kicker').textContent = flexibleLive ? 'Available now' : 'Not currently available';
+    document.getElementById('curriculum-section-kicker').textContent = hasActiveCurriculum
+      ? 'Your programme'
+      : 'Not currently available';
     document.getElementById('flexible-section-copy').textContent = flexible.length
       ? 'Buy ' + flexibleChoice + ' hours upfront. Use them with any available CoachCarter instructor, book in 30-minute steps and take as long as you need.'
       : '';
 
-    document.getElementById('flexible-section').hidden = !flexible.length;
+    document.getElementById('flexible-section').hidden = !showFlexible;
     document.getElementById('full-curriculum-section').hidden = !curriculum.length;
     document.getElementById('manoeuvres-section').hidden = !manoeuvres.length;
-    document.getElementById('flexible-truth-panel').hidden = !flexible.length;
+    document.getElementById('flexible-truth-panel').hidden = !showFlexible;
     var flexibleShortcuts = document.getElementById('flexible-purchase-shortcuts');
-    flexibleShortcuts.innerHTML = renderFlexiblePurchaseShortcuts(flexible);
+    flexibleShortcuts.innerHTML = showFlexible ? renderFlexiblePurchaseShortcuts(flexible) : '';
     flexibleShortcuts.hidden = !flexibleShortcuts.innerHTML;
 
     document.getElementById('flexible-products').innerHTML = flexible.map(function (product) {
       var hours = Number(product.content && product.content.entitlement && product.content.entitlement.hours || 0);
-      return renderProduct(product, { label: hours === 15 ? 'A smaller upfront block' : 'The lowest hourly price' });
+      return renderProduct(product, {
+        label: hours === 15 ? 'A smaller upfront block' : 'The lowest hourly price',
+        hideSummary: true
+      });
     }).join('');
     document.getElementById('full-curriculum-product').innerHTML = curriculum.map(function (product) {
       return renderProduct(product, { label: 'For learners with a booked test' });
@@ -397,6 +415,7 @@
             : 'We could not verify the latest details. Submit your current test information for another review.';
       }
     }
+    return showFlexible;
   }
 
   function requestStorageKey(productId) { return 'cc_package_test_request_' + String(productId); }
@@ -659,8 +678,8 @@
         }
         throw new Error(data.message || 'The catalogue could not be loaded.');
       }
-      renderCatalogue(data);
-      loadFlexibleBalance();
+      var showFlexible = renderCatalogue(data);
+      if (showFlexible) loadFlexibleBalance();
     } catch (error) {
       showMessage('We could not load Packages', error.message || 'Please try again.', true);
     }
