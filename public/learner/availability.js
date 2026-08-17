@@ -8,6 +8,7 @@
   const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
   window.addEventListener('DOMContentLoaded', async () => {
+    openAvailabilityFromHash();
     AUTH = ccAuth.getAuth();
     if (!AUTH) {
       const guestHint = document.getElementById('guestHint');
@@ -76,11 +77,19 @@
     if (!badge) return;
     if (AVAIL_WINDOWS.length === 0) {
       badge.textContent = 'Not set';
-      badge.className = 'availability-status';
+      badge.className = 'acc-status is-warn';
     } else {
       badge.textContent = AVAIL_WINDOWS.length + ' slot' + (AVAIL_WINDOWS.length !== 1 ? 's' : '') + ' set';
-      badge.className = 'availability-status is-ok';
+      badge.className = 'acc-status is-ok';
     }
+  }
+
+  function openAvailabilityFromHash() {
+    if (window.location.hash !== '#availability') return;
+    const section = document.getElementById('availability');
+    if (!section) return;
+    section.open = true;
+    window.requestAnimationFrame(() => section.scrollIntoView({ block: 'start' }));
   }
 
   function showAddRow(btn, day) {
@@ -188,4 +197,5 @@
 
   const saveBtn = document.getElementById('btnSaveAvail');
   if (saveBtn) saveBtn.addEventListener('click', saveAvailability);
+  window.addEventListener('hashchange', openAvailabilityFromHash);
 })();

@@ -233,7 +233,6 @@
       ]},
       { icon: 'gift', label: 'Packages', href: '/learner/packages.html', featureGate: 'learner_packages' },
       { icon: 'clipboard', label: 'Driving Test', href: '/learner/driving-test.html', authOnly: true },
-      { icon: 'clock', label: 'Availability', href: '/learner/availability.html', authOnly: true },
       { icon: 'user', label: 'Profile', href: '/learner/profile.html', authOnly: true }
     ],
     instructor: [
@@ -258,10 +257,8 @@
           activeOn: ['/learner/lessons-hub', '/learner/lessons'] },
         { icon: 'clipboard', label: 'Driving Test', href: '/learner/driving-test.html',
           activeOn: [] },
-        { icon: 'clock', label: 'Availability', href: '/learner/availability.html',
-          activeOn: [] },
         { icon: 'user', label: 'Profile', href: '/learner/profile.html',
-          activeOn: [] }
+          activeOn: ['/learner/availability'] }
       ]
     },
     instructor: {

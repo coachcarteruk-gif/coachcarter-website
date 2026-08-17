@@ -426,7 +426,7 @@
     }
     .avail-add-btn:hover { border-color: var(--accent); color: var(--accent); }
     .avail-add-row {
-      display: flex; align-items: center; gap: 6px; margin-top: 6px;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px;
     }
     .avail-add-row select {
       border: 1.5px solid var(--border); border-radius: 6px;
@@ -533,7 +533,26 @@
     </div>
   </details>
 
-
+  <!-- AVAILABILITY -->
+  <details class="acc-section" id="availability">
+    <summary>
+      <span class="acc-summary-left">
+        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+        Availability
+      </span>
+      <span class="acc-summary-right">
+        <span class="acc-status is-warn" id="availBadge">Not set</span>
+      </span>
+    </summary>
+    <div class="acc-body">
+      <p class="avail-explainer">Set the times you are usually free. These windows help filter the booking calendar and tell us when to notify you about newly opened slots.</p>
+      <div id="availDays"></div>
+      <div class="profile-save-row">
+        <span class="profile-save-note" id="availSaveNote"></span>
+        <button class="btn-save-profile" id="btnSaveAvail" type="button">Save</button>
+      </div>
+    </div>
+  </details>
 
   <!-- LESSON CREDIT BALANCES -->
   <details class="acc-section" id="credit-balances-card" open>
@@ -598,9 +617,9 @@
     <div class="acc-body">
       <div style="padding:4px 4px 0;font-size:12px;color:#797879;line-height:1.8">
         <a href="/learner/my-data.html" style="color:#797879;text-decoration:underline">View my data</a>
-        <span style="margin:0 6px">·</span>
+        <span style="margin:0 6px">Â·</span>
         <a href="#" id="link-cookie-prefs" style="color:#797879;text-decoration:underline">Cookie preferences</a>
-        <span style="margin:0 6px">·</span>
+        <span style="margin:0 6px">Â·</span>
         <a href="/privacy.html" style="color:#797879;text-decoration:underline">Privacy policy</a>
       </div>
       <!-- Calendar sync token rotation (PR-L, audit #17) -->
@@ -626,5 +645,6 @@
 </main>
 
 <script src="/learner/profile.js"></script>
+<script src="/learner/availability.js"></script>
 </body>
 </html>
