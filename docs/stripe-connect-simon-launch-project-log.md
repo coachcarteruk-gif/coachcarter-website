@@ -5712,3 +5712,27 @@ not be retried.
   changes `0`; real account list/create/map/reconcile `0`; invitations/emails
   `0`; previews from Production data `0`; unpauses/payouts/transfers `0`; and
   Production mutations `0`.
+
+## 17 August 2026 - payment fulfilment incident and controlled-source evidence
+
+- A production webhook permission defect prevented the existing balance audit
+  trigger from writing its append-only row under the restricted runtime role.
+  Four already-paid Checkout sessions had durable `slot_purchase` rows but no
+  corresponding booking. Stripe showed the four sessions paid and complete;
+  no fifth in-scope payment, refund or dispute was found.
+- After fresh tenant, identity and all-source slot-conflict checks, the four
+  payments were reconciled into exactly four scheduled bookings and four
+  `booking_credit_sources` rows. Each scoped learner/instructor balance
+  finished at its pre-repair value. No charge, refund, payout, transfer or
+  customer communication was created.
+- The one Simon-controlled direct booking received one interim-v1 funding
+  evidence row. Its provider identity remains `py_` and its balance transaction
+  type remains `payment`, so the evidence is deliberately `pending` and
+  payout-blocking. It was not reinterpreted as exact `ch_`/`charge` evidence.
+- The audit trigger is now owner-controlled with `SECURITY DEFINER`, a fixed
+  `pg_catalog, public` search path, schema-qualified ledger writes and no public
+  execute privilege. The runtime role received no direct audit table or
+  sequence grants. Permanent webhook recovery is restricted to one-off paid
+  slots, exact ledger reconciliation and conflict-free creation.
+- Simon remains paused. This incident did not authorize onboarding, unpausing,
+  payout approval, payout execution, transfer, A8/A9 or payout-v2 cutover.

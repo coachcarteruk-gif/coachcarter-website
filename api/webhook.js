@@ -13,6 +13,7 @@ const { grantCredits, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { withNeonTransaction } = require('./_db-transaction');
 const { recordInterimV1FundingEvidence } = require('./_interim-v1-payout');
+const { recoverPaidBookingOrphan } = require('./_paid-booking-orphan-recovery');
 const { normaliseSocialVideoConsent } = require('./_pricing-helpers');
 const {
   computeRequestExpiresAt,
@@ -1327,14 +1328,61 @@ async function handleSlotBooking(session, eventContext = null) {
         return;
       }
 
-      // Existing behaviour for an orphan paid session: once the slot_purchase
-      // ledger row exists but no matching booking exists, do not replay the
-      // booking/balance/notification path from a retry. The existing failure
-      // alert path is responsible for operator recovery.
-      console.warn(`slot_booking ${session.id} has slot_purchase CT but no matching booking; leaving orphan recovery to operator flow`);
-      if (eventContext?.launchEnabled === true) {
-        throw new Error(`STRIPE_LAUNCH_BOOKING_NOT_READY: ${session.id}`);
+      if (bookingPurpose !== 'lesson') {
+        throw new Error(`slot_booking ${session.id} has an unsupported test-date orphan`);
       }
+      const recovered = await recoverPaidBookingOrphan({
+        connectionString: process.env.POSTGRES_URL,
+        paymentType: 'slot_booking',
+        schoolId,
+        learnerId,
+        instructorId,
+        sessionId: session.id,
+        paymentIntentId,
+        scheduledDate,
+        startTime,
+        endTime,
+        minutes: chargeMins,
+        amountPence,
+        lessonTypeId,
+        stripeFeePence: fundingEvidence.feePence,
+        stripeChargeId: fundingEvidence.chargeId,
+        transmissionType: bookingTransmissionType,
+        pickupAddress,
+        dropoffAddress,
+        socialVideoConsent,
+        socialVideoAgeConfirmed,
+        socialVideoDiscountPct,
+      });
+      await recordInterimV1FundingEvidence(sql, {
+        schoolId,
+        instructorId,
+        learnerId,
+        bookingId: recovered.bookingId,
+        creditTransactionId: recovered.creditTransactionId,
+        fundingEvidence,
+        providerLivemode: eventContext?.providerLivemode === true,
+      });
+      const launchResult = await ensurePayoutV2StripeSource({
+        sql,
+        schoolId,
+        creditTransactionId: recovered.creditTransactionId,
+        sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+        fundingEvidence,
+        eventContext: {
+          stripeEventId: eventContext?.stripeEventId || null,
+          stripeEventType: eventContext?.stripeEventType || null,
+          launchEnabled: eventContext?.launchEnabled === true,
+        },
+        launchContract: {
+          bookingId: recovered.bookingId,
+          metadata,
+          expectedOrigin: STRIPE_LAUNCH_PAYMENT_ORIGINS.DIRECT_SLOT,
+        },
+      });
+      const retryError = launchMaterializationRetryError(launchResult);
+      if (retryError) throw retryError;
+      console.warn(`slot_booking ${session.id} recovered orphan source into booking ${recovered.bookingId}`);
       return;
     }
 
@@ -1389,7 +1437,9 @@ async function handleSlotBooking(session, eventContext = null) {
         } else if (racedBooking && isTerminal(racedBooking.status)) {
           console.warn(`slot_booking ${session.id} hit uq_credit_tx_session with refunded booking ${racedBooking.id}; not repairing active BCS`);
         } else {
-          console.warn(`slot_booking ${session.id} hit uq_credit_tx_session before a matching booking was visible; leaving retry/operator flow unchanged`);
+          throw new Error(
+            `slot_booking ${session.id} hit uq_credit_tx_session before a matching booking was visible; retry required`
+          );
         }
         if (
           racedCreditTx &&
@@ -2493,9 +2543,69 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       ? session.payment_intent
       : session.payment_intent?.id || null;
 
-    // uq_credit_tx_session catches concurrent Stripe retries on the same
-    // offer-acceptance event. SELECT idempotency above is the fast path;
-    // this is the DB-enforced backstop.
+    // A completed transaction with a still-pending one-off offer is the
+    // durable signature of an earlier partial webhook attempt. Recover that
+    // state before trying another insert. A truly concurrent insert race is
+    // kept retryable below instead of competing with the winning handler.
+    const [existingPendingOfferCreditTx] = await sql`
+      SELECT id
+        FROM credit_transactions
+       WHERE stripe_session_id = ${session.id}
+         AND type = 'slot_purchase'
+         AND learner_id = ${learnerId}
+         AND instructor_id = ${instructorId}
+         AND school_id = ${schoolId}
+       LIMIT 1
+    `;
+    if (existingPendingOfferCreditTx) {
+      if (!isFlexible && repeatWeeks === 1) {
+        const recovered = await recoverPaidBookingOrphan({
+          connectionString: process.env.POSTGRES_URL,
+          paymentType: 'lesson_offer',
+          repeatWeeks,
+          offerId: offer.id,
+          schoolId,
+          learnerId,
+          instructorId,
+          sessionId: session.id,
+          paymentIntentId,
+          scheduledDate,
+          startTime,
+          endTime,
+          minutes: durationMins,
+          amountPence: totalAmountPence,
+          lessonTypeId,
+          stripeFeePence,
+          stripeChargeId: offerFundingEvidence.chargeId,
+          pickupAddress,
+        });
+        await ensurePayoutV2StripeSource({
+          sql,
+          schoolId,
+          creditTransactionId: recovered.creditTransactionId,
+          sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+          fundingEvidence: offerFundingEvidence,
+          eventContext: payoutV2Receipt ? {
+            stripeEventId: payoutV2Receipt.stripeEventId,
+            stripeEventType: payoutV2Receipt.stripeEventType,
+            launchEnabled: true,
+          } : {},
+          launchContract: {
+            bookingId: recovered.bookingId,
+            metadata,
+            expectedOrigin: STRIPE_LAUNCH_PAYMENT_ORIGINS.ONE_OFF_OFFER,
+          },
+        });
+        console.warn(`lesson_offer ${session.id} recovered orphan source into booking ${recovered.bookingId}`);
+        return;
+      }
+      throw new Error(
+        `lesson_offer ${session.id} already has a credit_transaction but requires operator reconciliation`
+      );
+    }
+
+    // uq_credit_tx_session is the DB-enforced backstop for a truly concurrent
+    // delivery that passed the SELECT above before the winning INSERT committed.
     let offerCreditTx;
     try {
       const [creditTx] = await sql`
@@ -2510,13 +2620,8 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       offerCreditTx = creditTx;
     } catch (insertErr) {
       if (insertErr.message?.includes('uq_credit_tx_session') || insertErr.code === '23505') {
-        // A source row is no longer an early progress marker in Slice 2: the
-        // exact contract can only be written after the booking and BCS exist.
-        // A pending offer plus an existing CT is therefore ambiguous. Never
-        // replay balance or booking mutations; only the accepted path above
-        // can repair a missing contract automatically.
         const duplicatePendingError = new Error(
-          `lesson_offer ${session.id} already has a credit_transaction but offer ${offer.id} is not accepted; previous webhook attempt likely failed mid-flight`
+          `lesson_offer ${session.id} hit uq_credit_tx_session before fulfilment was visible; retry required`
         );
         console.error('❌ lesson_offer: duplicate credit transaction on pending offer', duplicatePendingError.message);
         throw duplicatePendingError;
