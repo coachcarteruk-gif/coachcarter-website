@@ -372,15 +372,7 @@ function selectLearner(id, name, detail, balanceMinutes) {
   document.getElementById('bookSelectedName').textContent = name;
   document.getElementById('bookSelectedDetail').textContent = detail;
   document.getElementById('bookSelected').classList.add('show');
-
-  // Show credit note
-  var note = document.getElementById('bookCreditNote');
-  if (balanceMinutes > 0) {
-    note.textContent = 'Learner has ' + formatBalanceMins(balanceMinutes) + ' with you.';
-    note.style.display = 'block';
-  } else {
-    note.style.display = 'none';
-  }
+  updateBookCreditNote(balanceMinutes);
 }
 
 function clearLearner() {
@@ -392,12 +384,42 @@ function clearLearner() {
   document.getElementById('bookSearch').value = '';
 }
 
+function updateBookCreditNote(balanceMinutes) {
+  var payMethod = document.querySelector('input[name="bookPay"]:checked')?.value || 'cash';
+  var note = document.getElementById('bookCreditNote');
+  if (!note) return;
+  if (!selectedLearnerId) {
+    note.style.display = 'none';
+    return;
+  }
+  if (payMethod === 'credit') {
+    if (balanceMinutes > 0) {
+      note.textContent = 'Learner has ' + formatBalanceMins(balanceMinutes) + ' with you.';
+      note.style.color = 'var(--muted)';
+      note.style.display = 'block';
+    } else {
+      note.textContent = 'Learner has no hours with you. Choose Cash or Free instead.';
+      note.style.color = 'var(--red)';
+      note.style.display = 'block';
+    }
+    return;
+  }
+  if (payMethod === 'flexible_package') {
+    note.textContent = 'Use learner flexible package credits.';
+    note.style.color = 'var(--muted)';
+    note.style.display = 'block';
+    return;
+  }
+  note.style.display = 'none';
+}
+
 function updateBookPaymentUi() {
   var payMethod = document.querySelector('input[name="bookPay"]:checked')?.value || 'cash';
   var linkNote = document.getElementById('bookPaymentLinkNote');
   var btn = document.getElementById('bookBtn');
   if (linkNote) linkNote.style.display = payMethod === 'payment_link' ? 'block' : 'none';
   if (btn && !btn.disabled) btn.textContent = payMethod === 'payment_link' ? 'Send payment link' : 'Book lesson';
+  updateBookCreditNote(selectedLearnerBalanceMinutes);
 }
 
 function clearPaymentLinkSuccess() {
