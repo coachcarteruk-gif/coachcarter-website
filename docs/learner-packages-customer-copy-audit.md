@@ -6,14 +6,14 @@ Reviewed: 18 August 2026
 
 The production page was not ready for ordinary learners or parents. The product and payment rules were safe, but the presentation exposed rollout and accounting language such as `School 1 gate`, `verified signed webhook`, `immutable purchase source`, version numbers, `fulfilment`, test-mode states and raw programme statuses.
 
-The frontend now leads with the live customer choices of 10, 15 or 30 Flexible Hours and describes unavailable products in customer language. The 10-hour option is presented as payment convenience rather than a discount. It keeps the exact checkout acknowledgement and immediate-access request at the payment decision point inside one combined terms checkbox in the purchase step. Learners with a positive balance see a direct calendar CTA instead of another purchase action.
+The frontend now leads with the live customer choices of 10, 15 or 30 Flexible Hours and describes unavailable products in customer language. The 10-hour option is presented as payment convenience rather than a discount. The purchase step uses one concise combined terms checkbox and keeps the exact checkout acknowledgement and immediate-access request unchanged in an adjacent expandable disclosure associated with that checkbox. Learners with a positive balance see a direct calendar CTA instead of another purchase action.
 
 ## Visible copy ownership
 
 | Source | What it controls | Treatment in this change |
 |---|---|---|
 | `public/learner/packages.html` | Page introduction, section order, section explanations, payment overview and cross-links | Rewritten in plain British English. Flexible Hours now leads as available; other packages are clearly unavailable. |
-| `public/learner/packages.js` | Availability labels, card presentation, purchase review, balance/status wording, payment-return wording and programme-status wording | Legal strings still come from the API unchanged but are presented in one combined acceptance. A positive balance links to `/learner/book.html`. |
+| `public/learner/packages.js` | Availability labels, card presentation, purchase review, balance/status wording, payment-return wording and programme-status wording | Legal strings still come from the API unchanged. The concise combined acceptance is associated with an expandable disclosure containing the approved wording. A positive balance links to `/learner/book.html`. |
 | `api/packages.js` and eligibility helpers | School-scoped catalogue, live/test gates, signed-in eligibility and machine-readable reasons | A positive Flexible Hours balance returns `existing_flexible_balance`, preventing a repeat purchase action while preserving catalogue visibility. |
 | `api/flexible-packages.js` | Checkout, status and balance responses | Checkout independently rejects a positive spendable balance, so the rule cannot be bypassed through the browser UI. |
 | `package_product_versions.content` | Product names, descriptions, highlights, exclusions, checkout disclosure and Flexible Hours acknowledgement wording | Existing rows remain immutable and were not edited. The page uses structured facts to present concise card copy while preserving the exact legal acknowledgements. |
@@ -31,7 +31,7 @@ The live immutable product versions still contain wording that should not be reu
 | Manoeuvres | `Three immutable GBP 50 session units for future accounting`; `not available in Phase 1` | `Three one-hour specialist sessions with no promotional tasks`; `Not currently available to book.` |
 | Manoeuvres Challenge | `original-method refund or programme credit`; rollout, safeguard and evidence language | `Three specialist sessions with optional promotional tasks and a possible reward if you meet the published criteria`; `Not currently available to book.` |
 
-The Flexible Hours checkout acknowledgement and immediate-access request retain their approved wording and legal meaning. The frontend combines both exact strings into one checked acceptance and stores immediate access as requested. The wording should change only through a separately reviewed consumer-rights version.
+The Flexible Hours checkout acknowledgement and immediate-access request retain their approved wording and legal meaning. The frontend uses one concise checked acceptance, keeps both exact strings in an adjacent expandable disclosure associated with that checkbox, and stores immediate access as requested. The approved wording itself should change only through a separately reviewed consumer-rights version.
 
 ## Safe follow-up mechanism
 
