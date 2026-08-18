@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-let AUTH, BOOKINGS_DATA, UNLOGGED_DATA, BALANCE_DATA;
+let AUTH, BOOKINGS_DATA, UNLOGGED_DATA, BALANCE_DATA, FLEXIBLE_BALANCE_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  await Promise.all([loadBookings(), loadUnlogged(), loadReadiness(), loadBalance()]);
+  await Promise.all([loadBookings(), loadUnlogged(), loadReadiness(), loadBalance(), loadFlexibleBalance()]);
   render();
   loadProfileCompleteness();
   loadReferralCard();
@@ -153,9 +153,32 @@ async function loadBalance() {
   } catch (e) { console.warn('Credit balance load failed:', e); }
 }
 
+async function loadFlexibleBalance() {
+  try {
+    const res = await ccAuth.fetchAuthed('/api/flexible-packages?action=balance');
+    if (res.ok) FLEXIBLE_BALANCE_DATA = await res.json();
+  } catch (e) { console.warn('Flexible Hours balance load failed:', e); }
+}
+
 function formatHours(minutes) {
   const hrs = (Number(minutes) || 0) / 60;
   return hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+}
+
+function lessonCreditMinutes() {
+  if (BALANCE_DATA?.balance_minutes != null) return Number(BALANCE_DATA.balance_minutes) || 0;
+  if (AUTH?.user?.balance_minutes != null) return Number(AUTH.user.balance_minutes) || 0;
+  if (AUTH?.user?.credits != null) return (Number(AUTH.user.credits) || 0) * 90;
+  return 0;
+}
+
+function flexibleHoursMinutes() {
+  return Number(FLEXIBLE_BALANCE_DATA?.remaining_minutes || 0);
+}
+
+function hoursLabel(minutes, label) {
+  const hours = formatHours(minutes);
+  return hours + ' hr' + (hours !== '1' ? 's' : '') + ' ' + label;
 }
 
 const MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -175,23 +198,18 @@ function render() {
     nameEl.textContent = 'Welcome!';
   }
 
-  // Credit balance sub-line. Prefer the live LCB aggregate from the balance API;
-  // the auth blob is display-only and can be stale after per-instructor changes.
+  // Keep the school-wide Flexible Hours entitlement visibly distinct from
+  // per-instructor Lesson Credit even though the stat can total both balances.
   const greetingSub = document.getElementById('greeting-sub');
   const creditLine = document.getElementById('credit-balance-line');
   if (greetingSub && creditLine) {
-    const bal = BALANCE_DATA?.balance_minutes ?? AUTH?.user?.balance_minutes ?? AUTH?.user?.credits;
-    if (typeof bal !== 'undefined' && bal !== null) {
-      let display;
-      if (BALANCE_DATA?.balance_minutes != null || AUTH?.user?.balance_minutes != null) {
-        const hrs = formatHours(bal);
-        display = hrs + ' hr' + (hrs !== '1' ? 's' : '') + ' total credit across instructors';
-      } else {
-        display = (bal * 1.5) + ' hrs total credit across instructors';
-      }
-      creditLine.innerHTML = '<span class="credit-badge">' + display + '</span>';
-      greetingSub.style.display = 'flex';
-    }
+    const lessonMinutes = lessonCreditMinutes();
+    const flexibleMinutes = flexibleHoursMinutes();
+    const balances = [];
+    if (flexibleMinutes > 0) balances.push(hoursLabel(flexibleMinutes, 'Flexible Hours'));
+    if (lessonMinutes > 0) balances.push(hoursLabel(lessonMinutes, 'Lesson Credit'));
+    creditLine.textContent = balances.length ? balances.join(' · ') : 'No available hours';
+    greetingSub.style.display = 'flex';
   }
 
   renderBalanceStat();
@@ -205,14 +223,13 @@ function renderBalanceStat() {
   const val = document.getElementById('stat-balance-value');
   const sub = document.getElementById('stat-balance-sub');
   if (!val || !sub) return;
-  const minutes = BALANCE_DATA?.balance_minutes ?? AUTH?.user?.balance_minutes;
-  if (typeof minutes !== 'undefined' && minutes !== null) {
-    val.textContent = formatHours(minutes);
-    sub.textContent = 'across instructors';
-  } else if (AUTH?.user?.credits != null) {
-    val.textContent = String(AUTH.user.credits * 1.5);
-    sub.textContent = 'across instructors';
-  }
+  const lessonMinutes = lessonCreditMinutes();
+  const flexibleMinutes = flexibleHoursMinutes();
+  val.textContent = formatHours(lessonMinutes + flexibleMinutes);
+  if (flexibleMinutes > 0 && lessonMinutes > 0) sub.textContent = 'Flexible Hours + Lesson Credit';
+  else if (flexibleMinutes > 0) sub.textContent = 'Flexible Hours, school-wide';
+  else if (lessonMinutes > 0) sub.textContent = 'Lesson Credit across instructors';
+  else sub.textContent = 'No available hours';
 }
 
 // One-time toast confirming the learner has arrived in their dashboard

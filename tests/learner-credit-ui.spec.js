@@ -172,27 +172,37 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
 });
 
 test.describe('learner aggregate-safe balance displays', () => {
-  test('dashboard loads live aggregate balance and labels it across instructors', () => {
+  test('dashboard displays Flexible Hours separately while totalling available hours', () => {
     const html = read('public/learner/index.html');
     const js = read('public/learner/index.js');
     const glue = read('public/learner/index-page.js');
 
-    expect(html).toContain('<div class="stat-cell-label">Total hours</div>');
-    expect(html).toContain('<div class="stat-cell-sub" id="stat-balance-sub">across instructors</div>');
+    expect(html).toContain('<div class="stat-cell-label">Available hours</div>');
+    expect(html).toContain('<div class="stat-cell-sub" id="stat-balance-sub">Flexible Hours + Lesson Credit</div>');
     expect(js).toContain("ccAuth.fetchAuthed('/api/credits?action=balance')");
-    expect(js).toContain('BALANCE_DATA?.balance_minutes ?? AUTH?.user?.balance_minutes');
-    expect(js).toContain('total credit across instructors');
-    expect(glue).toContain("balSub.textContent = 'across instructors';");
+    expect(js).toContain("ccAuth.fetchAuthed('/api/flexible-packages?action=balance')");
+    expect(js).toContain("balances.push(hoursLabel(flexibleMinutes, 'Flexible Hours'))");
+    expect(js).toContain("balances.push(hoursLabel(lessonMinutes, 'Lesson Credit'))");
+    expect(js).toContain('formatHours(lessonMinutes + flexibleMinutes)');
+    expect(js).toContain("sub.textContent = 'Flexible Hours, school-wide'");
+    expect(glue).not.toContain("balSub.textContent = 'across instructors';");
   });
 
-  test('profile fetches balance API and renders per-instructor rows', () => {
+  test('profile renders school-wide Flexible Hours before per-instructor Lesson Credit', () => {
     const html = read('public/learner/profile.html');
     const js = read('public/learner/profile.js');
 
+    expect(html).toContain('id="flexible-hours-card"');
+    expect(html).toContain('School-wide balance');
+    expect(html.indexOf('id="flexible-hours-card"')).toBeLessThan(html.indexOf('id="credit-balances-card"'));
     expect(html).toContain('Lesson credit balances');
     expect(html).toContain('Total across instructors');
     expect(html).toContain('id="creditBalanceRows"');
     expect(js).toContain("ccAuth.fetchAuthed('/api/credits?action=balance')");
+    expect(js).toContain("ccAuth.fetchAuthed('/api/flexible-packages?action=balance')");
+    expect(js).toContain("FLEXIBLE_BALANCE_DATA?.remaining_minutes || 0");
+    expect(js).toContain('Available with any active instructor');
+    expect(js).toContain('href="/learner/book.html"');
     expect(js).toContain('const rows = (BALANCE_DATA.balances || []).filter');
     expect(js).toContain("escapeHtml(row.instructor_name || 'Instructor')");
     expect(js).toContain("'<span class=\"credit-balance-hours\">' + hours + ' hr'");

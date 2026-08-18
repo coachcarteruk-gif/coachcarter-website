@@ -38,8 +38,8 @@ test.describe('Codex seeded test accounts', () => {
     await learnerPage.goto('/learner/index.html');
 
     await expect(learnerPage.locator('#stat-balance-value')).toHaveText('6');
-    await expect(learnerPage.locator('#stat-balance-sub')).toHaveText('across instructors');
-    await expect(learnerPage.locator('#credit-balance-line')).toContainText('6 hrs total credit across instructors');
+    await expect(learnerPage.locator('#stat-balance-sub')).toHaveText('Lesson Credit across instructors');
+    await expect(learnerPage.locator('#credit-balance-line')).toContainText('6 hrs Lesson Credit');
   });
 
   test('instructor logs in and reaches dashboard', async ({ instructorPage }, testInfo) => {
