@@ -2,7 +2,7 @@
   'use strict';
 
 // ── Auth ──
-let AUTH, PROGRESS, BALANCE_DATA;
+let AUTH, PROGRESS, BALANCE_DATA, FLEXIBLE_BALANCE_DATA;
 
 window.addEventListener('DOMContentLoaded', async () => {
   AUTH = ccAuth.getAuth();
@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (guestHint) guestHint.style.display = 'block';
     return;
   }
-  await Promise.all([loadProgress(), loadCreditBalances()]);
+  await Promise.all([loadProgress(), loadCreditBalances(), loadFlexibleBalance()]);
   render();
 });
 
@@ -32,6 +32,14 @@ async function loadCreditBalances() {
     if (res.status === 401) { logout(); return; }
     if (res.ok) BALANCE_DATA = await res.json();
   } catch (e) { console.error('load-credit-balances error:', e); }
+}
+
+async function loadFlexibleBalance() {
+  try {
+    const res = await ccAuth.fetchAuthed('/api/flexible-packages?action=balance');
+    if (res.status === 401) { logout(); return; }
+    if (res.ok) FLEXIBLE_BALANCE_DATA = await res.json();
+  } catch (e) { console.error('load-flexible-balance error:', e); }
 }
 
 function formatHours(minutes) {
@@ -98,6 +106,33 @@ function render() {
   }
 
   renderCreditBalances();
+  renderFlexibleBalance();
+}
+
+function renderFlexibleBalance() {
+  const totalEl = document.getElementById('flexibleBalanceTotal');
+  const actionEl = document.getElementById('flexibleBalanceAction');
+  const badge = document.getElementById('flexibleBalanceBadge');
+  if (!totalEl || !actionEl || !badge) return;
+
+  const minutes = Number(FLEXIBLE_BALANCE_DATA?.remaining_minutes || 0);
+  const hours = formatHours(minutes);
+  const display = hours + ' hr' + (hours !== '1' ? 's' : '');
+  totalEl.textContent = display;
+  badge.textContent = display;
+
+  if (minutes > 0) {
+    actionEl.innerHTML = '<div class="credit-balance-row">' +
+      '<span class="credit-balance-name">Available with any active instructor</span>' +
+      '<a class="credit-balance-hours" href="/learner/book.html">Book now</a>' +
+      '</div>';
+    return;
+  }
+
+  actionEl.innerHTML = '<div class="credit-balance-row">' +
+    '<span class="credit-balance-empty">No Flexible Hours yet</span>' +
+    '<a class="credit-balance-hours" href="/learner/packages.html">View packages</a>' +
+    '</div>';
 }
 
 function renderCreditBalances() {
