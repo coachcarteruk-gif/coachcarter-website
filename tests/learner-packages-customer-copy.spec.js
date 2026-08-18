@@ -3,6 +3,7 @@ const path = require('path');
 
 const FLEXIBLE_ACKNOWLEDGEMENT = 'I have read and accept the Flexible Hours terms, cancellation rules and unused-value refund basis.';
 const FLEXIBLE_IMMEDIATE_ACCESS = 'I expressly request immediate access to my Flexible Hours during the 14-day cancellation period and understand that properly used or late-cancelled value may be deducted.';
+const FLEXIBLE_ACCEPTANCE_SUMMARY = 'I accept the Flexible Hours terms and request immediate access to my hours.';
 
 function product({ id, slug, type, price, content, eligibility, rights = null }) {
   return {
@@ -172,12 +173,19 @@ test.describe('Learner Packages customer copy', () => {
     await expect(page.locator('.price-saving')).toHaveText(['Save £15', 'Save £60']);
     await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(0);
     await expect(page.getByText('For learners who prefer one payment over 10 separate payments when booking.', { exact: true })).toBeVisible();
-    await expect(page.locator('.purchase-review summary')).toHaveText(['Book 10hrs', 'Book 15hrs', 'Book 30hrs']);
+    await expect(page.locator('.purchase-review > summary')).toHaveText(['Book 10hrs', 'Book 15hrs', 'Book 30hrs']);
     await expect(page.getByRole('link', { name: 'Book 10hrs Flexible Hours package' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Book 30hrs Flexible Hours package' })).toBeVisible();
     await page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' }).click();
-    await expect(page.locator('[data-flexible-purchase-panel="8"]')).toHaveAttribute('open', '');
+    const openPurchase = page.locator('[data-flexible-purchase-panel="8"]');
+    await expect(openPurchase).toHaveAttribute('open', '');
+    const openCardLayout = await openPurchase.evaluate(details => {
+      const card = details.closest('.product-shell');
+      const grid = card.parentElement;
+      return { cardWidth: card.getBoundingClientRect().width, gridWidth: grid.getBoundingClientRect().width };
+    });
+    expect(openCardLayout.cardWidth).toBeGreaterThan(openCardLayout.gridWidth * 0.95);
     await expect(page.locator('#full-curriculum-section')).toBeHidden();
     await expect(page.locator('#manoeuvres-section')).toBeHidden();
     await expect(page.locator('#flexible-truth-panel')).toBeVisible();
@@ -274,8 +282,15 @@ test.describe('Learner Packages customer copy', () => {
     await expect(review).toBeVisible();
     await review.click();
     const openReview = page.locator('.purchase-review[open]');
-    await expect(openReview.locator('.checkout-owner')).toHaveText('Buying for: Alex Taylor');
-    await expect(openReview.getByLabel(FLEXIBLE_ACKNOWLEDGEMENT + ' ' + FLEXIBLE_IMMEDIATE_ACCESS, { exact: true })).toBeVisible();
+    await expect(openReview.locator('.checkout-owner')).toHaveCount(0);
+    await expect(openReview.getByText('15 hours for £810.', { exact: false })).toHaveCount(0);
+    await expect(openReview.getByText('You have 14 days to cancel.', { exact: false })).toHaveCount(0);
+    await expect(openReview.getByLabel(FLEXIBLE_ACCEPTANCE_SUMMARY, { exact: true })).toBeVisible();
+    const termsDetail = openReview.locator('.consumer-terms-detail');
+    await expect(termsDetail).not.toHaveAttribute('open', '');
+    await termsDetail.locator('summary').click();
+    await expect(termsDetail).toContainText(FLEXIBLE_ACKNOWLEDGEMENT);
+    await expect(termsDetail).toContainText(FLEXIBLE_IMMEDIATE_ACCESS);
     await expect(page.locator('[name="immediate_access_requested"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pay £810 by bank' })).toBeVisible();
     await expect(page.locator('#test-booking-panel')).toBeHidden();

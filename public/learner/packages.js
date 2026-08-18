@@ -214,15 +214,13 @@
     if (eligibility.checkout_available) {
       var rights = product.consumer_rights || {};
       if (product.product_type === 'flexible_hours') {
-        var entitlement = product.content && product.content.entitlement || {};
+        var termsDetailId = 'flexible-terms-detail-' + escapeHtml(product.id);
         return '<details class="purchase-review" id="flexible-purchase-' + escapeHtml(product.id) + '" data-flexible-purchase-panel="' + escapeHtml(product.id) + '"><summary>' + escapeHtml(flexibleBookLabel(product)) + '</summary>' +
           '<div class="consumer-checkout flexible-checkout" data-flexible-checkout-panel="' + escapeHtml(product.id) + '">' +
-            '<p class="checkout-owner"><strong>Buying for:</strong> ' + escapeHtml(catalogueViewer && catalogueViewer.learner_name || 'your signed-in learner account') + '</p>' +
-            '<p><strong>' + escapeHtml(entitlement.hours || '') + ' hours for ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '.</strong> Pay by Bank only. The hours do not expire and cannot be transferred.</p>' +
-            '<p>You have 14 days to cancel. Your hours become available as soon as payment is confirmed. We may deduct hours you use or lose through a cancellation with less than 48 hours\' notice. Any unused hours are refunded at the rate paid, and CoachCarter absorbs the original payment fee.</p>' +
-            '<p class="checkout-prompt"><strong>Please confirm before paying:</strong></p>' +
+            '<p class="checkout-prompt"><strong>Before paying:</strong></p>' +
             '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
-            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml((rights.checkout_acknowledgement || '') + ' ' + (rights.immediate_access_request || '')) + '</label>' +
+            '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted" aria-describedby="' + termsDetailId + '"> I accept the Flexible Hours terms and request immediate access to my hours.</label>' +
+            '<details class="consumer-terms-detail"><summary>Important cancellation and refund information</summary><p id="' + termsDetailId + '">' + escapeHtml((rights.checkout_acknowledgement || '') + ' ' + (rights.immediate_access_request || '')) + '</p></details>' +
             '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' by bank</button>' +
           '</div>' +
         '</details>';

@@ -18,7 +18,7 @@ Hours are school-wide, do not expire and cannot transfer to another learner. The
 
 Each booking uses Flexible Hours, Lesson Credit or Pay As You Go, never a blend. At 48+ hours, learner cancellation returns each exact allocation once. A 48+ hour reschedule atomically moves the exact allocation and frozen value to the replacement lesson, including a different active same-school instructor. Under 48 hours/no-show consumes it and leaves the booking payable. Durations not divisible by 30 minutes fail closed. Unused source units are refunded at their frozen rate; CoachCarter absorbs the original Stripe fee.
 
-Every learner receives access as soon as signed payment confirmation creates the entitlement. The checkout page presents the immediate-access request inside the single combined terms acceptance and records `terms_accepted = TRUE` plus `immediate_access_requested = TRUE`; do not remove that wording or evidence when simplifying the UI.
+Every learner receives access as soon as signed payment confirmation creates the entitlement. The checkout page presents the immediate-access request inside the single combined terms acceptance and records `terms_accepted = TRUE` plus `immediate_access_requested = TRUE`. The checkbox may use a concise customer-facing label only while the approved acknowledgement and immediate-access wording remain unchanged in the adjacent checkout disclosure and are programmatically associated with that checkbox; do not remove that wording or evidence when simplifying the UI.
 
 ## Separate live Stripe prerequisites
 

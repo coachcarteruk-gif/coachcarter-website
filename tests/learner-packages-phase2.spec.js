@@ -913,7 +913,7 @@ test.describe('Learner Packages Phase 2 page states', () => {
       beforeCurriculum: Boolean(element.closest('#flexible-section')?.compareDocumentPosition(document.querySelector('#full-curriculum-section')) & Node.DOCUMENT_POSITION_FOLLOWING),
       actionHeight: Number.parseFloat(getComputedStyle(element.querySelector('.product-action')).height),
     }));
-    expect(mobileGrid).toMatchObject({ columns: 2, beforeCurriculum: true });
+    expect(mobileGrid).toMatchObject({ columns: 1, beforeCurriculum: true });
     expect(mobileGrid.actionHeight).toBeGreaterThanOrEqual(48);
 
     await page.unroute('**/api/packages?action=catalogue**');
