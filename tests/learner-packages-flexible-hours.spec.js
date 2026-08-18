@@ -99,12 +99,16 @@ function providerObject(overrides = {}) {
 
 test.describe('school-wide Flexible Hours packages', () => {
   test('pins the approved immutable prices and 30-minute entitlements', () => {
+    expect(productTerms(product('flexible-10-hours'))).toEqual({
+      amountPence: 55000, totalUnits: 20, unitMinutes: 30, ratePencePerUnit: 2750,
+    });
     expect(productTerms(product('flexible-15-hours'))).toEqual({
       amountPence: 81000, totalUnits: 30, unitMinutes: 30, ratePencePerUnit: 2700,
     });
     expect(productTerms(product('flexible-30-hours'))).toEqual({
       amountPence: 159000, totalUnits: 60, unitMinutes: 30, ratePencePerUnit: 2650,
     });
+    expect(productTerms(product('flexible-10-hours', { price_pence: 54999 }))).toBeNull();
     expect(productTerms(product('flexible-15-hours', { price_pence: 80999 }))).toBeNull();
     expect(productTerms(product('flexible-30-hours', { customer_terms_version: 'draft' }))).toBeNull();
   });
@@ -314,6 +318,14 @@ test.describe('school-wide Flexible Hours packages', () => {
     expect(creditFlowMigration).toContain('uq_flexible_attempt_active_learner');
     expect(creditFlowMigration).toContain("'rescheduled_48h_plus'");
     expect(read('db/migration.sql')).toContain('uq_flexible_attempt_active_learner');
+    for (const source of [read('db/migrations/053_flexible_hours_10_hour_package.sql'), read('db/migration.sql')]) {
+      expect(source).toContain("'flexible-10-hours', 'flexible_hours'");
+      expect(source).toContain("'short_description', 'For learners who prefer one payment over 10 separate payments when booking.'");
+      expect(source).toContain('55000');
+      expect(source).toContain('total_units = 20');
+      expect(source).toContain('rate_pence_per_unit = 2750');
+      expect(source).not.toMatch(/UPDATE package_product_versions\s+SET/i);
+    }
   });
 
   test('keeps booking and refund money separate from Lesson Credit and attributes frozen lesson value', () => {

@@ -1,12 +1,12 @@
 # Learner Packages customer-copy audit
 
-Reviewed: 16 August 2026
+Reviewed: 18 August 2026
 
 ## Customer-facing readiness finding
 
 The production page was not ready for ordinary learners or parents. The product and payment rules were safe, but the presentation exposed rollout and accounting language such as `School 1 gate`, `verified signed webhook`, `immutable purchase source`, version numbers, `fulfilment`, test-mode states and raw programme statuses.
 
-The frontend now leads with the only live customer choice, 15 or 30 Flexible Hours, and describes unavailable products in customer language. It keeps the exact checkout acknowledgement and immediate-access request at the payment decision point inside one combined terms checkbox in the `Review and buy` step. Learners with a positive balance see a direct calendar CTA instead of another purchase action.
+The frontend now leads with the live customer choices of 10, 15 or 30 Flexible Hours and describes unavailable products in customer language. The 10-hour option is presented as payment convenience rather than a discount. It keeps the exact checkout acknowledgement and immediate-access request at the payment decision point inside one combined terms checkbox in the purchase step. Learners with a positive balance see a direct calendar CTA instead of another purchase action.
 
 ## Visible copy ownership
 
@@ -24,6 +24,7 @@ The live immutable product versions still contain wording that should not be reu
 
 | Product | Current database-backed wording | Recommended prospective wording |
 |---|---|---|
+| 10 Flexible Hours | `10-hour Flexible Hours package`; `For learners who prefer one payment over 10 separate payments when booking`; `Used in exact 30-minute units`; signed-webhook checkout disclosure | `10 Flexible Hours`; keep the payment-convenience description; `Book in 30-minute steps`; `Your hours are added after your bank confirms the payment.` |
 | 15 Flexible Hours | `15-hour Flexible Hours package`; `Fifteen school-wide lesson hours, usable with any eligible active instructor`; `Used in exact 30-minute units`; signed-webhook checkout disclosure | `15 Flexible Hours`; `A smaller upfront block you can use with any available CoachCarter instructor`; `Book in 30-minute steps`; `Your hours are added after your bank confirms the payment.` |
 | 30 Flexible Hours | `30-hour Flexible Hours package`; `Thirty school-wide lesson hours, usable with any eligible active instructor`; `Used in exact 30-minute units`; signed-webhook checkout disclosure | `30 Flexible Hours`; `A larger upfront block for learners planning regular lessons`; `Book in 30-minute steps`; `Your hours are added after your bank confirms the payment.` |
 | Full Curriculum | Internal Phase 1/2/3 language and `Adults-only controlled pilot` | `A structured weekly route to your booked practical test, with independent progress checks and extra support for one eligible retake.` Keep the exact 24-week, test-date, cancellation and exclusion terms in the purchased terms. |

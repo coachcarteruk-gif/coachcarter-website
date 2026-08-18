@@ -49,6 +49,18 @@ function catalogue({ signedIn, flexibleBalanceMinutes = 0, emailVerified = true 
     full_curriculum_eligibility: { test_booking: null, has_active_enrolment: false },
     products: [
       product({
+        id: 9, slug: 'flexible-10-hours', type: 'flexible_hours', price: 55000,
+        content: {
+          name: '10-hour Flexible Hours package',
+          short_description: 'For learners who prefer one payment over 10 separate payments when booking.',
+          highlights: ['10 school-wide hours', 'GBP 55 per hour', 'No expiry', 'Used in exact 30-minute units'],
+          entitlement: { hours: 10, units: 20, unit_minutes: 30, scope: 'school' },
+          checkout_disclosure: 'Pay by Bank. Access is created only after verified signed webhook confirmation.',
+        },
+        eligibility: flexibleEligibility,
+        rights: flexibleRights,
+      }),
+      product({
         id: 8, slug: 'flexible-15-hours', type: 'flexible_hours', price: 81000,
         content: {
           name: '15-hour Flexible Hours package',
@@ -150,6 +162,7 @@ test.describe('Learner Packages customer copy', () => {
 
     await expect(page.locator('#catalogue-content')).toBeVisible();
     await expect(page.locator('#catalogue-status')).toBeHidden();
+    await expect(page.getByRole('heading', { name: '10 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '15 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '30 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByText('Book in 30-minute steps', { exact: true })).toHaveCount(0);
@@ -158,7 +171,9 @@ test.describe('Learner Packages customer copy', () => {
     await expect(page.locator('.price-was s')).toHaveText(['£825', '£1,650']);
     await expect(page.locator('.price-saving')).toHaveText(['Save £15', 'Save £60']);
     await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(0);
-    await expect(page.locator('.purchase-review summary')).toHaveText(['Book 15hrs', 'Book 30hrs']);
+    await expect(page.getByText('For learners who prefer one payment over 10 separate payments when booking.', { exact: true })).toBeVisible();
+    await expect(page.locator('.purchase-review summary')).toHaveText(['Book 10hrs', 'Book 15hrs', 'Book 30hrs']);
+    await expect(page.getByRole('link', { name: 'Book 10hrs Flexible Hours package' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Book 30hrs Flexible Hours package' })).toBeVisible();
     await page.getByRole('link', { name: 'Book 15hrs Flexible Hours package' }).click();
@@ -219,11 +234,13 @@ test.describe('Learner Packages customer copy', () => {
     await preparePage(page, { signedIn: false, viewport: { width: 390, height: 844 } });
 
     await expect(page.getByRole('heading', { name: 'Find the package that fits.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '10 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '15 Flexible Hours', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '30 Flexible Hours', exact: true })).toBeVisible();
+    await expect(page.getByText('£55 per hour', { exact: true })).toBeVisible();
     await expect(page.getByText('£54 per hour', { exact: true })).toBeVisible();
     await expect(page.getByText('£53 per hour', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in to buy' })).toHaveCount(2);
+    await expect(page.getByRole('button', { name: 'Sign in to buy' })).toHaveCount(3);
     await expect(page.getByRole('button', { name: 'Not available yet' })).toHaveCount(3);
 
     const visibleCopy = await page.locator('body').innerText();
@@ -256,8 +273,9 @@ test.describe('Learner Packages customer copy', () => {
     const review = page.locator('.purchase-review summary').filter({ hasText: 'Book 15hrs' });
     await expect(review).toBeVisible();
     await review.click();
-    await expect(page.locator('.purchase-review[open] .checkout-owner')).toHaveText('Buying for: Alex Taylor');
-    await expect(page.getByLabel(FLEXIBLE_ACKNOWLEDGEMENT + ' ' + FLEXIBLE_IMMEDIATE_ACCESS, { exact: true }).first()).toBeVisible();
+    const openReview = page.locator('.purchase-review[open]');
+    await expect(openReview.locator('.checkout-owner')).toHaveText('Buying for: Alex Taylor');
+    await expect(openReview.getByLabel(FLEXIBLE_ACKNOWLEDGEMENT + ' ' + FLEXIBLE_IMMEDIATE_ACCESS, { exact: true })).toBeVisible();
     await expect(page.locator('[name="immediate_access_requested"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pay £810 by bank' })).toBeVisible();
     await expect(page.locator('#test-booking-panel')).toBeHidden();
@@ -277,10 +295,10 @@ test.describe('Learner Packages customer copy', () => {
     });
 
     await expect(page.locator('#flexible-balance-status')).toContainText('2.5 hours remaining');
-    await expect(page.getByRole('link', { name: 'Book with your Flexible Hours' })).toHaveCount(3);
+    await expect(page.getByRole('link', { name: 'Book with your Flexible Hours' })).toHaveCount(4);
     await expect(page.getByText('Review and buy', { exact: true })).toHaveCount(0);
     await expect(page.locator('#flexible-purchase-shortcuts')).toBeHidden();
-    await expect(page.getByText('Hours ready to use', { exact: true })).toHaveCount(2);
+    await expect(page.getByText('Hours ready to use', { exact: true })).toHaveCount(3);
   });
 
   test('keeps the mobile package hierarchy readable in explicit dark mode', async ({ page }) => {
