@@ -161,6 +161,7 @@
               <div style="display:flex;gap:12px;flex-wrap:wrap">
                 <label style="display:flex;align-items:center;gap:4px;font-size:0.85rem;cursor:pointer"><input type="radio" name="ba-add-pay" value="cash" checked><span>Cash</span></label>
                 <label style="display:flex;align-items:center;gap:4px;font-size:0.85rem;cursor:pointer"><input type="radio" name="ba-add-pay" value="credit"><span>Deduct credit</span></label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:0.85rem;cursor:pointer"><input type="radio" name="ba-add-pay" value="flexible_package"><span>Flexible package</span></label>
                 <label style="display:flex;align-items:center;gap:4px;font-size:0.85rem;cursor:pointer"><input type="radio" name="ba-add-pay" value="free"><span>Free</span></label>
               </div>
               <div id="ba-add-credit-note" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:4px"></div>
@@ -607,6 +608,9 @@
     const note = document.getElementById('ba-add-credit-note');
     if (pay === 'credit' && addLessonSelectedId) {
       note.textContent = 'Hours with this instructor: ' + formatBalanceMins(addLessonSelectedBalanceMinutes);
+      note.style.display = 'block';
+    } else if (pay === 'flexible_package' && addLessonSelectedId) {
+      note.textContent = 'Use learner flexible package credits.';
       note.style.display = 'block';
     } else {
       note.style.display = 'none';

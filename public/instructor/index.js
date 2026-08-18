@@ -2153,12 +2153,20 @@ function clearSelectedLearner() {
 function updateCreditNote(balanceMinutes) {
   const noteEl = document.getElementById('addLessonCreditNote');
   const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value;
+  if (!selectedLearnerId) {
+    noteEl.style.display = 'none';
+    return;
+  }
   if (payMethod === 'credit') {
     noteEl.style.display = 'block';
     noteEl.textContent = balanceMinutes > 0
       ? `Learner has ${formatBalanceMins(balanceMinutes)} with you.`
       : 'Learner has no hours with you. Choose Cash or Free instead.';
     noteEl.style.color = balanceMinutes > 0 ? 'var(--muted)' : 'var(--red)';
+  } else if (payMethod === 'flexible_package') {
+    noteEl.style.display = 'block';
+    noteEl.textContent = 'Use learner flexible package credits.';
+    noteEl.style.color = 'var(--muted)';
   } else {
     noteEl.style.display = 'none';
   }
@@ -2176,13 +2184,10 @@ function updateAddLessonPaymentUi() {
     configureLessonTransmissionSelect('addLessonTransmission', 'addLessonTransmissionWrap', document.getElementById('addLessonTransmission')?.value);
   }
   if (btn && !btn.disabled) btn.textContent = payMethod === 'payment_link' ? 'Send payment link' : 'Book lesson';
-  if (payMethod === 'credit' && selectedLearnerId) {
-    const learner = addLessonLearners.find(l => l.id === selectedLearnerId);
-    if (learner) updateCreditNote(learner.balance_minutes || 0);
-  } else {
-    const creditNote = document.getElementById('addLessonCreditNote');
-    if (creditNote) creditNote.style.display = 'none';
-  }
+  const learner = selectedLearnerId
+    ? addLessonLearners.find(l => l.id === selectedLearnerId)
+    : null;
+  updateCreditNote(learner ? learner.balance_minutes || 0 : 0);
 }
 
 function clearPaymentLinkSuccess() {

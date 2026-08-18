@@ -52,6 +52,7 @@ const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
 const { isLessonTypeOffered, areOfferedLessonTypeSlugsValid } = require('./_lesson-type-helpers');
 const { logAudit } = require('./_audit');
+const { randomUUID } = require('crypto');
 const {
   dateOnly: requestDateOnly,
   releaseRequestHold,
@@ -75,6 +76,7 @@ const {
   listEligibleRescheduleInstructors,
   validateInstructorRescheduleSlot,
 } = require('./_instructor-reschedule-slot');
+const { bookFlexiblePackageSlotTransaction } = require('./_flexible-package-ledger');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -134,6 +136,11 @@ function isValidTimeHHMM(value) {
   if (!TIME_HHMM_RE.test(String(value || ''))) return false;
   const [hh, mm] = value.split(':').map(Number);
   return hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
+}
+
+function pickClientRequestId(value) {
+  const explicit = String(value || '').trim();
+  return explicit || randomUUID();
 }
 
 function timeToMinutes(value) {
@@ -3030,7 +3037,18 @@ async function handleCreateBooking(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { learner_id, scheduled_date, start_time, lesson_type_id, payment_method, notes, pickup_address, dropoff_address, transmission_type } = req.body;
+  const {
+    learner_id,
+    scheduled_date,
+    start_time,
+    lesson_type_id,
+    payment_method,
+    notes,
+    pickup_address,
+    dropoff_address,
+    transmission_type,
+    client_request_id,
+  } = req.body;
   if (!learner_id || !scheduled_date || !start_time)
     return res.status(400).json({ error: 'learner_id, scheduled_date and start_time are required' });
 
@@ -3140,7 +3158,56 @@ async function handleCreateBooking(req, res) {
       }
     } catch (_) {}
 
-    if (payMethod === 'credit') {
+    if (payMethod === 'flexible_package') {
+      const booked = await bookFlexiblePackageSlotTransaction({
+        connectionString: process.env.POSTGRES_URL,
+        learnerId: learner_id,
+        instructorId: instructor.id,
+        schoolId,
+        date: scheduled_date,
+        startTime: start_time,
+        endTime: end_time,
+        lessonTypeId: lessonType.id,
+        durationMinutes: durationMins,
+        pickupAddress: bookingPickup,
+        dropoffAddress: bookingDropoff,
+        transmissionType: bookingTransmissionType,
+        clientRequestId: pickClientRequestId(client_request_id),
+      });
+
+      if (!booked.ok) {
+        if (booked.code === 'INSUFFICIENT_FLEXIBLE_UNITS') {
+          const remainingMinutes = Number(booked.remainingUnits || 0) * 30;
+          return res.status(402).json({
+            error: `${learner.name} doesn't have enough flexible package minutes. They need ${durationStr} but have ${(remainingMinutes / 60).toFixed(1)} hrs. Use "Cash" or "Free" instead.`,
+          });
+        }
+        if (booked.code === 'SLOTS_UNAVAILABLE') {
+          return res.status(409).json({ error: 'That slot is already booked. Please choose another time.' });
+        }
+        if (booked.code === 'FLEXIBLE_BOOKING_REQUEST_MISMATCH') {
+          return res.status(409).json({ error: booked.message || 'That slot is already booked. Please choose another time.' });
+        }
+        if (booked.code === 'FLEXIBLE_DURATION_INCOMPATIBLE') {
+          return res.status(400).json({ error: `Flexible package bookings must be booked in ${booked.unit_minutes || 30}-minute blocks.` });
+        }
+        if (booked.code === 'FLEXIBLE_BOOKING_REQUEST_ID_REQUIRED') {
+          return res.status(400).json({ error: 'Unable to validate package-booking request. Please try again.' });
+        }
+        if (booked.code === 'INVALID_UNIT_REQUEST' || booked.code === 'INVALID_SOURCE_RATE') {
+          return res.status(400).json({ error: 'This lesson cannot be paid from the flexible package right now.' });
+        }
+        if (booked.code === 'INSTRUCTOR_NOT_ELIGIBLE') {
+          return res.status(400).json({ error: 'Instructor is not eligible for flexible package booking.' });
+        }
+        if (booked.code === 'LEARNER_SCOPE_MISMATCH') {
+          return res.status(404).json({ error: 'Learner not found' });
+        }
+        return res.status(500).json({ error: 'Failed to create booking with flexible package credits' });
+      }
+
+      booking = booked.booking;
+    } else if (payMethod === 'credit') {
       const booked = await createInstructorCreditBookingTransaction({
         connectionString: process.env.POSTGRES_URL,
         learnerId: learner_id,
@@ -3220,7 +3287,7 @@ async function handleCreateBooking(req, res) {
             <tr><td><strong>Transmission:</strong></td><td>${bookingTransmissionType === 'automatic' ? 'Automatic' : 'Manual'}</td></tr>
             <tr><td><strong>Duration:</strong></td><td>${durationStr}</td></tr>
           </table>
-          ${payMethod === 'credit' ? `<p>${durationStr} deducted from your balance. You have ${balanceStr} remaining.</p>` : ''}
+          ${payMethod === 'credit' ? `<p>${durationStr} deducted from your balance. You have ${balanceStr} remaining.</p>` : payMethod === 'flexible_package' ? `<p>${durationStr} deducted from your flexible package credits.</p>` : ''}
           <p style="margin-top:16px;font-size:0.875rem;color:#797879">
             Need to cancel? Do so at least 48 hours before and the hours return to your balance.
           </p>
@@ -3239,7 +3306,7 @@ async function handleCreateBooking(req, res) {
 
     // WhatsApp to learner
     await sendWhatsApp(learner.phone,
-      `✅ Lesson booked!\n\n📅 ${dateStr}\n⏰ ${start_time} – ${end_time}\n🚗 Instructor: ${instrDetails.name}\n\n${payMethod === 'credit' ? `${durationStr} deducted. ${balanceStr} remaining.\n\n` : ''}Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
+      `✅ Lesson booked!\n\n📅 ${dateStr}\n⏰ ${start_time} – ${end_time}\n🚗 Instructor: ${instrDetails.name}\n\n${payMethod === 'credit' ? `${durationStr} deducted. ${balanceStr} remaining.\n\n` : payMethod === 'flexible_package' ? `${durationStr} deducted from flexible package credits.\n\n` : ''}Need to cancel? Do so at least 48 hours before and the lesson returns to your balance.\n\nView bookings: https://coachcarter.uk/learner/`
     );
 
     await sendWhatsApp(
