@@ -68,6 +68,7 @@ const {
   copyRefundedBookingCreditSources,
 } = require('./_bcs-refund-marker');
 const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
+const { isLearnerPackagesEnabled } = require('./_learner-packages');
 const { transferBookingFunding } = require('./_instructor-switch-transfer');
 const {
   InstructorRescheduleSlotError,
@@ -253,6 +254,7 @@ module.exports = async (req, res) => {
   if (action === 'accept-request')       return handleAcceptRequest(req, res);
   if (action === 'decline-request')      return handleDeclineRequest(req, res);
   if (action === 'create-offer')         return handleCreateOffer(req, res);
+  if (action === 'share-package-link')   return handleSharePackageLink(req, res);
   if (action === 'list-offers')          return handleListOffers(req, res);
   if (action === 'cancel-offer')         return handleCancelOffer(req, res);
   if (action === 'preview-broadcast-audience') return handlePreviewBroadcastAudience(req, res);
@@ -1352,6 +1354,11 @@ async function handleProfile(req, res) {
                  FROM schools s
                 WHERE s.id = instructors.school_id
              ), false) AS incompatible_products_retired
+             ,COALESCE((
+               SELECT s.config->'features'->'learner_packages_enabled' = 'true'::jsonb
+                 FROM schools s
+                WHERE s.id = instructors.school_id
+             ), false) AS learner_packages_enabled
       FROM instructors
       WHERE id = ${instructor.id}
         AND school_id = ${schoolId}
@@ -4740,6 +4747,180 @@ async function handleCreateOffer(req, res) {
     }
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to create offer' });
+  }
+}
+
+// ── POST /api/instructor?action=share-package-link ───────────────────────────
+// Sends the school's ordinary Packages catalogue link. The instructor does not
+// select or price a product: catalogue visibility, terms and Checkout
+// eligibility remain server-controlled on /learner/packages.html.
+async function handleSharePackageLink(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { learner_id, learner_email, learner_name } = req.body || {};
+  const learnerIdClean = learner_id != null && learner_id !== '' ? parseInt(learner_id, 10) : null;
+  if (learnerIdClean != null && (!Number.isInteger(learnerIdClean) || learnerIdClean <= 0)) {
+    return res.status(400).json({ error: 'learner_id must be a positive integer' });
+  }
+  if (!learnerIdClean && !learner_email && !learner_name) {
+    return res.status(400).json({ error: 'Either learner_id, learner_email, or learner_name is required' });
+  }
+  if (learner_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(learner_email)) {
+    return res.status(400).json({ error: 'Invalid email address' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [school] = await sql`
+      SELECT id, name, primary_host, config
+      FROM schools
+      WHERE id = ${schoolId}
+        AND active = TRUE
+      LIMIT 1
+    `;
+    if (!school) return res.status(404).json({ error: 'School not found' });
+    if (!isLearnerPackagesEnabled(school.config)) {
+      return res.status(409).json({ error: 'Packages are not available for your school yet' });
+    }
+
+    const [instrDetails] = await sql`
+      SELECT id, name, email
+      FROM instructors
+      WHERE id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND active = TRUE
+      LIMIT 1
+    `;
+    if (!instrDetails) return res.status(404).json({ error: 'Instructor not found' });
+
+    let existingLearner = null;
+    if (learnerIdClean) {
+      [existingLearner] = await sql`
+        SELECT id, name, email, phone
+        FROM learner_users
+        WHERE id = ${learnerIdClean}
+          AND school_id = ${schoolId}
+          AND archived_at IS NULL
+        LIMIT 1
+      `;
+      if (!existingLearner) return res.status(404).json({ error: 'Learner not found in your school' });
+    } else if (learner_email) {
+      [existingLearner] = await sql`
+        SELECT id, name, email, phone
+        FROM learner_users
+        WHERE LOWER(email) = LOWER(${learner_email})
+          AND school_id = ${schoolId}
+          AND archived_at IS NULL
+        LIMIT 1
+      `;
+    }
+
+    const primaryHost = String(school.primary_host || '').trim().toLowerCase();
+    const configuredBaseUrl = String(process.env.BASE_URL || 'https://coachcarter.uk').replace(/\/$/, '');
+    const hasPrimaryHost = /^[a-z0-9.-]+$/.test(primaryHost) && primaryHost.includes('.');
+    const baseUrl = hasPrimaryHost
+      ? `https://${primaryHost}`
+      : configuredBaseUrl;
+    const packageUrl = `${baseUrl}/learner/packages.html${hasPrimaryHost ? '' : `?school_id=${schoolId}`}`;
+    const resolvedEmail = existingLearner?.email || (learner_email ? String(learner_email).trim().toLowerCase() : null);
+    const resolvedPhone = existingLearner?.phone || null;
+    const resolvedName = existingLearner?.name || String(learner_name || '').trim() || 'Learner';
+    const firstName = String(resolvedName).split(' ')[0] || 'there';
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    let messageSent = false;
+    let messageError = null;
+    if (resolvedPhone) {
+      try {
+        const messageResult = await sendWhatsApp(
+          resolvedPhone,
+          `Hi ${firstName}, ${instrDetails.name} has shared CoachCarter's driving lesson packages with you.\n\nCompare the available packages and continue to checkout here: ${packageUrl}`,
+          {
+            purpose: 'instructor.package_link_shared_learner',
+            learnerId: existingLearner?.id,
+            instructorId: instructor.id,
+            schoolId,
+          }
+        );
+        messageSent = !!messageResult?.ok;
+        messageError = messageResult?.ok ? null : (messageResult?.error || 'Message delivery failed');
+      } catch (messageErr) {
+        console.error('Failed to send package link message:', messageErr);
+        messageError = messageErr.message || 'Message delivery failed';
+      }
+    }
+
+    let emailSent = false;
+    if (resolvedEmail) {
+      try {
+        const mailer = createTransporter();
+        await mailer.sendMail({
+          from: 'CoachCarter <bookings@coachcarter.uk>',
+          to: resolvedEmail,
+          subject: `Driving lesson packages shared by ${instrDetails.name}`,
+          text: `Hi ${firstName},\n\n${instrDetails.name} has shared CoachCarter's driving lesson packages with you. Compare the available packages and continue to checkout here: ${packageUrl}`,
+          html: `
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
+              <h2 style="color:#262626">Hi ${escapeHtml(firstName)},</h2>
+              <p>${escapeHtml(instrDetails.name)} has shared CoachCarter's driving lesson packages with you.</p>
+              <p>You can compare the packages, see the current terms and continue to checkout on the Packages page.</p>
+              <p style="margin:24px 0">
+                <a href="${packageUrl}"
+                   style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:1rem">
+                  View packages &amp; checkout →
+                </a>
+              </p>
+              <p style="font-size:0.85rem;color:#797879">Availability and eligibility are confirmed on the Packages page before payment.</p>
+            </div>
+          `,
+        });
+        emailSent = true;
+      } catch (emailErr) {
+        console.error('Failed to send package link email:', emailErr);
+      }
+    }
+
+    await logAudit(sql, {
+      adminId: null,
+      adminEmail: instructor.email || instrDetails.email || null,
+      action: 'instructor.package_link_shared',
+      targetType: existingLearner ? 'learner_user' : 'package_catalogue',
+      targetId: existingLearner?.id || null,
+      schoolId,
+      req,
+      details: {
+        instructor_id: instructor.id,
+        learner_id: existingLearner?.id || null,
+        email_available: !!resolvedEmail,
+        message_available: !!resolvedPhone,
+        email_sent: emailSent,
+        message_sent: messageSent,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      learner_exists: !!existingLearner,
+      learner_name: resolvedName,
+      email_available: !!resolvedEmail,
+      message_available: !!resolvedPhone,
+      email_sent: emailSent,
+      message_sent: messageSent,
+      message_error: messageError,
+      share_url: packageUrl,
+    });
+  } catch (err) {
+    console.error('share-package-link error:', err);
+    reportError('/api/instructor?action=share-package-link', err);
+    return res.status(500).json({ error: 'Failed to share package link' });
   }
 }
 

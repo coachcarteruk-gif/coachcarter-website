@@ -960,15 +960,35 @@
   </div>
 </div>
 
-<!-- ── Offer Lesson Modal ── -->
+<!-- ── Send Offer Modal ── -->
 <div class="modal-overlay" id="offerLessonModal">
   <div class="modal" style="max-width:480px">
-    <div class="modal-title">Offer Lesson</div>
-    <div class="modal-sub">Send a lesson offer to one learner, or broadcast it to everyone free at this time.</div>
+    <div class="modal-title" id="offerModalTitle">Send an offer</div>
+    <div class="modal-sub" id="offerModalSubtitle">Send a lesson offer to one learner, or broadcast it to everyone free at this time.</div>
     <div style="margin:16px 0; display:flex; flex-direction:column; gap:12px;">
 
-      <!-- Audience picker (one learner vs broadcast) -->
       <div>
+        <div class="notes-label">Offer</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
+            <input type="radio" name="offerKind" value="lesson" id="offerKindLesson" checked
+              style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+            Lesson slot
+          </label>
+          <label id="offerKindPackageRow" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
+            <input type="radio" name="offerKind" value="package" id="offerKindPackage"
+              style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+            Package checkout
+          </label>
+        </div>
+      </div>
+
+      <div id="offerPackageNote" style="display:none;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);font-size:0.82rem;line-height:1.45;">
+        Sends the learner to your school's Packages page. They choose from the packages currently available to them, review the terms and complete checkout there.
+      </div>
+
+      <!-- Audience picker (one learner vs broadcast) -->
+      <div id="offerAudiencePicker">
         <div class="notes-label">Send to</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:0.88rem;">
@@ -1044,6 +1064,7 @@
         <div id="offerBroadcastWarn" style="display:none;margin-top:8px;padding:8px 10px;background:#fff7e6;border:1px solid #ffd591;border-radius:6px;font-size:0.78rem;color:#7a4f00"></div>
       </div>
       <!-- /pane -->
+      <div id="offerLessonFields" style="display:flex;flex-direction:column;gap:12px;">
       <div>
         <div class="notes-label">Lesson type</div>
         <select id="offerLessonType" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;"></select>
@@ -1103,6 +1124,7 @@
             style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
         </div>
         <div id="offerPriceNote" style="font-size:0.82rem; color:var(--muted); margin-top:6px;"></div>
+      </div>
       </div>
     </div>
     <div id="offerError" style="display:none; background:var(--red-lt); color:var(--red); border-radius:8px; padding:10px 14px; font-size:0.85rem; font-weight:600; margin-top:8px;"></div>
