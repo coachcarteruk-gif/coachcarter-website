@@ -91,6 +91,7 @@ let loadedRanges = []; // [{from, to}] already fetched
 let requestsLoaded = false;
 let selectedBooking = null;
 let incompatibleProductsRetired = false;
+let learnerPackagesEnabled = false;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
@@ -125,9 +126,21 @@ async function loadCalendarPrefs() {
       instructorSlug = data.instructor.slug || null;
       instructorTransmissionType = normaliseTransmissionType(data.instructor.transmission_type) || 'manual';
       incompatibleProductsRetired = data.instructor.incompatible_products_retired === true;
+      learnerPackagesEnabled = data.instructor.learner_packages_enabled === true;
       applyOfferRetirementUi();
+      applyPackageOfferAvailabilityUi();
     }
   } catch {}
+}
+
+function applyPackageOfferAvailabilityUi() {
+  const row = document.getElementById('offerKindPackageRow');
+  if (row) row.style.display = learnerPackagesEnabled ? 'flex' : 'none';
+  if (learnerPackagesEnabled) return;
+  const packageOption = document.getElementById('offerKindPackage');
+  const lessonOption = document.getElementById('offerKindLesson');
+  if (packageOption) packageOption.checked = false;
+  if (lessonOption) lessonOption.checked = true;
 }
 
 function applyOfferRetirementUi() {
@@ -2347,6 +2360,54 @@ async function confirmCreateBooking() {
 let offerLearners = [];
 let selectedOfferLearnerId = null;
 
+function isPackageOfferMode() {
+  return document.getElementById('offerKindPackage')?.checked === true;
+}
+
+function updateOfferSendButton() {
+  const sendBtn = document.getElementById('offerSendBtn');
+  if (!sendBtn) return;
+  const isBroadcast = document.getElementById('offerAudienceBroadcast')?.checked === true;
+  if (isBroadcast && !isPackageOfferMode()) {
+    sendBtn.textContent = 'Send broadcast';
+    return;
+  }
+  const existingMode = document.getElementById('offerModeExisting')?.checked === true;
+  const sendEmail = document.getElementById('offerSendEmail')?.checked === true;
+  if (isPackageOfferMode()) {
+    sendBtn.textContent = (existingMode || sendEmail) ? 'Send package link' : 'Create package link';
+  } else {
+    sendBtn.textContent = (existingMode || sendEmail) ? 'Send offer' : 'Create link';
+  }
+}
+
+function updateOfferKindUi() {
+  const packageMode = isPackageOfferMode();
+  const audienceOne = document.getElementById('offerAudienceOne');
+  const audienceBroadcast = document.getElementById('offerAudienceBroadcast');
+  if (packageMode && audienceOne && audienceBroadcast) {
+    audienceOne.checked = true;
+    audienceBroadcast.checked = false;
+  }
+  const audiencePicker = document.getElementById('offerAudiencePicker');
+  const onePane = document.getElementById('offerOneLearnerPane');
+  const broadcastPane = document.getElementById('offerBroadcastPane');
+  const lessonFields = document.getElementById('offerLessonFields');
+  const packageNote = document.getElementById('offerPackageNote');
+  const title = document.getElementById('offerModalTitle');
+  const subtitle = document.getElementById('offerModalSubtitle');
+  if (audiencePicker) audiencePicker.style.display = packageMode ? 'none' : '';
+  if (onePane) onePane.style.display = packageMode || !audienceBroadcast?.checked ? '' : 'none';
+  if (broadcastPane) broadcastPane.style.display = !packageMode && audienceBroadcast?.checked ? '' : 'none';
+  if (lessonFields) lessonFields.style.display = packageMode ? 'none' : 'flex';
+  if (packageNote) packageNote.style.display = packageMode ? '' : 'none';
+  if (title) title.textContent = packageMode ? 'Share package checkout' : 'Send an offer';
+  if (subtitle) subtitle.textContent = packageMode
+    ? 'Send one learner the standard Packages link, or create a link to share yourself.'
+    : 'Send a lesson offer to one learner, or broadcast it to everyone free at this time.';
+  updateOfferSendButton();
+}
+
 async function openOfferModal(prefillEmail, prefillName) {
   selectedOfferLearnerId = null;
   document.getElementById('offerName').value = prefillName || '';
@@ -2365,16 +2426,22 @@ async function openOfferModal(prefillEmail, prefillName) {
   if (prefillEmail) {
     emailCb.checked = true;
     emailRow.style.display = '';
-    sendBtn.textContent = 'Send offer';
   } else {
     emailCb.checked = false;
     emailRow.style.display = 'none';
-    sendBtn.textContent = 'Create link';
   }
   emailCb.onchange = () => {
     emailRow.style.display = emailCb.checked ? '' : 'none';
-    sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
+    updateOfferSendButton();
   };
+
+  const kindLesson = document.getElementById('offerKindLesson');
+  const kindPackage = document.getElementById('offerKindPackage');
+  kindLesson.checked = true;
+  kindPackage.checked = false;
+  applyPackageOfferAvailabilityUi();
+  kindLesson.onchange = updateOfferKindUi;
+  kindPackage.onchange = updateOfferKindUi;
 
   const modeExisting = document.getElementById('offerModeExisting');
   const modeNew = document.getElementById('offerModeNew');
@@ -2391,14 +2458,13 @@ async function openOfferModal(prefillEmail, prefillName) {
     if (existing) {
       emailCb.checked = true;
       emailRow.style.display = 'none';
-      sendBtn.textContent = 'Send offer';
       filterOfferLearners();
     } else {
       selectedOfferLearnerId = null;
       document.getElementById('offerLearnerSelected').style.display = 'none';
       emailRow.style.display = emailCb.checked ? '' : 'none';
-      sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
     }
+    updateOfferSendButton();
   };
   modeExisting.onchange = switchLearnerMode;
   modeNew.onchange = switchLearnerMode;
@@ -2447,15 +2513,10 @@ async function openOfferModal(prefillEmail, prefillName) {
       flexCb.checked = false;
       document.getElementById('offerSlotFields').style.display = '';
     }
-    // Update CTA copy
-    const sendBtn = document.getElementById('offerSendBtn');
     if (isBroadcast) {
-      sendBtn.textContent = 'Send broadcast';
       loadBroadcastAudience();
-    } else {
-      const emailCb = document.getElementById('offerSendEmail');
-      sendBtn.textContent = emailCb.checked ? 'Send offer' : 'Create link';
     }
+    updateOfferKindUi();
   };
   audOne.onchange = switchAudience;
   audBcast.onchange = switchAudience;
@@ -2496,6 +2557,7 @@ async function openOfferModal(prefillEmail, prefillName) {
   // Reset custom price
   document.getElementById('offerCustomPrice').value = '';
   updateOfferPrice();
+  updateOfferKindUi();
 }
 
 function updateOfferPrice() {
@@ -2770,6 +2832,9 @@ async function sendBroadcastOffer() {
 }
 
 async function sendOffer() {
+  if (isPackageOfferMode()) {
+    return sendPackageLink();
+  }
   const isBroadcast = document.getElementById('offerAudienceBroadcast').checked;
   if (isBroadcast) {
     return sendBroadcastOffer();
@@ -2937,6 +3002,108 @@ async function sendOffer() {
     errorEl.style.display = 'block';
     btn.disabled = false;
     btn.textContent = (sendEmail || existingMode) ? 'Send offer' : 'Create link';
+  }
+}
+
+async function sendPackageLink() {
+  const existingMode = document.getElementById('offerModeExisting').checked;
+  const learnerName = document.getElementById('offerName').value.trim();
+  const sendEmail = document.getElementById('offerSendEmail').checked;
+  const learnerEmail = document.getElementById('offerEmail').value.trim();
+  const errorEl = document.getElementById('offerError');
+  const successEl = document.getElementById('offerSuccess');
+  const btn = document.getElementById('offerSendBtn');
+
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+  if (existingMode && !selectedOfferLearnerId) {
+    errorEl.textContent = 'Please select an existing learner.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!existingMode && !learnerName) {
+    errorEl.textContent = 'Please enter the learner\'s name.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (!existingMode && sendEmail && !learnerEmail) {
+    errorEl.textContent = 'Please enter the learner\'s email address.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = (existingMode || sendEmail) ? 'Sending…' : 'Creating…';
+  try {
+    const payload = existingMode
+      ? { learner_id: selectedOfferLearnerId }
+      : { learner_name: learnerName, learner_email: sendEmail ? learnerEmail : undefined };
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=share-package-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to share package link');
+
+    const selectedName = existingMode
+      ? document.getElementById('offerLearnerSelectedName').textContent
+      : learnerName;
+    const safeName = escapeHtml(selectedName);
+    const deliveryParts = [];
+    if (data.email_sent === true) deliveryParts.push('email');
+    if (data.message_sent === true) deliveryParts.push('text message');
+    const failedParts = [];
+    if (data.email_available === true && data.email_sent !== true) failedParts.push('email');
+    if (data.message_available === true && data.message_sent !== true) failedParts.push('text message');
+    const missingParts = [];
+    if (existingMode && data.email_available !== true) missingParts.push('no email saved');
+    if (existingMode && data.message_available !== true) missingParts.push('no phone saved');
+
+    let statusLine;
+    if (deliveryParts.length) {
+      const sentBy = deliveryParts.length === 2 ? 'email and text message' : deliveryParts[0];
+      statusLine = `Package link sent to ${safeName} by ${sentBy}.`;
+    } else if (failedParts.length) {
+      statusLine = `Package link created for ${safeName}, but ${failedParts.join(' and ')} delivery did not complete.`;
+    } else if (missingParts.length) {
+      statusLine = `Package link created for ${safeName}; the selected learner has ${missingParts.join(' and ')}.`;
+    } else {
+      statusLine = `Package link created for ${safeName}.`;
+    }
+    statusLine += ' The learner will see current availability, eligibility and terms before checkout.';
+    const shareUrl = data.share_url;
+    successEl.innerHTML = `
+      <div>${statusLine}</div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="text" id="offerShareUrl" readonly
+          style="flex:1;min-width:0;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.78rem;background:var(--white);color:var(--primary)">
+        <button id="offerCopyBtn"
+          style="padding:6px 14px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Copy link</button>
+      </div>`;
+    document.getElementById('offerShareUrl').value = shareUrl;
+    document.getElementById('offerCopyBtn').addEventListener('click', function () {
+      const copyBtn = this;
+      const urlInput = document.getElementById('offerShareUrl');
+      const markCopied = () => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 2000);
+      };
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(markCopied).catch(function () {
+          urlInput.select(); document.execCommand('copy'); markCopied();
+        });
+      } else {
+        urlInput.select(); document.execCommand('copy'); markCopied();
+      }
+    });
+    successEl.style.display = 'block';
+    btn.textContent = (existingMode || sendEmail) ? 'Sent ✓' : 'Created ✓';
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    updateOfferSendButton();
   }
 }
 

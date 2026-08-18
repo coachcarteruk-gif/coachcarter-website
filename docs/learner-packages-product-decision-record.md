@@ -95,6 +95,7 @@ Packages and Lessons are separate customer journeys:
 - **Lessons:** choose a lesson and Pay As You Go or use eligible existing value.
 - **Packages:** choose flexible prepaid hours, the structured Full Curriculum programme, or the Manoeuvres product.
 - The two pages should link clearly to each other.
+- An instructor may refer one learner to the standard Packages page from the existing offer modal. This is a catalogue referral, not a bespoke product offer: the instructor cannot choose or override a package price, terms, entitlement or checkout eligibility, and sharing the link creates no purchase attempt or financial row.
 
 ## 2. Product decision record
 
