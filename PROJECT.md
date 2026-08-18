@@ -1351,7 +1351,7 @@ Learner Packages is separate from historical Lesson Credit. Migrations 044-045 p
 | `allocate-programme-booking` / `record-week-outcome` | POST | Instructor or admin | Links actual same-school lessons and records cancellation/replacement outcomes without Lesson Credit. |
 | `activate-retake` / `record-retake-test-change` | POST | Admin | Activates one 600-minute allowance or moves its 28-day window for verified DVSA/exception evidence. |
 
-**`package_products`** stores stable school-owned identities, product type, same-school prerequisite, visibility, activation, and display order. Seeded choices are the 15-hour and 30-hour Flexible Hours packages, Phases 1â€“3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge.
+**`package_products`** stores stable school-owned identities, product type, same-school prerequisite, visibility, activation, and display order. Seeded choices are the 10-hour, 15-hour and 30-hour Flexible Hours packages, Phases 1â€“3, Full Curriculum, Manoeuvres, and Manoeuvres Challenge.
 
 **`package_product_versions`** stores immutable numbered commercial/catalogue snapshots: same-school product identity, GBP pence price, JSONB content, customer terms identity, effective timestamp, and creating actor evidence. A database trigger rejects update/delete so changes are prospective new versions.
 

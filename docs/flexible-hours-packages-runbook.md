@@ -10,10 +10,11 @@ Full Curriculum remains test-only and isolated. Do not reuse its restricted key,
 
 | Product | Price | Entitlement | Frozen unit rate |
 |---|---:|---:|---:|
+| 10-hour Flexible Hours | £550 | 20 × 30 minutes | £27.50 |
 | 15-hour Flexible Hours | £810 | 30 × 30 minutes | £27.00 |
 | 30-hour Flexible Hours | £1,590 | 60 × 30 minutes | £26.50 |
 
-Hours are school-wide, do not expire and cannot transfer to another learner. Learners must use their spendable balance before starting another package Checkout. FIFO allocation still preserves every immutable source if historical returns or late payment success make sources coexist. A booking carries its delivering instructor and frozen allocated value into the normal scheduled/chargeable/refunded payout lifecycle. Purchase alone creates no earning or payout.
+Hours are school-wide, do not expire and cannot transfer to another learner. The 10-hour option is a payment-convenience package for learners who prefer one payment over 10 separate payments when booking; at £55 per hour, it is not presented as a discount. Learners must use their spendable balance before starting another package Checkout. FIFO allocation still preserves every immutable source if historical returns or late payment success make sources coexist. A booking carries its delivering instructor and frozen allocated value into the normal scheduled/chargeable/refunded payout lifecycle. Purchase alone creates no earning or payout.
 
 Each booking uses Flexible Hours, Lesson Credit or Pay As You Go, never a blend. At 48+ hours, learner cancellation returns each exact allocation once. A 48+ hour reschedule atomically moves the exact allocation and frozen value to the replacement lesson, including a different active same-school instructor. Under 48 hours/no-show consumes it and leaves the booking payable. Durations not divisible by 30 minutes fail closed. Unused source units are refunded at their frozen rate; CoachCarter absorbs the original Stripe fee.
 
@@ -35,7 +36,7 @@ The code rejects absent identities and known shared/test identities. It omits `p
 
 ## Approved rollout order
 
-1. Review migrations 050 and 051 and the money-flow diff.
+1. Review migrations 050, 051 and 053 and the money-flow diff.
 2. Apply and verify them only on the confirmed disposable Neon branch.
 3. Run syntax, focused unit/contract tests and the gated fresh-schema integration suite.
 4. Configure and inspect the three dedicated live Stripe resources while the school gate remains false.

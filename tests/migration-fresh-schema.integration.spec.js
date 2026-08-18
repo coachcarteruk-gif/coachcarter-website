@@ -219,11 +219,11 @@ test.describe('fresh-schema migration bootstrap', () => {
            WHERE candidate.school_id = p.school_id AND candidate.product_id = p.id
            ORDER BY candidate.effective_from DESC, candidate.version_number DESC LIMIT 1
         ) v ON TRUE
-       WHERE p.school_id = 1 AND p.slug IN ('flexible-15-hours','flexible-30-hours')
+       WHERE p.school_id = 1 AND p.slug IN ('flexible-10-hours','flexible-15-hours','flexible-30-hours')
        ORDER BY p.slug
     `);
     expect(products.rows.map(row => [row.slug, row.price_pence])).toEqual([
-      ['flexible-15-hours', 81000], ['flexible-30-hours', 159000],
+      ['flexible-10-hours', 55000], ['flexible-15-hours', 81000], ['flexible-30-hours', 159000],
     ]);
     const learner = await client.query(`
       INSERT INTO learner_users (name, email, school_id)

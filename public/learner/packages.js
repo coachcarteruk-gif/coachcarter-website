@@ -42,9 +42,11 @@
       var hourlyPence = Math.round(Number(product.price_pence || 0) / hours);
       return {
         name: hours + ' Flexible Hours',
-        summary: hours === 15
-          ? 'A smaller block for learners who want to build confidence without committing to 30 hours.'
-          : 'A larger block for learners planning regular lessons and looking for the lowest hourly price.',
+        summary: hours === 10
+          ? 'For learners who prefer one payment over 10 separate payments when booking.'
+          : hours === 15
+            ? 'A smaller block for learners who want to build confidence without committing to 30 hours.'
+            : 'A larger block for learners planning regular lessons and looking for the lowest hourly price.',
         highlights: [
           hours + ' lesson hours',
           formatPrice(hourlyPence, product.currency) + ' per hour',
@@ -396,8 +398,8 @@
     document.getElementById('flexible-products').innerHTML = flexible.map(function (product) {
       var hours = Number(product.content && product.content.entitlement && product.content.entitlement.hours || 0);
       return renderProduct(product, {
-        label: hours === 15 ? 'A smaller upfront block' : 'The lowest hourly price',
-        hideSummary: true
+        label: hours === 10 ? 'Payment convenience' : hours === 15 ? 'A smaller upfront block' : 'The lowest hourly price',
+        hideSummary: hours !== 10
       });
     }).join('');
     document.getElementById('full-curriculum-product').innerHTML = curriculum.map(function (product) {

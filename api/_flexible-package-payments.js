@@ -14,8 +14,9 @@ const FLEXIBLE_PACKAGE_LIVE_RESTRICTED_KEY_ENV = 'STRIPE_FLEXIBLE_PACKAGES_LIVE_
 const FLEXIBLE_PACKAGE_LIVE_PAYMENT_CONFIGURATION_ENV = 'STRIPE_FLEXIBLE_PACKAGES_LIVE_PAYMENT_METHOD_CONFIGURATION';
 const FLEXIBLE_PACKAGE_LIVE_WEBHOOK_SECRET_ENV = 'STRIPE_FLEXIBLE_PACKAGES_LIVE_WEBHOOK_SECRET';
 const FLEXIBLE_HOURS_DISCLOSURE_VERSION = 'flexible-hours-consumer-rights-v1';
-const FLEXIBLE_PACKAGE_SLUGS = Object.freeze(['flexible-15-hours', 'flexible-30-hours']);
+const FLEXIBLE_PACKAGE_SLUGS = Object.freeze(['flexible-10-hours', 'flexible-15-hours', 'flexible-30-hours']);
 const FLEXIBLE_PACKAGE_TERMS = Object.freeze({
+  'flexible-10-hours': Object.freeze({ amountPence: 55000, totalUnits: 20, unitMinutes: 30, ratePencePerUnit: 2750 }),
   'flexible-15-hours': Object.freeze({ amountPence: 81000, totalUnits: 30, unitMinutes: 30, ratePencePerUnit: 2700 }),
   'flexible-30-hours': Object.freeze({ amountPence: 159000, totalUnits: 60, unitMinutes: 30, ratePencePerUnit: 2650 }),
 });
