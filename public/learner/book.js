@@ -492,7 +492,7 @@ function lessonLengthLabel(lt) {
   if (!lt) return 'Lesson';
   const mins = Number(lt.duration_minutes || 0);
   if (mins > 0 && mins % 60 === 0) return `${mins / 60} hr`;
-  if (mins > 60 && mins % 60 === 30) return `${Math.floor(mins / 60)}½ hr`;
+  if (mins > 60 && mins % 60 === 30) return `${(mins / 60).toFixed(1)} hr`;
   return `${mins} min`;
 }
 

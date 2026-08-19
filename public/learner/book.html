@@ -59,11 +59,11 @@
       margin: 20px 0 14px;
     }
     .control-label {
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
-      font-weight: 700;
+      font-family: var(--font-body);
+      font-size: 0.76rem;
+      font-weight: 800;
       color: var(--muted);
-      letter-spacing: 0.14em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
     }
     .lesson-length-segmented {
@@ -78,10 +78,10 @@
       background: var(--surface);
       color: var(--primary);
       padding: 9px 14px;
-      font-family: var(--font-mono);
-      font-size: 0.76rem;
+      font-family: var(--font-body);
+      font-size: 0.86rem;
       font-weight: 800;
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
       cursor: pointer;
       touch-action: manipulation;
       transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s;
@@ -161,14 +161,14 @@
     }
     .banner-dismiss:hover { border-color: var(--muted); color: var(--primary); }
 
-    /* Reschedule "Cancel" button - mono pill */
+    /* Reschedule "Cancel" button */
     .reschedule-banner button:not(.banner-dismiss) {
       background: transparent; border: 1px solid var(--accent);
       border-radius: 6px;
       padding: 5px 12px; cursor: pointer;
       color: var(--accent);
-      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
-      letter-spacing: 0.08em; text-transform: uppercase;
+      font-family: var(--font-body); font-size: 0.78rem; font-weight: 800;
+      letter-spacing: 0.02em; text-transform: uppercase;
       white-space: nowrap;
       transition: background 0.2s;
     }
@@ -177,8 +177,8 @@
     .next-lesson-label { display: none; }
     .next-lesson-detail { font-weight: 600; color: var(--primary); }
     .next-lesson-link {
-      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
-      color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase;
+      font-family: var(--font-body); font-size: 0.78rem; font-weight: 800;
+      color: var(--accent); letter-spacing: 0.02em; text-transform: uppercase;
       text-decoration: none; white-space: nowrap;
     }
     .next-lesson-link:hover { text-decoration: underline; }
@@ -229,8 +229,8 @@
       padding: 10px 18px !important;
       background: var(--accent); color: #fff;
       border: none; border-radius: 8px;
-      font-family: var(--font-mono) !important; font-size: 0.7rem !important; font-weight: 700;
-      letter-spacing: 0.1em; text-transform: uppercase;
+      font-family: var(--font-body) !important; font-size: 0.8rem !important; font-weight: 800;
+      letter-spacing: 0.02em; text-transform: uppercase;
       cursor: pointer;
       transition: background 0.2s, transform 0.15s;
     }
@@ -239,8 +239,8 @@
     .postcode-prompt-error {
       display: none;
       margin: 6px 0 0 32px;
-      font-family: var(--font-mono); font-size: 0.7rem;
-      color: var(--red); letter-spacing: 0.04em;
+      font-family: var(--font-body); font-size: 0.8rem;
+      color: var(--red); letter-spacing: 0;
     }
 
     /* ── TOOLBAR (mono filter strip) ──
@@ -280,11 +280,11 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       background: var(--white);
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 800;
       color: var(--primary);
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
       overflow-wrap: anywhere;
     }
     .test-date-controls {
@@ -301,8 +301,8 @@
       background: var(--white);
       color: var(--primary);
       padding: 8px 11px;
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
+      font-family: var(--font-body);
+      font-size: 0.82rem;
       font-weight: 800;
       cursor: pointer;
     }
@@ -327,11 +327,11 @@
     }
     .test-date-action:disabled { background: var(--border); cursor: not-allowed; }
     .test-date-status {
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
+      font-family: var(--font-body);
+      font-size: 0.8rem;
       font-weight: 700;
       color: var(--muted);
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
     }
     @media (max-width: 560px) {
       .test-date-meta { grid-template-columns: 1fr; }
@@ -348,8 +348,8 @@
     }
     .cal-toolbar::before {
       content: 'Filter';
-      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: var(--font-body); font-size: 0.76rem; font-weight: 800;
+      color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
     }
     .filter-select {
       border: 1.5px solid var(--border);
@@ -357,8 +357,8 @@
       color: var(--primary);
       border-radius: 8px;
       padding: 8px 14px;
-      font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600;
-      letter-spacing: 0.04em;
+      font-family: var(--font-body); font-size: 0.88rem; font-weight: 700;
+      letter-spacing: 0;
       cursor: pointer;
       transition: border-color 0.2s;
     }
@@ -369,10 +369,10 @@
       gap: 8px;
       min-height: 40px;
       color: var(--primary);
-      font-family: var(--font-mono);
-      font-size: 0.74rem;
+      font-family: var(--font-body);
+      font-size: 0.86rem;
       font-weight: 700;
-      letter-spacing: 0.03em;
+      letter-spacing: 0;
     }
     .availability-filter[hidden] { display: none; }
     .availability-filter input {
@@ -384,11 +384,11 @@
     .availability-filter input:disabled { cursor: not-allowed; }
     .availability-filter-link {
       color: var(--accent);
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
+      font-family: var(--font-body);
+      font-size: 0.84rem;
       font-weight: 800;
       text-decoration: none;
-      letter-spacing: 0.03em;
+      letter-spacing: 0;
     }
     .availability-filter-link:hover,
     .availability-filter-link:focus {
@@ -397,10 +397,10 @@
     }
     .availability-filter-note {
       color: var(--muted);
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
+      font-family: var(--font-body);
+      font-size: 0.82rem;
       font-weight: 700;
-      letter-spacing: 0.03em;
+      letter-spacing: 0;
     }
 
     /* Travel-hidden banner */
@@ -412,8 +412,8 @@
       border-left: 2px solid var(--muted);
       border-radius: 0 8px 8px 0;
       margin-bottom: 14px;
-      font-family: var(--font-mono); font-size: 0.7rem;
-      color: var(--muted); letter-spacing: 0.04em;
+      font-family: var(--font-body); font-size: 0.82rem;
+      color: var(--muted); letter-spacing: 0;
     }
 
     /* ── DATE GRID + TIME GROUPS ── */
@@ -433,10 +433,10 @@
     }
     .date-grid-head {
       text-align: center;
-      font-family: var(--font-mono);
-      font-size: 0.6rem;
+      font-family: var(--font-body);
+      font-size: 0.68rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--muted);
       padding-bottom: 2px;
@@ -451,10 +451,10 @@
       border: 1px dashed var(--border);
       border-radius: 10px;
       color: var(--muted);
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 800;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       cursor: pointer;
     }
@@ -478,10 +478,10 @@
     .date-cell-month {
       position: absolute;
       top: 4px;
-      font-family: var(--font-mono);
-      font-size: 0.52rem;
+      font-family: var(--font-body);
+      font-size: 0.58rem;
       font-weight: 800;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       color: var(--muted);
     }
@@ -489,10 +489,10 @@
       grid-column: 1 / -1;
       margin-top: 6px;
       padding: 2px 0;
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--muted);
       border-bottom: 1px solid var(--border);
@@ -579,19 +579,19 @@
       border-radius: 6px;
       background: var(--accent);
       color: #fff;
-      font-family: var(--font-mono);
-      font-size: 0.58rem;
+      font-family: var(--font-body);
+      font-size: 0.66rem;
       font-weight: 900;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.04em;
       line-height: 1;
       text-transform: uppercase;
     }
     .selected-date-heading span {
       flex-shrink: 0;
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--muted);
     }
@@ -659,10 +659,10 @@
       display: block;
       margin-top: 4px;
       color: var(--muted);
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
       line-height: 1.35;
     }
     .slot-on-request {
@@ -727,11 +727,11 @@
       gap: 3px;
     }
     .selected-slot-label {
-      font-family: var(--font-mono);
-      font-size: 0.62rem;
+      font-family: var(--font-body);
+      font-size: 0.74rem;
       font-weight: 800;
       color: var(--accent);
-      letter-spacing: 0.12em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .selected-slot-title {
@@ -744,10 +744,10 @@
     }
     .selected-slot-meta {
       color: var(--muted);
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
       line-height: 1.35;
     }
     .selected-slot-continue {
@@ -771,8 +771,8 @@
     /* ── LEGACY SLOT FEED SUPPORT ── */
     .slot-feed { display: flex; flex-direction: column; gap: 6px; }
     .feed-date-header {
-      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 700;
-      color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+      font-family: var(--font-body); font-size: 0.78rem; font-weight: 800;
+      color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
       padding: 20px 0 8px;
       display: flex; align-items: center; gap: 10px;
     }
@@ -812,17 +812,17 @@
       font-variant-numeric: tabular-nums;
     }
     .feed-card-instructor {
-      font-family: var(--font-mono); font-size: 0.7rem;
-      color: var(--muted); letter-spacing: 0.04em;
+      font-family: var(--font-body); font-size: 0.82rem; font-weight: 600;
+      color: var(--muted); letter-spacing: 0;
       display: flex; align-items: center; gap: 8px;
     }
     .feed-card-meta {
       margin-top: 5px;
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 700;
       color: var(--accent);
-      letter-spacing: 0.08em;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
     }
     .feed-card-chevron {
@@ -846,8 +846,8 @@
     /* Feed footer */
     .feed-footer { text-align: center; padding: 24px 0 8px; }
     .feed-status {
-      font-family: var(--font-mono); font-size: 0.7rem;
-      color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase;
+      font-family: var(--font-body); font-size: 0.82rem;
+      color: var(--muted); letter-spacing: 0.02em; text-transform: uppercase;
       margin-bottom: 14px;
     }
     .btn-load-more {
@@ -856,8 +856,8 @@
       border: 1.5px solid var(--border);
       background: transparent;
       color: var(--primary);
-      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
-      letter-spacing: 0.1em; text-transform: uppercase;
+      font-family: var(--font-body); font-size: 0.84rem; font-weight: 800;
+      letter-spacing: 0.02em; text-transform: uppercase;
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s, color 0.2s;
     }
@@ -877,11 +877,11 @@
     .repeat-count-label {
       display: block;
       margin-bottom: 8px;
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 800;
       color: var(--muted);
-      letter-spacing: 0.1em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
     .repeat-count-control {
@@ -895,8 +895,8 @@
       border-radius: 10px;
       background: var(--white);
       color: var(--primary);
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
+      font-family: var(--font-body);
+      font-size: 0.84rem;
       font-weight: 800;
       cursor: pointer;
       touch-action: manipulation;
@@ -979,11 +979,11 @@
     }
     .modal-section-title {
       margin: 18px 0 8px;
-      font-family: var(--font-mono);
-      font-size: 0.66rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
       font-weight: 800;
       color: var(--muted);
-      letter-spacing: 0.12em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
     .modal-credit-note { font-size: 0.825rem; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
