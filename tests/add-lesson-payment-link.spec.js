@@ -61,9 +61,9 @@ test.describe('instructor add lesson payment links', () => {
 
   test('calendar payment-link branch posts minimal existing-learner offer payload', () => {
     const body = functionBody(read('public/instructor/index.js'), 'confirmCreateBooking');
-    const offerBranch = sliceBetween(body, "if (isPaymentLink) {", "const res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking'");
+    const offerBranch = sliceBetween(body, "if (isPaymentLink) {", "const result = await BookingActions.postWithScheduleOverride(\n      '/api/instructor?action=create-booking'");
 
-    expect(offerBranch).toContain("ccAuth.fetchAuthed('/api/instructor?action=create-offer'");
+    expect(offerBranch).toContain("BookingActions.postWithScheduleOverride(\n        '/api/instructor?action=create-offer'");
     expect(offerBranch).toContain('learner_id: selectedLearnerId');
     expect(offerBranch).toContain('scheduled_date: newDate');
     expect(offerBranch).toContain('start_time: newTime.slice(0, 5)');
@@ -79,7 +79,7 @@ test.describe('instructor add lesson payment links', () => {
     const body = functionBody(read('public/instructor/dashboard.js'), 'confirmBook');
     const offerBranch = sliceBetween(body, "if (isPaymentLink) {", 'var body = {');
 
-    expect(offerBranch).toContain("ccAuth.fetchAuthed('/api/instructor?action=create-offer'");
+    expect(offerBranch).toContain("BookingActions.postWithScheduleOverride(\n        '/api/instructor?action=create-offer'");
     expect(offerBranch).toContain('learner_id: selectedLearnerId');
     expect(offerBranch).toContain('scheduled_date: date');
     expect(offerBranch).toContain('start_time: time.slice(0,5)');
@@ -95,11 +95,11 @@ test.describe('instructor add lesson payment links', () => {
     const indexBody = functionBody(read('public/instructor/index.js'), 'confirmCreateBooking');
     const dashboardBody = functionBody(read('public/instructor/dashboard.js'), 'confirmBook');
 
-    expect(indexBody).toContain("ccAuth.fetchAuthed('/api/instructor?action=create-booking'");
+    expect(indexBody).toContain("BookingActions.postWithScheduleOverride(\n      '/api/instructor?action=create-booking'");
     expect(indexBody).toContain('payment_method: payMethod');
     expect(indexBody).toContain('notes: notes || null');
     expect(indexBody).toContain("dropoff_address: document.getElementById('addLessonDropoff').value.trim() || null");
-    expect(dashboardBody).toContain("ccAuth.fetchAuthed('/api/instructor?action=create-booking'");
+    expect(dashboardBody).toContain("BookingActions.postWithScheduleOverride(\n      '/api/instructor?action=create-booking'");
     expect(dashboardBody).toContain('payment_method: payMethod');
     expect(dashboardBody).toContain("notes: document.getElementById('bookNotes').value.trim() || null");
     expect(dashboardBody).toContain("dropoff_address: document.getElementById('bookDropoff').value.trim() || null");

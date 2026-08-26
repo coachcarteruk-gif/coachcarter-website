@@ -519,7 +519,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 
 | Action | Method | Auth | Description |
 |---|---|---|---|
-| `create-offer` | POST | Instructor JWT | Creates a fixed one-lesson offer. With retirement active, flexible input or `max_repeat_weeks > 1` returns `410 PRODUCT_CREATION_RETIRED` before insert or notification. One-off offers keep their existing price snapshot rules. |
+| `create-offer` | POST | Instructor JWT | Creates a fixed one-lesson offer. A fixed slot that overlaps a schedule block or falls outside recurring/one-off availability first returns `409 SCHEDULE_OVERRIDE_REQUIRED`; resend with exact Boolean `availability_override: true` to confirm the instructor/admin exception. Real lesson, offer, request, and reservation conflicts remain blocked. With retirement active, flexible input or `max_repeat_weeks > 1` returns `410 PRODUCT_CREATION_RETIRED` before insert or notification. One-off offers keep their existing price snapshot rules. |
 | `list-offers` | GET | Instructor JWT | Lists instructor's offers with status filter |
 | `cancel-offer` | POST | Instructor JWT | Cancels a pending offer |
 
@@ -742,7 +742,7 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `reschedule-availability` | GET | JWT | Read-only preview for an instructor-managed reschedule. Rechecks the selected instructor's availability/overrides, lessons, reservations, blackouts, busy/external events, pending requests/offers, recurring holds, notice/window, and pickup travel spacing. Query: `booking_id`, `new_instructor_id`, `new_date`, `new_start_time`. |
 | `reschedule-booking` | POST | JWT | Move an authorised booking to a new slot or active eligible same-school instructor (no old-lesson notice restriction and no count limit). Body: `{ booking_id, new_date, new_start_time, new_instructor_id? }`. Confirmation repeats the full availability check server-side. The old-row termination, replacement booking, and BCS/funding transfer are atomic; cross-instructor moves reuse migration 042's paired transfer ledger and do not charge the learner again. Reserved Weekly Slot occurrences cannot switch instructor. |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts the learner's balance with that booking's instructor if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
-| `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/free payment) |
+| `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/flexible-package/free payment). Schedule blocks and times outside recurring/one-off availability first return `409 SCHEDULE_OVERRIDE_REQUIRED`; resend with exact Boolean `availability_override: true` to confirm the exception. Actual lesson and held-request conflicts are not overridable. |
 | `blackout-dates` | GET | JWT | Returns active/future blackout date ranges. Response: `{ blackout_dates: [{ id, start_date, end_date, reason }] }` |
 | `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |
 | `payout-history` | GET | JWT | Paginated payout records for the instructor |

@@ -518,12 +518,18 @@ async function confirmBook() {
         lesson_type_id: parseInt(document.getElementById('bookType').value)
       };
 
-      var offerRes = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(offerBody)
-      });
-      var offerData = await offerRes.json();
+      var offerResult = await BookingActions.postWithScheduleOverride(
+        '/api/instructor?action=create-offer',
+        offerBody,
+        'Send this payment-link offer anyway?'
+      );
+      if (offerResult.cancelled) {
+        btn.disabled = false;
+        btn.textContent = 'Send payment link';
+        return;
+      }
+      var offerRes = offerResult.res;
+      var offerData = offerResult.data;
       if (!offerRes.ok) throw new Error(offerData.error || 'Failed to send payment link');
 
       renderBookOfferSuccess(offerData);
@@ -544,12 +550,18 @@ async function confirmBook() {
       dropoff_address: document.getElementById('bookDropoff').value.trim() || null
     };
 
-    var res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    var data = await res.json();
+    var bookingResult = await BookingActions.postWithScheduleOverride(
+      '/api/instructor?action=create-booking',
+      body,
+      'Book this lesson anyway?'
+    );
+    if (bookingResult.cancelled) {
+      btn.disabled = false;
+      btn.textContent = 'Book lesson';
+      return;
+    }
+    var res = bookingResult.res;
+    var data = bookingResult.data;
     if (!res.ok) throw new Error(data.error || 'Booking failed');
 
     closeBookModal();

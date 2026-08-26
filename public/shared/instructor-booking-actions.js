@@ -617,6 +617,44 @@
     }
   }
 
+  function _confirmScheduleOverride(data, actionLabel) {
+    var warnings = Array.isArray(data && data.warnings) ? data.warnings : [];
+    var warningText = warnings.length
+      ? warnings.map(function (warning) { return '• ' + warning.message; }).join('\n')
+      : '• This time conflicts with the instructor schedule.';
+    return window.confirm(
+      'Please check this time:\n\n' + warningText +
+      '\n\nThis warning can be overridden. Existing lesson, offer and request clashes will still be blocked.\n\n' +
+      (actionLabel || 'Continue anyway?')
+    );
+  }
+
+  async function postWithScheduleOverride(url, body, actionLabel) {
+    var payload = Object.assign({}, body || {});
+    var res = await ccAuth.fetchAuthed(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+
+    if (res.status === 409 && data && data.code === 'SCHEDULE_OVERRIDE_REQUIRED'
+        && payload.availability_override !== true) {
+      if (!_confirmScheduleOverride(data, actionLabel)) {
+        return { cancelled: true, res: res, data: data };
+      }
+      payload.availability_override = true;
+      res = await ccAuth.fetchAuthed(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      data = await res.json();
+    }
+
+    return { cancelled: false, res: res, data: data };
+  }
+
   async function confirmAdd() {
     if (!addLessonSelectedId) { _showToast('Please select a learner', 'error'); return; }
     const date = document.getElementById('ba-add-date').value;
@@ -643,12 +681,18 @@
       if (notes) body.notes = notes;
       if (dropoff) body.dropoff_address = dropoff;
 
-      const res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
+      const result = await postWithScheduleOverride(
+        '/api/instructor?action=create-booking',
+        body,
+        'Book this lesson anyway?'
+      );
+      if (result.cancelled) {
+        btn.disabled = false;
+        btn.textContent = 'Book lesson';
+        return;
+      }
+      const res = result.res;
+      const data = result.data;
       if (!res.ok) throw new Error(data.error || 'Failed to book');
       var learnerName = document.getElementById('ba-add-sel-name').textContent;
       closeAdd();
@@ -683,6 +727,7 @@
     openAdd: openAdd,
     closeAdd: closeAdd,
     confirmAdd: confirmAdd,
+    postWithScheduleOverride: postWithScheduleOverride,
     _filterLearners: _filterLearners,
     _selectLearner: _selectLearner,
     _clearLearner: _clearLearner
