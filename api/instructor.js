@@ -77,6 +77,11 @@ const {
   validateInstructorRescheduleSlot,
 } = require('./_instructor-reschedule-slot');
 const { bookFlexiblePackageSlotTransaction } = require('./_flexible-package-ledger');
+const {
+  SCHEDULE_OVERRIDE_REQUIRED,
+  loadInstructorScheduleWarnings,
+  sendScheduleOverrideRequired,
+} = require('./_instructor-schedule-warnings');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -190,6 +195,42 @@ function setCors(res) {
 // checks are applied consistently with the rest of the codebase.
 function verifyInstructorAuth(req) {
   return requireAuth(req, { roles: ['instructor'] });
+}
+
+async function logInstructorScheduleOverride(sql, {
+  instructor,
+  schoolId,
+  req,
+  targetType,
+  targetId,
+  scheduledDate,
+  startTime,
+  endTime,
+  warnings,
+}) {
+  if (!Array.isArray(warnings) || warnings.length === 0) return;
+  const adminImpersonation = instructor.impersonation === true;
+  await logAudit(sql, {
+    adminId: adminImpersonation ? (instructor.impersonated_by_admin_id || null) : null,
+    adminEmail: adminImpersonation
+      ? (instructor.impersonated_by_admin_email || instructor.email || null)
+      : (instructor.email || null),
+    action: adminImpersonation
+      ? 'admin.instructor_schedule_override'
+      : 'instructor.schedule_override',
+    targetType,
+    targetId,
+    schoolId,
+    req,
+    details: {
+      instructor_id: instructor.id,
+      scheduled_date: scheduledDate,
+      start_time: startTime,
+      end_time: endTime,
+      warning_codes: warnings.map(warning => warning.code),
+      impersonation: adminImpersonation,
+    },
+  });
 }
 
 function lessonBookingTransmissionColumnMissing(err) {
@@ -2794,6 +2835,7 @@ async function createInstructorCreditBookingTransaction({
   dropoffAddress,
   sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
   blockingStatuses = BLOCKING_STATUSES,
+  allowBusyBlockOverride = false,
 }) {
   try {
     return await withNeonTransaction(connectionString, async client => {
@@ -2851,23 +2893,29 @@ async function createInstructorCreditBookingTransaction({
         });
       }
 
-      const busyBlockConflict = await client.query(
-        `SELECT id
-           FROM instructor_busy_blocks
-          WHERE instructor_id = $1
-            AND school_id = $2
-            AND block_date = $3::date
-            AND start_time < $5::time
-            AND end_time > $4::time
-          LIMIT 1`,
-        [instructorId, schoolId, scheduledDate, startTime, endTime]
-      );
-      if (busyBlockConflict.rowCount > 0) {
-        abortInstructorBookingTransaction({
-          ok: false,
-          code: 'SLOT_UNAVAILABLE',
-          message: 'That time is blocked as busy. Remove the busy block or choose another time.',
-        });
+      if (!allowBusyBlockOverride) {
+        const busyBlockConflict = await client.query(
+          `SELECT id
+             FROM instructor_busy_blocks
+            WHERE instructor_id = $1
+              AND school_id = $2
+              AND block_date = $3::date
+              AND start_time < $5::time
+              AND end_time > $4::time
+            LIMIT 1`,
+          [instructorId, schoolId, scheduledDate, startTime, endTime]
+        );
+        if (busyBlockConflict.rowCount > 0) {
+          abortInstructorBookingTransaction({
+            ok: false,
+            code: SCHEDULE_OVERRIDE_REQUIRED,
+            message: 'Please review this time before continuing.',
+            warnings: [{
+              code: 'BUSY_BLOCK',
+              message: 'This time overlaps a busy block on the instructor calendar.',
+            }],
+          });
+        }
       }
 
       const sourcesResult = await client.query(
@@ -3048,6 +3096,7 @@ async function handleCreateBooking(req, res) {
     dropoff_address,
     transmission_type,
     client_request_id,
+    availability_override,
   } = req.body;
   if (!learner_id || !scheduled_date || !start_time)
     return res.status(400).json({ error: 'learner_id, scheduled_date and start_time are required' });
@@ -3122,22 +3171,6 @@ async function handleCreateBooking(req, res) {
     const bookingPickup = pickup_address || learner.pickup_address || null;
     const bookingDropoff = dropoff_address || null;
 
-    try {
-      const [busyBlock] = await sql`
-        SELECT id
-        FROM instructor_busy_blocks
-        WHERE instructor_id = ${instructor.id}
-          AND school_id = ${schoolId}
-          AND block_date = ${scheduled_date}::date
-          AND start_time < ${end_time}::time
-          AND end_time > ${start_time}::time
-        LIMIT 1
-      `;
-      if (busyBlock) {
-        return res.status(409).json({ error: 'That time is blocked as busy. Remove the busy block or choose another time.' });
-      }
-    } catch (_) {}
-
     // A learner's pending request holds real money against this slot — the
     // instructor should answer it, not book over it.
     try {
@@ -3157,6 +3190,18 @@ async function handleCreateBooking(req, res) {
         return res.status(409).json({ error: 'A learner has a pending lesson request on that time — accept or decline it from your dashboard first.' });
       }
     } catch (_) {}
+
+    const scheduleWarnings = await loadInstructorScheduleWarnings(sql, {
+      instructorId: instructor.id,
+      schoolId,
+      scheduledDate: scheduled_date,
+      startTime: start_time,
+      endTime: end_time,
+    });
+    const scheduleOverrideConfirmed = availability_override === true;
+    if (scheduleWarnings.length > 0 && !scheduleOverrideConfirmed) {
+      return sendScheduleOverrideRequired(res, scheduleWarnings);
+    }
 
     if (payMethod === 'flexible_package') {
       const booked = await bookFlexiblePackageSlotTransaction({
@@ -3222,6 +3267,7 @@ async function handleCreateBooking(req, res) {
         notes,
         pickupAddress: bookingPickup,
         dropoffAddress: bookingDropoff,
+        allowBusyBlockOverride: scheduleOverrideConfirmed,
       });
 
       if (!booked.ok) {
@@ -3231,6 +3277,9 @@ async function handleCreateBooking(req, res) {
         }
         if (booked.code === 'SLOT_UNAVAILABLE') {
           return res.status(409).json({ error: booked.message || 'That slot is already booked. Please choose another time.' });
+        }
+        if (booked.code === SCHEDULE_OVERRIDE_REQUIRED) {
+          return sendScheduleOverrideRequired(res, booked.warnings || []);
         }
         return res.status(500).json({ error: 'Failed to create credit booking' });
       }
@@ -3257,6 +3306,20 @@ async function handleCreateBooking(req, res) {
         }
         throw insertErr;
       }
+    }
+
+    if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
+      await logInstructorScheduleOverride(sql, {
+        instructor,
+        schoolId,
+        req,
+        targetType: 'lesson_booking',
+        targetId: booking.id,
+        scheduledDate: scheduled_date,
+        startTime: start_time,
+        endTime: end_time,
+        warnings: scheduleWarnings,
+      });
     }
 
     // Get updated balance
@@ -4479,6 +4542,7 @@ async function handleCreateOffer(req, res) {
   const schoolId = instructor.school_id || 1;
 
   const { learner_id, learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
+  const { availability_override } = req.body;
   const learnerIdClean = learner_id != null && learner_id !== '' ? parseInt(learner_id, 10) : null;
   if (learnerIdClean != null && (!Number.isInteger(learnerIdClean) || learnerIdClean <= 0))
     return res.status(400).json({ error: 'learner_id must be a positive integer' });
@@ -4634,6 +4698,18 @@ async function handleCreateOffer(req, res) {
         return res.status(409).json({ error: 'Someone is currently booking that slot. Try again shortly.' });
     }
 
+    const scheduleWarnings = isFlexible ? [] : await loadInstructorScheduleWarnings(sql, {
+      instructorId: instructor.id,
+      schoolId,
+      scheduledDate: scheduled_date,
+      startTime: start_time,
+      endTime: end_time,
+    });
+    const scheduleOverrideConfirmed = availability_override === true;
+    if (scheduleWarnings.length > 0 && !scheduleOverrideConfirmed) {
+      return sendScheduleOverrideRequired(res, scheduleWarnings);
+    }
+
     let existingLearner = null;
     if (learnerIdClean) {
       const [found] = await sql`
@@ -4684,6 +4760,20 @@ async function handleCreateOffer(req, res) {
          ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', ${offerExpiresAt}, ${schoolId})
       RETURNING id, expires_at
     `;
+
+    if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
+      await logInstructorScheduleOverride(sql, {
+        instructor,
+        schoolId,
+        req,
+        targetType: 'lesson_offer',
+        targetId: offer.id,
+        scheduledDate: scheduled_date,
+        startTime: start_time,
+        endTime: end_time,
+        warnings: scheduleWarnings,
+      });
+    }
 
     // Determine final price for email
     const pricePence = offerPricing.pricePence;
@@ -5157,7 +5247,7 @@ async function handleCreateBroadcastOffer(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { scheduled_date, start_time, lesson_type_id, discount_pct, learner_ids } = req.body;
+  const { scheduled_date, start_time, lesson_type_id, discount_pct, learner_ids, availability_override } = req.body;
 
   if (!scheduled_date || !/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date))
     return res.status(400).json({ error: 'scheduled_date (YYYY-MM-DD) required' });
@@ -5247,6 +5337,18 @@ async function handleCreateBroadcastOffer(req, res) {
         return res.status(409).json({ error: 'A learner has already requested that slot — accept or decline their request instead.' });
     } catch (e) { /* table may not exist yet */ }
 
+    const scheduleWarnings = await loadInstructorScheduleWarnings(sql, {
+      instructorId: instructor.id,
+      schoolId,
+      scheduledDate: scheduled_date,
+      startTime: start_time,
+      endTime: end_time,
+    });
+    const scheduleOverrideConfirmed = availability_override === true;
+    if (scheduleWarnings.length > 0 && !scheduleOverrideConfirmed) {
+      return sendScheduleOverrideRequired(res, scheduleWarnings);
+    }
+
     // Verify each learner is in this school AND has availability covering the slot.
     // We trust the frontend less than the DB — re-validate so a malicious client
     // can't broadcast to learners who didn't opt in to that time.
@@ -5306,6 +5408,20 @@ async function handleCreateBroadcastOffer(req, res) {
 
     if (offerRows.length === 0)
       return res.status(500).json({ error: 'Failed to create any offers' });
+
+    if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
+      await logInstructorScheduleOverride(sql, {
+        instructor,
+        schoolId,
+        req,
+        targetType: 'lesson_offer_batch',
+        targetId: offerRows[0].id,
+        scheduledDate: scheduled_date,
+        startTime: start_time,
+        endTime: end_time,
+        warnings: scheduleWarnings,
+      });
+    }
 
     // Send notifications in parallel (fire-and-forget).
     const { sendWhatsApp } = require('./_whatsapp');
