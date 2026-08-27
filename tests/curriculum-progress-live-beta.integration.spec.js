@@ -417,7 +417,7 @@ test.describe('curriculum progress persistent non-production rehearsal', () => {
       }, instructor);
       const instructorPage = await instructorContext.newPage();
       await instructorPage.setViewportSize({ width: 390, height: 844 });
-      await instructorPage.goto(`/instructor/review-lesson.html?booking_id=${booking.id}`);
+      await instructorPage.goto(`/instructor/review-lesson?booking_id=${booking.id}`);
       await expect(instructorPage.getByText(learner.name)).toBeVisible();
       await instructorPage.getByText('Moving off and stopping', { exact: true }).click();
       const movingOff = instructorPage.locator('[data-skill="MOVE-01"]');
@@ -449,7 +449,7 @@ test.describe('curriculum progress persistent non-production rehearsal', () => {
       }, learner);
       const learnerPage = await learnerContext.newPage();
       await learnerPage.setViewportSize({ width: 390, height: 844 });
-      await learnerPage.goto(`/learner/rate-lesson.html?booking_id=${booking.id}`);
+      await learnerPage.goto(`/learner/rate-lesson?booking_id=${booking.id}`);
       await expect(learnerPage.locator('.cp-card').filter({ hasText: 'MOVE-01' })).toBeVisible();
       await learnerPage.locator('.cp-card').filter({ hasText: 'MOVE-01' })
         .getByText('3 · Independent', { exact: true }).click();

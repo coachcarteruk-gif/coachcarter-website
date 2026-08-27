@@ -78,6 +78,8 @@ test.describe('curriculum progress beta contracts', () => {
     const api = read('api/curriculum-progress.js');
     const gdpr = read('api/_gdpr.js');
     const learner = read('api/learner.js');
+    const instructorWidget = read('public/instructor/curriculum-reviews-widget.js');
+    const learnerWidget = read('public/learner/curriculum-reflection-widget.js');
     expect(migration).toContain('school_id          INTEGER NOT NULL REFERENCES schools(id)');
     expect(migration).toContain("CHECK (assessor_role IN ('instructor', 'learner'))");
     expect(migration).toContain('CHECK (score BETWEEN 1 AND 3)');
@@ -100,6 +102,10 @@ test.describe('curriculum progress beta contracts', () => {
     expect(gdpr).toContain('DELETE FROM curriculum_review_submissions');
     expect(gdpr).toContain('DELETE FROM curriculum_completion_events');
     expect(learner).toContain('curriculum_rating_events: curriculumRatingEvents');
+    expect(instructorWidget).toContain('href="/instructor/review-lesson?booking_id=');
+    expect(instructorWidget).not.toContain('review-lesson.html?booking_id=');
+    expect(learnerWidget).toContain('href="/learner/rate-lesson?booking_id=');
+    expect(learnerWidget).not.toContain('rate-lesson.html?booking_id=');
   });
 
   test('curriculum API does not mutate booking, credit, refund, payout or Stripe state', () => {
@@ -127,7 +133,8 @@ test.describe('curriculum progress browser flow', () => {
       instructor_submission: null, instructor_ratings: [], learner_submission: null, learner_ratings: [], completions: [],
     }) }));
     await page.route('**/api/curriculum-progress?action=submit-instructor-review**', async (route) => { submitted = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, duplicate: false, submission_id: 1 }) }); });
-    await page.goto('/instructor/review-lesson.html?booking_id=91', { waitUntil: 'domcontentloaded' });
+    await page.goto('/instructor/review-lesson?booking_id=91', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/instructor\/review-lesson\?booking_id=91$/);
     await expect(page.getByText('Jamie Learner')).toBeVisible();
     await page.getByText('Moving off and stopping', { exact: true }).click();
     const movingOff = page.locator('[data-skill="MOVE-01"]');
@@ -155,7 +162,8 @@ test.describe('curriculum progress browser flow', () => {
       instructor_submission: { id: 1 }, instructor_ratings: [{ item_key: 'MOVE-01', score: 2 }, { item_key: 'RNDB-03', score: 1 }], learner_submission: null, learner_ratings: [], completions: [],
     }) }));
     await page.route('**/api/curriculum-progress?action=submit-learner-reflection**', async (route) => { submitted = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }); });
-    await page.goto('/learner/rate-lesson.html?booking_id=91', { waitUntil: 'domcontentloaded' });
+    await page.goto('/learner/rate-lesson?booking_id=91', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/learner\/rate-lesson\?booking_id=91$/);
     await expect(page.getByText('Choose and check the correct mirrors at the right time')).toHaveCount(0);
     await expect(page.getByText('Choose a safe, legal and appropriate place to pull up')).toBeVisible();
     await page.locator('.cp-card').filter({ hasText: 'MOVE-01' }).getByText('3 · Independent', { exact: true }).click();
