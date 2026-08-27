@@ -110,6 +110,9 @@ async function startLocalCurriculumServer(curriculumHandler) {
       if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
         filePath = path.join(filePath, 'index.html');
       }
+      if (!path.extname(filePath) && fs.existsSync(`${filePath}.html`)) {
+        filePath = `${filePath}.html`;
+      }
       if (!fs.existsSync(filePath)) {
         res.writeHead(404).end('Not found');
         return;

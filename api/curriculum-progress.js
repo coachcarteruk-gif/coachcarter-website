@@ -266,10 +266,29 @@ async function saveSubmission({ actor, role, body }) {
         'instructor', NULL, ${booking.id}, ${schoolId}
       )
       ON CONFLICT (booking_id) WHERE booking_id IS NOT NULL
-      DO UPDATE SET booking_id = EXCLUDED.booking_id
+      DO NOTHING
       RETURNING id
     `;
-    const sessionId = sessions[0].id;
+    let sessionId = sessions[0]?.id;
+    if (!sessionId) {
+      const [existingSession] = await sql`
+        SELECT id, user_id
+        FROM driving_sessions
+        WHERE booking_id = ${booking.id}
+          AND school_id = ${schoolId}
+        LIMIT 1
+      `;
+      if (!existingSession || Number(existingSession.user_id) !== Number(booking.learner_id)) {
+        return {
+          error: {
+            status: 409,
+            code: 'SESSION_LINK_CONFLICT',
+            error: 'The lesson session could not be linked safely',
+          },
+        };
+      }
+      sessionId = existingSession.id;
+    }
     const submissions = await sql`
       INSERT INTO curriculum_review_submissions (
         school_id, session_id, booking_id, learner_id, instructor_id,

@@ -127,6 +127,10 @@ test.describe('curriculum progress beta contracts', () => {
     expect(api).toContain('OR instructor_id = ${viewerInstructorId}');
     expect(api).toContain('loadCurriculumProgressBetaState(sql, schoolId)');
     expect(api).toContain('withNeonTransaction(process.env.POSTGRES_URL');
+    expect(api).toContain('ON CONFLICT (booking_id) WHERE booking_id IS NOT NULL\n      DO NOTHING\n      RETURNING id');
+    expect(api).not.toContain('DO UPDATE SET booking_id = EXCLUDED.booking_id');
+    expect(api).toContain('SELECT id, user_id');
+    expect(api).toContain("code: 'SESSION_LINK_CONFLICT'");
     expect(api).toContain('ON CONFLICT (school_id, assessor_role, client_request_id)');
     expect(api).toContain("code: 'INSTRUCTOR_REVIEW_REQUIRED'");
     expect(api).toContain('curriculum_item_key, assessor_role, assessed_at DESC');
