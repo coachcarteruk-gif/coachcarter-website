@@ -28,6 +28,7 @@ window.addEventListener('DOMContentLoaded', function() {
     return;
   }
   loadData();
+  window.CCCurriculumProgress.mount(document.getElementById('curriculum-progress-live'));
 });
 
 // ── Load competency data ──

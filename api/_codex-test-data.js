@@ -152,6 +152,9 @@ async function cleanupCodexData(sql) {
 
   if (learnerIds.length || instructorIds.length) {
     if (learnerIds.length) {
+      await sql`DELETE FROM curriculum_rating_events WHERE learner_id = ANY(${learnerIds})`;
+      await sql`DELETE FROM curriculum_completion_events WHERE learner_id = ANY(${learnerIds})`;
+      await sql`DELETE FROM curriculum_review_submissions WHERE learner_id = ANY(${learnerIds})`;
       await sql`
         DELETE FROM booking_credit_sources
          WHERE booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id = ANY(${learnerIds}))

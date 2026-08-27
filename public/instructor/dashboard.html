@@ -442,6 +442,7 @@
   <script src="/sidebar.js"></script>
   <script src="/shared/instructor-auth.js"></script>
   <script src="/shared/instructor-booking-actions.js"></script>
+  <link rel="stylesheet" href="/shared/curriculum-progress.css">
   <script src="/auth-gate.js"></script>
 </head>
 <body>
@@ -470,6 +471,8 @@
 
   <!-- Connect health alert (fire-and-forget; hidden when account is healthy) -->
   <a href="/instructor/earnings.html" class="dash-connect-alert" id="dashConnectAlert" style="display:none"></a>
+
+  <section class="cp-card cp-banner" id="curriculum-reviews-due" hidden aria-live="polite"></section>
 
   <!-- Future requests stay visible without becoming a separate dashboard section. -->
   <a class="request-attention" id="dashRequestAttention" href="/instructor/" style="display:none">
@@ -599,5 +602,6 @@
 </div>
 
 <script src="/instructor/dashboard.js"></script>
+<script src="/instructor/curriculum-reviews-widget.js"></script>
 </body>
 </html>
