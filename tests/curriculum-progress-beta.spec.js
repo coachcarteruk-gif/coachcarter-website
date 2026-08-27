@@ -39,8 +39,8 @@ test.describe('curriculum progress beta contracts', () => {
     const rewrites = config.rewrites || [];
     const catchAllIndex = rewrites.findIndex((rule) => rule.source === '/:path*');
     const expected = [
-      ['/instructor/review-lesson', '/public/instructor/review-lesson.html'],
-      ['/learner/rate-lesson', '/public/learner/rate-lesson.html'],
+      ['/instructor/review-lesson', '/instructor/review-lesson.html'],
+      ['/learner/rate-lesson', '/learner/rate-lesson.html'],
     ];
 
     expect(catchAllIndex).toBeGreaterThan(-1);

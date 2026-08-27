@@ -38,8 +38,8 @@
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/r/:code", "destination": "/api/r?code=:code" },
     { "source": "/book/:slug", "destination": "/learner/book.html" },
-    { "source": "/instructor/review-lesson", "destination": "/public/instructor/review-lesson.html" },
-    { "source": "/learner/rate-lesson", "destination": "/public/learner/rate-lesson.html" },
+    { "source": "/instructor/review-lesson", "destination": "/instructor/review-lesson.html" },
+    { "source": "/learner/rate-lesson", "destination": "/learner/rate-lesson.html" },
     { "source": "/check-my-driving", "destination": "/check-my-driving.html" },
     { "source": "/freetrial", "destination": "/free-lesson.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
