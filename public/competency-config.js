@@ -9,7 +9,7 @@
  * Every feature imports this file via <script src="/competency-config.js">
  * so wording, grouping, and skill keys are always consistent.
  */
-window.CC_COMPETENCY = (function () {
+var CC_COMPETENCY = (function () {
   'use strict';
 
   // ── 10 DL25 Categories ─────────────────────────────────────────
@@ -380,6 +380,105 @@ window.CC_COMPETENCY = (function () {
     { key: 'nailed',    label: 'Confident',       colour: '#22c55e', score: 3 }
   ];
 
+  // ── Booked-lesson curriculum progress beta ─────────────────────
+  // Stable item keys from docs/driving-curriculum-progress-prototype.md.
+  // This remains the runtime source of truth for both browser rendering and
+  // server-side item/score validation (the CommonJS export is appended below).
+  var CURRICULUM_RATINGS = [
+    { score: 1, key: 'struggled', label: 'Needs support' },
+    { score: 2, key: 'ok', label: 'Developing' },
+    { score: 3, key: 'nailed', label: 'Independent' }
+  ];
+
+  var CURRICULUM_SECTIONS = [
+    { key: 'getting_ready', label: 'Getting ready', type: 'completion' },
+    { key: 'vehicle_setup', label: 'Vehicle setup and safety checks', type: 'completion' },
+    { key: 'moving_off', label: 'Moving off and stopping', type: 'score' },
+    { key: 'core_process', label: 'Core driving process', type: 'score' },
+    { key: 't_junctions', label: 'T-junctions', type: 'score' },
+    { key: 'roundabouts', label: 'Roundabouts', type: 'score' },
+    { key: 'crossroads', label: 'Crossroads', type: 'score' },
+    { key: 'higher_speed_rural', label: 'Higher-speed and rural roads', type: 'score' },
+    { key: 'manoeuvres', label: 'Manoeuvres', type: 'score' },
+    { key: 'broader_safety', label: 'Broader safety and driving experience', type: 'score' },
+    { key: 'test_preparation', label: 'Independent driving and test preparation', type: 'score' }
+  ];
+
+  function curriculumItem(key, label, section, type, skillKey) {
+    return { key: key, label: label, section: section, assessmentType: type, skillKey: skillKey || null };
+  }
+
+  var CURRICULUM_ITEMS = [
+    curriculumItem('SET-01', 'Driving licence checked and photograph matches learner', 'getting_ready', 'completion'),
+    curriculumItem('SET-02', 'Minimum eyesight requirement met', 'getting_ready', 'completion'),
+    curriculumItem('SET-03', 'Lesson rules and cancellation expectations agreed', 'getting_ready', 'completion'),
+    curriculumItem('VEH-01', 'Identify the location and function of vehicle controls', 'vehicle_setup', 'completion', 'control'),
+    curriculumItem('VEH-02', 'Check that the doors are secure', 'vehicle_setup', 'completion', 'control'),
+    curriculumItem('VEH-03', 'Adjust the seat for safe comfortable control', 'vehicle_setup', 'completion', 'control'),
+    curriculumItem('VEH-04', 'Set an appropriate steering-wheel position', 'vehicle_setup', 'completion', 'control'),
+    curriculumItem('VEH-05', 'Adjust the mirrors correctly', 'vehicle_setup', 'completion', 'control'),
+    curriculumItem('VEH-06', 'Carry out POWDERS vehicle checks', 'vehicle_setup', 'completion', 'control'),
+    curriculumItem('VEH-07', 'Answer and demonstrate show me, tell me vehicle-safety questions', 'vehicle_setup', 'completion'),
+    curriculumItem('MOVE-01', 'Choose a safe, legal and appropriate place to pull up', 'moving_off', 'score', 'positioning'),
+    curriculumItem('MOVE-02', 'Stop an appropriate distance from the kerb', 'moving_off', 'score', 'positioning'),
+    curriculumItem('MOVE-03', 'Prepare the vehicle before moving off', 'moving_off', 'score', 'move_off'),
+    curriculumItem('MOVE-04', 'Make effective observations before moving off', 'moving_off', 'score', 'move_off'),
+    curriculumItem('MOVE-05', 'Move away safely using Prepare–Observe–Move', 'moving_off', 'score', 'move_off'),
+    curriculumItem('MOVE-06', 'Move off safely uphill', 'moving_off', 'score', 'move_off'),
+    curriculumItem('MOVE-07', 'Move off safely downhill', 'moving_off', 'score', 'move_off'),
+    curriculumItem('MOVE-08', 'Carry out a controlled emergency stop', 'moving_off', 'score', 'manoeuvres'),
+    curriculumItem('CORE-01', 'Choose and check the correct mirrors at the right time', 'core_process', 'score', 'mirrors'),
+    curriculumItem('CORE-02', 'Decide when a signal is necessary or could mislead', 'core_process', 'score', 'signals'),
+    curriculumItem('CORE-03', 'Choose an appropriate normal and junction road position', 'core_process', 'score', 'positioning'),
+    curriculumItem('CORE-04', 'Choose an appropriate speed and stop within the clear distance', 'core_process', 'score', 'positioning'),
+    curriculumItem('CORE-05', "Judge safety from other road users' signals, position and speed", 'core_process', 'score', 'judgement'),
+    curriculumItem('TJUN-01', 'Turn left from a minor road into a major road', 't_junctions', 'score', 'junctions'),
+    curriculumItem('TJUN-02', 'Turn right from a minor road into a major road', 't_junctions', 'score', 'junctions'),
+    curriculumItem('TJUN-03', 'Turn left from a major road into a minor road', 't_junctions', 'score', 'junctions'),
+    curriculumItem('TJUN-04', 'Turn right from a major road into a minor road', 't_junctions', 'score', 'junctions'),
+    curriculumItem('RNDB-01', 'Approach and turn left at a roundabout', 'roundabouts', 'score', 'junctions'),
+    curriculumItem('RNDB-02', 'Approach and follow the road ahead at a roundabout', 'roundabouts', 'score', 'junctions'),
+    curriculumItem('RNDB-03', 'Approach and turn right at a roundabout', 'roundabouts', 'score', 'junctions'),
+    curriculumItem('RNDB-04', 'Use mini-roundabouts safely', 'roundabouts', 'score', 'junctions'),
+    curriculumItem('RNDB-05', 'Select and maintain the correct lane on multi-lane roundabouts', 'roundabouts', 'score', 'junctions'),
+    curriculumItem('CROSS-01', 'Turn left from a minor road into a major road at a crossroads', 'crossroads', 'score', 'junctions'),
+    curriculumItem('CROSS-02', 'Turn right from a minor road into a major road at a crossroads', 'crossroads', 'score', 'junctions'),
+    curriculumItem('CROSS-03', 'Turn left from a major road into a minor road at a crossroads', 'crossroads', 'score', 'junctions'),
+    curriculumItem('CROSS-04', 'Turn right from a major road into a minor road at a crossroads', 'crossroads', 'score', 'junctions'),
+    curriculumItem('CROSS-05', 'Follow the road ahead through a crossroads', 'crossroads', 'score', 'junctions'),
+    curriculumItem('ROAD-01', 'Merge onto a dual carriageway from a slip road', 'higher_speed_rural', 'score', 'judgement'),
+    curriculumItem('ROAD-02', 'Leave a dual carriageway using a slip road', 'higher_speed_rural', 'score', 'positioning'),
+    curriculumItem('ROAD-03', 'Overtake slower-moving vehicles safely', 'higher_speed_rural', 'score', 'judgement'),
+    curriculumItem('ROAD-04', 'Understand when and how to use an emergency area', 'higher_speed_rural', 'score', 'signs_signals'),
+    curriculumItem('ROAD-05', 'Use location markers and emergency telephones when needed', 'higher_speed_rural', 'score', 'signs_signals'),
+    curriculumItem('ROAD-06', 'Adapt to country lanes with changing speeds and widths', 'higher_speed_rural', 'score', 'positioning'),
+    curriculumItem('ROAD-07', 'Leave enough space behind another vehicle to see its tyres and the road', 'higher_speed_rural', 'score', 'positioning'),
+    curriculumItem('ROAD-08', 'Use limit points to choose an appropriate speed and position', 'higher_speed_rural', 'score', 'judgement'),
+    curriculumItem('MAN-01', 'Reverse into a parking bay and drive out', 'manoeuvres', 'score', 'manoeuvres'),
+    curriculumItem('MAN-02', 'Drive forwards into a parking bay and reverse out', 'manoeuvres', 'score', 'manoeuvres'),
+    curriculumItem('MAN-03', 'Parallel park at the side of the road', 'manoeuvres', 'score', 'manoeuvres'),
+    curriculumItem('MAN-04', 'Pull up on the right, reverse and rejoin traffic safely', 'manoeuvres', 'score', 'manoeuvres'),
+    curriculumItem('MAN-05', 'Reverse around a corner', 'manoeuvres', 'score', 'manoeuvres'),
+    curriculumItem('MAN-06', 'Turn the vehicle around in the road', 'manoeuvres', 'score', 'manoeuvres'),
+    curriculumItem('SAFE-01', 'Deal safely with automated traffic-control systems', 'broader_safety', 'score', 'signs_signals'),
+    curriculumItem('SAFE-02', 'Approach and use pedestrian crossings safely', 'broader_safety', 'score', 'positioning'),
+    curriculumItem('SAFE-03', 'Adapt driving to different weather conditions', 'broader_safety', 'score', 'positioning'),
+    curriculumItem('SAFE-04', 'Demonstrate a safe, patient and considerate driving attitude', 'broader_safety', 'score', 'judgement'),
+    curriculumItem('SAFE-05', 'Explain what to do after being involved in a collision', 'broader_safety', 'score'),
+    curriculumItem('SAFE-06', 'Respond safely when stopped by the emergency services', 'broader_safety', 'score', 'signs_signals'),
+    curriculumItem('TEST-01', 'Drive independently by following a sat nav', 'test_preparation', 'score', 'signs_signals'),
+    curriculumItem('TEST-02', 'Drive independently by following road signs', 'test_preparation', 'score', 'signs_signals'),
+    curriculumItem('TEST-03', 'Apply skills safely on test-style routes without route memorisation', 'test_preparation', 'score', 'progress'),
+    curriculumItem('TEST-04', 'Complete a mock driving test at an appropriate standard', 'test_preparation', 'score')
+  ];
+
+  function getCurriculumItem(key) {
+    for (var i = 0; i < CURRICULUM_ITEMS.length; i++) {
+      if (CURRICULUM_ITEMS[i].key === key) return CURRICULUM_ITEMS[i];
+    }
+    return null;
+  }
+
   // ── Mock Test Pass Criteria ────────────────────────────────────
   var MOCK_TEST = {
     maxDrivingFaults: 15,
@@ -662,6 +761,9 @@ window.CC_COMPETENCY = (function () {
     SKILLS:           SKILLS,
     FAULT_TYPES:      FAULT_TYPES,
     RATINGS:          RATINGS,
+    CURRICULUM_RATINGS: CURRICULUM_RATINGS,
+    CURRICULUM_SECTIONS: CURRICULUM_SECTIONS,
+    CURRICULUM_ITEMS: CURRICULUM_ITEMS,
     MOCK_TEST:        MOCK_TEST,
     MANOEUVRE_TYPES:        MANOEUVRE_TYPES,
     SUPERVISOR_CATEGORIES: SUPERVISOR_CATEGORIES,
@@ -670,6 +772,7 @@ window.CC_COMPETENCY = (function () {
     QUIZ_DL25_MAP:         QUIZ_DL25_MAP,
 
     getSkill:               getSkill,
+    getCurriculumItem:      getCurriculumItem,
     getSkillsByArea:        getSkillsByArea,
     getAreaForSkill:        getAreaForSkill,
     quizRefToSkill:         quizRefToSkill,
@@ -682,3 +785,6 @@ window.CC_COMPETENCY = (function () {
     getWeakAreas:           getWeakAreas
   };
 })();
+
+if (typeof window !== 'undefined') window.CC_COMPETENCY = CC_COMPETENCY;
+if (typeof module !== 'undefined' && module.exports) module.exports = CC_COMPETENCY;

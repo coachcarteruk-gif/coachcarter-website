@@ -110,6 +110,7 @@ Learner Packages portability note: preserve both strict school Booleans, stable 
 | `sidebar.js` | Context-aware nav — desktop sidebar with collapsible groups + mobile floating pill bottom bar (Home/Lessons/Practice/Learn/Profile) |
 | `branding.js` | Per-school logo/colour injection from `schools.config` |
 | `competency-config.js` | 10 DL25 categories, 39 sub-skills, fault types, ratings, readiness scoring (single source of truth — port to TS for the app) |
+| `competency-config.js` curriculum progress | 61 stable booked-lesson items (10 completion, 51 scored) and exact 1–3 mappings; native ports must preserve item keys and separate assessor roles |
 | `cookie-consent.js` | GDPR cookie banner — gates analytics |
 | `posthog-loader.js` | Loads PostHog only after analytics consent |
 | `auth-gate.js` | Modal login prompt, `window.ccAuth` (token, user, requireAuth) |
@@ -762,6 +763,8 @@ without parsing web markup:
 The current web client uses localStorage only for disposable drafts and the
 last-opened topic. Native clients should replace those two conveniences with
 device storage; they are not server authority.
+
+The booked-lesson progress beta is a separate portable contract at `/api/curriculum-progress`. Native clients must not create off-system sessions: they pass only the owned `booking_id`, stable item keys, scores/notes and a client request id. The server derives school/learner/instructor/date, creates or reuses the `driving_sessions` header, and stores assessor-role events. Completion items are instructor-controlled learner-level facts. Learner and instructor scores remain separate, blank is Not assessed, and no readiness percentage or automatic mastery is part of this contract.
 
 ---
 

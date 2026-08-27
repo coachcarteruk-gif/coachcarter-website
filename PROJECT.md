@@ -1391,3 +1391,10 @@ Migration 051 aligns the ledger with calendar-style credit use: one unresolved C
 - **Capacitor native wrapper** — App Store / Play Store submission
 - ~~**Instructor dashboard** — earnings tracking, lesson stats, learner progress overview~~ ✅ Done (earnings page + Stripe Connect payouts)
 - **Theory test prep** — built-in revision tools
+### Booked-lesson curriculum progress beta (August 2026)
+
+`api/curriculum-progress.js` is a separate authenticated action route from the instructor curriculum-discovery workspace. It supports `feature-state`, `reviews-due`, `review`, `submit-instructor-review`, `reflection-due`, `reflection`, `submit-learner-reflection`, and `progress`. Every action reads the authenticated actor's `school_id`; mutations then resolve learner, instructor, date and status from the owned `lesson_bookings` row.
+
+Migration 054 adds `curriculum_review_submissions` (immutable instructor/learner revisions and retry ids), `curriculum_rating_events` (separate 1–3 assessor signals) and `curriculum_completion_events` (once-per-learner completion checks). All tables and query paths carry `school_id`. `driving_sessions` remains the booking-linked header and its existing one-booking constraint is reused. `public/competency-config.js` exports the 61 stable item definitions to browser and CommonJS runtimes.
+
+The strict rollout gate is `schools.config.features.curriculum_progress_beta === true`; absent, malformed, string, numeric and false values disable reads and mutations. It is off by default and has no admin UI setter. Operational steps are in `docs/curriculum-progress-beta-runbook.md`.

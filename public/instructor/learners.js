@@ -259,6 +259,7 @@ async function openLearner(id) {
     if (mockRes.ok) mockData = await mockRes.json();
 
     renderDetail(historyData, notesData, mockData);
+    window.CCCurriculumProgress.mount(document.getElementById('curriculum-progress-instructor'), id);
   } catch (err) {
     dv.querySelector('#detail-content').innerHTML = '<div style="color:var(--red);padding:24px;text-align:center">Failed to load learner details.<br><button data-action="open-learner" data-learner-id="' + id + '" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>';
   }
@@ -821,6 +822,7 @@ function renderDetail(data, notesData, mockData) {
 
   html += renderTeachingSummary(summarizeLearnerTeachingSignals(data, notesData, mockData));
   html += renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData));
+  html += '<div id="curriculum-progress-instructor" hidden aria-live="polite"></div>';
 
   html += renderPrivatePracticeSummaries(data.private_practice || []);
 
