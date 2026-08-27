@@ -92,6 +92,8 @@ test.describe('curriculum progress beta contracts', () => {
 
   test('schema, API and GDPR code enforce school scope, immutable history and retry-safe booking submissions', () => {
     const migration = read('db/migrations/054_curriculum_progress_beta.sql');
+    const runtimeGrants = read('db/migrations/055_curriculum_progress_runtime_grants.sql');
+    const aggregateMigration = read('db/migration.sql');
     const api = read('api/curriculum-progress.js');
     const gdpr = read('api/_gdpr.js');
     const learner = read('api/learner.js');
@@ -105,6 +107,19 @@ test.describe('curriculum progress beta contracts', () => {
     expect(migration).toContain('CREATE UNIQUE INDEX IF NOT EXISTS uq_driving_sessions_booking');
     expect(migration).toContain('CONSTRAINT curriculum_rating_events_item_type_check');
     expect(migration).toContain('CONSTRAINT curriculum_completion_events_item_type_check');
+    for (const source of [runtimeGrants, aggregateMigration]) {
+      expect(source).toContain("c.relname = 'lesson_bookings'");
+      expect(source).toContain("has_table_privilege(r.rolname, 'public.schools', 'SELECT')");
+      expect(source).toContain("has_table_privilege(r.rolname, 'public.driving_sessions', 'SELECT')");
+      expect(source).toContain('a.grantee <> c.relowner');
+      expect(source).toContain('r.rolcanlogin');
+      expect(source).toContain('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.curriculum_review_submissions TO %I');
+      expect(source).toContain('GRANT SELECT, INSERT, DELETE ON TABLE public.curriculum_rating_events TO %I');
+      expect(source).toContain('GRANT SELECT, INSERT, DELETE ON TABLE public.curriculum_completion_events TO %I');
+      expect(source).toContain('GRANT SELECT, USAGE ON SEQUENCE public.curriculum_review_submissions_id_seq TO %I');
+      expect(source).toContain('GRANT SELECT, USAGE ON SEQUENCE public.curriculum_rating_events_id_seq TO %I');
+      expect(source).toContain('GRANT SELECT, USAGE ON SEQUENCE public.curriculum_completion_events_id_seq TO %I');
+    }
     expect(api).toContain('AND lb.instructor_id = ${instructorId}');
     expect(api).toContain('AND lb.learner_id = ${learnerId}');
     expect(api).toContain('AND lb.school_id = ${schoolId}');
