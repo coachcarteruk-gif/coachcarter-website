@@ -34,6 +34,23 @@ test.describe('curriculum progress beta contracts', () => {
     expect(isCurriculumProgressBetaEnabled({ features: { curriculum_progress_beta: true } })).toBe(true);
   });
 
+  test('production routing serves curriculum booking pages without dropping query parameters', () => {
+    const config = JSON.parse(read('vercel.json'));
+    const rewrites = config.rewrites || [];
+    const catchAllIndex = rewrites.findIndex((rule) => rule.source === '/:path*');
+    const expected = [
+      ['/instructor/review-lesson', '/public/instructor/review-lesson.html'],
+      ['/learner/rate-lesson', '/public/learner/rate-lesson.html'],
+    ];
+
+    expect(catchAllIndex).toBeGreaterThan(-1);
+    for (const [source, destination] of expected) {
+      const index = rewrites.findIndex((rule) => rule.source === source && rule.destination === destination);
+      expect(index).toBeGreaterThan(-1);
+      expect(index).toBeLessThan(catchAllIndex);
+    }
+  });
+
   test('eligible past scheduled/chargeable lessons work retrospectively; refunded, future and cancelled-forfeit rows do not', () => {
     const past = '2026-08-20T11:00:00.000Z';
     const now = new Date('2026-08-27T11:00:00.000Z');
