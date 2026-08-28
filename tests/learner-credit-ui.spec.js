@@ -156,7 +156,7 @@ test.describe('learner booking modal instructor-aware credit balance', () => {
     expect(js).toContain("claimCta.style.display = 'block'");
     expect(js).toContain("params.set('instructor_id', pendingSlot.instructor_id)");
     expect(js).toContain("params.set('date', pendingSlot.date)");
-    expect(js).toContain("window.location.href = '/free-trial.html'");
+    expect(js).toContain("window.location.href = '/free'");
     expect(html).toContain('id="claimTrialCta"');
     expect(html).toContain('id="claimTrialLink"');
   });

@@ -28,13 +28,13 @@
   var marketingNavConfig = {
     desktopLinks: [
       { label: 'Home', href: '/' },
-      { label: 'Free Trial', href: '/free-trial.html' },
+      { label: 'Free Trial', href: '/free' },
       { label: 'Book', href: '/learner/book.html' }
     ],
     desktopCta: { label: 'Login', href: '/learner/login.html' },
     mobileTabs: [
       { label: 'Home', href: '/', icon: '🏠' },
-      { label: 'Free Trial', href: '/free-trial.html', icon: '🎁' },
+      { label: 'Free Trial', href: '/free', icon: '🎁' },
       { label: 'Log in', href: '/learner/login.html', icon: '👤' },
       { label: 'Book', href: '/learner/book.html', icon: '📅', cta: true }
     ]

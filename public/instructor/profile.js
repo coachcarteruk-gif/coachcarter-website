@@ -15,6 +15,10 @@
     return !isOptInOnlyLessonType(slug);
   }
 
+  function bookingPathForInstructor(slug) {
+    return String(slug).toLowerCase() === 'simon' ? '/simon' : '/book/' + slug;
+  }
+
   function init() {
     if (!ccAuth.getAuth()) { window.location.href = '/instructor/login.html'; return; }
     loadProfile();
@@ -389,7 +393,7 @@
       // Build a toggle + copy-link row per lesson type
       var rows = types.map(function(lt) {
         var isEnabled = isLessonTypeEnabledByProfile(lt.slug);
-        var url = window.location.origin + '/book/' + slug + '?type=' + encodeURIComponent(lt.slug);
+        var url = window.location.origin + bookingPathForInstructor(slug) + '?type=' + encodeURIComponent(lt.slug);
         return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'
           + '<label style="display:flex;align-items:center;gap:0;cursor:pointer;position:relative;width:40px;height:22px;flex-shrink:0">'
           + '<input type="checkbox" data-lt-slug="' + lt.slug + '" class="lt-toggle"'
@@ -415,7 +419,7 @@
       }).join('');
 
       // General booking page link at the bottom
-      var myUrl = window.location.origin + '/book/' + slug;
+      var myUrl = window.location.origin + bookingPathForInstructor(slug);
       var generalLink = '<div style="padding-top:14px;display:flex;align-items:center;gap:10px">'
         + '<div style="flex:1;min-width:0">'
         + '<div style="font-weight:600;font-size:0.85rem;color:var(--muted)">All lesson types</div>'
