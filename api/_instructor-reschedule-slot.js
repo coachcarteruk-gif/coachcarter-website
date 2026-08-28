@@ -356,7 +356,14 @@ async function validateInstructorRescheduleSlot(sql, {
     && supportsTransmission(window.transmission_type, booking.transmission_type)
     && supportsTransmission(targetInstructor.transmission_type, booking.transmission_type)
   ));
-  if (!fitsAvailability) conflict('OUTSIDE_AVAILABILITY', 'That time is outside the selected instructor\'s availability.');
+  const instructorChanged = Number(targetInstructorId) !== Number(booking.instructor_id);
+  // The current instructor is deliberately moving their own lesson, so their
+  // saved learner-facing hours are guidance rather than a hard boundary. Keep
+  // the boundary for transfers: one instructor must not place work outside a
+  // colleague's advertised availability.
+  if (!fitsAvailability && instructorChanged) {
+    conflict('OUTSIDE_AVAILABILITY', 'That time is outside the selected instructor\'s availability.');
+  }
 
   const externalEvents = await sql`
     SELECT id, start_time::text AS start_time, end_time::text AS end_time, is_all_day

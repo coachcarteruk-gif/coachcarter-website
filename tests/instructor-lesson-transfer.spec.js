@@ -158,6 +158,41 @@ test.describe('instructor lesson transfer', () => {
     expect(result.targetInstructor.min_booking_notice_hours).toBe(48);
   });
 
+  test('instructor can move their own lesson outside learner-facing availability', async () => {
+    const { validateInstructorRescheduleSlot } = require('../api/_instructor-reschedule-slot');
+    const sql = mockSql(query => {
+      if (query.includes('FROM instructors')) return [targetInstructor({ id: 4 })];
+      return [];
+    });
+
+    const result = await validateInstructorRescheduleSlot(sql, {
+      schoolId: 1,
+      booking: booking(),
+      targetInstructorId: 4,
+      newDate: '2026-08-11',
+      newStartTime: '19:00',
+      now: new Date('2026-08-10T08:00:00Z'),
+      geocode: async () => ({}),
+    });
+
+    expect(result.newEndTime).toBe('20:30');
+  });
+
+  test('lesson transfers still require the destination instructor availability', async () => {
+    const { validateInstructorRescheduleSlot } = require('../api/_instructor-reschedule-slot');
+    const sql = mockSql(query => query.includes('FROM instructors') ? [targetInstructor()] : []);
+
+    await expect(validateInstructorRescheduleSlot(sql, {
+      schoolId: 1,
+      booking: booking(),
+      targetInstructorId: 6,
+      newDate: '2026-08-11',
+      newStartTime: '19:00',
+      now: new Date('2026-08-10T08:00:00Z'),
+      geocode: async () => ({}),
+    })).rejects.toMatchObject({ code: 'OUTSIDE_AVAILABILITY' });
+  });
+
   test('reserved weekly lessons cannot switch instructor', async () => {
     const { validateInstructorRescheduleSlot } = require('../api/_instructor-reschedule-slot');
     const sql = mockSql(query => query.includes('FROM instructors') ? [targetInstructor()] : []);
