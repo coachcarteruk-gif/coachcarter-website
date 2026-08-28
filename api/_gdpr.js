@@ -136,6 +136,16 @@ async function fullCurriculumPilotAccessTableExists(sql) {
   return Boolean(row?.has_pilot_access);
 }
 
+async function curriculumProgressTablesExist(sql) {
+  const [row] = await sql`
+    SELECT
+      to_regclass('public.curriculum_review_submissions') IS NOT NULL AS has_submissions,
+      to_regclass('public.curriculum_rating_events') IS NOT NULL AS has_ratings,
+      to_regclass('public.curriculum_completion_events') IS NOT NULL AS has_completions
+  `;
+  return Boolean(row?.has_submissions && row?.has_ratings && row?.has_completions);
+}
+
 async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   if (!sql || !learnerId) {
     throw new Error('deleteLearnerCascade: sql and learnerId required');
@@ -158,6 +168,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
   const hasFullCurriculumConsumerRights = await fullCurriculumConsumerRightsTablesExist(sql);
   const hasFullCurriculumPilotAccess = await fullCurriculumPilotAccessTableExists(sql);
+  const hasCurriculumProgress = await curriculumProgressTablesExist(sql);
 
   const txn = [
     // 1. Anonymise financial records (7-year retention).
@@ -204,6 +215,16 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
     // 3. Nullify cookie consents (consent record stays as anonymous audit row).
     sql`UPDATE cookie_consents SET learner_id = NULL WHERE learner_id = ${learnerId}`,
   ];
+
+  if (hasCurriculumProgress) {
+    const drivingSessionDeleteIndex = txn.findIndex((query) => String(query?.query || '').includes('driving_sessions'));
+    const curriculumDeletes = [
+      sql`DELETE FROM curriculum_rating_events WHERE school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId}) AND learner_id = ${learnerId}`,
+      sql`DELETE FROM curriculum_review_submissions WHERE school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId}) AND learner_id = ${learnerId}`,
+      sql`DELETE FROM curriculum_completion_events WHERE school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId}) AND learner_id = ${learnerId}`,
+    ];
+    txn.splice(drivingSessionDeleteIndex >= 0 ? drivingSessionDeleteIndex : 2, 0, ...curriculumDeletes);
+  }
 
   const retainedAnonymisation = [];
   if (hasRefundLedger) {
@@ -295,4 +316,5 @@ module.exports = {
   fullCurriculumMatchingTablesExist,
   fullCurriculumConsumerRightsTablesExist,
   fullCurriculumPilotAccessTableExists,
+  curriculumProgressTablesExist,
 };

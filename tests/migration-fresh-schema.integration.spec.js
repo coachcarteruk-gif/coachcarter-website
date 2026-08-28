@@ -31,8 +31,16 @@ const path = require('path');
 const ENABLED = process.env.CC_TEST_DB === '1'
   && !!process.env.POSTGRES_URL_TEST
   && process.env.CC_TEST_DB_CONFIRMED_NON_PRODUCTION === '1';
+const EXPECTED_TEST_HOSTNAME = String(
+  process.env.CC_TEST_DB_EXPECTED_HOSTNAME
+  || 'ep-shy-mode-za3r7anf.c-2.eu-west-2.aws.neon.tech'
+).trim();
 const migrationSql = fs.readFileSync(
   path.resolve(__dirname, '..', 'db', 'migration.sql'),
+  'utf8'
+);
+const curriculumMigrationSql = fs.readFileSync(
+  path.resolve(__dirname, '..', 'db', 'migrations', '054_curriculum_progress_beta.sql'),
   'utf8'
 );
 const schoolFoundationStart = '-- MULTI-TENANT: SCHOOLS (must precede the first school-scoped FK)';
@@ -48,6 +56,17 @@ const schoolFoundationSql = migrationSql.slice(
 
 function quoteIdentifier(value) {
   return `"${value.replace(/"/g, '""')}"`;
+}
+
+async function expectConstraintFailure(client, savepointName, query, values, code) {
+  const quotedSavepoint = quoteIdentifier(savepointName);
+  await client.query(`SAVEPOINT ${quotedSavepoint}`);
+  try {
+    await expect(client.query(query, values)).rejects.toMatchObject({ code });
+  } finally {
+    await client.query(`ROLLBACK TO SAVEPOINT ${quotedSavepoint}`);
+    await client.query(`RELEASE SAVEPOINT ${quotedSavepoint}`);
+  }
 }
 
 function createClientSqlTag(client, statements) {
@@ -134,6 +153,12 @@ test.describe('fresh-schema migration bootstrap', () => {
   let client;
   const schemaName = `cc_migration_bootstrap_${process.pid}_${Date.now()}`;
   const quotedSchema = quoteIdentifier(schemaName);
+  const isolatedMigrationSql = migrationSql
+    .replace(/\bpublic\./g, `${quotedSchema}.`)
+    .replace(
+      /SET search_path = pg_catalog, public/gi,
+      `SET search_path = pg_catalog, ${quotedSchema}`
+    );
 
   test.beforeAll(async () => {
     if (!ENABLED) return;
@@ -141,12 +166,23 @@ test.describe('fresh-schema migration bootstrap', () => {
       process.env.POSTGRES_URL
       && process.env.POSTGRES_URL_TEST === process.env.POSTGRES_URL
     ) throw new Error('Refusing fresh-schema bootstrap test: test URL equals production URL');
+    if (new URL(process.env.POSTGRES_URL_TEST).hostname !== EXPECTED_TEST_HOSTNAME) {
+      throw new Error(
+        'Refusing fresh-schema bootstrap test: test URL is not the confirmed disposable Neon endpoint'
+      );
+    }
 
     if (!neonConfig.webSocketConstructor && typeof globalThis.WebSocket === 'function') {
       neonConfig.webSocketConstructor = globalThis.WebSocket;
     }
-    client = new Client({ connectionString: process.env.POSTGRES_URL_TEST });
-    await client.connect();
+    const candidateClient = new Client({ connectionString: process.env.POSTGRES_URL_TEST });
+    try {
+      await candidateClient.connect();
+    } catch (error) {
+      await candidateClient.end().catch(() => {});
+      throw error;
+    }
+    client = candidateClient;
     await client.query('BEGIN');
     await client.query(`CREATE SCHEMA ${quotedSchema}`);
     await client.query(`SET LOCAL search_path TO ${quotedSchema}, pg_catalog`);
@@ -154,8 +190,17 @@ test.describe('fresh-schema migration bootstrap', () => {
 
   test.afterAll(async () => {
     if (!client) return;
-    await client.query('ROLLBACK').catch(() => {});
-    await client.end().catch(() => {});
+    try {
+      await client.query('ROLLBACK');
+      const residualSchema = await client.query(`
+        SELECT COUNT(*)::INTEGER AS count
+        FROM pg_namespace
+        WHERE nspname = $1
+      `, [schemaName]);
+      expect(residualSchema.rows[0].count).toBe(0);
+    } finally {
+      await client.end().catch(() => {});
+    }
   });
 
   test('applies the complete aggregate to an empty schema', async () => {
@@ -167,7 +212,7 @@ test.describe('fresh-schema migration bootstrap', () => {
     `, [schemaName]);
     expect(before.rows[0].count).toBe(0);
 
-    await expect(client.query(migrationSql)).resolves.toBeTruthy();
+    await expect(client.query(isolatedMigrationSql)).resolves.toBeTruthy();
 
     const relations = await client.query(`
       SELECT
@@ -208,6 +253,218 @@ test.describe('fresh-schema migration bootstrap', () => {
       data_type: 'boolean',
       column_default: 'false',
     });
+  });
+
+  test('creates migration 054 idempotently and enforces curriculum event contracts', async () => {
+    const curriculumTables = await client.query(`
+      SELECT
+        to_regclass($1) AS submissions,
+        to_regclass($2) AS ratings,
+        to_regclass($3) AS completions,
+        to_regclass($4) AS booking_session_uniqueness
+    `, [
+      `${schemaName}.curriculum_review_submissions`,
+      `${schemaName}.curriculum_rating_events`,
+      `${schemaName}.curriculum_completion_events`,
+      `${schemaName}.uq_driving_sessions_booking`,
+    ]);
+    expect(Object.values(curriculumTables.rows[0]).every(Boolean)).toBe(true);
+
+    await expect(client.query(curriculumMigrationSql)).resolves.toBeTruthy();
+
+    const suffix = `${process.pid}-${Date.now()}`;
+    await client.query(`
+      INSERT INTO migration_markers (key, notes)
+      VALUES (
+        'public_endpoints_tenant_resolved',
+        'Rollback-only curriculum constraint fixture'
+      )
+    `);
+    const otherSchool = await client.query(`
+      INSERT INTO schools (name, slug)
+      VALUES ('Curriculum Constraint School', $1)
+      RETURNING id
+    `, [`curriculum-constraint-${suffix}`]);
+    await client.query(`
+      DELETE FROM migration_markers
+      WHERE key = 'public_endpoints_tenant_resolved'
+    `);
+    const learner = await client.query(`
+      INSERT INTO learner_users (name, email, school_id)
+      VALUES ('Curriculum Constraint Learner', $1, 1)
+      RETURNING id
+    `, [`curriculum-constraint-learner-${suffix}@example.test`]);
+    const instructor = await client.query(`
+      INSERT INTO instructors (name, email, school_id, active)
+      VALUES ('Curriculum Constraint Instructor', $1, 1, TRUE)
+      RETURNING id
+    `, [`curriculum-constraint-instructor-${suffix}@example.test`]);
+    const otherSchoolInstructor = await client.query(`
+      INSERT INTO instructors (name, email, school_id, active)
+      VALUES ('Other School Curriculum Instructor', $1, $2, TRUE)
+      RETURNING id
+    `, [
+      `curriculum-constraint-other-${suffix}@example.test`,
+      otherSchool.rows[0].id,
+    ]);
+    const booking = await client.query(`
+      INSERT INTO lesson_bookings (
+        learner_id, instructor_id, scheduled_date, start_time, end_time, status, school_id
+      ) VALUES ($1, $2, CURRENT_DATE + 60, '09:00', '10:00', 'scheduled', 1)
+      RETURNING id
+    `, [learner.rows[0].id, instructor.rows[0].id]);
+    const session = await client.query(`
+      INSERT INTO driving_sessions (
+        user_id, session_date, duration_minutes, session_type, booking_id, school_id
+      ) VALUES ($1, CURRENT_DATE + 60, 60, 'instructor', $2, 1)
+      RETURNING id
+    `, [learner.rows[0].id, booking.rows[0].id]);
+    const submissionValues = [
+      session.rows[0].id,
+      booking.rows[0].id,
+      learner.rows[0].id,
+      instructor.rows[0].id,
+    ];
+    const submission = await client.query(`
+      INSERT INTO curriculum_review_submissions (
+        school_id, session_id, booking_id, learner_id, instructor_id,
+        assessor_role, client_request_id
+      ) VALUES (1, $1, $2, $3, $4, 'instructor', 'curriculum-request-1')
+      RETURNING id
+    `, submissionValues);
+
+    await expectConstraintFailure(
+      client,
+      'curriculum_bad_submission_role',
+      `INSERT INTO curriculum_review_submissions (
+        school_id, session_id, booking_id, learner_id, instructor_id,
+        assessor_role, client_request_id
+      ) VALUES (1, $1, $2, $3, $4, 'admin', 'curriculum-request-2')`,
+      submissionValues,
+      '23514'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_duplicate_request',
+      `INSERT INTO curriculum_review_submissions (
+        school_id, session_id, booking_id, learner_id, instructor_id,
+        assessor_role, client_request_id
+      ) VALUES (1, $1, $2, $3, $4, 'instructor', 'curriculum-request-1')`,
+      submissionValues,
+      '23505'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_cross_school_submission',
+      `INSERT INTO curriculum_review_submissions (
+        school_id, session_id, booking_id, learner_id, instructor_id,
+        assessor_role, client_request_id
+      ) VALUES (1, $1, $2, $3, $4, 'instructor', 'curriculum-request-3')`,
+      [
+        session.rows[0].id,
+        booking.rows[0].id,
+        learner.rows[0].id,
+        otherSchoolInstructor.rows[0].id,
+      ],
+      '23503'
+    );
+
+    const ratingValues = [
+      submission.rows[0].id,
+      session.rows[0].id,
+      booking.rows[0].id,
+      learner.rows[0].id,
+      instructor.rows[0].id,
+    ];
+    await client.query(`
+      INSERT INTO curriculum_rating_events (
+        school_id, submission_id, session_id, booking_id, learner_id, instructor_id,
+        curriculum_item_key, assessor_role, score
+      ) VALUES (1, $1, $2, $3, $4, $5, 'MOVE-01', 'instructor', 2)
+    `, ratingValues);
+    await expectConstraintFailure(
+      client,
+      'curriculum_bad_score',
+      `INSERT INTO curriculum_rating_events (
+        school_id, submission_id, session_id, booking_id, learner_id, instructor_id,
+        curriculum_item_key, assessor_role, score
+      ) VALUES (1, $1, $2, $3, $4, $5, 'MOVE-02', 'instructor', 4)`,
+      ratingValues,
+      '23514'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_bad_rating_role',
+      `INSERT INTO curriculum_rating_events (
+        school_id, submission_id, session_id, booking_id, learner_id, instructor_id,
+        curriculum_item_key, assessor_role, score
+      ) VALUES (1, $1, $2, $3, $4, $5, 'MOVE-02', 'admin', 2)`,
+      ratingValues,
+      '23514'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_completion_as_rating',
+      `INSERT INTO curriculum_rating_events (
+        school_id, submission_id, session_id, booking_id, learner_id, instructor_id,
+        curriculum_item_key, assessor_role, score
+      ) VALUES (1, $1, $2, $3, $4, $5, 'SET-01', 'instructor', 2)`,
+      ratingValues,
+      '23514'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_duplicate_rating',
+      `INSERT INTO curriculum_rating_events (
+        school_id, submission_id, session_id, booking_id, learner_id, instructor_id,
+        curriculum_item_key, assessor_role, score
+      ) VALUES (1, $1, $2, $3, $4, $5, 'MOVE-01', 'instructor', 3)`,
+      ratingValues,
+      '23505'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_cross_school_rating',
+      `INSERT INTO curriculum_rating_events (
+        school_id, submission_id, session_id, booking_id, learner_id, instructor_id,
+        curriculum_item_key, assessor_role, score
+      ) VALUES ($6, $1, $2, $3, $4, $5, 'MOVE-03', 'instructor', 2)`,
+      [...ratingValues, otherSchool.rows[0].id],
+      '23503'
+    );
+
+    const completionValues = [
+      learner.rows[0].id,
+      instructor.rows[0].id,
+      session.rows[0].id,
+      booking.rows[0].id,
+    ];
+    await client.query(`
+      INSERT INTO curriculum_completion_events (
+        school_id, learner_id, curriculum_item_key, completed_by_instructor_id,
+        session_id, booking_id
+      ) VALUES (1, $1, 'SET-01', $2, $3, $4)
+    `, completionValues);
+    await expectConstraintFailure(
+      client,
+      'curriculum_rating_as_completion',
+      `INSERT INTO curriculum_completion_events (
+        school_id, learner_id, curriculum_item_key, completed_by_instructor_id,
+        session_id, booking_id
+      ) VALUES (1, $1, 'MOVE-01', $2, $3, $4)`,
+      completionValues,
+      '23514'
+    );
+    await expectConstraintFailure(
+      client,
+      'curriculum_duplicate_completion',
+      `INSERT INTO curriculum_completion_events (
+        school_id, learner_id, curriculum_item_key, completed_by_instructor_id,
+        session_id, booking_id
+      ) VALUES (1, $1, 'SET-01', $2, $3, $4)`,
+      completionValues,
+      '23505'
+    );
   });
 
   test('creates and enforces the Flexible Hours source/allocation/return ledger', async () => {
@@ -330,6 +587,8 @@ test.describe('fresh-schema migration bootstrap', () => {
 
   test('supports audited same-school admin access without passwords or login codes', async () => {
     const originalJwtSecret = process.env.JWT_SECRET;
+    const originalStripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const originalStripeMode = process.env.STRIPE_MODE;
     const jwtSecret = 'fresh-schema-admin-access-test-secret';
     const csrfToken = 'fresh-schema-admin-access-csrf-token';
     const statements = [];
@@ -337,6 +596,8 @@ test.describe('fresh-schema migration bootstrap', () => {
     let loadedAdmin;
 
     process.env.JWT_SECRET = jwtSecret;
+    process.env.STRIPE_SECRET_KEY = 'sk_test_fresh_schema_admin_access_fixture';
+    process.env.STRIPE_MODE = 'test';
     try {
       const suffix = `${process.pid}-${Date.now()}`;
       await client.query(`
@@ -466,6 +727,10 @@ test.describe('fresh-schema migration bootstrap', () => {
       if (loadedAdmin) loadedAdmin.restore();
       if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
       else process.env.JWT_SECRET = originalJwtSecret;
+      if (originalStripeSecretKey === undefined) delete process.env.STRIPE_SECRET_KEY;
+      else process.env.STRIPE_SECRET_KEY = originalStripeSecretKey;
+      if (originalStripeMode === undefined) delete process.env.STRIPE_MODE;
+      else process.env.STRIPE_MODE = originalStripeMode;
     }
   });
 });

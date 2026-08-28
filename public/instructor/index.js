@@ -413,41 +413,6 @@ function showError(msg) {
   document.getElementById('calContent').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p><button data-action="retry-current-view" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--white);font-size:0.85rem;font-weight:600;cursor:pointer;font-family:var(--font-body)">Try again</button></div>`;
 }
 
-// ─── Outside-availability check (shared by Add Lesson + Send Offer) ─────────
-// Returns true iff [startHHMM, startHHMM+durationMins] fits fully inside at
-// least one of the instructor's weekly availability windows for that date's
-// day-of-week. If availCache hasn't been populated yet, returns true (no
-// warning) - fail-open so we never block a legit booking on a load race.
-function _slotInsideAvailability(dateStr, startHHMM, durationMins) {
-  if (!availCache || availCache.length === 0) return true;
-  if (!dateStr || !startHHMM || !durationMins) return true;
-  // JS getDay(): Sun=0..Sat=6. Our schema uses Mon=1..Sun=7 (Postgres convention).
-  const d = new Date(dateStr + 'T00:00:00');
-  if (isNaN(d.getTime())) return true;
-  const jsDow = d.getDay();
-  const dow = jsDow === 0 ? 7 : jsDow;
-  const [sh, sm] = startHHMM.split(':').map(Number);
-  const startMins = sh * 60 + sm;
-  const endMins = startMins + durationMins;
-  return availCache.some(w => {
-    if (w.day_of_week !== dow) return false;
-    const [wsh, wsm] = w.start_time.split(':').map(Number);
-    const [weh, wem] = w.end_time.split(':').map(Number);
-    const wStart = wsh * 60 + wsm;
-    const wEnd = weh * 60 + wem;
-    return startMins >= wStart && endMins <= wEnd;
-  });
-}
-
-// Look up a lesson type's duration from the cached list. Returns null if the
-// cache is empty (caller should fall back to a sensible default).
-function _lessonTypeMinutes(lessonTypeId) {
-  const types = window._offerLessonTypes || [];
-  if (!lessonTypeId || types.length === 0) return null;
-  const lt = types.find(t => Number(t.id) === Number(lessonTypeId));
-  return lt ? lt.duration_minutes : null;
-}
-
 // ─── Availability fetching ───────────────────────────────────────────────────
 async function loadAvailability() {
   try {
@@ -2294,38 +2259,25 @@ async function confirmCreateBooking() {
   const isPaymentLink = payMethod === 'payment_link';
   const transmission = normaliseTransmissionType(document.getElementById('addLessonTransmission')?.value) || (instructorTransmissionType === 'automatic' ? 'automatic' : 'manual');
 
-  // Outside-availability second-confirm (catches the Beatriz-style mistake:
-  // booking a slot the learner can't pay for without seeing it on the calendar).
-  const lessonTypeId = parseInt(document.getElementById('addLessonType').value) || null;
-  const lessonTypeMins = _lessonTypeMinutes(lessonTypeId) || 90;
-  if (!_slotInsideAvailability(newDate, newTime.slice(0, 5), lessonTypeMins)) {
-    const proceed = confirm(
-      "Heads up - this slot is outside your weekly availability for that day.\n\n" +
-      (isPaymentLink
-        ? "Sending the payment link will still hold the slot as a pending offer, but it won't appear in your normal availability and the learner won't see it in their slot feed.\n\n"
-        : "Booking it will still work, but it won't appear on your normal availability and the learner won't see it in their slot feed.\n\n") +
-      "Continue?"
-    );
-    if (!proceed) return;
-  }
-
   const btn = document.getElementById('addLessonBtn');
   btn.disabled = true; btn.textContent = isPaymentLink ? 'Sending...' : 'Booking…';
   clearPaymentLinkSuccess();
 
   try {
     if (isPaymentLink) {
-      const res = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await BookingActions.postWithScheduleOverride(
+        '/api/instructor?action=create-offer',
+        {
           learner_id: selectedLearnerId,
           scheduled_date: newDate,
           start_time: newTime.slice(0, 5),
           lesson_type_id: parseInt(document.getElementById('addLessonType').value) || null
-        })
-      });
-      const data = await res.json();
+        },
+        'Send this payment-link offer anyway?'
+      );
+      if (result.cancelled) return;
+      const res = result.res;
+      const data = result.data;
       if (!res.ok) throw new Error(data.error || 'Failed to send payment link');
 
       renderAddLessonOfferSuccess(data);
@@ -2334,10 +2286,9 @@ async function confirmCreateBooking() {
       return;
     }
 
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-booking', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const result = await BookingActions.postWithScheduleOverride(
+      '/api/instructor?action=create-booking',
+      {
         learner_id: selectedLearnerId,
         scheduled_date: newDate,
         start_time: newTime.slice(0, 5),
@@ -2346,9 +2297,12 @@ async function confirmCreateBooking() {
         payment_method: payMethod,
         notes: notes || null,
         dropoff_address: document.getElementById('addLessonDropoff').value.trim() || null
-      })
-    });
-    const data = await res.json();
+      },
+      'Book this lesson anyway?'
+    );
+    if (result.cancelled) return;
+    const res = result.res;
+    const data = result.data;
     if (!res.ok) throw new Error(data.error);
 
     closeAddLessonModal();
@@ -2807,18 +2761,24 @@ async function sendBroadcastOffer() {
   btn.disabled = true;
   btn.textContent = 'Sending…';
   try {
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-broadcast-offer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const result = await BookingActions.postWithScheduleOverride(
+      '/api/instructor?action=create-broadcast-offer',
+      {
         scheduled_date: date,
         start_time: time,
         lesson_type_id: parseInt(lessonTypeId, 10),
         discount_pct: discount_pct,
         learner_ids: checked
-      })
-    });
-    const data = await res.json();
+      },
+      'Send this broadcast offer anyway?'
+    );
+    if (result.cancelled) {
+      btn.disabled = false;
+      btn.textContent = 'Send broadcast';
+      return;
+    }
+    const res = result.res;
+    const data = result.data;
     if (!res.ok) throw new Error(data.error || 'Failed to send broadcast');
 
     const skipMsg = data.skipped > 0 ? ` (${data.skipped} skipped - no longer free at that time)` : '';
@@ -2874,22 +2834,6 @@ async function sendOffer() {
     offerPricePence = Math.round(parsed * 100);
   }
 
-  // Outside-availability second-confirm - only for slot-pinned offers
-  // (flexible offers don't have a fixed time to check). Catches the case
-  // where the instructor sends a paid link for a time they're not normally
-  // free, e.g. Beatriz / Simon 2026-05-19.
-  if (!flexible) {
-    const offerMins = _lessonTypeMinutes(lessonTypeId ? parseInt(lessonTypeId) : null) || 90;
-    if (!_slotInsideAvailability(date, time.slice(0, 5), offerMins)) {
-      const proceed = confirm(
-        "Heads up - this slot is outside your weekly availability for that day.\n\n" +
-        "You can still send the offer, but the learner won't see this slot in their normal feed and your other learners may not realise it's now blocked.\n\n" +
-        "Send the offer anyway?"
-      );
-      if (!proceed) return;
-    }
-  }
-
   btn.disabled = true;
   btn.textContent = (sendEmail || existingMode) ? 'Sending…' : 'Creating…';
 
@@ -2917,12 +2861,18 @@ async function sendOffer() {
       payload.offer_price_pence = offerPricePence;
     }
 
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=create-offer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+    const result = await BookingActions.postWithScheduleOverride(
+      '/api/instructor?action=create-offer',
+      payload,
+      'Send this offer anyway?'
+    );
+    if (result.cancelled) {
+      btn.disabled = false;
+      btn.textContent = (sendEmail || existingMode) ? 'Send offer' : 'Create link';
+      return;
+    }
+    const res = result.res;
+    const data = result.data;
     if (!res.ok) throw new Error(data.error || 'Failed to send offer');
 
     const priceMsg = offerPricePence === 0 ? ' (free lesson)' : offerPricePence != null ? ` (£${(offerPricePence / 100).toFixed(2)})` : '';

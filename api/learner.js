@@ -86,6 +86,7 @@ const {
   fullCurriculumMatchingTablesExist,
   fullCurriculumConsumerRightsTablesExist,
   fullCurriculumPilotAccessTableExists,
+  curriculumProgressTablesExist,
 } = require('./_gdpr');
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
@@ -1499,6 +1500,23 @@ async function handleExportData(req, res) {
       WHERE fp.learner_id = ${user.id} AND fp.school_id = ${schoolId}
       ORDER BY fp.created_at DESC`;
 
+    const hasCurriculumProgress = await curriculumProgressTablesExist(sql);
+    const curriculumReviewSubmissions = hasCurriculumProgress ? await sql`
+      SELECT booking_id, assessor_role, note, submitted_at
+      FROM curriculum_review_submissions
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY submitted_at DESC, id DESC` : null;
+    const curriculumRatingEvents = hasCurriculumProgress ? await sql`
+      SELECT booking_id, curriculum_item_key, assessor_role, score, note, assessed_at
+      FROM curriculum_rating_events
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY assessed_at DESC, id DESC` : null;
+    const curriculumCompletionEvents = hasCurriculumProgress ? await sql`
+      SELECT curriculum_item_key, booking_id, completed_at
+      FROM curriculum_completion_events
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+      ORDER BY completed_at DESC, id DESC` : null;
+
     const referralCode = await sql`
       SELECT code, created_at FROM referrals
       WHERE learner_id = ${user.id} AND school_id = ${schoolId}`;
@@ -2002,7 +2020,8 @@ async function handleExportData(req, res) {
           ...(hasFlexiblePackages ? ['flexible_hours'] : []),
           ...(hasFullCurriculum ? ['full_curriculum'] : []),
           ...(hasRefundLedger ? ['refund_events'] : []),
-          ...(hasLearnerBroadcasts ? ['broadcasts_received'] : [])
+          ...(hasLearnerBroadcasts ? ['broadcasts_received'] : []),
+          ...(hasCurriculumProgress ? ['curriculum_review_submissions', 'curriculum_rating_events', 'curriculum_completion_events'] : [])
         ]
       },
       profile: profile || {},
@@ -2035,6 +2054,11 @@ async function handleExportData(req, res) {
       ...(hasFullCurriculum ? { full_curriculum: fullCurriculum } : {}),
       ...(hasRefundLedger ? { refund_events: refundEvents } : {}),
       ...(hasLearnerBroadcasts ? { broadcasts_received: broadcastsReceived } : {}),
+      ...(hasCurriculumProgress ? {
+        curriculum_review_submissions: curriculumReviewSubmissions,
+        curriculum_rating_events: curriculumRatingEvents,
+        curriculum_completion_events: curriculumCompletionEvents,
+      } : {}),
     };
 
     const dateStr = new Date().toISOString().slice(0, 10);
