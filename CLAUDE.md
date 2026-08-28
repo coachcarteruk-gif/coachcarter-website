@@ -293,5 +293,6 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - [`docs/booking-statuses.md`](docs/booking-statuses.md) — three-state booking lifecycle (`scheduled`/`chargeable`/`refunded`), transitions, late-cancel rule, payout implications
 - [`docs/travel-time.md`](docs/travel-time.md) — postcodes.io slot filter, OpenRouteService booking warnings
 - [`docs/navigation.md`](docs/navigation.md) — learner/instructor sidebar + bottom tabs, booking page structure
+- [`docs/30-day-email-sequence-reference.md`](docs/30-day-email-sequence-reference.md) — living marketing strategy for lead magnets and the 30-day nurture sequence: Knowledge/Safety/Skill belief map, mechanisms, proof, asset standards, cadence, offer campaign, and AI accountability rules
 - [`docs/franchise-benefits.md`](docs/franchise-benefits.md) — CoachCarter franchise pack: live + pipeline benefits, CoachCarter-vs-InstructorBook split
 - [`docs/credits-grandfather.md`](docs/credits-grandfather.md) — PITR rollback procedure for credits migration + drill record + (TODO) grandfather scenarios for Step 6
