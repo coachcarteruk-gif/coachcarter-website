@@ -1804,7 +1804,7 @@ async function handleDurationsForSlot(req, res) {
     const schoolId = tenant.schoolId;
 
     // Load all active lesson types for this school, excluding the free-trial
-    // type (free trials have their own dedicated flow at /free-trial.html).
+    // type (free trials have their own dedicated flow at /free).
     const lessonTypes = await sql`
       SELECT id, slug, name, duration_minutes, price_pence, colour
       FROM lesson_types

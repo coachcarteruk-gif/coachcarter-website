@@ -32,13 +32,25 @@
       "source": "/classroom",
       "destination": "/",
       "permanent": false
+    },
+    {
+      "source": "/free-trial.html",
+      "destination": "/free",
+      "permanent": true
+    },
+    {
+      "source": "/book/simon",
+      "destination": "/simon",
+      "permanent": true
     }
   ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/r/:code", "destination": "/api/r?code=:code" },
+    { "source": "/simon", "destination": "/learner/book.html" },
     { "source": "/book/:slug", "destination": "/learner/book.html" },
     { "source": "/check-my-driving", "destination": "/check-my-driving.html" },
+    { "source": "/free", "destination": "/free-trial.html" },
     { "source": "/freetrial", "destination": "/free-lesson.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
   ],

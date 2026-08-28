@@ -108,7 +108,7 @@ Learner and instructor user-facing sign-in uses a 6-digit email code. Admins ret
 - Calendar views (weekly/monthly/daily were intentionally removed)
 - View toggles, date navigation arrows, or cursor state
 - Empty-hour grids
-- Login wall on `/learner/book.html` (removed April 2026 — page is spectator-mode for guests; the existing `?action=checkout-slot-guest` path lets them pay without an account, and a `#claimTrialCta` inside the guest modal links to `/free-trial.html?instructor_id=…&date=…` when the school has `slug='trial'`. Auth is required only for credit-pay, reschedule, and cancel actions.)
+- Login wall on `/learner/book.html` (removed April 2026 — page is spectator-mode for guests; the existing `?action=checkout-slot-guest` path lets them pay without an account, and a `#claimTrialCta` inside the guest modal links to `/free?instructor_id=…&date=…` when the school has `slug='trial'`. Auth is required only for credit-pay, reschedule, and cancel actions.)
 - The lesson-type **pill bar** at the top of the page (`.lesson-type-pills` / `.lt-pill` / `renderLessonTypePills` / `selectLessonType` were all retired April 2026 when slot-first shipped). Lesson length is picked via `<select id="mdLessonTypeSelect">` inside the booking modal after slot click. The slot feed always renders at the smallest active duration via `?action=available&min_duration_only=1`. Per-duration fits/clash/travel checks happen in `?action=durations-for-slot` when the modal opens.
 
 ## Navigation — intentionally removed (do NOT re-add)

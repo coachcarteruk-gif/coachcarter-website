@@ -135,11 +135,13 @@ function init() {
     window.history.replaceState({}, '', '/learner/book.html');
   }
 
-  // Pre-select instructor from URL param (e.g. ?instructor=4) or /book/:slug path
+  // Pre-select instructor from URL param, /book/:slug, or a named short URL.
   let preselectedInstructorId = params.get('instructor');
   const bookPathMatch = window.location.pathname.match(/^\/book\/([^/]+)$/);
   if (bookPathMatch) {
     preselectedInstructorSlug = decodeURIComponent(bookPathMatch[1]).toLowerCase();
+  } else if (window.location.pathname.replace(/\/+$/, '') === '/simon') {
+    preselectedInstructorSlug = 'simon';
   }
 
   // Wire up modal buttons (must work for both guest and authenticated users)
@@ -220,7 +222,7 @@ function init() {
 
   function preselectInstructor() {
     const sel = document.getElementById('instructorFilter');
-    // Resolve slug from /book/:slug path to instructor ID
+    // Resolve the URL's instructor slug to an instructor ID.
     if (preselectedInstructorSlug && !preselectedInstructorId && instructors.length) {
       const match = instructors.find(i => i.slug === preselectedInstructorSlug);
       if (match) preselectedInstructorId = String(match.id);
@@ -2602,7 +2604,7 @@ async function confirmBookWithCredit() {
 }
 
 // ─── Claim-as-free-trial (guest CTA) ─────────────────────────────────────────
-// Routes the guest to /free-trial.html carrying the chosen instructor + date as
+// Routes the guest to /free carrying the chosen instructor + date as
 // hints. The trial handler enforces strict duration matching, so the slot itself
 // cannot be force-converted - the guest re-picks a real trial slot on the
 // dedicated page. Eligibility (one-trial-per-email/phone) is checked at submit
@@ -2618,7 +2620,7 @@ function handleClaimTrialClick(e) {
   const params = new URLSearchParams();
   if (pendingSlot.instructor_id) params.set('instructor_id', pendingSlot.instructor_id);
   if (pendingSlot.date) params.set('date', pendingSlot.date);
-  window.location.href = '/free-trial.html' + (params.toString() ? '?' + params.toString() : '');
+  window.location.href = '/free' + (params.toString() ? '?' + params.toString() : '');
 }
 
 // ─── Pay & book (Stripe) ─────────────────────────────────────────────────────

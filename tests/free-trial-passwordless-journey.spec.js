@@ -108,4 +108,22 @@ test.describe('free trial passwordless journey', () => {
     expect(success).toContain('6-digit code');
     expect(slotsApi).toContain('use learner sign-in and request a 6-digit code');
   });
+
+  test('publishes the booking flow at /free and redirects the legacy URL', () => {
+    const vercelConfig = JSON.parse(read('vercel.json'));
+    const form = read('public/free-trial.html');
+    const sitemap = read('public/sitemap.xml');
+
+    expect(vercelConfig.rewrites).toContainEqual({
+      source: '/free',
+      destination: '/free-trial.html',
+    });
+    expect(vercelConfig.redirects).toContainEqual({
+      source: '/free-trial.html',
+      destination: '/free',
+      permanent: true,
+    });
+    expect(form).toContain('<link rel="canonical" href="https://www.coachcarter.uk/free">');
+    expect(sitemap).toContain('<loc>https://www.coachcarter.uk/free</loc>');
+  });
 });
