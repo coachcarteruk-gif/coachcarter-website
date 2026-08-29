@@ -53,7 +53,8 @@ test.describe('admin reserved goodwill move UI', () => {
     expect(portalJs).toContain('learner self-serve move available');
     expect(portalJs).toContain('disabled title="');
     expect(portalJs).toContain('Reschedule lesson');
-    expect(portalJs).toContain('title="Edit booking details"');
+    expect(portalJs).toContain('data-action="open-admin-reschedule"');
+    expect(portalJs).toContain('title="Choose a new instructor, date and time"');
     expect(portalJs).toContain('!b || !b.is_reserved_weekly_slot || !b.reserved_goodwill_move_open');
 
     expect(portalHtml).toContain('id="modal-reserved-goodwill-move"');

@@ -94,6 +94,20 @@ const { buildPayoutV2ShadowStatement } = require('./_payout-v2-shadow');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { normaliseReferralCode, updateReferralCodeForLearner } = require('./_referral-code');
 const {
+  markBookingCreditSourcesRefunded,
+  copyRefundedBookingCreditSources,
+} = require('./_bcs-refund-marker');
+const { transferBookingFunding } = require('./_instructor-switch-transfer');
+const {
+  InstructorRescheduleSlotError,
+  listEligibleRescheduleInstructors,
+  validateInstructorRescheduleSlot,
+} = require('./_instructor-reschedule-slot');
+const {
+  hoursUntilFlexibleLesson,
+  moveFlexiblePackageBookingAllocations,
+} = require('./_flexible-package-ledger');
+const {
   StripeLaunchShadowFixtureError,
   validateStripeLaunchShadowFixtureRequest,
   authorizeStripeLaunchShadowFixture,
@@ -361,6 +375,9 @@ module.exports = async (req, res) => {
   if (action === 'all-bookings')    return handleAllBookings(req, res);
   if (action === 'create-retrospective-booking') return handleCreateRetrospectiveBooking(req, res);
   if (action === 'edit-booking')    return handleEditBooking(req, res);
+  if (action === 'reschedule-options') return handleAdminRescheduleOptions(req, res);
+  if (action === 'reschedule-availability') return handleAdminRescheduleAvailability(req, res);
+  if (action === 'reschedule-booking') return handleAdminRescheduleBooking(req, res);
   if (action === 'reserved-goodwill-move') return handleReservedGoodwillMove(req, res);
   if (action === 'mark-complete')   return handleMarkComplete(req, res);
   if (action === 'all-instructors')   return handleAllInstructors(req, res);
@@ -1446,6 +1463,466 @@ async function handleEditBooking(req, res) {
     console.error('admin edit-booking error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to edit booking', details: 'Internal server error' });
+  }
+}
+
+function adminClientSqlTag(client) {
+  return async (strings, ...values) => {
+    let text = '';
+    for (let index = 0; index < strings.length; index += 1) {
+      text += strings[index];
+      if (index < values.length) text += `$${index + 1}`;
+    }
+    const result = await client.query(text, values);
+    return result.rows || [];
+  };
+}
+
+async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
+  const [booking] = await sql`
+    SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
+           lb.scheduled_date::text AS scheduled_date,
+           lb.start_time::text AS start_time,
+           lb.end_time::text AS end_time,
+           COALESCE(lb.reschedule_count, 0)::int AS reschedule_count,
+           lb.lesson_type_id, lb.minutes_deducted, lb.pickup_address, lb.dropoff_address,
+           lb.created_by, lb.payment_method, lb.stripe_fee_pence, lb.stripe_fee_source,
+           lb.list_price_pence, lb.list_price_source,
+           COALESCE(lb.transmission_type, 'manual') AS transmission_type,
+           COALESCE(lb.social_video_consent, false) AS social_video_consent,
+           COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
+           COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
+           s.config AS school_config,
+           lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+           COALESCE(lb.pickup_address, lu.pickup_address) AS effective_pickup_address,
+           old_i.name AS old_instructor_name,
+           old_i.email AS old_instructor_email,
+           old_i.phone AS old_instructor_phone,
+           lt.name AS lesson_type_name,
+           lt.slug AS lesson_type_slug,
+           COALESCE(
+             lt.duration_minutes,
+             CASE WHEN lb.end_time > lb.start_time
+               THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+               ELSE NULL
+             END,
+             90
+           )::int AS duration_minutes,
+           EXISTS (
+             SELECT 1
+               FROM recurring_slot_block_items rsbi
+               JOIN recurring_slot_blocks rsb
+                 ON rsb.id = rsbi.block_id
+                AND rsb.school_id = lb.school_id
+                AND rsb.instructor_id = lb.instructor_id
+                AND rsb.learner_id = lb.learner_id
+                AND rsb.status = 'confirmed'
+              WHERE rsbi.lesson_booking_id = lb.id
+                AND rsbi.school_id = lb.school_id
+                AND rsbi.instructor_id = lb.instructor_id
+                AND rsbi.status = 'booked'
+           ) AS is_reserved_weekly_slot,
+           EXISTS (
+             SELECT 1
+               FROM flexible_package_booking_allocations fpba
+              WHERE fpba.booking_id = lb.id
+                AND fpba.learner_id = lb.learner_id
+                AND fpba.school_id = lb.school_id
+                AND NOT EXISTS (
+                  SELECT 1
+                    FROM flexible_package_allocation_returns fpar
+                   WHERE fpar.allocation_id = fpba.id
+                )
+           ) AS is_flexible_package_booking
+      FROM lesson_bookings lb
+      JOIN schools s
+        ON s.id = lb.school_id
+      JOIN learner_users lu
+        ON lu.id = lb.learner_id
+       AND lu.school_id = lb.school_id
+      JOIN instructors old_i
+        ON old_i.id = lb.instructor_id
+       AND old_i.school_id = lb.school_id
+      LEFT JOIN lesson_types lt
+        ON lt.id = lb.lesson_type_id
+       AND lt.school_id = lb.school_id
+     WHERE lb.id = ${bookingId}
+       AND lb.school_id = ${schoolId}
+  `;
+  if (booking) booking.pickup_address = booking.effective_pickup_address || null;
+  return booking || null;
+}
+
+function validateAdminFlexibleRescheduleNotice(booking) {
+  if (!booking?.is_flexible_package_booking) return;
+  const hoursUntil = hoursUntilFlexibleLesson({
+    scheduledDate: booking.scheduled_date,
+    startTime: booking.start_time,
+    schoolConfig: booking.school_config,
+  });
+  if (hoursUntil == null || hoursUntil < RESERVED_MOVE_NOTICE_HOURS) {
+    throw new InstructorRescheduleSlotError(
+      'FLEXIBLE_PACKAGE_RESCHEDULE_NOTICE_TOO_SHORT',
+      `Flexible Hours lessons can only be rescheduled with at least ${RESERVED_MOVE_NOTICE_HOURS} hours' notice.`,
+      409
+    );
+  }
+}
+
+async function handleAdminRescheduleOptions(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+  const bookingId = parseInt(req.query.booking_id, 10);
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    return res.status(400).json({ error: 'booking_id must be a positive integer' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const booking = await loadAdminRescheduleBooking(sql, { bookingId, schoolId });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== SCHEDULED) {
+      return res.status(400).json({ error: `Cannot reschedule a booking with status "${booking.status}"` });
+    }
+
+    let instructors = await listEligibleRescheduleInstructors(sql, { schoolId, booking });
+    if (booking.is_reserved_weekly_slot) {
+      instructors = instructors.filter(candidate => Number(candidate.id) === Number(booking.instructor_id));
+    }
+    return res.json({
+      ok: true,
+      booking_id: booking.id,
+      current_instructor_id: Number(booking.instructor_id),
+      is_reserved_weekly_slot: !!booking.is_reserved_weekly_slot,
+      instructors: instructors.map(candidate => ({
+        id: Number(candidate.id),
+        name: candidate.name,
+        transmission_type: candidate.transmission_type,
+      })),
+    });
+  } catch (err) {
+    console.error('admin reschedule-options error:', err);
+    reportError('/api/admin?action=reschedule-options', err);
+    return res.status(500).json({ error: 'Failed to load instructor options' });
+  }
+}
+
+async function handleAdminRescheduleAvailability(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+  const bookingId = parseInt(req.query.booking_id, 10);
+  const targetInstructorId = parseInt(req.query.new_instructor_id, 10);
+  const newDate = String(req.query.new_date || '').trim();
+  const newStartTime = String(req.query.new_start_time || '').trim().slice(0, 5);
+  if (!Number.isInteger(bookingId) || bookingId <= 0 || !Number.isInteger(targetInstructorId) || targetInstructorId <= 0) {
+    return res.status(400).json({ error: 'booking_id and new_instructor_id must be positive integers' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const booking = await loadAdminRescheduleBooking(sql, { bookingId, schoolId });
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== SCHEDULED) {
+      return res.status(409).json({ error: 'This booking is no longer available to reschedule.' });
+    }
+    validateAdminFlexibleRescheduleNotice(booking);
+    const availability = await validateInstructorRescheduleSlot(sql, {
+      schoolId,
+      booking,
+      targetInstructorId,
+      newDate,
+      newStartTime,
+    });
+    return res.json({
+      ok: true,
+      available: true,
+      new_end_time: availability.newEndTime,
+      instructor: { id: Number(availability.targetInstructor.id), name: availability.targetInstructor.name },
+    });
+  } catch (err) {
+    if (err instanceof InstructorRescheduleSlotError) {
+      return res.status(err.status).json({ error: err.message, code: err.code, conflict: err.conflict || undefined });
+    }
+    console.error('admin reschedule-availability error:', err);
+    reportError('/api/admin?action=reschedule-availability', err);
+    return res.status(500).json({ error: 'Failed to check instructor availability' });
+  }
+}
+
+function adminRescheduleDateLabel(value) {
+  return new Date(`${String(value).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+}
+
+async function notifyAdminReschedule({ booking, targetInstructor, newBooking, newDate, newStartTime, schoolId }) {
+  const oldDate = adminRescheduleDateLabel(booking.scheduled_date);
+  const newDateLabel = adminRescheduleDateLabel(newDate);
+  const oldTime = String(booking.start_time).slice(0, 5);
+  const newTime = String(newStartTime).slice(0, 5);
+  const instructorChanged = Number(booking.instructor_id) !== Number(targetInstructor.id);
+  const details = `
+    <table>
+      <tr><td><strong>Was:</strong></td><td>${oldDate} at ${oldTime} with ${booking.old_instructor_name}</td></tr>
+      <tr><td><strong>Now:</strong></td><td>${newDateLabel} at ${newTime} with ${targetInstructor.name}</td></tr>
+    </table>`;
+  const mailer = createTransporter();
+  const tasks = [];
+
+  if (booking.learner_email) {
+    const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
+    tasks.push(mailer.sendMail({
+      _log: { purpose: 'admin.booking_rescheduled', learnerId: booking.learner_id, instructorId: targetInstructor.id, schoolId },
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: booking.learner_email,
+      subject: `Lesson moved to ${newDateLabel} at ${newTime}`,
+      html: `<h2>Hi ${firstName},</h2><p>Your driving lesson has been rescheduled by the school.</p>${details}<p>Your existing payment or lesson credit still covers this lesson. You have not been charged again.</p>`,
+    }));
+  }
+  if (booking.old_instructor_email && booking.old_instructor_email !== 'demo@coachcarter.uk') {
+    tasks.push(mailer.sendMail({
+      _log: { purpose: 'admin.booking_rescheduled_old_instructor', learnerId: booking.learner_id, instructorId: booking.instructor_id, schoolId },
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: booking.old_instructor_email,
+      subject: `${instructorChanged ? 'Lesson transferred' : 'Lesson rescheduled'} - ${booking.learner_name}`,
+      html: `<h2>${instructorChanged ? 'Lesson transferred' : 'Lesson rescheduled'}</h2><p>${booking.learner_name}'s lesson has changed.</p>${details}`,
+    }));
+  }
+  if (instructorChanged && targetInstructor.email && targetInstructor.email !== 'demo@coachcarter.uk') {
+    tasks.push(mailer.sendMail({
+      _log: { purpose: 'admin.booking_rescheduled_new_instructor', learnerId: booking.learner_id, instructorId: targetInstructor.id, schoolId },
+      from: 'CoachCarter <system@coachcarter.uk>',
+      to: targetInstructor.email,
+      subject: `Lesson transferred to you - ${booking.learner_name}`,
+      html: `<h2>Lesson transferred to you</h2><p>${booking.learner_name}'s lesson has been assigned to you by the school.</p>${details}<p>After delivery, booking #${newBooking.id} will be included in your normal payout.</p>`,
+    }));
+  }
+
+  const textDetails = `Was: ${oldDate} at ${oldTime} with ${booking.old_instructor_name}\nNow: ${newDateLabel} at ${newTime} with ${targetInstructor.name}`;
+  if (booking.learner_phone) {
+    tasks.push(sendWhatsApp(booking.learner_phone, `Lesson rescheduled\n\n${textDetails}\n\nYour existing payment or credit still covers it; there is no new charge.`));
+  }
+  if (booking.old_instructor_phone) {
+    tasks.push(sendWhatsApp(booking.old_instructor_phone, `${instructorChanged ? 'Lesson transferred' : 'Lesson rescheduled'}: ${booking.learner_name}\n\n${textDetails}`));
+  }
+  if (instructorChanged && targetInstructor.phone) {
+    tasks.push(sendWhatsApp(targetInstructor.phone, `Lesson transferred to you: ${booking.learner_name}\n\n${textDetails}\n\nThis will follow the normal payout after delivery.`));
+  }
+
+  const results = await Promise.allSettled(tasks);
+  for (const result of results) {
+    if (result.status === 'rejected') console.warn('Admin reschedule notification failed:', result.reason?.message || result.reason);
+  }
+}
+
+async function handleAdminRescheduleBooking(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const admin = verifyAdminJWT(req);
+  if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = getAdminSchoolId(admin, req);
+  const bookingId = parseInt(req.body?.booking_id, 10);
+  const targetInstructorId = parseInt(req.body?.new_instructor_id, 10);
+  const newDate = String(req.body?.new_date || '').trim();
+  const newStartTime = String(req.body?.new_start_time || '').trim().slice(0, 5);
+  if (!Number.isInteger(bookingId) || bookingId <= 0 || !newDate || !newStartTime) {
+    return res.status(400).json({ error: 'booking_id, new_date and new_start_time are required' });
+  }
+  if (!Number.isInteger(targetInstructorId) || targetInstructorId <= 0) {
+    return res.status(400).json({ error: 'new_instructor_id must be a positive integer' });
+  }
+
+  try {
+    const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const locked = await client.query(
+        `SELECT id
+           FROM lesson_bookings
+          WHERE id = $1
+            AND school_id = $2
+            AND status = $3
+          FOR UPDATE`,
+        [bookingId, schoolId, SCHEDULED]
+      );
+      if (locked.rowCount === 0) {
+        throw new InstructorRescheduleSlotError(
+          'BOOKING_NOT_MANAGEABLE',
+          'Booking not found or no longer available to reschedule.',
+          404
+        );
+      }
+
+      await client.query(
+        'SELECT pg_advisory_xact_lock($1::integer, hashtext($2)::integer)',
+        [schoolId, `admin-reschedule:${targetInstructorId}:${newDate}`]
+      );
+      const txSql = adminClientSqlTag(client);
+      const booking = await loadAdminRescheduleBooking(txSql, { bookingId, schoolId });
+      if (!booking) {
+        throw new InstructorRescheduleSlotError('BOOKING_NOT_MANAGEABLE', 'Booking not found.', 404);
+      }
+      validateAdminFlexibleRescheduleNotice(booking);
+
+      const availability = await validateInstructorRescheduleSlot(txSql, {
+        schoolId,
+        booking,
+        targetInstructorId,
+        newDate,
+        newStartTime,
+      });
+      const instructorChanged = Number(targetInstructorId) !== Number(booking.instructor_id);
+
+      const inserted = await client.query(
+        `INSERT INTO lesson_bookings
+           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+            rescheduled_from, reschedule_count, lesson_type_id, minutes_deducted,
+            pickup_address, dropoff_address, school_id, created_by, payment_method,
+            stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source,
+            transmission_type, social_video_consent, social_video_age_confirmed, social_video_discount_pct)
+         VALUES
+           ($1, $2, $3::date, $4::time, $5::time, $6,
+            $7, $8, $9, $10,
+            $11, $12, $13, 'admin', $14,
+            $15, $16, $17, $18,
+            $19, $20, $21, $22)
+         RETURNING id, scheduled_date::text, start_time::text, end_time::text, reschedule_count`,
+        [
+          booking.learner_id, targetInstructorId, newDate, newStartTime, availability.newEndTime, SCHEDULED,
+          bookingId, booking.reschedule_count + 1, booking.lesson_type_id || null,
+          booking.minutes_deducted != null ? booking.minutes_deducted : null,
+          booking.pickup_address || null, booking.dropoff_address || null, schoolId,
+          booking.payment_method || null,
+          booking.stripe_fee_pence != null ? booking.stripe_fee_pence : null,
+          booking.stripe_fee_source || null,
+          booking.list_price_pence != null ? booking.list_price_pence : null,
+          booking.list_price_source || null,
+          booking.transmission_type || 'manual', !!booking.social_video_consent,
+          !!booking.social_video_age_confirmed, booking.social_video_discount_pct || 0,
+        ]
+      );
+      const newBooking = inserted.rows[0];
+
+      if (booking.is_flexible_package_booking) {
+        await moveFlexiblePackageBookingAllocations(client, {
+          learnerId: booking.learner_id,
+          schoolId,
+          oldBookingId: bookingId,
+          newBookingId: newBooking.id,
+          newInstructorId: targetInstructorId,
+        });
+      } else if (instructorChanged) {
+        const fundingTransfer = await transferBookingFunding(client, {
+          oldBookingId: bookingId,
+          newBookingId: newBooking.id,
+          learnerId: booking.learner_id,
+          oldInstructorId: booking.instructor_id,
+          newInstructorId: targetInstructorId,
+          schoolId,
+        });
+        const expectedMinutes = Number(booking.minutes_deducted || 0);
+        if (expectedMinutes > 0 && fundingTransfer.transferredMinutes !== expectedMinutes) {
+          throw new InstructorRescheduleSlotError(
+            'INSTRUCTOR_SWITCH_FUNDING_REVIEW',
+            'This older booking needs an admin funding review before its instructor can be changed.'
+          );
+        }
+      } else {
+        const refundedBcsIds = await markBookingCreditSourcesRefunded(txSql, { bookingId, schoolId });
+        await copyRefundedBookingCreditSources(txSql, {
+          bcsIds: refundedBcsIds,
+          newBookingId: newBooking.id,
+          schoolId,
+        });
+      }
+
+      const oldUpdated = await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1, credit_returned = TRUE, cancelled_at = NOW()
+          WHERE id = $2
+            AND school_id = $3
+            AND status = $4`,
+        [REFUNDED, bookingId, schoolId, SCHEDULED]
+      );
+      if (oldUpdated.rowCount !== 1) {
+        throw new InstructorRescheduleSlotError('BOOKING_CHANGED', 'This booking changed while it was being rescheduled.');
+      }
+
+      await logAudit(txSql, {
+        adminId: admin.id,
+        adminEmail: admin.email,
+        action: 'admin.reschedule_booking',
+        targetType: 'booking',
+        targetId: bookingId,
+        details: {
+          old_booking_id: bookingId,
+          new_booking_id: Number(newBooking.id),
+          old_instructor_id: Number(booking.instructor_id),
+          new_instructor_id: Number(targetInstructorId),
+          old_date: String(booking.scheduled_date).slice(0, 10),
+          old_start_time: String(booking.start_time).slice(0, 5),
+          new_date: newDate,
+          new_start_time: newStartTime,
+          instructor_changed: instructorChanged,
+        },
+        schoolId,
+        req,
+      });
+
+      return {
+        booking,
+        targetInstructor: availability.targetInstructor,
+        newBooking,
+        newEndTime: availability.newEndTime,
+        instructorChanged,
+      };
+    });
+
+    try {
+      await notifyAdminReschedule({
+        booking: result.booking,
+        targetInstructor: result.targetInstructor,
+        newBooking: result.newBooking,
+        newDate,
+        newStartTime,
+        schoolId,
+      });
+    } catch (notifyErr) {
+      console.warn('Admin reschedule notification setup failed:', notifyErr?.message || notifyErr);
+    }
+
+    return res.json({
+      ok: true,
+      old_booking_id: bookingId,
+      new_booking_id: Number(result.newBooking.id),
+      old_instructor_id: Number(result.booking.instructor_id),
+      new_instructor_id: Number(result.targetInstructor.id),
+      instructor_changed: result.instructorChanged,
+      new_date: newDate,
+      new_start_time: newStartTime,
+      new_end_time: result.newEndTime,
+      message: result.instructorChanged
+        ? `Lesson transferred from ${result.booking.old_instructor_name} to ${result.targetInstructor.name}. The learner was not charged again.`
+        : 'Lesson rescheduled. The learner and instructor were notified.',
+    });
+  } catch (err) {
+    if (err instanceof InstructorRescheduleSlotError) {
+      return res.status(err.status).json({ error: err.message, code: err.code, conflict: err.conflict || undefined });
+    }
+    const moveCode = err?.result?.code || err?.code;
+    const moveMessage = err?.result?.message || err?.message;
+    if (['BOOKING_CHANGED', 'FLEXIBLE_REPLACEMENT_BOOKING_MISMATCH',
+      'FLEXIBLE_MIXED_FUNDING_CONTRADICTION', 'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION',
+      'NOT_FLEXIBLE_PACKAGE_BOOKING'].includes(moveCode)) {
+      return res.status(409).json({ error: moveMessage, code: moveCode });
+    }
+    if (err?.code === '23505' || err?.message?.includes('uq_booking_slot')) {
+      return res.status(409).json({ error: 'That slot was just taken. Please choose another.', code: 'SLOT_UNAVAILABLE' });
+    }
+    console.error('admin reschedule-booking error:', err);
+    reportError('/api/admin?action=reschedule-booking', err);
+    return res.status(500).json({ error: 'Failed to reschedule booking' });
   }
 }
 

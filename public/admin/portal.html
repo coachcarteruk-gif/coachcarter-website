@@ -1493,6 +1493,7 @@ body {
         <input type="date" id="adminEditDate" class="input" style="width:100%"></div>
       <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Start time</label>
         <input type="time" id="adminEditTime" class="input" style="width:100%" step="1800"></div>
+      <div id="adminEditScheduleNote" style="display:none;font-size:0.82rem;color:var(--muted);line-height:1.4">Use <strong>Reschedule lesson</strong> to change the instructor, date, or time.</div>
       <div><label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:4px">Lesson type</label>
         <select id="adminEditType" class="input" style="width:100%"></select></div>
       <div style="font-size:0.85rem;color:var(--muted)">End time: <strong id="adminEditEndTime"> - </strong></div>
@@ -1507,6 +1508,35 @@ body {
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
       <button class="btn" id="btn-close-admin-edit">Cancel</button>
       <button class="btn btn-success" id="adminEditSaveBtn">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Reschedule Modal -->
+<div class="modal-overlay" id="modal-admin-reschedule">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">Reschedule lesson</div>
+    <div id="adminRescheduleSummary" style="font-size:0.88rem;color:var(--muted);line-height:1.45;margin-bottom:16px;"></div>
+    <div class="form-group">
+      <label for="adminRescheduleInstructor">Instructor taking the lesson</label>
+      <select id="adminRescheduleInstructor"></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label for="adminRescheduleDate">New date</label>
+        <input type="date" id="adminRescheduleDate">
+      </div>
+      <div class="form-group">
+        <label for="adminRescheduleStartTime">New start time</label>
+        <input type="time" id="adminRescheduleStartTime" step="300">
+      </div>
+    </div>
+    <div style="font-size:0.84rem;color:var(--muted);margin:-2px 0 12px;">End time: <strong id="adminRescheduleEndTime">-</strong></div>
+    <div id="adminRescheduleTransferNote" style="font-size:0.82rem;color:var(--muted);line-height:1.4;margin-bottom:12px;"></div>
+    <div id="adminRescheduleStatus" role="alert" style="display:none;padding:10px 12px;border-radius:8px;background:var(--red-bg);color:#991b1b;font-size:0.84rem;line-height:1.35;"></div>
+    <div class="modal-actions">
+      <button class="btn" data-action="close-admin-reschedule">Cancel</button>
+      <button class="btn btn-primary" data-action="submit-admin-reschedule" id="adminRescheduleSubmitBtn">Reschedule lesson</button>
     </div>
   </div>
 </div>
