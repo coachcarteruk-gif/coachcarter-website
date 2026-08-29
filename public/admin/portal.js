@@ -742,6 +742,8 @@ async function saveBlackouts() {
 let allBookings = [];
 let currentBookingFilter = '';
 let reservedGoodwillBookingId = null;
+let adminRescheduleBooking = null;
+let adminRescheduleValidationSeq = 0;
 let adminRetroLessonTypes = [];
 
 async function loadBookings() {
@@ -798,7 +800,8 @@ function bookingActionHtml(b) {
       '<div style="font-size:0.72rem;color:var(--muted);margin-top:5px;">' + esc(policyCopy) + '</div>';
   }
 
-  return '<button class="btn btn-sm" data-action="edit-booking" data-id="' + b.id + '" title="Edit booking details" style="margin-right:4px">Reschedule lesson</button>' +
+  return '<button class="btn btn-sm" data-action="open-admin-reschedule" data-id="' + b.id + '" title="Choose a new instructor, date and time" style="margin-right:4px">Reschedule lesson</button>' +
+    '<button class="btn btn-sm" data-action="edit-booking" data-id="' + b.id + '" title="Edit lesson type, locations and notes" style="margin-right:4px">Edit details</button>' +
     '<button class="btn btn-sm btn-success" data-action="mark-complete" data-id="' + b.id + '" style="margin-right:4px">Complete</button>' +
     '<button class="btn btn-sm" data-action="open-refund-preview" data-id="' + b.id + '">Refund preview</button>';
 }
@@ -1028,8 +1031,14 @@ async function openAdminEditBooking(bookingId) {
   adminEditBookingStatus = b.status || '';
 
   document.getElementById('adminEditTitle').textContent = b.status === 'chargeable' ? 'Edit Lesson' : 'Edit Booking';
-  document.getElementById('adminEditDate').value = b.scheduled_date;
-  document.getElementById('adminEditTime').value = b.start_time.slice(0, 5);
+  var editDate = document.getElementById('adminEditDate');
+  var editTime = document.getElementById('adminEditTime');
+  var editScheduleNote = document.getElementById('adminEditScheduleNote');
+  editDate.value = b.scheduled_date;
+  editTime.value = b.start_time.slice(0, 5);
+  editDate.disabled = b.status === 'scheduled';
+  editTime.disabled = b.status === 'scheduled';
+  editScheduleNote.style.display = b.status === 'scheduled' ? 'block' : 'none';
   document.getElementById('adminEditPickup').value = b.pickup_address || '';
   document.getElementById('adminEditDropoff').value = b.dropoff_address || '';
   document.getElementById('adminEditNotes').value = b.notes || '';
@@ -1150,6 +1159,163 @@ async function confirmAdminEditBooking(forceOverride) {
     toast(err.message || 'Failed to edit', 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+function setAdminRescheduleStatus(message, type) {
+  var el = document.getElementById('adminRescheduleStatus');
+  if (!el) return;
+  if (!message) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.textContent = message;
+  el.style.display = 'block';
+  el.style.background = type === 'success' ? 'var(--green-bg)' : type === 'pending' ? 'var(--bg-soft, #f5f5f4)' : 'var(--red-bg)';
+  el.style.color = type === 'success' ? '#166534' : type === 'pending' ? 'var(--muted)' : '#991b1b';
+}
+
+async function openAdminReschedule(bookingId) {
+  var booking = allBookings.find(function (candidate) { return candidate.id === bookingId; });
+  if (!booking || booking.status !== 'scheduled' || booking.is_reserved_weekly_slot) {
+    toast('Only ordinary upcoming lessons can be rescheduled here.', 'error');
+    return;
+  }
+
+  adminRescheduleBooking = booking;
+  adminRescheduleValidationSeq += 1;
+  document.getElementById('adminRescheduleSummary').innerHTML =
+    '<strong>' + esc(booking.learner_name) + '</strong><br>' +
+    formatDate(booking.scheduled_date) + ', ' + formatTime(booking.start_time) + '-' + formatTime(booking.end_time) +
+    ' with ' + esc(booking.instructor_name);
+  document.getElementById('adminRescheduleDate').value = String(booking.scheduled_date).slice(0, 10);
+  document.getElementById('adminRescheduleDate').min = new Date().toISOString().slice(0, 10);
+  document.getElementById('adminRescheduleStartTime').value = String(booking.start_time).slice(0, 5);
+  document.getElementById('adminRescheduleEndTime').textContent = '-';
+  document.getElementById('adminRescheduleTransferNote').textContent =
+    'The learner keeps the same payment or credit entitlement and will not be charged again.';
+  var select = document.getElementById('adminRescheduleInstructor');
+  select.disabled = true;
+  select.innerHTML = '<option>Loading instructors...</option>';
+  var submit = document.getElementById('adminRescheduleSubmitBtn');
+  submit.disabled = true;
+  submit.textContent = 'Reschedule lesson';
+  setAdminRescheduleStatus('Loading eligible instructors...', 'pending');
+  openModal('modal-admin-reschedule');
+
+  try {
+    var res = await fetchAdmin('/api/admin?action=reschedule-options&booking_id=' + encodeURIComponent(bookingId), { headers: HEADERS });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load instructors');
+    if (!adminRescheduleBooking || adminRescheduleBooking.id !== bookingId) return;
+
+    select.innerHTML = '';
+    (data.instructors || []).forEach(function (instructor) {
+      var option = document.createElement('option');
+      option.value = String(instructor.id);
+      option.textContent = instructor.name;
+      select.appendChild(option);
+    });
+    if (!select.options.length) throw new Error('No eligible instructors are available for this lesson type and transmission.');
+    adminRescheduleBooking.currentInstructorId = Number(data.current_instructor_id);
+    select.value = String(data.current_instructor_id);
+    if (!select.value) select.selectedIndex = 0;
+    select.disabled = false;
+    await checkAdminRescheduleAvailability();
+  } catch (err) {
+    if (!adminRescheduleBooking || adminRescheduleBooking.id !== bookingId) return;
+    select.disabled = true;
+    setAdminRescheduleStatus(err.message || 'Failed to load instructors', 'error');
+    submit.disabled = true;
+  }
+}
+
+function closeAdminReschedule() {
+  adminRescheduleValidationSeq += 1;
+  adminRescheduleBooking = null;
+  closeModal('modal-admin-reschedule');
+}
+
+async function checkAdminRescheduleAvailability() {
+  if (!adminRescheduleBooking) return;
+  var bookingId = adminRescheduleBooking.id;
+  var instructorId = parseInt(document.getElementById('adminRescheduleInstructor').value, 10);
+  var newDate = document.getElementById('adminRescheduleDate').value;
+  var newStartTime = document.getElementById('adminRescheduleStartTime').value.slice(0, 5);
+  var submit = document.getElementById('adminRescheduleSubmitBtn');
+  var sequence = ++adminRescheduleValidationSeq;
+  submit.disabled = true;
+  document.getElementById('adminRescheduleEndTime').textContent = '-';
+  if (!instructorId || !newDate || !newStartTime) {
+    setAdminRescheduleStatus('Choose an instructor, date, and time.', 'error');
+    return;
+  }
+
+  setAdminRescheduleStatus('Checking the instructor\'s availability...', 'pending');
+  try {
+    var query = new URLSearchParams({
+      action: 'reschedule-availability',
+      booking_id: String(bookingId),
+      new_instructor_id: String(instructorId),
+      new_date: newDate,
+      new_start_time: newStartTime
+    });
+    var res = await fetchAdmin('/api/admin?' + query.toString(), { headers: HEADERS });
+    var data = await res.json();
+    if (sequence !== adminRescheduleValidationSeq || !adminRescheduleBooking || adminRescheduleBooking.id !== bookingId) return;
+    if (!res.ok || !data.available) throw new Error(data.error || 'That slot is not available.');
+
+    document.getElementById('adminRescheduleEndTime').textContent = String(data.new_end_time || '').slice(0, 5);
+    setAdminRescheduleStatus('Available - this will be checked again when you confirm.', 'success');
+    submit.disabled = false;
+    var instructorChanged = instructorId !== Number(adminRescheduleBooking.currentInstructorId);
+    document.getElementById('adminRescheduleTransferNote').textContent = instructorChanged
+      ? 'The learner will not be charged again. Their entitlement and eventual payout will move to ' + data.instructor.name + '.'
+      : 'The learner keeps the same payment or credit entitlement and will not be charged again.';
+  } catch (err) {
+    if (sequence !== adminRescheduleValidationSeq || !adminRescheduleBooking || adminRescheduleBooking.id !== bookingId) return;
+    setAdminRescheduleStatus(err.message || 'Could not verify that slot.', 'error');
+    submit.disabled = true;
+  }
+}
+
+async function submitAdminReschedule() {
+  if (!adminRescheduleBooking) return;
+  var bookingId = adminRescheduleBooking.id;
+  var instructorId = parseInt(document.getElementById('adminRescheduleInstructor').value, 10);
+  var newDate = document.getElementById('adminRescheduleDate').value;
+  var newStartTime = document.getElementById('adminRescheduleStartTime').value.slice(0, 5);
+  if (!instructorId || !newDate || !newStartTime) {
+    setAdminRescheduleStatus('Choose an instructor, date, and time.', 'error');
+    return;
+  }
+
+  var btn = document.getElementById('adminRescheduleSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Rescheduling...';
+  setAdminRescheduleStatus('Moving the lesson and its existing payment entitlement...', 'pending');
+  try {
+    var res = await fetchAdmin('/api/admin?action=reschedule-booking', {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        booking_id: bookingId,
+        new_instructor_id: instructorId,
+        new_date: newDate,
+        new_start_time: newStartTime
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to reschedule lesson');
+    closeAdminReschedule();
+    toast(data.message || 'Lesson rescheduled', 'success');
+    loadBookings();
+  } catch (err) {
+    setAdminRescheduleStatus(err.message || 'Failed to reschedule lesson', 'error');
+    btn.disabled = false;
+  } finally {
+    btn.textContent = 'Reschedule lesson';
   }
 }
 
@@ -4464,6 +4630,9 @@ document.addEventListener('click', function (e) {
   else if (a === 'remove-window') removeWindow(parseInt(t.dataset.idx, 10));
   else if (a === 'remove-blackout') removeBlackout(parseInt(t.dataset.idx, 10));
   else if (a === 'edit-booking') openAdminEditBooking(parseInt(t.dataset.id, 10));
+  else if (a === 'open-admin-reschedule') openAdminReschedule(parseInt(t.dataset.id, 10));
+  else if (a === 'close-admin-reschedule') closeAdminReschedule();
+  else if (a === 'submit-admin-reschedule') submitAdminReschedule();
   else if (a === 'open-reserved-goodwill-move') openReservedGoodwillMove(parseInt(t.dataset.id, 10));
   else if (a === 'close-reserved-goodwill-move') closeReservedGoodwillMove();
   else if (a === 'submit-reserved-goodwill-move') submitReservedGoodwillMove();
@@ -4957,6 +5126,14 @@ document.querySelectorAll('.sidebar-nav a[data-section]').forEach(function (a) {
   if (retroTime) retroTime.addEventListener('input', updateAdminRetroEnd);
   var retroType = document.getElementById('adminRetroType');
   if (retroType) retroType.addEventListener('change', updateAdminRetroEnd);
+  var adminRescheduleModal = document.getElementById('modal-admin-reschedule');
+  if (adminRescheduleModal) adminRescheduleModal.addEventListener('click', function (e) { if (e.target === adminRescheduleModal) closeAdminReschedule(); });
+  var adminRescheduleInstructor = document.getElementById('adminRescheduleInstructor');
+  if (adminRescheduleInstructor) adminRescheduleInstructor.addEventListener('change', checkAdminRescheduleAvailability);
+  var adminRescheduleDate = document.getElementById('adminRescheduleDate');
+  if (adminRescheduleDate) adminRescheduleDate.addEventListener('change', checkAdminRescheduleAvailability);
+  var adminRescheduleStartTime = document.getElementById('adminRescheduleStartTime');
+  if (adminRescheduleStartTime) adminRescheduleStartTime.addEventListener('change', checkAdminRescheduleAvailability);
   var reservedGoodwillModal = document.getElementById('modal-reserved-goodwill-move');
   if (reservedGoodwillModal) reservedGoodwillModal.addEventListener('click', function (e) { if (e.target === reservedGoodwillModal) closeReservedGoodwillMove(); });
   var editTime = document.getElementById('adminEditTime');
