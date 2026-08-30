@@ -1207,6 +1207,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 |---|---|---|
 | `learner_users` | `last_activity_at` | Tracks last login/booking for retention policy |
 | `learner_users` | `archived_at` | Soft-delete timestamp (set by retention cron) |
+| `instructor_learner_notes` | `archived_at` | Reversible per-instructor list archive; hides retained learners from that instructor's active lists and pickers |
 | `enquiries` | `archived_at` | Soft-delete timestamp (set by retention cron) |
 | `credit_transactions` | `anonymized` | Boolean, set when learner is deleted (records kept for tax) |
 | `learner_users` | `referred_by` | FK to learner_users(id) — permanent link to referrer |

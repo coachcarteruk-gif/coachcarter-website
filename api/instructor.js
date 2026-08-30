@@ -293,6 +293,7 @@ module.exports = async (req, res) => {
   if (action === 'learner-notes')      return handleLearnerNotes(req, res);
   if (action === 'learner-mock-tests') return handleLearnerMockTests(req, res);
   if (action === 'update-learner-notes') return handleUpdateLearnerNotes(req, res);
+  if (action === 'set-learner-archived') return handleSetLearnerArchived(req, res);
   if (action === 'earnings-week')        return handleEarningsWeek(req, res);
   if (action === 'earnings-history')     return handleEarningsHistory(req, res);
   if (action === 'earnings-summary')     return handleEarningsSummary(req, res);
@@ -3516,6 +3517,7 @@ async function handleMyLearners(req, res) {
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
+  const includeArchived = String(req.query.include_archived || '').toLowerCase() === 'true';
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
@@ -3534,7 +3536,8 @@ async function handleMyLearners(req, res) {
         iln.notes AS instructor_notes,
         iln.test_date::text AS test_date,
         iln.custom_hourly_rate_pence,
-        iln.learner_category
+        iln.learner_category,
+        iln.archived_at::text AS archived_at
       FROM learner_users lu
       LEFT JOIN lesson_bookings lb
         ON lb.learner_id = lu.id
@@ -3550,13 +3553,14 @@ async function handleMyLearners(req, res) {
        AND lcb.school_id = ${schoolId}
       WHERE lu.school_id = ${schoolId}
         AND lu.archived_at IS NULL
+        AND (${includeArchived} OR iln.archived_at IS NULL)
         AND (
           lb.id IS NOT NULL
           OR iln.id IS NOT NULL
           OR lu.primary_instructor_id = ${instructor.id}
           OR lcb.id IS NOT NULL
         )
-      GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category
+      GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category, iln.archived_at
       ORDER BY MAX(lb.scheduled_date) DESC NULLS LAST, lu.name ASC
     `;
 
@@ -3640,6 +3644,14 @@ async function handleSchoolLearners(req, res) {
        AND lcb.school_id = ${schoolId}
       WHERE lu.school_id = ${schoolId}
         AND lu.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM instructor_learner_notes archived_note
+          WHERE archived_note.learner_id = lu.id
+            AND archived_note.instructor_id = ${instructor.id}
+            AND archived_note.school_id = ${schoolId}
+            AND archived_note.archived_at IS NOT NULL
+        )
       ORDER BY lu.name ASC
     `;
 
@@ -3759,7 +3771,8 @@ async function handleLearnerNotes(req, res) {
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     const [row] = await sql`
-      SELECT notes, test_date::text, custom_hourly_rate_pence, learner_category
+      SELECT notes, test_date::text, custom_hourly_rate_pence, learner_category,
+             archived_at::text AS archived_at
       FROM instructor_learner_notes
       WHERE instructor_id = ${instructor.id}
         AND learner_id = ${learner_id}
@@ -3769,7 +3782,8 @@ async function handleLearnerNotes(req, res) {
       notes: row?.notes || '',
       test_date: row?.test_date || null,
       custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null,
-      learner_category: row?.learner_category || null
+      learner_category: row?.learner_category || null,
+      archived_at: row?.archived_at || null
     });
   } catch (err) {
     console.error('learner-notes error:', err);
@@ -3822,6 +3836,84 @@ async function handleUpdateLearnerNotes(req, res) {
     console.error('update-learner-notes error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to save notes' });
+  }
+}
+
+// ── POST /api/instructor?action=set-learner-archived ────────────────────────
+// Body: { learner_id, archived }
+// Archives only this instructor/learner relationship. The learner account,
+// lesson history and other instructors' views remain untouched.
+async function handleSetLearnerArchived(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const { learner_id, archived } = req.body || {};
+  const learnerId = parseInt(learner_id, 10);
+  if (!Number.isInteger(learnerId) || learnerId <= 0) {
+    return res.status(400).json({ error: 'learner_id must be a positive integer' });
+  }
+  if (typeof archived !== 'boolean') {
+    return res.status(400).json({ error: 'archived must be a boolean' });
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [learner] = await sql`
+      SELECT id, name
+      FROM learner_users
+      WHERE id = ${learnerId}
+        AND school_id = ${schoolId}
+        AND archived_at IS NULL
+    `;
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+
+    let row = null;
+    if (archived) {
+      [row] = await sql`
+        INSERT INTO instructor_learner_notes
+          (instructor_id, learner_id, school_id, archived_at, updated_at)
+        VALUES (${instructor.id}, ${learnerId}, ${schoolId}, NOW(), NOW())
+        ON CONFLICT (instructor_id, learner_id)
+        DO UPDATE SET archived_at = NOW(), updated_at = NOW()
+        RETURNING archived_at::text AS archived_at
+      `;
+    } else {
+      [row] = await sql`
+        UPDATE instructor_learner_notes
+        SET archived_at = NULL, updated_at = NOW()
+        WHERE instructor_id = ${instructor.id}
+          AND learner_id = ${learnerId}
+          AND school_id = ${schoolId}
+        RETURNING archived_at::text AS archived_at
+      `;
+    }
+
+    await logAudit(sql, {
+      adminId: null,
+      adminEmail: instructor.email || null,
+      action: archived ? 'instructor.learner_archived' : 'instructor.learner_restored',
+      targetType: 'learner_user',
+      targetId: learnerId,
+      schoolId,
+      req,
+      details: {
+        instructor_id: instructor.id,
+        learner_id: learnerId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      learner_id: learnerId,
+      archived_at: row?.archived_at || null,
+    });
+  } catch (err) {
+    console.error('set-learner-archived error:', err);
+    reportError('/api/instructor?action=set-learner-archived', err);
+    return res.status(500).json({ error: archived ? 'Failed to archive learner' : 'Failed to restore learner' });
   }
 }
 
@@ -5215,6 +5307,14 @@ async function handlePreviewBroadcastAudience(req, res) {
       WHERE la.active = true
         AND la.school_id = ${schoolId}
         AND lu.school_id = ${schoolId}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM instructor_learner_notes archived_note
+          WHERE archived_note.learner_id = lu.id
+            AND archived_note.instructor_id = ${instructor.id}
+            AND archived_note.school_id = ${schoolId}
+            AND archived_note.archived_at IS NOT NULL
+        )
         AND la.day_of_week = ${dayOfWeek}
         AND la.start_time <= ${start_time}::time
         AND la.end_time   >= ${end_time}::time
@@ -5361,6 +5461,14 @@ async function handleCreateBroadcastOffer(req, res) {
         AND lu.school_id = ${schoolId}
         AND la.school_id = ${schoolId}
         AND la.active = true
+        AND NOT EXISTS (
+          SELECT 1
+          FROM instructor_learner_notes archived_note
+          WHERE archived_note.learner_id = lu.id
+            AND archived_note.instructor_id = ${instructor.id}
+            AND archived_note.school_id = ${schoolId}
+            AND archived_note.archived_at IS NOT NULL
+        )
         AND la.day_of_week = ${dayOfWeek}
         AND la.start_time <= ${start_time}::time
         AND la.end_time   >= ${end_time}::time
