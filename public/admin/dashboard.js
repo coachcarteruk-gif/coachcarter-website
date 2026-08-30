@@ -385,6 +385,7 @@ async function loadEnquiries() {
       'general': 'General',
       'booking': 'Booking',
       'pass-guarantee': 'Test Ready Guarantee',
+      'free-consultation': 'Free Consultation',
       'bulk-packages': 'Existing Lesson Credit',
       'availability': 'Availability'
     };
@@ -396,6 +397,12 @@ async function loadEnquiries() {
       const isPass = e.enquiry_type === 'pass-guarantee';
       const typeLabel = enquiryTypeLabels[e.enquiry_type] || e.enquiry_type;
       const enquiryId = parseInt(e.id) || 0;
+      const experimentLabel = e.experiment_variant
+        ? 'Variant ' + e.experiment_variant
+        : 'No experiment';
+      const sourceLabel = e.utm_source || 'direct';
+      const campaignLabel = e.utm_campaign || '—';
+      const contentLabel = e.utm_content || '—';
 
       return '<div class="booking-row">' +
         '<div class="package ' + (isPass ? 'pass' : '') + '" style="min-width: 120px;">' + esc(typeLabel) + '</div>' +
@@ -408,6 +415,11 @@ async function loadEnquiries() {
         '</div>' +
         '<div style="min-width: 180px; font-size: 0.85rem; color: var(--muted);">' +
           dateStr + ' at ' + timeStr +
+        '</div>' +
+        '<div style="min-width: 210px; font-size: 0.8rem; color: var(--muted); line-height: 1.45;">' +
+          '<strong style="color: var(--text);">' + esc(experimentLabel) + ' · ' + esc(sourceLabel) + '</strong><br>' +
+          'Campaign: ' + esc(campaignLabel) + '<br>' +
+          'Content: ' + esc(contentLabel) +
         '</div>' +
         '<div style="min-width: 100px;">' +
           '<span class="status ' + (e.status === 'new' ? 'pending' : e.status === 'contacted' ? 'scheduled' : 'verification') + '">' +
@@ -443,12 +455,20 @@ function viewEnquiry(id) {
         'general': 'General Question',
         'booking': 'Booking Enquiry',
         'pass-guarantee': 'Test Ready Guarantee Programme',
+        'free-consultation': 'Free Learner Driver Consultation',
         'bulk-packages': 'Existing Lesson Credit',
         'availability': 'Check Availability'
       };
       
       const marketingText = e.marketing_consent ? 'Yes' : 'No';
       const messageText = e.message ? '\n\nMessage:\n' + e.message : '';
+      const experimentText = e.experiment_key
+        ? '\n\nExperiment: ' + e.experiment_key
+          + '\nVariant: ' + (e.experiment_variant || '—')
+          + '\nAd source: ' + (e.utm_source || 'direct')
+          + '\nCampaign: ' + (e.utm_campaign || '—')
+          + '\nAd content: ' + (e.utm_content || '—')
+        : '';
       
       const action = prompt(
         'Enquiry from ' + e.name + '\n\n' +
@@ -456,6 +476,8 @@ function viewEnquiry(id) {
         'Email: ' + e.email + '\n' +
         'Phone: ' + e.phone + '\n' +
         'Marketing: ' + marketingText +
+        '\nLead status: ' + (e.status || 'new') +
+        experimentText +
         messageText +
         '\n\nSubmitted: ' + new Date(e.submitted_at).toLocaleString('en-GB') + '\n\n' +
         'Actions:\n1. Mark as contacted\n2. Reply via email\n3. Close\n\nEnter 1, 2, or 3:'

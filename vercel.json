@@ -52,6 +52,7 @@
     { "source": "/instructor/review-lesson", "destination": "/instructor/review-lesson.html" },
     { "source": "/learner/rate-lesson", "destination": "/learner/rate-lesson.html" },
     { "source": "/check-my-driving", "destination": "/check-my-driving.html" },
+    { "source": "/free-consultation", "destination": "/free-consultation.html" },
     { "source": "/free", "destination": "/free-trial.html" },
     { "source": "/freetrial", "destination": "/free-lesson.html" },
     { "source": "/:path*", "destination": "/public/:path*" }
