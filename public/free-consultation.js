@@ -175,7 +175,7 @@
       }
 
       capture('free_consultation_requested');
-      form.innerHTML = '<div class="success-box" role="status"><strong>Your request is in.</strong><p>We’ll get in touch to arrange your free 45-minute consultation. There is nothing to pay and no obligation to continue with CoachCarter.</p></div>';
+      form.innerHTML = '<div class="success-box" role="status"><strong>Your request is in.</strong><p>We’ll get in touch to arrange your free one-hour consultation. There is nothing to pay and no obligation to continue with CoachCarter.</p></div>';
     } catch (error) {
       capture('free_consultation_submission_error', {
         error_category: error.category || 'network_error',

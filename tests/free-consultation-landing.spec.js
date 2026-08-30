@@ -70,6 +70,7 @@ test.describe('free consultation advertising landing page', () => {
     await page.goto('/free-consultation?cc_variant=A&utm_source=meta&utm_medium=paid-social&utm_campaign=road-to-pass&utm_content=learner-video');
 
     await expect(page.getByRole('heading', { name: /Know exactly what to work on/ })).toBeVisible();
+    await expect(page.getByText('Free one-hour session', { exact: true })).toBeVisible();
     await expect(page.getByText('£0. No card needed.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'This is genuinely free.' })).toBeVisible();
 
@@ -77,6 +78,7 @@ test.describe('free consultation advertising landing page', () => {
     await page.locator('#consultSubmit').click();
 
     await expect(page.getByText('Your request is in.')).toBeVisible();
+    await expect(page.getByText(/arrange your free one-hour consultation/)).toBeVisible();
     expect(payload).toMatchObject({
       name: 'Alex Driver',
       phone: '07123 456 789',
@@ -101,6 +103,7 @@ test.describe('free consultation advertising landing page', () => {
     await page.goto('/free-consultation?cc_variant=B');
 
     await expect(page.getByRole('heading', { name: /Find out how close you are to test-ready/ })).toBeVisible();
+    await expect(page.getByText(/Take one calm, one-hour drive/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Stop guessing whether you are nearly ready.' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'See your real level' })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Know exactly what to work on/ })).toBeHidden();
@@ -318,6 +321,7 @@ test.describe('free consultation advertising landing page', () => {
     const migration = read('db/migrations/056_enquiry_experiment_attribution.sql');
     const reviewSeed = read('db/migrations/016_seed_google_reviews.sql');
     const landing = read('public/free-consultation.html');
+    const landingScript = read('public/free-consultation.js');
     const privacy = read('public/privacy.html');
 
     expect(vercelConfig.rewrites).toContainEqual({
@@ -334,6 +338,10 @@ test.describe('free consultation advertising landing page', () => {
     expect(landing).not.toContain('—');
     expect(landing).not.toContain('almost giving up to passing');
     expect(landing).not.toContain('sales lesson');
+    expect(landing).not.toMatch(/45(?:-minute| minutes)/i);
+    expect(landingScript).not.toMatch(/45(?:-minute| minutes)/i);
+    expect(landing).toContain('Free one-hour session');
+    expect(landingScript).toContain('free one-hour consultation');
     expect(landing).toContain('id="consultExperience"');
     expect(landing).toContain('id="consultPostcode"');
     expect(landing).not.toContain('consultFindAddress');
