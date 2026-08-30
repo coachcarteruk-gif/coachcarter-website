@@ -250,7 +250,13 @@ CREATE TABLE IF NOT EXISTS enquiries (
   message           TEXT,
   marketing_consent BOOLEAN DEFAULT FALSE,
   submitted_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  status            VARCHAR(50) DEFAULT 'new'
+  status            VARCHAR(50) DEFAULT 'new',
+  experiment_key    VARCHAR(100),
+  experiment_variant VARCHAR(50),
+  utm_source        VARCHAR(255),
+  utm_medium        VARCHAR(255),
+  utm_campaign      VARCHAR(255),
+  utm_content       VARCHAR(255)
 );
 
 -- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1328,6 +1334,15 @@ UPDATE learner_users SET last_activity_at = created_at WHERE last_activity_at IS
 ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
 ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);
 CREATE INDEX IF NOT EXISTS idx_enquiries_school_id ON enquiries(school_id);
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS experiment_key VARCHAR(100);
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS experiment_variant VARCHAR(50);
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS utm_source VARCHAR(255);
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS utm_medium VARCHAR(255);
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS utm_campaign VARCHAR(255);
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS utm_content VARCHAR(255);
+CREATE INDEX IF NOT EXISTS idx_enquiries_school_experiment
+  ON enquiries (school_id, experiment_key, experiment_variant, submitted_at DESC)
+  WHERE experiment_key IS NOT NULL;
 
 -- Multi-tenancy backfill for availability_submissions (added 2026-04-10)
 ALTER TABLE availability_submissions ADD COLUMN IF NOT EXISTS school_id INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id);

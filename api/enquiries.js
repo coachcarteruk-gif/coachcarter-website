@@ -13,6 +13,8 @@ const { reportError } = require('./_error-alert');
 const { createTransporter } = require('./_auth-helpers');
 const { requireAuth, getSchoolId } = require('./_auth');
 const { checkRateLimit, getClientIp } = require('./_rate-limit');
+const { normalizeEnquiryAttribution } = require('./_enquiry-attribution');
+const { resolveSchoolFromRequest } = require('./_tenant');
 
 // HTML-escape helper for email templates — user input is never trusted.
 function esc(str) {
@@ -122,6 +124,12 @@ async function handleSubmit(req, res) {
   if (!name || !email || !phone || !enquiryType)
     return res.status(400).json({ error: 'Missing required fields' });
 
+  const attribution = normalizeEnquiryAttribution(req.body);
+  if (
+    enquiryType === 'free-consultation'
+    && (!attribution.experiment_key || !attribution.experiment_variant)
+  ) return res.status(400).json({ error: 'Missing experiment assignment' });
+
   // ── Anti-spam: silent drop ──────────────────────────────────────────────────
   // Bots auto-fill every field they see, including our hidden honeypot, and
   // they submit obvious junk in the name/phone. We return 200 success without
@@ -141,7 +149,18 @@ async function handleSubmit(req, res) {
     return res.status(429).json({ error: 'Too many submissions. Please try again later.' });
   }
 
-  const schoolId = parseInt(req.body.school_id) || 1;
+  let tenant;
+  try {
+    tenant = await resolveSchoolFromRequest(req, { sql });
+  } catch (tenantErr) {
+    console.error('Enquiry tenant resolution failed:', tenantErr);
+    reportError('/api/enquiries', tenantErr);
+    return res.status(500).json({ error: 'Unable to identify the driving school.' });
+  }
+  if (!tenant) {
+    return res.status(400).json({ error: 'Unable to identify the driving school.' });
+  }
+  const schoolId = tenant.schoolId;
 
   let dbSaved = false;
   let enquiryId;
@@ -150,12 +169,18 @@ async function handleSubmit(req, res) {
   // Save to DB
   try {
     const result = await sql`
-      INSERT INTO enquiries (name, email, phone, enquiry_type, message, marketing_consent, submitted_at, school_id)
+      INSERT INTO enquiries (
+        name, email, phone, enquiry_type, message, marketing_consent, submitted_at, school_id,
+        experiment_key, experiment_variant, utm_source, utm_medium, utm_campaign, utm_content
+      )
       VALUES (
         ${name}, ${email}, ${phone}, ${enquiryType},
         ${message || null}, ${marketing || false},
         ${submittedAt || new Date().toISOString()},
-        ${schoolId}
+        ${schoolId},
+        ${attribution.experiment_key || null}, ${attribution.experiment_variant || null},
+        ${attribution.utm_source || null}, ${attribution.utm_medium || null},
+        ${attribution.utm_campaign || null}, ${attribution.utm_content || null}
       )
       RETURNING id
     `;
@@ -171,7 +196,7 @@ async function handleSubmit(req, res) {
       const labels = {
         general: 'General Question', booking: 'Booking Enquiry',
         'pass-guarantee': 'Test Ready Guarantee', 'bulk-packages': 'Existing Lesson Credit',
-        availability: 'Check Availability'
+        availability: 'Check Availability', 'free-consultation': 'Free Learner Driver Consultation'
       };
       const n8nRes = await fetch(process.env.N8N_WEBHOOK_URL, {
         method: 'POST',
@@ -180,7 +205,13 @@ async function handleSubmit(req, res) {
           date: new Date(submittedAt || Date.now()).toLocaleString('en-GB'),
           name, email, phone, type: labels[enquiryType] || enquiryType,
           message: message || '', marketing: marketing ? 'Yes' : 'No',
-          status: 'New', id: enquiryId ? String(enquiryId) : 'N/A'
+          status: 'New', id: enquiryId ? String(enquiryId) : 'N/A',
+          experiment_key: attribution.experiment_key,
+          experiment_variant: attribution.experiment_variant,
+          utm_source: attribution.utm_source,
+          utm_medium: attribution.utm_medium,
+          utm_campaign: attribution.utm_campaign,
+          utm_content: attribution.utm_content
         })
       });
       if (n8nRes.ok) sheetsSaved = true;
@@ -193,7 +224,8 @@ async function handleSubmit(req, res) {
   const enquiryTypeLabels = {
     general: 'General Question', booking: 'Booking Enquiry',
     'pass-guarantee': 'Test Ready Guarantee', 'bulk-packages': 'Existing Lesson Credit',
-    availability: 'Check Availability', 'join-team': 'Instructor Application'
+    availability: 'Check Availability', 'join-team': 'Instructor Application',
+    'free-consultation': 'Free Learner Driver Consultation'
   };
   const formattedType = enquiryTypeLabels[enquiryType] || enquiryType;
   const toEmail       = process.env.STAFF_EMAIL || 'fraser@coachcarter.uk';
@@ -201,6 +233,16 @@ async function handleSubmit(req, res) {
   const safeMailTo = safeEmail(email);
   const safeTel    = safePhone(phone);
   const messageHtml = message ? esc(message).replace(/\n/g, '<br>') : '';
+  const attributionHtml = attribution.experiment_key ? `
+        <div style="margin-bottom:20px">
+          <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Experiment &amp; attribution</label>
+          <div style="line-height:1.6">
+            ${esc(attribution.experiment_key)} · Variant ${esc(attribution.experiment_variant)}<br>
+            Source: ${esc(attribution.utm_source || 'direct')}<br>
+            Campaign: ${esc(attribution.utm_campaign || '—')}<br>
+            Ad content: ${esc(attribution.utm_content || '—')}
+          </div>
+        </div>` : '';
 
   const emailHtml = `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:40px 20px;color:#272727">
@@ -230,6 +272,7 @@ async function handleSubmit(req, res) {
           <label style="display:block;font-size:12px;text-transform:uppercase;color:#797879;font-weight:700;margin-bottom:4px">Message</label>
           <div style="line-height:1.6;white-space:pre-wrap">${messageHtml}</div>
         </div>` : ''}
+        ${attributionHtml}
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid #e0e0e0;font-size:12px;color:#797879">
           <strong>Marketing Consent:</strong> ${marketing ? 'Yes' : 'No'}<br>
           <strong>Submitted:</strong> ${esc(new Date(submittedAt || Date.now()).toLocaleString('en-GB'))}

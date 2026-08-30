@@ -166,6 +166,7 @@ test.describe('public tenant resolver', () => {
 test.describe('tenant resolver wiring', () => {
   const instructorsJs = fs.readFileSync(path.join(__dirname, '..', 'api', 'instructors.js'), 'utf8');
   const slotsJs = fs.readFileSync(path.join(__dirname, '..', 'api', 'slots.js'), 'utf8');
+  const enquiriesJs = fs.readFileSync(path.join(__dirname, '..', 'api', 'enquiries.js'), 'utf8');
   const migrationSql = fs.readFileSync(path.join(__dirname, '..', 'db', 'migration.sql'), 'utf8');
 
   test('public instructor list uses resolver instead of silent school_id default', () => {
@@ -197,6 +198,15 @@ test.describe('tenant resolver wiring', () => {
     expect(body).not.toContain('parseInt(school_id) || 1');
     expect(body).not.toContain('parseInt(req.query.school_id) || 1');
     expect(body).toContain('WHERE school_id = ${schoolId}');
+  });
+
+  test('public enquiry submission derives tenant scope instead of trusting the request body', () => {
+    const body = extractAsyncFunction(enquiriesJs, 'handleSubmit');
+    expect(enquiriesJs).toContain("require('./_tenant')");
+    expect(body).toContain('resolveSchoolFromRequest(req, { sql })');
+    expect(body).not.toContain('req.body.school_id');
+    expect(body).not.toContain('parseInt(req.body.school_id)');
+    expect(body).toContain('const schoolId = tenant.schoolId');
   });
 
   test('migration adds primary_host and second-school insert gate', () => {

@@ -6,22 +6,79 @@
   var PH_HOST = 'https://eu.i.posthog.com';
   var loaded = false;
 
+  function isFreeConsultationPage() {
+    return /^\/free-consultation(?:\.html)?\/?$/.test(window.location.pathname);
+  }
+
+  function minimiseConsultationEvent(event) {
+    var allowedEvents = [
+      'free_consultation_page_viewed',
+      'free_consultation_cta_clicked',
+      'free_consultation_form_started',
+      'free_consultation_requested',
+      'free_consultation_submission_error'
+    ];
+    if (!event || allowedEvents.indexOf(event.event) === -1) return null;
+
+    var allowedProperties = [
+      'experiment_key', 'experiment_variant', 'experiment_status',
+      'experiment_eligible', 'experiment_assignment_source',
+      'utm_source', 'utm_medium', 'utm_campaign', 'utm_content',
+      '$feature/free-consultation-v1', 'label', 'location',
+      'error_category', 'http_status',
+      '$lib', '$lib_version', '$device_id', '$session_id', 'distinct_id',
+      '$anon_distinct_id', '$process_person_profile', '$geoip_disable',
+      '$device_type', '$browser', '$browser_version', '$os', '$os_version',
+      '$screen_height', '$screen_width', '$viewport_height', '$viewport_width',
+      '$insert_id', '$time', '$session_timeout', '$window_id'
+    ];
+    var minimised = {};
+    Object.keys(event.properties || {}).forEach(function (key) {
+      if (allowedProperties.indexOf(key) !== -1) minimised[key] = event.properties[key];
+    });
+    event.properties = minimised;
+    delete event.$set;
+    delete event.$set_once;
+    return event;
+  }
+
+  function postHogConfig() {
+    var config = {
+      api_host: PH_HOST,
+      person_profiles: 'identified_only'
+    };
+
+    if (isFreeConsultationPage()) {
+      config.autocapture = false;
+      config.capture_pageview = false;
+      config.capture_pageleave = false;
+      config.capture_dead_clicks = false;
+      config.capture_heatmaps = false;
+      config.capture_performance = false;
+      config.disable_session_recording = true;
+      config.disable_surveys = true;
+      config.person_profiles = 'never';
+      config.before_send = minimiseConsultationEvent;
+    }
+
+    return config;
+  }
+
   function loadPostHog() {
     if (loaded) return;
     loaded = true;
 
     !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageviewId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
 
-    posthog.init(PH_KEY, {
-      api_host: PH_HOST,
-      person_profiles: 'identified_only'
-    });
+    posthog.init(PH_KEY, postHogConfig());
 
-    /* Load custom event tracking */
-    var s = document.createElement('script');
-    s.src = '/posthog-tracking.js';
-    s.defer = true;
-    document.head.appendChild(s);
+    /* The consultation page sends its own deliberately minimised funnel events. */
+    if (!isFreeConsultationPage()) {
+      var s = document.createElement('script');
+      s.src = '/posthog-tracking.js';
+      s.defer = true;
+      document.head.appendChild(s);
+    }
   }
 
   function disablePostHog() {
