@@ -197,6 +197,28 @@
     .category-sporadic { background: var(--amber-lt); color: var(--amber); }
     .category-inactive { background: var(--surface); color: var(--muted); }
     .category-passed { background: var(--blue-lt); color: var(--blue); }
+    .category-archived { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+
+    .archive-filter-row {
+      display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 14px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    }
+    .archive-filter-btn {
+      padding: 7px 14px; border: 0; border-radius: 7px; background: transparent;
+      color: var(--muted); font-family: var(--font-body); font-size: 0.8rem;
+      font-weight: 700; cursor: pointer;
+    }
+    .archive-filter-btn.active { background: var(--white); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .btn-detail-offer, .btn-archive-learner {
+      padding: 8px 16px; border-radius: 8px; font-family: var(--font-body);
+      font-weight: 700; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-detail-offer { border: 1.5px solid var(--accent); background: var(--accent-lt); color: var(--accent); }
+    .btn-archive-learner { border: 1px solid var(--border); background: var(--white); color: var(--muted); }
+    .btn-archive-learner:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-archive-learner.restore { border-color: var(--accent); background: var(--accent); color: #fff; }
+    .btn-archive-learner:disabled { opacity: 0.55; cursor: wait; }
 
     /* ── Learner notes preview ── */
     .learner-notes-preview { font-size: 0.78rem; color: var(--muted); font-style: italic; margin-top: 4px; }
@@ -258,6 +280,11 @@
     <div class="page-header">
       <h1>My Learners</h1>
       <span id="learner-count" style="font-size:0.85rem;color:var(--muted);"></span>
+    </div>
+
+    <div class="archive-filter-row" aria-label="Learner archive view">
+      <button class="archive-filter-btn active" data-archive-filter="active">Active learners</button>
+      <button class="archive-filter-btn" data-archive-filter="archived">Archived</button>
     </div>
 
     <div class="sort-row">

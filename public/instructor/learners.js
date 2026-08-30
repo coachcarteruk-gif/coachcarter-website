@@ -5,6 +5,7 @@ let instructor;
 let allLearners = [];
 let currentSort = 'recent';
 let currentCategoryFilter = 'all';
+let currentArchiveFilter = 'active';
 let currentDetailLearnerId = null;
 
 const LEARNER_CATEGORY_META = {
@@ -109,6 +110,14 @@ function setCategoryFilter(mode) {
   renderLearners();
 }
 
+function setArchiveFilter(mode) {
+  currentArchiveFilter = mode === 'archived' ? 'archived' : 'active';
+  document.querySelectorAll('[data-archive-filter]').forEach(b => b.classList.remove('active'));
+  const active = document.querySelector('[data-archive-filter="' + currentArchiveFilter + '"]');
+  if (active) active.classList.add('active');
+  renderLearners();
+}
+
 function sortLearners(list) {
   const sorted = [...list];
   if (currentSort === 'lessons') {
@@ -124,7 +133,7 @@ function sortLearners(list) {
 // ── Load learners ──
 async function loadLearners() {
   try {
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=my-learners');
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=my-learners&include_archived=true');
     const data = await res.json();
     if (res.status === 401) { signOut(); return; }
     if (!res.ok) throw new Error(data.error);
@@ -141,6 +150,7 @@ function renderLearners() {
   const search = (document.getElementById('learner-search')?.value || '').toLowerCase();
 
   let filtered = allLearners;
+  filtered = filtered.filter(l => currentArchiveFilter === 'archived' ? !!l.archived_at : !l.archived_at);
   if (search) {
     filtered = filtered.filter(l =>
       (l.name || '').toLowerCase().includes(search) ||
@@ -155,14 +165,14 @@ function renderLearners() {
   filtered = sortLearners(filtered);
 
   document.getElementById('learner-count').textContent =
-    filtered.length + (filtered.length === 1 ? ' learner' : ' learners');
+    filtered.length + (filtered.length === 1 ? (currentArchiveFilter === 'archived' ? ' archived learner' : ' learner') : (currentArchiveFilter === 'archived' ? ' archived learners' : ' learners'));
 
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state fade-in">
         <div class="empty-state-icon">&#x1F465;</div>
-        <h2>${search ? 'No matching learners' : 'No learners yet'}</h2>
-        <p>${search ? 'Try a different search term.' : 'Learners assigned to you or booked with you will appear here.'}</p>
+        <h2>${search ? 'No matching learners' : (currentArchiveFilter === 'archived' ? 'No archived learners' : 'No learners yet')}</h2>
+        <p>${search ? 'Try a different search term.' : (currentArchiveFilter === 'archived' ? 'Learners you archive will stay safely stored here.' : 'Learners assigned to you or booked with you will appear here.')}</p>
       </div>`;
     return;
   }
@@ -199,6 +209,9 @@ function renderLearners() {
     const categoryBadge = category
       ? '<span class="learner-category-badge ' + category.className + '">' + category.label + '</span>'
       : '';
+    const archivedBadge = l.archived_at
+      ? '<span class="learner-category-badge category-archived">Archived</span>'
+      : '';
 
     // Notes preview
     let notesPreview = '';
@@ -216,7 +229,7 @@ function renderLearners() {
     return `
       <div class="learner-card fade-in" style="cursor:pointer" data-action="open-learner" data-learner-id="${l.id}">
         <div class="learner-card-top">
-          <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}${categoryBadge}${testBadge}${rateBadge}</span>
+          <span class="learner-name">${esc(l.name || 'Unnamed')}${l.prefer_contact_before ? '<span class="contact-pref-badge">Contact first</span>' : ''}${categoryBadge}${archivedBadge}${testBadge}${rateBadge}</span>
           <span class="tier-badge tier-${tier}">${tierLabels[tier] || 'Tier ' + tier}</span>
         </div>
         <div class="learner-stats">
@@ -809,7 +822,12 @@ function renderDetail(data, notesData, mockData) {
   html += '<div class="detail-header">';
   html += '<div class="detail-name">' + esc(l.name || 'Unnamed') + ' <span class="tier-badge tier-' + tier + '">' + (tierLabels[tier] || 'Tier ' + tier) + '</span></div>';
   if (info.length) html += '<div class="detail-info">' + info.join(' &middot; ') + '</div>';
-  html += '<div style="margin-top:10px"><button data-action="offer-lesson" data-email="' + esc(l.email || '') + '" data-name="' + esc(l.name || '') + '" style="padding:8px 16px;border:1.5px solid var(--accent);background:var(--accent-lt);color:var(--accent);border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;transition:all 0.15s">Offer a lesson</button></div>';
+  html += '<div class="detail-actions">';
+  if (!notesData.archived_at) {
+    html += '<button data-action="offer-lesson" data-email="' + esc(l.email || '') + '" data-name="' + esc(l.name || '') + '" class="btn-detail-offer">Offer a lesson</button>';
+  }
+  html += '<button data-action="set-learner-archived" data-archived="' + (notesData.archived_at ? 'false' : 'true') + '" data-name="' + esc(l.name || 'this learner') + '" class="btn-archive-learner' + (notesData.archived_at ? ' restore' : '') + '">' + (notesData.archived_at ? 'Restore learner' : 'Archive learner') + '</button>';
+  html += '</div>';
   html += '</div>';
 
   // Stats cards
@@ -988,6 +1006,42 @@ async function saveLearnerNotes() {
   }
 }
 
+async function setLearnerArchived(archived, learnerName) {
+  if (!currentDetailLearnerId) return;
+  if (archived && !window.confirm('Archive ' + learnerName + '? Their profile and lesson history will be kept, but they will be removed from your active lists and learner pickers.')) {
+    return;
+  }
+
+  const btn = document.querySelector('[data-action="set-learner-archived"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = archived ? 'Archiving…' : 'Restoring…';
+  }
+
+  try {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=set-learner-archived', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ learner_id: currentDetailLearnerId, archived: archived })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    const cached = allLearners.find(l => l.id === currentDetailLearnerId);
+    if (cached) cached.archived_at = data.archived_at || null;
+
+    showList();
+    setArchiveFilter(archived ? 'archived' : 'active');
+    showToast(archived ? 'Learner archived' : 'Learner restored');
+  } catch (err) {
+    showToast(err.message || (archived ? 'Failed to archive learner' : 'Failed to restore learner'), 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = archived ? 'Archive learner' : 'Restore learner';
+    }
+  }
+}
+
 function showList() {
   document.getElementById('detail-view').classList.remove('show');
   document.getElementById('list-view').style.display = 'block';
@@ -1059,6 +1113,7 @@ document.addEventListener('click', function (e) {
   if (a === 'load-learners') loadLearners();
   else if (a === 'open-learner') openLearner(parseInt(t.dataset.learnerId, 10));
   else if (a === 'offer-lesson') offerLessonToLearner(t.dataset.email, t.dataset.name);
+  else if (a === 'set-learner-archived') setLearnerArchived(t.dataset.archived === 'true', t.dataset.name || 'this learner');
 });
 (function wire() {
   document.querySelectorAll('[data-sort]').forEach(function (btn) {
@@ -1066,6 +1121,9 @@ document.addEventListener('click', function (e) {
   });
   document.querySelectorAll('[data-category-filter]').forEach(function (btn) {
     btn.addEventListener('click', function () { setCategoryFilter(btn.dataset.categoryFilter); });
+  });
+  document.querySelectorAll('[data-archive-filter]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setArchiveFilter(btn.dataset.archiveFilter); });
   });
   var search = document.getElementById('learner-search');
   if (search) search.addEventListener('input', renderLearners);
