@@ -386,6 +386,17 @@ test.describe('free consultation advertising landing page', () => {
   });
 
   for (const variant of ['A', 'B']) {
+    test(`keeps the hero photo unobstructed and aligned in Variant ${variant}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(`/free-consultation?cc_variant=${variant}`);
+
+      await expect(page.locator('.photo-frame')).toBeVisible();
+      await expect(page.locator('.result-card')).toHaveCount(0);
+      const visualBox = await page.locator('.hero-visual').boundingBox();
+      const photoBox = await page.locator('.photo-frame').boundingBox();
+      expect(photoBox).toEqual(visualBox);
+    });
+
     test(`has no horizontal overflow on a mobile viewport in Variant ${variant}`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`/free-consultation?cc_variant=${variant}`);
@@ -403,7 +414,7 @@ test.describe('free consultation advertising landing page', () => {
       await page.goto(`/free-consultation?cc_variant=${variant}`);
 
       await expect(page.locator('.photo-frame')).toBeHidden();
-      await expect(page.locator('.result-card')).toBeVisible();
+      await expect(page.locator('.result-card')).toHaveCount(0);
       await expect(page.locator('.closing .brand-signoff')).toBeVisible();
       await expect(page.locator('.closing')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
       await expect(page.locator('.closing .brand-signoff')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
