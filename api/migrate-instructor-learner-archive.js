@@ -16,7 +16,14 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const sql = neon(process.env.POSTGRES_URL);
+    // Production's pooled POSTGRES_URL intentionally uses a restricted runtime
+    // role and must never gain schema-owner privileges. Migrations use the
+    // separately configured non-pooling owner connection.
+    const ownerConnectionString = process.env.POSTGRES_URL_NON_POOLING;
+    if (!ownerConnectionString) {
+      return res.status(500).json({ error: 'Owner database connection is not configured' });
+    }
+    const sql = neon(ownerConnectionString);
 
     await sql`
       ALTER TABLE instructor_learner_notes
