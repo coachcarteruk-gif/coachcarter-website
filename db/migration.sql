@@ -1112,12 +1112,6 @@ ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET NOT NULL;
 ALTER TABLE instructor_learner_notes ALTER COLUMN school_id SET DEFAULT 1;
 ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS custom_hourly_rate_pence INTEGER;
 ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS learner_category TEXT;
--- Instructor-specific list archive. Unlike learner_users.archived_at, this is
--- not a GDPR-retention state and never deletes the learner or their history.
-ALTER TABLE instructor_learner_notes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
-CREATE INDEX IF NOT EXISTS idx_instructor_learner_notes_archived
-  ON instructor_learner_notes(instructor_id, school_id, learner_id)
-  WHERE archived_at IS NOT NULL;
 DO $$
 BEGIN
   IF NOT EXISTS (
