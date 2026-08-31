@@ -14,6 +14,13 @@ test.describe('targeted instructor learner archive migration', () => {
     expect(source).toContain('safeEqual(secret, process.env.MIGRATION_SECRET)');
   });
 
+  test('uses only the configured owner connection for schema changes', () => {
+    expect(source).toContain('process.env.POSTGRES_URL_NON_POOLING');
+    expect(source).toContain("Owner database connection is not configured");
+    expect(source).toContain('const sql = neon(ownerConnectionString)');
+    expect(source).not.toContain('neon(process.env.POSTGRES_URL)');
+  });
+
   test('only adds the archive column and its partial index idempotently', () => {
     expect(source).toContain('ALTER TABLE instructor_learner_notes');
     expect(source).toContain('ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ');
