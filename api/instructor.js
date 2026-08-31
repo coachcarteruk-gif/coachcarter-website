@@ -51,7 +51,7 @@ const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
 const { isLessonTypeOffered, areOfferedLessonTypeSlugsValid } = require('./_lesson-type-helpers');
-const { logAudit } = require('./_audit');
+const { logAudit, logAuditRequired } = require('./_audit');
 const { randomUUID } = require('crypto');
 const {
   dateOnly: requestDateOnly,
@@ -3537,7 +3537,7 @@ async function handleMyLearners(req, res) {
         iln.test_date::text AS test_date,
         iln.custom_hourly_rate_pence,
         iln.learner_category,
-        iln.archived_at::text AS archived_at
+        archive_state.archived_at
       FROM learner_users lu
       LEFT JOIN lesson_bookings lb
         ON lb.learner_id = lu.id
@@ -3551,16 +3551,30 @@ async function handleMyLearners(req, res) {
         ON lcb.learner_id = lu.id
        AND lcb.instructor_id = ${instructor.id}
        AND lcb.school_id = ${schoolId}
+      LEFT JOIN LATERAL (
+        SELECT CASE
+          WHEN al.action = 'instructor.learner_archived' THEN al.created_at::text
+          ELSE NULL
+        END AS archived_at
+        FROM audit_log al
+        WHERE al.school_id = ${schoolId}
+          AND al.target_type = 'learner_user'
+          AND al.target_id = lu.id
+          AND al.action IN ('instructor.learner_archived', 'instructor.learner_restored')
+          AND al.details->>'instructor_id' = ${String(instructor.id)}
+        ORDER BY al.created_at DESC, al.id DESC
+        LIMIT 1
+      ) archive_state ON TRUE
       WHERE lu.school_id = ${schoolId}
         AND lu.archived_at IS NULL
-        AND (${includeArchived} OR iln.archived_at IS NULL)
+        AND (${includeArchived} OR archive_state.archived_at IS NULL)
         AND (
           lb.id IS NOT NULL
           OR iln.id IS NOT NULL
           OR lu.primary_instructor_id = ${instructor.id}
           OR lcb.id IS NOT NULL
         )
-      GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category, iln.archived_at
+      GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category, archive_state.archived_at
       ORDER BY MAX(lb.scheduled_date) DESC NULLS LAST, lu.name ASC
     `;
 
@@ -3644,14 +3658,17 @@ async function handleSchoolLearners(req, res) {
        AND lcb.school_id = ${schoolId}
       WHERE lu.school_id = ${schoolId}
         AND lu.archived_at IS NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM instructor_learner_notes archived_note
-          WHERE archived_note.learner_id = lu.id
-            AND archived_note.instructor_id = ${instructor.id}
-            AND archived_note.school_id = ${schoolId}
-            AND archived_note.archived_at IS NOT NULL
-        )
+        AND COALESCE((
+          SELECT al.action
+          FROM audit_log al
+          WHERE al.school_id = ${schoolId}
+            AND al.target_type = 'learner_user'
+            AND al.target_id = lu.id
+            AND al.action IN ('instructor.learner_archived', 'instructor.learner_restored')
+            AND al.details->>'instructor_id' = ${String(instructor.id)}
+          ORDER BY al.created_at DESC, al.id DESC
+          LIMIT 1
+        ), '') <> 'instructor.learner_archived'
       ORDER BY lu.name ASC
     `;
 
@@ -3771,19 +3788,32 @@ async function handleLearnerNotes(req, res) {
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
     const [row] = await sql`
-      SELECT notes, test_date::text, custom_hourly_rate_pence, learner_category,
-             archived_at::text AS archived_at
+      SELECT notes, test_date::text, custom_hourly_rate_pence, learner_category
       FROM instructor_learner_notes
       WHERE instructor_id = ${instructor.id}
         AND learner_id = ${learner_id}
         AND school_id = ${schoolId}
+    `;
+    const [archiveState] = await sql`
+      SELECT CASE
+        WHEN action = 'instructor.learner_archived' THEN created_at::text
+        ELSE NULL
+      END AS archived_at
+      FROM audit_log
+      WHERE school_id = ${schoolId}
+        AND target_type = 'learner_user'
+        AND target_id = ${learner_id}
+        AND action IN ('instructor.learner_archived', 'instructor.learner_restored')
+        AND details->>'instructor_id' = ${String(instructor.id)}
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
     `;
     return res.json({
       notes: row?.notes || '',
       test_date: row?.test_date || null,
       custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null,
       learner_category: row?.learner_category || null,
-      archived_at: row?.archived_at || null
+      archived_at: archiveState?.archived_at || null
     });
   } catch (err) {
     console.error('learner-notes error:', err);
@@ -3870,28 +3900,8 @@ async function handleSetLearnerArchived(req, res) {
     `;
     if (!learner) return res.status(404).json({ error: 'Learner not found' });
 
-    let row = null;
-    if (archived) {
-      [row] = await sql`
-        INSERT INTO instructor_learner_notes
-          (instructor_id, learner_id, school_id, archived_at, updated_at)
-        VALUES (${instructor.id}, ${learnerId}, ${schoolId}, NOW(), NOW())
-        ON CONFLICT (instructor_id, learner_id)
-        DO UPDATE SET archived_at = NOW(), updated_at = NOW()
-        RETURNING archived_at::text AS archived_at
-      `;
-    } else {
-      [row] = await sql`
-        UPDATE instructor_learner_notes
-        SET archived_at = NULL, updated_at = NOW()
-        WHERE instructor_id = ${instructor.id}
-          AND learner_id = ${learnerId}
-          AND school_id = ${schoolId}
-        RETURNING archived_at::text AS archived_at
-      `;
-    }
-
-    await logAudit(sql, {
+    const archivedAt = archived ? new Date().toISOString() : null;
+    await logAuditRequired(sql, {
       adminId: null,
       adminEmail: instructor.email || null,
       action: archived ? 'instructor.learner_archived' : 'instructor.learner_restored',
@@ -3908,7 +3918,7 @@ async function handleSetLearnerArchived(req, res) {
     return res.json({
       ok: true,
       learner_id: learnerId,
-      archived_at: row?.archived_at || null,
+      archived_at: archivedAt,
     });
   } catch (err) {
     console.error('set-learner-archived error:', err);
@@ -5307,14 +5317,17 @@ async function handlePreviewBroadcastAudience(req, res) {
       WHERE la.active = true
         AND la.school_id = ${schoolId}
         AND lu.school_id = ${schoolId}
-        AND NOT EXISTS (
-          SELECT 1
-          FROM instructor_learner_notes archived_note
-          WHERE archived_note.learner_id = lu.id
-            AND archived_note.instructor_id = ${instructor.id}
-            AND archived_note.school_id = ${schoolId}
-            AND archived_note.archived_at IS NOT NULL
-        )
+        AND COALESCE((
+          SELECT al.action
+          FROM audit_log al
+          WHERE al.school_id = ${schoolId}
+            AND al.target_type = 'learner_user'
+            AND al.target_id = lu.id
+            AND al.action IN ('instructor.learner_archived', 'instructor.learner_restored')
+            AND al.details->>'instructor_id' = ${String(instructor.id)}
+          ORDER BY al.created_at DESC, al.id DESC
+          LIMIT 1
+        ), '') <> 'instructor.learner_archived'
         AND la.day_of_week = ${dayOfWeek}
         AND la.start_time <= ${start_time}::time
         AND la.end_time   >= ${end_time}::time
@@ -5461,14 +5474,17 @@ async function handleCreateBroadcastOffer(req, res) {
         AND lu.school_id = ${schoolId}
         AND la.school_id = ${schoolId}
         AND la.active = true
-        AND NOT EXISTS (
-          SELECT 1
-          FROM instructor_learner_notes archived_note
-          WHERE archived_note.learner_id = lu.id
-            AND archived_note.instructor_id = ${instructor.id}
-            AND archived_note.school_id = ${schoolId}
-            AND archived_note.archived_at IS NOT NULL
-        )
+        AND COALESCE((
+          SELECT al.action
+          FROM audit_log al
+          WHERE al.school_id = ${schoolId}
+            AND al.target_type = 'learner_user'
+            AND al.target_id = lu.id
+            AND al.action IN ('instructor.learner_archived', 'instructor.learner_restored')
+            AND al.details->>'instructor_id' = ${String(instructor.id)}
+          ORDER BY al.created_at DESC, al.id DESC
+          LIMIT 1
+        ), '') <> 'instructor.learner_archived'
         AND la.day_of_week = ${dayOfWeek}
         AND la.start_time <= ${start_time}::time
         AND la.end_time   >= ${end_time}::time
