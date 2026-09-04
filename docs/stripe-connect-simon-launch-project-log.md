@@ -5736,3 +5736,35 @@ not be retried.
   slots, exact ledger reconciliation and conflict-free creation.
 - Simon remains paused. This incident did not authorize onboarding, unpausing,
   payout approval, payout execution, transfer, A8/A9 or payout-v2 cutover.
+
+## 4 September 2026 - exact manual-settlement handoff boundary prepared
+
+- The owner confirmed Simon was paid manually only up to Friday 4 September
+  2026 at 12:00 Europe/London. The first system payout week must therefore use
+  the half-open interval `[2026-09-04 12:00, 2026-09-11 12:00)`, classifying a
+  lesson by its Europe/London end instant. Exact equality at the opening noon
+  is included; exact equality at the following Friday noon is excluded.
+- The immutable original interim-v1 payout start date is retained. Additive,
+  inert migration 057 creates a separate one-row-per-instructor append-only
+  manual-settlement boundary with owner, reason and evidence reference. It
+  seeds no data and makes no Stripe request.
+- The dedicated superadmin mutation requires its own exact confirmation,
+  Friday dates exactly seven local calendar days apart, the existing interim-v1
+  control, and `payouts_paused=true`. It refuses a different replay, any prior
+  interim-v1 approval, or an overlapping existing payout claim. Its transaction
+  records only the boundary and required audit row.
+- Preview classification includes the exact booking end instant and boundary
+  in the canonical fingerprint. Rows before the opening instant are marked
+  `MANUALLY_SETTLED_BEFORE_CUTOFF`; rows at or after the closing instant are
+  marked `AFTER_FIRST_SYSTEM_PERIOD`. A missing boundary blocks approval.
+- This implementation work did not send an onboarding invitation, generate a
+  Production payout preview, approve or create a payout, create a transfer, or
+  unpause Simon. Recording the Production boundary remains a separate explicit
+  owner operation after deployment and requires the manual-payment evidence
+  reference.
+- The schema was rehearsed against a temporary branch of the protected
+  Production parent. Catalogue verification found the table, both explicit
+  indexes, all foreign-key/uniqueness/check constraints and the append-only
+  trigger; seeded boundary rows were exactly `0`. Europe/London noon resolved
+  to `2026-09-04T11:00:00.000Z` and `2026-09-11T11:00:00.000Z`. Applying the
+  tested schema to the protected parent remains pending explicit owner approval.

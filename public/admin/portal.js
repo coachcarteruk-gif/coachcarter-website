@@ -3383,6 +3383,12 @@ function renderInterimV1Preview(preview, schoolId) {
   const blockerCopy = preview.blockers.length ? preview.blockers.join(', ').replaceAll('_', ' ') : 'None';
   const approveButton = preview.ready_for_approval
     ? `<button class="btn btn-sm" data-action="approve-interim-v1" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Approve this exact preview</button>` : '';
+  const boundary = preview.manual_settlement_boundary;
+  const boundaryCopy = boundary
+    ? `System window: ${esc(new Date(boundary.settled_before_at).toLocaleString('en-GB', { timeZone: boundary.time_zone }))} (inclusive) to ${esc(new Date(boundary.first_system_period_end_at).toLocaleString('en-GB', { timeZone: boundary.time_zone }))} (exclusive), ${esc(boundary.time_zone)}`
+    : 'No manual-settlement boundary has been recorded.';
+  const boundaryButton = boundary ? ''
+    : `<button class="btn btn-sm" data-action="record-interim-v1-manual-boundary" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Record manual-payment handoff</button>`;
   target.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">
       <div><strong>${esc(preview.instructor.name)}</strong><br><span style="color:var(--muted);">Start ${esc(preview.instructor.payouts_start_date)}</span></div>
@@ -3391,10 +3397,11 @@ function renderInterimV1Preview(preview, schoolId) {
       <div>Configured weekly fee<br><strong>${preview.totals.weekly_franchise_fee_pence == null ? 'Commission model' : fmtPence(preview.totals.weekly_franchise_fee_pence)}</strong></div>
       <div>Proposed transfer<br><strong>${fmtPence(preview.totals.proposed_transfer_pence)}</strong></div>
     </div>
+    <p><strong>Manual-payment handoff:</strong> ${boundaryCopy}</p>
     <p><strong>Blockers:</strong> ${esc(blockerCopy)} · <strong>Fingerprint:</strong> <code>${esc(preview.preview_fingerprint)}</code></p>
     <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Included booking</th><th>Date</th><th>Learner</th><th>PaymentIntent</th><th>Charge</th><th>Gross</th><th>Fee</th></tr></thead><tbody>${included || '<tr><td colspan="7">No included lessons</td></tr>'}</tbody></table></div>
     <div style="overflow-x:auto;margin-top:10px"><table class="data-table"><thead><tr><th>Excluded booking</th><th>Date</th><th colspan="4">Reason</th></tr></thead><tbody>${excluded || '<tr><td colspan="6">No exclusions</td></tr>'}</tbody></table></div>
-    <div style="display:flex;gap:8px;margin-top:12px;">${approveButton}<span id="interim-v1-process-slot"></span></div>`;
+    <div style="display:flex;gap:8px;margin-top:12px;">${boundaryButton}${approveButton}<span id="interim-v1-process-slot"></span></div>`;
 }
 
 async function reviewInterimV1(instructorId, schoolId) {
@@ -3405,6 +3412,35 @@ async function reviewInterimV1(instructorId, schoolId) {
     currentInterimV1Preview = { ...data.preview, school_id: schoolId };
     currentInterimV1Approval = null;
     renderInterimV1Preview(data.preview, schoolId);
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function recordInterimV1ManualBoundary(instructorId, schoolId) {
+  const settledBeforeLocalDate = prompt('Friday date already paid manually through 12:00 (YYYY-MM-DD). Lessons ending exactly at 12:00 will belong to the new system week.');
+  if (!settledBeforeLocalDate) return;
+  const firstSystemPeriodEndLocalDate = prompt('Following Friday payout-week end at 12:00 (YYYY-MM-DD). This instant is excluded from the first week.');
+  if (!firstSystemPeriodEndLocalDate) return;
+  const evidenceReference = prompt('Enter the bank payment or other manual-payment evidence reference.');
+  if (!evidenceReference) return;
+  const reason = prompt('Enter the audit reason for this handoff boundary.', 'Manual payment completed through the handoff boundary');
+  if (!reason) return;
+  if (!confirm(`Record an immutable Europe/London window from ${settledBeforeLocalDate} 12:00 inclusive to ${firstSystemPeriodEndLocalDate} 12:00 exclusive? This will not invite, approve or pay anyone.`)) return;
+  try {
+    const res = await fetchAdmin('/api/admin?action=interim-v1-record-manual-settlement-boundary', {
+      method: 'POST',
+      body: JSON.stringify({
+        school_id: schoolId,
+        instructor_id: instructorId,
+        settled_before_local_date: settledBeforeLocalDate,
+        first_system_period_end_local_date: firstSystemPeriodEndLocalDate,
+        reason,
+        evidence_reference: evidenceReference,
+        operator_go: 'RECORD_INTERIM_V1_MANUAL_SETTLEMENT_BOUNDARY_CONFIRMED'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.code || 'Manual-payment handoff failed');
+    toast(data.created ? 'Manual-payment handoff recorded; payouts remain paused' : 'That exact handoff was already recorded; payouts remain paused', 'success');
   } catch (error) { toast(error.message, 'error'); }
 }
 
@@ -4665,6 +4701,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'prepare-interim-v1') prepareInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'send-interim-v1-invite') sendInterimV1Invite(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'review-interim-v1') reviewInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'record-interim-v1-manual-boundary') recordInterimV1ManualBoundary(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'approve-interim-v1') approveInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'process-interim-v1') processInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'filter-bookings') filterBookings(t, t.dataset.status);

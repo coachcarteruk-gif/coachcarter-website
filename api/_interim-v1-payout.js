@@ -9,14 +9,16 @@ const { classifyStripeError } = require('./_stripe-clients');
 
 const ACTIONS = new Set([
   'interim-v1-payout-preview',
+  'interim-v1-record-manual-settlement-boundary',
   'interim-v1-approve-first-run',
   'interim-v1-process-approved-payout',
   'interim-v1-reconcile-transfer',
 ]);
+const MANUAL_BOUNDARY_CONFIRMATION = 'RECORD_INTERIM_V1_MANUAL_SETTLEMENT_BOUNDARY_CONFIRMED';
 const APPROVE_CONFIRMATION = 'APPROVE_INTERIM_V1_FIRST_RUN_CONFIRMED';
 const PROCESS_CONFIRMATION = 'PROCESS_INTERIM_V1_APPROVED_PAYOUT_CONFIRMED';
 const RECONCILE_CONFIRMATION = 'RECONCILE_INTERIM_V1_TRANSFER_CONFIRMED';
-const PLANNER_VERSION = 'interim-v1-payout/1';
+const PLANNER_VERSION = 'interim-v1-payout/2';
 
 class InterimV1PayoutError extends Error {
   constructor(status, code, message) {
@@ -44,6 +46,39 @@ function dateOnly(value) {
   return String(value || '').slice(0, 10);
 }
 
+function instantIso(value) {
+  if (!value) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function validateManualBoundaryDates(settledBeforeLocalDate, firstSystemPeriodEndLocalDate) {
+  const parse = (value) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const utc = new Date(Date.UTC(year, month - 1, day));
+    if (utc.getUTCFullYear() !== year || utc.getUTCMonth() !== month - 1 || utc.getUTCDate() !== day) return null;
+    return utc;
+  };
+  const settled = parse(settledBeforeLocalDate);
+  const periodEnd = parse(firstSystemPeriodEndLocalDate);
+  if (!settled || !periodEnd) return { ok: false, code: 'INVALID_MANUAL_SETTLEMENT_DATES' };
+  if (settled.getUTCDay() !== 5 || periodEnd.getUTCDay() !== 5) {
+    return { ok: false, code: 'MANUAL_SETTLEMENT_BOUNDARIES_MUST_BE_FRIDAYS' };
+  }
+  if (periodEnd.getTime() - settled.getTime() !== 7 * 24 * 60 * 60 * 1000) {
+    return { ok: false, code: 'MANUAL_SETTLEMENT_PERIOD_MUST_BE_SEVEN_DAYS' };
+  }
+  return {
+    ok: true,
+    settled_before_local_date: dateOnly(settledBeforeLocalDate),
+    first_system_period_end_local_date: dateOnly(firstSystemPeriodEndLocalDate),
+  };
+}
+
 function exactId(value, prefix) {
   return typeof value === 'string' && value.startsWith(`${prefix}_`) ? value : null;
 }
@@ -58,6 +93,13 @@ function classifyFundingRow(row, now = new Date()) {
   if (row.is_test_account === true) return reject('TEST_ACCOUNT');
   if (!startDate) return reject('START_DATE_MISSING');
   if (!bookingDate || bookingDate < startDate) return reject('BOOKING_BEFORE_START');
+  const settledBeforeAt = instantIso(row.settled_before_at);
+  const firstSystemPeriodEndAt = instantIso(row.first_system_period_end_at);
+  const bookingEndsAt = instantIso(row.booking_ends_at);
+  if (!settledBeforeAt || !firstSystemPeriodEndAt) return reject('MANUAL_SETTLEMENT_BOUNDARY_MISSING');
+  if (!bookingEndsAt) return reject('BOOKING_END_INSTANT_MISSING');
+  if (bookingEndsAt < settledBeforeAt) return reject('MANUALLY_SETTLED_BEFORE_CUTOFF');
+  if (bookingEndsAt >= firstSystemPeriodEndAt) return reject('AFTER_FIRST_SYSTEM_PERIOD');
   if (!row.evidence_id) {
     if (row.bcs_count === 0) return reject('NO_FUNDING_SOURCE');
     if (row.ct_source !== 'stripe' || row.ct_payment_method !== 'card') return reject('EXTERNAL_OR_CREDIT_SOURCE');
@@ -154,6 +196,7 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
     const identity = {
       booking_id: Number(row.booking_id),
       scheduled_date: dateOnly(row.scheduled_date),
+      booking_ends_at: instantIso(row.booking_ends_at),
       learner_name: row.learner_name || null,
       checkout_session_id: row.stripe_checkout_session_id || null,
       payment_intent_id: row.stripe_payment_intent_id || null,
@@ -173,6 +216,7 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
   if (instructor.stripe_onboarding_complete !== true) blockers.push('CONNECT_ONBOARDING_INCOMPLETE');
   if (instructor.payouts_paused !== true) blockers.push('PAUSE_GUARD_NOT_SET');
   if (!instructor.payouts_start_date) blockers.push('START_DATE_MISSING');
+  if (!instructor.manual_settlement_boundary_id) blockers.push('MANUAL_SETTLEMENT_BOUNDARY_MISSING');
   if (!included.length) blockers.push('NO_ELIGIBLE_LESSONS');
   if (totals.insufficient_week) blockers.push('INSUFFICIENT_WEEK_MANUAL_HANDLING');
   const canonical = {
@@ -180,12 +224,18 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
     school_id: Number(instructor.school_id),
     instructor_id: Number(instructor.id),
     payouts_start_date: dateOnly(instructor.payouts_start_date),
+    manual_settlement_boundary: instructor.manual_settlement_boundary_id ? {
+      settled_before_at: instantIso(instructor.settled_before_at),
+      first_system_period_end_at: instantIso(instructor.first_system_period_end_at),
+      time_zone: instructor.manual_settlement_time_zone,
+    } : null,
     stripe_account_id: instructor.stripe_account_id || null,
     weekly_franchise_fee_pence: totals.weekly_franchise_fee_pence,
     commission_rate: totals.commission_rate,
     included: totals.lines.map((line) => ({
       booking_id: line.booking_id,
       scheduled_date: line.scheduled_date,
+      booking_ends_at: line.booking_ends_at,
       funding_evidence_id: line.funding_evidence_id,
       checkout_session_id: line.checkout_session_id,
       payment_intent_id: line.payment_intent_id,
@@ -207,6 +257,15 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
       stripe_account_id: instructor.stripe_account_id || null,
       stripe_onboarding_complete: instructor.stripe_onboarding_complete === true,
     },
+    manual_settlement_boundary: instructor.manual_settlement_boundary_id ? {
+      id: instructor.manual_settlement_boundary_id,
+      settled_before_at: instantIso(instructor.settled_before_at),
+      first_system_period_end_at: instantIso(instructor.first_system_period_end_at),
+      time_zone: instructor.manual_settlement_time_zone,
+      reason: instructor.manual_settlement_reason,
+      evidence_reference: instructor.manual_settlement_evidence_reference,
+      created_at: instantIso(instructor.manual_settlement_created_at),
+    } : null,
     included: totals.lines,
     excluded,
     totals: {
@@ -226,18 +285,27 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
   const [instructor] = await sql`
     SELECT i.id, i.school_id, i.name, i.commission_rate, i.weekly_franchise_fee_pence,
            i.stripe_account_id, i.stripe_onboarding_complete, i.payouts_paused,
-           i.payouts_start_date, c.id AS control_id
+           i.payouts_start_date, c.id AS control_id,
+           mb.id AS manual_settlement_boundary_id, mb.settled_before_at,
+           mb.first_system_period_end_at, mb.time_zone AS manual_settlement_time_zone,
+           mb.reason AS manual_settlement_reason,
+           mb.evidence_reference AS manual_settlement_evidence_reference,
+           mb.created_at AS manual_settlement_created_at
       FROM instructors i
       LEFT JOIN interim_v1_instructor_controls c
         ON c.school_id = i.school_id AND c.instructor_id = i.id
+      LEFT JOIN interim_v1_manual_settlement_boundaries mb
+        ON mb.school_id = i.school_id AND mb.instructor_id = i.id
      WHERE i.id = ${instructorId} AND i.school_id = ${schoolId}
      LIMIT 1
   `;
   if (!instructor) throw new InterimV1PayoutError(404, 'NOT_FOUND', 'Instructor not found');
   const rows = await sql`
     SELECT lb.id AS booking_id, lb.scheduled_date, lb.status, lu.name AS learner_name,
+           ((lb.scheduled_date + lb.end_time) AT TIME ZONE 'Europe/London') AS booking_ends_at,
            COALESCE(lu.is_test_account, FALSE) AS is_test_account,
-           c.payouts_start_date, e.id AS evidence_id, e.payment_origin,
+           c.payouts_start_date, mb.settled_before_at, mb.first_system_period_end_at,
+           e.id AS evidence_id, e.payment_origin,
            e.provider_livemode, e.stripe_checkout_session_id, e.stripe_payment_intent_id,
            e.stripe_payment_intent_status, e.stripe_charge_id, e.stripe_charge_paid,
            e.stripe_charge_captured, e.stripe_charge_payment_intent_id,
@@ -257,6 +325,8 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
       JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
       JOIN interim_v1_instructor_controls c
         ON c.school_id = lb.school_id AND c.instructor_id = lb.instructor_id
+      LEFT JOIN interim_v1_manual_settlement_boundaries mb
+        ON mb.school_id = lb.school_id AND mb.instructor_id = lb.instructor_id
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS bcs_count, MIN(id) AS only_bcs_id
           FROM booking_credit_sources
@@ -526,6 +596,123 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
       }
       if (req.method !== 'POST') throw new InterimV1PayoutError(405, 'METHOD_NOT_ALLOWED', 'POST required');
 
+      if (action === 'interim-v1-record-manual-settlement-boundary') {
+        if (req.body?.operator_go !== MANUAL_BOUNDARY_CONFIRMATION) {
+          throw new InterimV1PayoutError(400, 'OPERATOR_CONFIRMATION_REQUIRED', `operator_go must equal ${MANUAL_BOUNDARY_CONFIRMATION}`);
+        }
+        const dates = validateManualBoundaryDates(
+          req.body?.settled_before_local_date,
+          req.body?.first_system_period_end_local_date,
+        );
+        if (!dates.ok) throw new InterimV1PayoutError(400, dates.code, 'The boundary must be two valid Fridays exactly seven days apart');
+        const reason = String(req.body?.reason || '').trim();
+        const evidenceReference = String(req.body?.evidence_reference || '').trim();
+        if (!reason || !evidenceReference) {
+          throw new InterimV1PayoutError(400, 'MANUAL_SETTLEMENT_EVIDENCE_REQUIRED', 'A reason and evidence_reference are required');
+        }
+        const result = await runTransaction(async (txSql) => {
+          await txSql`SELECT pg_advisory_xact_lock(${schoolId}, ${instructorId})`;
+          const [inst] = await txSql`
+            SELECT i.id, i.school_id, i.payouts_paused, i.payouts_start_date,
+                   c.id AS control_id, mb.id AS boundary_id, mb.settled_before_at,
+                   mb.first_system_period_end_at, mb.time_zone, mb.reason, mb.evidence_reference,
+                   mb.created_at
+              FROM instructors i
+              LEFT JOIN interim_v1_instructor_controls c
+                ON c.school_id = i.school_id AND c.instructor_id = i.id
+              LEFT JOIN interim_v1_manual_settlement_boundaries mb
+                ON mb.school_id = i.school_id AND mb.instructor_id = i.id
+             WHERE i.id = ${instructorId} AND i.school_id = ${schoolId}
+             LIMIT 1
+             FOR UPDATE OF i
+          `;
+          if (!inst) throw new InterimV1PayoutError(404, 'NOT_FOUND', 'Instructor not found');
+          if (!inst.control_id) throw new InterimV1PayoutError(409, 'INTERIM_V1_CONTROL_MISSING', 'Instructor is not under interim v1 control');
+          if (inst.payouts_paused !== true) throw new InterimV1PayoutError(409, 'INTERIM_V1_PAUSE_GUARD_REQUIRED', 'Instructor must remain paused');
+          if (!dateOnly(inst.payouts_start_date)) throw new InterimV1PayoutError(409, 'START_DATE_MISSING', 'The immutable payout start date is missing');
+          if (dateOnly(inst.payouts_start_date) > dates.settled_before_local_date) {
+            throw new InterimV1PayoutError(409, 'MANUAL_SETTLEMENT_BEFORE_ORIGINAL_START', 'The manual handoff cannot precede the immutable payout start date');
+          }
+          const [instants] = await txSql`
+            SELECT ((${dates.settled_before_local_date}::date + TIME '12:00') AT TIME ZONE 'Europe/London') AS settled_before_at,
+                   ((${dates.first_system_period_end_local_date}::date + TIME '12:00') AT TIME ZONE 'Europe/London') AS first_system_period_end_at
+          `;
+          const wantedSettled = instantIso(instants?.settled_before_at);
+          const wantedEnd = instantIso(instants?.first_system_period_end_at);
+          if (!wantedSettled || !wantedEnd) throw new InterimV1PayoutError(400, 'INVALID_MANUAL_SETTLEMENT_DATES', 'Could not resolve the Europe/London payout boundary');
+          if (inst.boundary_id) {
+            if (instantIso(inst.settled_before_at) !== wantedSettled
+              || instantIso(inst.first_system_period_end_at) !== wantedEnd
+              || inst.time_zone !== 'Europe/London' || inst.reason !== reason
+              || inst.evidence_reference !== evidenceReference) {
+              throw new InterimV1PayoutError(409, 'MANUAL_SETTLEMENT_BOUNDARY_ALREADY_RECORDED', 'A different immutable manual-settlement boundary already exists');
+            }
+            return {
+              created: false,
+              boundary: {
+                id: inst.boundary_id, settled_before_at: wantedSettled,
+                first_system_period_end_at: wantedEnd, time_zone: inst.time_zone,
+                reason: inst.reason, evidence_reference: inst.evidence_reference,
+                created_at: instantIso(inst.created_at),
+              },
+            };
+          }
+          const [priorApproval] = await txSql`
+            SELECT id FROM interim_v1_payout_approvals
+             WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+             LIMIT 1
+          `;
+          if (priorApproval) throw new InterimV1PayoutError(409, 'INTERIM_V1_APPROVAL_ALREADY_EXISTS', 'The manual boundary must be recorded before any interim v1 payout approval');
+          const [overlappingClaim] = await txSql`
+            SELECT pli.id
+              FROM payout_line_items pli
+              JOIN lesson_bookings lb ON lb.id = pli.booking_id
+              JOIN instructor_payouts ip ON ip.id = pli.payout_id
+             WHERE ip.school_id = ${schoolId} AND ip.instructor_id = ${instructorId}
+               AND ((lb.scheduled_date + lb.end_time) AT TIME ZONE 'Europe/London') >= ${wantedSettled}::timestamptz
+             LIMIT 1
+          `;
+          if (overlappingClaim) throw new InterimV1PayoutError(409, 'PAYOUT_CLAIM_ALREADY_EXISTS_AFTER_BOUNDARY', 'A payout claim already exists in or after the proposed system window');
+          const boundaryId = crypto.randomUUID();
+          const [created] = await txSql`
+            INSERT INTO interim_v1_manual_settlement_boundaries (
+              id, school_id, instructor_id, settled_before_at, first_system_period_end_at,
+              time_zone, reason, evidence_reference, created_by_admin_id
+            ) VALUES (${boundaryId}, ${schoolId}, ${instructorId}, ${wantedSettled}::timestamptz,
+              ${wantedEnd}::timestamptz, 'Europe/London', ${reason}, ${evidenceReference}, ${admin.id})
+            RETURNING id, settled_before_at, first_system_period_end_at, time_zone,
+                      reason, evidence_reference, created_at
+          `;
+          await logAuditRequired(txSql, {
+            adminId: admin.id, adminEmail: admin.email,
+            action: 'payout.interim_v1_manual_settlement_boundary_recorded',
+            targetType: 'instructor', targetId: instructorId, schoolId, req,
+            details: {
+              boundary_id: created.id,
+              settled_before_at: instantIso(created.settled_before_at),
+              first_system_period_end_at: instantIso(created.first_system_period_end_at),
+              time_zone: created.time_zone, reason, evidence_reference: evidenceReference,
+              payouts_paused: true, invitation_created: false, approval_created: false,
+              payout_created: false, transfer_created: false,
+            },
+          });
+          return {
+            created: true,
+            boundary: {
+              ...created,
+              settled_before_at: instantIso(created.settled_before_at),
+              first_system_period_end_at: instantIso(created.first_system_period_end_at),
+              created_at: instantIso(created.created_at),
+            },
+          };
+        });
+        res.status(result.created ? 201 : 200).json({
+          ok: true, ...result, payouts_paused: true, invitation_created: false,
+          approval_created: false, payout_created: false, transfer_created: false,
+        });
+        return true;
+      }
+
       if (action === 'interim-v1-approve-first-run') {
         if (req.body?.operator_go !== APPROVE_CONFIRMATION) throw new InterimV1PayoutError(400, 'OPERATOR_CONFIRMATION_REQUIRED', `operator_go must equal ${APPROVE_CONFIRMATION}`);
         const reason = String(req.body?.reason || '').trim();
@@ -682,8 +869,9 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
 }
 
 module.exports = {
-  ACTIONS, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION, RECONCILE_CONFIRMATION,
+  ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION, RECONCILE_CONFIRMATION,
   InterimV1PayoutError, allocateInstructorAmounts, buildPreviewFromRows,
   classifyFundingRow, createInterimV1PayoutHandler, evidenceRecord, fingerprint,
-  loadInterimV1Preview, recordInterimV1FundingEvidence, stableJson, validateTransfer,
+  loadInterimV1Preview, recordInterimV1FundingEvidence, stableJson,
+  validateManualBoundaryDates, validateTransfer,
 };
