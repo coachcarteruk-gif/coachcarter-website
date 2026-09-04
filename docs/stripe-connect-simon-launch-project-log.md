@@ -5766,5 +5766,15 @@ not be retried.
   Production parent. Catalogue verification found the table, both explicit
   indexes, all foreign-key/uniqueness/check constraints and the append-only
   trigger; seeded boundary rows were exactly `0`. Europe/London noon resolved
-  to `2026-09-04T11:00:00.000Z` and `2026-09-11T11:00:00.000Z`. Applying the
-  tested schema to the protected parent remains pending explicit owner approval.
+  to `2026-09-04T11:00:00.000Z` and `2026-09-11T11:00:00.000Z`.
+- After explicit owner approval, the tested schema was applied to protected
+  Production `main` and the temporary rehearsal branch was deleted. PR #433
+  merged as `81eb4327922e20aeb96bebc9d5f3b7dd4cc3b890`; Vercel reported the
+  resulting Production deployment complete.
+- Post-apply read-only verification retained Simon's stable identity
+  `cc:connect-v1:1:6:live:express`, provider account
+  `acct_1U3pyqIjVkzjlvAE`, succeeded mapping, original start date
+  `2026-08-14`, completed onboarding and `payouts_paused=true`. Boundary,
+  approval, payout and transfer-intent counts were all exactly `0`. The
+  boundary row remains pending the owner's manual bank-payment evidence
+  reference; no value will be invented.
