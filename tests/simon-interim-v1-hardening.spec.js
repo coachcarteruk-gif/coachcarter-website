@@ -19,6 +19,7 @@ const {
   classifyFundingRow,
   createInterimV1PayoutHandler,
   evidenceRecord,
+  validateManualBoundaryDates,
   validateTransfer,
 } = require('../api/_interim-v1-payout');
 
@@ -29,10 +30,13 @@ function fundingRow(overrides = {}) {
   return {
     booking_id: 501,
     scheduled_date: '2026-09-08',
+    booking_ends_at: '2026-09-08T10:30:00.000Z',
     status: 'chargeable',
     learner_name: 'Reviewed learner',
     is_test_account: false,
     payouts_start_date: '2026-09-01',
+    settled_before_at: '2026-09-04T11:00:00.000Z',
+    first_system_period_end_at: '2026-09-11T11:00:00.000Z',
     evidence_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     payment_origin: 'direct_slot',
     provider_livemode: true,
@@ -84,6 +88,13 @@ function instructor(overrides = {}) {
     payouts_paused: true,
     payouts_start_date: '2026-09-01',
     control_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    manual_settlement_boundary_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    settled_before_at: '2026-09-04T11:00:00.000Z',
+    first_system_period_end_at: '2026-09-11T11:00:00.000Z',
+    manual_settlement_time_zone: 'Europe/London',
+    manual_settlement_reason: 'Manual payment complete',
+    manual_settlement_evidence_reference: 'BANK-REF-1',
+    manual_settlement_created_at: '2026-09-04T12:00:00.000Z',
     ...overrides,
   };
 }
@@ -156,6 +167,25 @@ test.describe('Simon interim v1 Connect identity', () => {
 });
 
 test.describe('Simon interim v1 exact funding and preview', () => {
+  test('uses an exact half-open Friday-noon manual settlement window', () => {
+    expect(validateManualBoundaryDates('2026-09-04', '2026-09-11')).toMatchObject({ ok: true });
+    expect(validateManualBoundaryDates('2026-09-03', '2026-09-10')).toMatchObject({
+      ok: false, code: 'MANUAL_SETTLEMENT_BOUNDARIES_MUST_BE_FRIDAYS',
+    });
+    expect(validateManualBoundaryDates('2026-09-04', '2026-09-18')).toMatchObject({
+      ok: false, code: 'MANUAL_SETTLEMENT_PERIOD_MUST_BE_SEVEN_DAYS',
+    });
+
+    expect(classifyFundingRow(fundingRow({ booking_ends_at: '2026-09-04T10:59:59.999Z' }))).toEqual({
+      eligible: false, reason: 'MANUALLY_SETTLED_BEFORE_CUTOFF',
+    });
+    expect(classifyFundingRow(fundingRow({ booking_ends_at: '2026-09-04T11:00:00.000Z' }))).toMatchObject({ eligible: true });
+    expect(classifyFundingRow(fundingRow({ booking_ends_at: '2026-09-11T10:59:59.999Z' }))).toMatchObject({ eligible: true });
+    expect(classifyFundingRow(fundingRow({ booking_ends_at: '2026-09-11T11:00:00.000Z' }))).toEqual({
+      eligible: false, reason: 'AFTER_FIRST_SYSTEM_PERIOD',
+    });
+  });
+
   test('accepts only exact live direct-slot evidence', () => {
     expect(classifyFundingRow(fundingRow(), new Date('2026-09-04T00:00:00Z'))).toMatchObject({
       eligible: true, gross_pence: 5500, stripe_fee_pence: 103,
@@ -275,9 +305,24 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     const source = read('api/_interim-v1-payout.js');
     expect(source).toContain('APPROVE_INTERIM_V1_FIRST_RUN_CONFIRMED');
     expect(source).toContain('PROCESS_INTERIM_V1_APPROVED_PAYOUT_CONFIRMED');
+    expect(source).toContain('RECORD_INTERIM_V1_MANUAL_SETTLEMENT_BOUNDARY_CONFIRMED');
     expect(source).toContain('INTERIM_V1_STALE_APPROVAL');
     expect(source).toContain('INTERIM_V1_FIRST_RUN_ALREADY_COMPLETED');
     expect(source).not.toContain('payouts_paused = FALSE');
+  });
+
+  test('manual handoff is a narrow append-only record and cannot move money', () => {
+    const source = read('api/_interim-v1-payout.js');
+    const start = source.indexOf("if (action === 'interim-v1-record-manual-settlement-boundary')");
+    const end = source.indexOf("if (action === 'interim-v1-approve-first-run')", start);
+    const branch = source.slice(start, end);
+    expect(branch).toContain('MANUAL_BOUNDARY_CONFIRMATION');
+    expect(branch).toContain('inst.payouts_paused !== true');
+    expect(branch).toContain('INSERT INTO interim_v1_manual_settlement_boundaries');
+    expect(branch).toContain("action: 'payout.interim_v1_manual_settlement_boundary_recorded'");
+    expect(branch).not.toContain('stripe.');
+    expect(branch).not.toMatch(/INSERT INTO (interim_v1_payout_approvals|instructor_payouts|payout_line_items|interim_v1_transfer)/);
+    expect(branch).not.toContain('payouts_paused = FALSE');
   });
 
   test('admin UI labels legacy bulk payout and gates interim controls to platform owner', () => {
@@ -312,6 +357,12 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS interim_v1_transfer_intents');
     expect(migration).not.toMatch(/INSERT\s+INTO\s+(interim_v1|connect_v1)/i);
     expect(migration).not.toMatch(/(UPDATE|DELETE\s+FROM)\s+(connect_v2|payout_v2|stripe_launch)/i);
+
+    const boundaryMigration = read('db/migrations/057_interim_v1_manual_settlement_boundary.sql');
+    expect(boundaryMigration).toContain('CREATE TABLE IF NOT EXISTS interim_v1_manual_settlement_boundaries');
+    expect(boundaryMigration).toContain('interim_v1_manual_boundaries_append_only');
+    expect(boundaryMigration).not.toMatch(/INSERT\s+INTO\s+interim_v1_manual_settlement_boundaries/i);
+    expect(boundaryMigration).not.toMatch(/(approval|payout|transfer).*INSERT/i);
   });
 
   test('protected specifications retain their approved LF-normalized hashes', () => {
