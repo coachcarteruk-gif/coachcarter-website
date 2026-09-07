@@ -49,7 +49,7 @@ test.describe('learner categories', () => {
     expect(list).toContain('LEFT JOIN learner_credit_balances lcb');
     expect(list).toContain('OR lu.primary_instructor_id = ${instructor.id}');
     expect(list).toContain('OR lcb.id IS NOT NULL');
-    expect(list).toContain('GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category');
+    expect(list).toContain('GROUP BY lu.id, lcb.balance_minutes, fpb.remaining_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category');
     expect(getNotes).toContain('custom_hourly_rate_pence, learner_category');
     expect(getNotes).toContain('learner_category: row?.learner_category || null');
     expect(saveNotes).toContain('normaliseLearnerCategory(learner_category)');
