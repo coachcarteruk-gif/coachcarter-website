@@ -55,3 +55,9 @@ and exercises concurrent conversion, actual cross-instructor booking/retry,
 cross-instructor move, cancellation/retry and exact returned balances. It creates
 synthetic January 2030 bookings only on that clone; never run it on production.
 Focused Playwright tests cover both rates, remainders, overspend and ordinary pricing.
+
+## 2026-09-07 production incident: missing view access
+
+Migration 058 dropped/recreated balance views without restoring runtime SELECT grants. Owner-role database tests passed, but the website could not read Flexible Hours and rendered zero/missing balances. All other legacy LCB balances remained unchanged; converted sources 5 and 6 retained 180 and 424 minutes. Restored SELECT on both views to the existing runtime grant role, inherited by the active production login. Verified both balance and source queries with that active login. Migration 059 and the 058/cumulative rerun paths now restore SELECT to existing complete ledger-reader roles, including NOLOGIN groups. No credit was regranted or financial history rewritten.
+
+Verification after repair: the actual balance handler returned HTTP 200 for both learners using the active production database login (authenticated identity substituted locally, no token minted). A rollback-only clone regression reproduces missing inherited view access, applies migration 059, and verifies SELECT is restored without UPDATE permission.

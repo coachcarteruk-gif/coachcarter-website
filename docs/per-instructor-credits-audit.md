@@ -377,3 +377,5 @@ The normal Flexible Hours purchase path requires the school-wide spendable balan
 ## Owner-approved legacy exception (2026-09-07)
 
 [School-wide conversion](legacy-schoolwide-hours.md) atomically removes a reconciled offline legacy LCB balance, appends CSA evidence and grants the same remaining minutes as Flexible Hours at the confirmed original rate. Current scope: School 1 learners 34 and 74 only. Other balances and historical bookings remain unchanged. Ordinary Lesson Credit remains instructor-scoped.
+
+2026-09-07 incident repair: recreated Flexible Hours balance views lost runtime SELECT grants. Balances were intact. Migration 059 and rerun repair blocks restore read access to existing ledger-reader roles, including inherited NOLOGIN groups. Verified with the production runtime login and actual balance handler; no financial balances were adjusted.
