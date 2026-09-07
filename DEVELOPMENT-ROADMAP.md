@@ -2556,3 +2556,7 @@ GPT-audit finding #13: `api/create-checkout-session.js` accepted caller-supplied
 Implemented the default-off, school-scoped live beta from booked lesson through instructor review, learner reflection and shared progress. The 61 stable curriculum items live in `public/competency-config.js`; migration 054 adds immutable submission/rating history and learner-level completion events linked to the existing one-session-per-booking header. The API derives school, learner, instructor and lesson date from authenticated bookings, supports retrospective reviews, rejects refunded/future/late-cancelled lessons, validates item types and 1–3 scores, and uses client request ids plus a transaction for retry-safe multi-row writes.
 
 Instructor dashboard and learner home prompts, mobile review/reflection forms, learner Progress and instructor learner-detail views are all gated by the exact Boolean `schools.config.features.curriculum_progress_beta === true`. GDPR export/deletion includes the new notes and events. No booking, credit, refund, payout or Stripe behaviour changed. Migration, deployment and School 1 flag activation remain explicit operator actions; see `docs/curriculum-progress-beta-runbook.md`.
+
+## 2026-09-07: Original-rate school-wide legacy hours
+
+Added an audited atomic conversion for approved offline legacy balances, exact minute remainders and purchase rates, source discovery, booking/move/return precision and credit reconciliation. Includes migration 058 and focused unit/database tests. See [the runbook](docs/legacy-schoolwide-hours.md).

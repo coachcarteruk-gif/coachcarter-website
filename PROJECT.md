@@ -1399,3 +1399,7 @@ Migration 051 aligns the ledger with calendar-style credit use: one unresolved C
 Migration 054 adds `curriculum_review_submissions` (immutable instructor/learner revisions and retry ids), `curriculum_rating_events` (separate 1–3 assessor signals) and `curriculum_completion_events` (once-per-learner completion checks). All tables and query paths carry `school_id`. `driving_sessions` remains the booking-linked header and its existing one-booking constraint is reused. `public/competency-config.js` exports the 61 stable item definitions to browser and CommonJS runtimes.
 
 The strict rollout gate is `schools.config.features.curriculum_progress_beta === true`; absent, malformed, string, numeric and false values disable reads and mutations. It is off by default and has no admin UI setter. Operational steps are in `docs/curriculum-progress-beta-runbook.md`.
+
+## Legacy school-wide hours (2026-09-07)
+
+Migration 058 adds a database-owner preview/fingerprint-bound conversion from reconciled offline Lesson Credit to Flexible Hours, preserving original rates and exact remaining minutes. CSA, LCB, source, state and audit writes are atomic; no Stripe purchase is created. See [the runbook](docs/legacy-schoolwide-hours.md).

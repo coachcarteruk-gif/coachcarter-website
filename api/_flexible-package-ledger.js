@@ -44,26 +44,27 @@ function planFlexiblePackageFifo(sources, unitsRequired) {
   if (!Number.isSafeInteger(required) || required <= 0) {
     return { ok: false, code: 'INVALID_UNIT_REQUEST', allocations: [] };
   }
-  let remaining = required;
+  let remaining = required * FLEXIBLE_UNIT_MINUTES;
   const allocations = [];
   for (const source of sources || []) {
-    const available = Math.max(0, Number(source.remaining_units || 0));
+    const available = Math.max(0, Math.round(Number(source.remaining_units || 0) * FLEXIBLE_UNIT_MINUTES));
     if (!available || remaining <= 0) continue;
-    const units = Math.min(available, remaining);
+    const minutes = Math.min(available, remaining);
+    const units = minutes / FLEXIBLE_UNIT_MINUTES;
     const rate = Number(source.rate_pence_per_unit);
-    if (!Number.isSafeInteger(rate) || rate <= 0) {
+    if (!Number.isFinite(rate) || rate <= 0 || !Number.isSafeInteger(Math.round(rate * 1e6))) {
       return { ok: false, code: 'INVALID_SOURCE_RATE', source_id: source.id, allocations: [] };
     }
     allocations.push({
       source_id: Number(source.id),
       units,
       rate_pence_per_unit: rate,
-      contribution_pence: units * rate,
+      contribution_pence: Math.round(units * rate),
     });
-    remaining -= units;
+    remaining -= minutes;
   }
   if (remaining > 0) {
-    return { ok: false, code: 'INSUFFICIENT_FLEXIBLE_UNITS', shortage_units: remaining, allocations: [] };
+    return { ok: false, code: 'INSUFFICIENT_FLEXIBLE_UNITS', shortage_units: remaining / FLEXIBLE_UNIT_MINUTES, allocations: [] };
   }
   return {
     ok: true,
@@ -114,7 +115,7 @@ async function bookFlexiblePackageSlotTransaction({
       const existing = await client.query(
         `SELECT b.id, b.instructor_id, b.scheduled_date::text, b.start_time::text,
                 b.end_time::text, b.lesson_type_id, b.status, b.created_at,
-                COALESCE(SUM(a.units_allocated),0)::int AS allocated_units
+                COALESCE(SUM(a.units_allocated),0)::numeric AS allocated_units
            FROM lesson_bookings b
            LEFT JOIN flexible_package_booking_allocations a
              ON a.booking_id = b.id AND a.school_id = b.school_id
@@ -131,11 +132,11 @@ async function bookFlexiblePackageSlotTransaction({
             || String(row.start_time).slice(0, 5) !== String(startTime).slice(0, 5)
             || String(row.end_time).slice(0, 5) !== String(endTime).slice(0, 5)
             || Number(row.lesson_type_id) !== Number(lessonTypeId)
-            || Number(row.allocated_units) !== unitsRequired) {
+            || Math.round(Number(row.allocated_units) * FLEXIBLE_UNIT_MINUTES) !== Number(durationMinutes)) {
           abort({ code: 'FLEXIBLE_BOOKING_REQUEST_MISMATCH' });
         }
         const balance = await client.query(
-          `SELECT COALESCE(SUM(remaining_units),0)::int AS remaining_units
+          `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
              FROM flexible_package_source_remaining
             WHERE school_id = $1 AND learner_id = $2`,
           [schoolId, learnerId]
@@ -165,7 +166,7 @@ async function bookFlexiblePackageSlotTransaction({
                                    SELECT 1 FROM flexible_package_allocation_returns ar
                                     WHERE ar.allocation_id = a.id AND ar.school_id = a.school_id
                                  )), 0)
-                )::int AS remaining_units
+                )::numeric AS remaining_units
            FROM flexible_package_sources s
           WHERE s.school_id = $1 AND s.learner_id = $2 AND s.available_at <= NOW()
           ORDER BY s.available_at ASC, s.id ASC
@@ -223,7 +224,7 @@ async function bookFlexiblePackageSlotTransaction({
         })]
       );
       const balance = await client.query(
-        `SELECT COALESCE(SUM(remaining_units),0)::int AS remaining_units
+        `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
            FROM flexible_package_source_remaining
           WHERE school_id = $1 AND learner_id = $2`,
         [schoolId, learnerId]
@@ -268,27 +269,27 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
     const units = allocations.rows.reduce((sum, row) => sum + Number(row.units_allocated), 0);
     if (booking.status === REFUNDED) {
       const returned = await client.query(
-        `SELECT COALESCE(SUM(ar.units_returned),0)::int AS units
+        `SELECT COALESCE(SUM(ar.units_returned),0)::numeric AS units
            FROM flexible_package_allocation_returns ar
            JOIN flexible_package_booking_allocations a
              ON a.id = ar.allocation_id AND a.school_id = ar.school_id
           WHERE a.booking_id = $1 AND a.school_id = $2`,
         [bookingId, schoolId]
       );
-      if (Number(returned.rows[0]?.units || 0) !== units) abort({ code: 'BOOKING_RETURN_CONTRADICTION' });
+      if (Math.round(Number(returned.rows[0]?.units || 0) * FLEXIBLE_UNIT_MINUTES) !== Math.round(units * FLEXIBLE_UNIT_MINUTES)) abort({ code: 'BOOKING_RETURN_CONTRADICTION' });
       const balance = await client.query(
-        `SELECT COALESCE(SUM(remaining_units),0)::int AS remaining_units
+        `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
            FROM flexible_package_source_remaining
           WHERE school_id = $1 AND learner_id = $2`,
         [schoolId, learnerId]
       );
       return { ok: true, eligibleReturn: true, idempotent: true, units,
-        minutesReturned: units * FLEXIBLE_UNIT_MINUTES,
+        minutesReturned: Math.round(units * FLEXIBLE_UNIT_MINUTES),
         remainingUnits: Number(balance.rows[0]?.remaining_units || 0) };
     }
     if (booking.status === SCHEDULED && booking.cancelled_at && booking.credit_forfeited === true) {
       const balance = await client.query(
-        `SELECT COALESCE(SUM(remaining_units),0)::int AS remaining_units
+        `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
            FROM flexible_package_source_remaining
           WHERE school_id = $1 AND learner_id = $2`,
         [schoolId, learnerId]
@@ -334,7 +335,7 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
       ]
     );
     const balance = await client.query(
-      `SELECT COALESCE(SUM(remaining_units),0)::int AS remaining_units
+      `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
          FROM flexible_package_source_remaining
         WHERE school_id = $1 AND learner_id = $2`,
       [schoolId, learnerId]
@@ -344,7 +345,7 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
       eligibleReturn,
       idempotent: false,
       units,
-      minutesReturned: eligibleReturn ? units * FLEXIBLE_UNIT_MINUTES : 0,
+      minutesReturned: eligibleReturn ? Math.round(units * FLEXIBLE_UNIT_MINUTES) : 0,
       remainingUnits: Number(balance.rows[0]?.remaining_units || 0),
     };
   }).catch(error => {
@@ -410,10 +411,10 @@ async function moveFlexiblePackageBookingAllocations(client, {
   }
 
   const units = allocations.rows.reduce((sum, row) => sum + Number(row.units_allocated), 0);
-  const minutes = allocations.rows.reduce(
+  const minutes = Math.round(allocations.rows.reduce(
     (sum, row) => sum + Number(row.units_allocated) * Number(row.unit_minutes),
     0
-  );
+  ));
   const contributionPence = allocations.rows.reduce(
     (sum, row) => sum + Number(row.contribution_pence),
     0

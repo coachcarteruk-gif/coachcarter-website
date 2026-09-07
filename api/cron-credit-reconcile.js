@@ -192,6 +192,7 @@ async function reconcileCtOnly(sql, { hasGrandfatheredAt } = {}) {
         FROM lesson_bookings lb
         WHERE lb.school_id = ${SCHOOL_ID}
           AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
           AND lb.minutes_deducted IS NOT NULL
           AND lb.minutes_deducted > 0
         GROUP BY lb.learner_id, lb.instructor_id
@@ -256,6 +257,7 @@ async function reconcileCtOnly(sql, { hasGrandfatheredAt } = {}) {
       FROM lesson_bookings lb
       WHERE lb.school_id = ${SCHOOL_ID}
         AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
         AND lb.minutes_deducted IS NOT NULL
         AND lb.minutes_deducted > 0
       GROUP BY lb.learner_id, lb.instructor_id
@@ -333,6 +335,7 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
         FROM lesson_bookings lb
         WHERE lb.school_id = ${SCHOOL_ID}
           AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
           AND lb.minutes_deducted IS NOT NULL
           AND lb.minutes_deducted > 0
           AND NOT EXISTS (
@@ -413,6 +416,7 @@ async function reconcileCtPlusBcs(sql, { hasGrandfatheredAt } = {}) {
       FROM lesson_bookings lb
       WHERE lb.school_id = ${SCHOOL_ID}
         AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
         AND lb.minutes_deducted IS NOT NULL
         AND lb.minutes_deducted > 0
         AND NOT EXISTS (
@@ -507,6 +511,7 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
         FROM lesson_bookings lb
         WHERE lb.school_id = ${SCHOOL_ID}
           AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
           AND lb.minutes_deducted IS NOT NULL
           AND lb.minutes_deducted > 0
           AND NOT EXISTS (
@@ -606,6 +611,7 @@ async function reconcileFull(sql, { hasGrandfatheredAt } = {}) {
       FROM lesson_bookings lb
       WHERE lb.school_id = ${SCHOOL_ID}
         AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
         AND lb.minutes_deducted IS NOT NULL
         AND lb.minutes_deducted > 0
         AND NOT EXISTS (
@@ -690,6 +696,7 @@ async function countGrandfatheredSuppressedCtOnly(sql) {
         FROM lesson_bookings lb
        WHERE lb.school_id = ${SCHOOL_ID}
          AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
          AND lb.minutes_deducted IS NOT NULL
          AND lb.minutes_deducted > 0
        GROUP BY lb.learner_id, lb.instructor_id
@@ -723,6 +730,7 @@ async function countGrandfatheredSuppressedCtPlusBcs(sql) {
         FROM lesson_bookings lb
        WHERE lb.school_id = ${SCHOOL_ID}
          AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
          AND lb.minutes_deducted IS NOT NULL
          AND lb.minutes_deducted > 0
          AND NOT EXISTS (
@@ -774,6 +782,7 @@ async function countGrandfatheredSuppressedFull(sql) {
         FROM lesson_bookings lb
        WHERE lb.school_id = ${SCHOOL_ID}
          AND lb.credit_returned = FALSE
+          AND COALESCE(lb.payment_method, '') <> 'flexible_package'
          AND lb.minutes_deducted IS NOT NULL
          AND lb.minutes_deducted > 0
          AND NOT EXISTS (

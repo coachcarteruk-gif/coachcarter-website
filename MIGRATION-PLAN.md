@@ -781,3 +781,7 @@ Each phase produces working, testable output. The web version keeps running thro
 - `api/_shared.js` — auth verification + AI context builder
 - `public/sidebar.js` — the navigation design to replicate
 - `CLAUDE.md` — project conventions and intentionally removed features
+
+## Legacy school-wide hours portability (2026-09-07)
+
+Flexible Hours balance rows can have `product_slug=legacy-lesson-credit` and no purchase. Use integer `remaining_minutes` for entitlement display; allow decimal base units and original rates. Lesson durations remain multiples of 30 minutes. Conversion stays in the operator-only database function. See `docs/legacy-schoolwide-hours.md`.

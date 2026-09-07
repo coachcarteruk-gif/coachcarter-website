@@ -373,3 +373,7 @@ Cancellation at 48+ hours appends one return per allocation and restores those e
 Flexible Hours rescheduling uses the same 48+ hour learner rule. It atomically terminates the old booking, appends exact allocation returns, and attaches identical frozen-value allocations to the replacement booking. Because the entitlement is school-wide, the replacement may use another active same-school instructor; the new booking carries that delivering instructor into the normal payout lifecycle. Any active `booking_credit_sources` row on the same lesson is a hard contradiction: Lesson Credit and Flexible Hours cannot jointly fund one booking.
 
 The normal Flexible Hours purchase path requires the school-wide spendable balance to be zero before another Checkout starts. This reduces cross-price overlap without weakening the immutable source/FIFO model needed for historical returns, webhook reordering and reconciliation.
+
+## Owner-approved legacy exception (2026-09-07)
+
+[School-wide conversion](legacy-schoolwide-hours.md) atomically removes a reconciled offline legacy LCB balance, appends CSA evidence and grants the same remaining minutes as Flexible Hours at the confirmed original rate. Current scope: School 1 learners 34 and 74 only. Other balances and historical bookings remain unchanged. Ordinary Lesson Credit remains instructor-scoped.
