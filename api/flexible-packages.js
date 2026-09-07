@@ -101,9 +101,10 @@ async function handleBalance(req, res) {
       SELECT remaining.source_id, remaining.purchase_id, remaining.remaining_units,
              remaining.unit_minutes, remaining.rate_pence_per_unit,
              remaining.refundable_value_pence, remaining.available_at,
-             purchase.product_slug, purchase.product_version_id, purchase.customer_terms_version
+             COALESCE(purchase.product_slug, 'legacy-lesson-credit') AS product_slug,
+             purchase.product_version_id, purchase.customer_terms_version
         FROM flexible_package_source_remaining remaining
-        JOIN flexible_package_purchases purchase
+        LEFT JOIN flexible_package_purchases purchase
           ON purchase.id = remaining.purchase_id AND purchase.school_id = ${scope.schoolId}
        WHERE remaining.school_id = ${scope.schoolId}
          AND remaining.learner_id = ${scope.learner.id}
@@ -367,16 +368,18 @@ async function handleAdminOverview(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const purchases = await sql`
-      SELECT purchase.id, purchase.learner_id, learner.name AS learner_name, source.id AS source_id,
-             purchase.product_slug, purchase.product_version_id, purchase.amount_pence,
-             purchase.total_units, purchase.rate_pence_per_unit, purchase.paid_at,
+      SELECT purchase.id, source.learner_id, learner.name AS learner_name, source.id AS source_id,
+             COALESCE(purchase.product_slug, 'legacy-lesson-credit') AS product_slug,
+             purchase.product_version_id, source.original_value_pence AS amount_pence,
+             source.initial_units AS total_units, source.rate_pence_per_unit,
+             COALESCE(purchase.paid_at, source.created_at) AS paid_at,
              remaining.remaining_units, remaining.refundable_value_pence
-        FROM flexible_package_purchases purchase
-        LEFT JOIN learner_users learner ON learner.id = purchase.learner_id AND learner.school_id = ${scope.schoolId}
-        JOIN flexible_package_sources source ON source.purchase_id = purchase.id AND source.school_id = ${scope.schoolId}
+        FROM flexible_package_sources source
+        LEFT JOIN flexible_package_purchases purchase ON purchase.id = source.purchase_id AND purchase.school_id = ${scope.schoolId}
+        LEFT JOIN learner_users learner ON learner.id = source.learner_id AND learner.school_id = ${scope.schoolId}
         JOIN flexible_package_source_remaining remaining ON remaining.source_id = source.id AND remaining.school_id = ${scope.schoolId}
-       WHERE purchase.school_id = ${scope.schoolId}
-       ORDER BY purchase.paid_at DESC, purchase.id DESC LIMIT 200
+       WHERE source.school_id = ${scope.schoolId}
+       ORDER BY source.created_at DESC, source.id DESC LIMIT 200
     `;
     const allocations = await sql`
       SELECT allocation.id, allocation.booking_id, allocation.learner_id,
@@ -416,9 +419,9 @@ async function handleAdminOverview(req, res) {
     `;
     const reconciliation = await sql`
       SELECT source.id AS source_id, source.learner_id, source.initial_units,
-             COALESCE(reduced.units, 0)::int AS reduced_units,
-             COALESCE(spent.units, 0)::int AS spent_units,
-             (source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0))::int AS raw_remaining_units,
+             COALESCE(reduced.units, 0)::numeric AS reduced_units,
+             COALESCE(spent.units, 0)::numeric AS spent_units,
+             (source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0))::numeric AS raw_remaining_units,
              ((source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0))
                * source.rate_pence_per_unit)::int AS raw_refundable_value_pence,
              (COALESCE(reduced.units, 0) < 0 OR COALESCE(spent.units, 0) < 0
@@ -496,7 +499,7 @@ async function handleRecordRefundEvidence(req, res) {
                                WHERE a.school_id = source.school_id AND a.source_id = source.id
                                  AND NOT EXISTS (SELECT 1 FROM flexible_package_allocation_returns ar
                                                   WHERE ar.school_id = a.school_id AND ar.allocation_id = a.id)), 0)
-                )::int AS remaining_units
+                )::numeric AS remaining_units
            FROM flexible_package_sources source
            JOIN flexible_package_purchases purchase
              ON purchase.id = source.purchase_id AND purchase.school_id = source.school_id

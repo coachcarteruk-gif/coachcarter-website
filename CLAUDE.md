@@ -296,3 +296,7 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - [`docs/30-day-email-sequence-reference.md`](docs/30-day-email-sequence-reference.md) — living marketing strategy for lead magnets and the 30-day nurture sequence: Knowledge/Safety/Skill belief map, mechanisms, proof, asset standards, cadence, offer campaign, and AI accountability rules
 - [`docs/franchise-benefits.md`](docs/franchise-benefits.md) — CoachCarter franchise pack: live + pipeline benefits, CoachCarter-vs-InstructorBook split
 - [`docs/credits-grandfather.md`](docs/credits-grandfather.md) — PITR rollback procedure for credits migration + drill record + (TODO) grandfather scenarios for Step 6
+
+## Original-rate legacy conversion
+
+An explicitly approved offline legacy balance may move to Flexible Hours through migration 058's preview/fingerprint-bound operator function. Never relabel historical Stripe/CT/BCS facts or grant the original purchased hours again. Preserve exact remaining minutes and confirmed purchase rate. Ordinary Lesson Credit remains instructor-scoped. See `docs/legacy-schoolwide-hours.md`.

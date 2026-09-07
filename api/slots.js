@@ -4206,7 +4206,7 @@ async function handleBook(req, res) {
       if (!booked.ok) throw new Error(`Flexible Hours booking transaction failed: ${booked.code || 'UNKNOWN'}`);
       createdBookings = [booked.booking];
       flexiblePackageRemainingUnits = booked.remainingUnits;
-      transactionBalanceMinutes = booked.remainingUnits * 30;
+      transactionBalanceMinutes = Math.round(booked.remainingUnits * 30);
       flexiblePackageBookingReused = booked.reused === true;
     } else if (!skipPayments) {
       const booked = await bookCreditFundedSlotsTransaction({
@@ -6506,7 +6506,7 @@ async function handleCancel(req, res) {
         package_units_returned: packageValueReturned ? cancelled.units : 0,
         minutes_returned: cancelled.minutesReturned,
         flexible_package_remaining_units: cancelled.remainingUnits,
-        flexible_package_remaining_minutes: cancelled.remainingUnits * 30,
+        flexible_package_remaining_minutes: Math.round(cancelled.remainingUnits * 30),
         credit_returned: false,
         package_value_returned: packageValueReturned,
         idempotent: cancelled.idempotent === true,
