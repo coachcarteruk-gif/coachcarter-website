@@ -5778,3 +5778,23 @@ not be retried.
   approval, payout and transfer-intent counts were all exactly `0`. The
   boundary row remains pending the owner's manual bank-payment evidence
   reference; no value will be invented.
+
+## 7 September 2026 - manual-settlement handoff boundary recorded
+
+- The owner explicitly accepted the evidence reference `Owner confirmed Simon
+  manually paid through 4 September 2026, 12:00 Europe/London` and authorised
+  recording the boundary.
+- A single Production transaction acquired the school/instructor advisory lock,
+  revalidated the exact live Express identity, original start dates, completed
+  onboarding and pause guard, and proved there was no existing boundary,
+  approval, payout or transfer intent. It then inserted boundary
+  `8716617e-0549-4d14-b9be-c2d37a1e0266` and its required audit row.
+- Read-only postflight resolved the stored window to
+  `[2026-09-04 12:00, 2026-09-11 12:00)` Europe/London. Boundary count and
+  matching-audit count were each exactly `1`; approval, payout,
+  transfer-intent, and invitation/onboarding-link actions since the boundary
+  were each exactly `0`.
+- Simon remains mapped to `acct_1U3pyqIjVkzjlvAE` under stable identity
+  `cc:connect-v1:1:6:live:express`, mapping state `succeeded`, original payout
+  start `2026-08-14`, onboarding complete and `payouts_paused=true`. No payout
+  preview was generated and no Stripe API operation was performed.
