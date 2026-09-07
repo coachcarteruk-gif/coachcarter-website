@@ -2560,3 +2560,7 @@ Instructor dashboard and learner home prompts, mobile review/reflection forms, l
 ## 2026-09-07: Original-rate school-wide legacy hours
 
 Added an audited atomic conversion for approved offline legacy balances, exact minute remainders and purchase rates, source discovery, booking/move/return precision and credit reconciliation. Includes migration 058 and focused unit/database tests. See [the runbook](docs/legacy-schoolwide-hours.md).
+
+### 2026-09-07 — Restore Flexible Hours balance view permissions
+
+Repaired the migration-058 ACL regression that prevented runtime balance reads. Added migration 059, rerun protection and an inherited-role permission regression test; validated real balance-handler responses with production runtime permissions.
