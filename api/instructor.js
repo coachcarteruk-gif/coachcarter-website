@@ -3528,6 +3528,7 @@ async function handleMyLearners(req, res) {
         lu.current_tier, lu.pickup_address, lu.prefer_contact_before,
         lu.credit_balance, lu.balance_minutes,
         COALESCE(lcb.balance_minutes, 0)::int AS instructor_balance_minutes,
+        COALESCE(fpb.remaining_minutes, 0)::int AS flexible_package_remaining_minutes,
         COUNT(lb.id)::int AS total_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = ${CHARGEABLE})::int AS completed_lessons,
         COUNT(lb.id) FILTER (WHERE lb.status = ${SCHEDULED} AND lb.scheduled_date >= CURRENT_DATE)::int AS upcoming_lessons,
@@ -3551,6 +3552,9 @@ async function handleMyLearners(req, res) {
         ON lcb.learner_id = lu.id
        AND lcb.instructor_id = ${instructor.id}
        AND lcb.school_id = ${schoolId}
+      LEFT JOIN flexible_package_balances fpb
+        ON fpb.learner_id = lu.id
+       AND fpb.school_id = ${schoolId}
       LEFT JOIN LATERAL (
         SELECT CASE
           WHEN al.action = 'instructor.learner_archived' THEN al.created_at::text
@@ -3574,7 +3578,7 @@ async function handleMyLearners(req, res) {
           OR lu.primary_instructor_id = ${instructor.id}
           OR lcb.id IS NOT NULL
         )
-      GROUP BY lu.id, lcb.balance_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category, archive_state.archived_at
+      GROUP BY lu.id, lcb.balance_minutes, fpb.remaining_minutes, iln.notes, iln.test_date, iln.custom_hourly_rate_pence, iln.learner_category, archive_state.archived_at
       ORDER BY MAX(lb.scheduled_date) DESC NULLS LAST, lu.name ASC
     `;
 
@@ -3634,6 +3638,7 @@ async function handleSchoolLearners(req, res) {
         lu.id, lu.name, lu.email, lu.phone,
         lu.credit_balance,
         COALESCE(lcb.balance_minutes, 0)::int AS balance_minutes,
+        COALESCE(fpb.remaining_minutes, 0)::int AS flexible_package_remaining_minutes,
         lu.balance_minutes AS total_balance_minutes,
         (
           EXISTS (
@@ -3656,6 +3661,9 @@ async function handleSchoolLearners(req, res) {
         ON lcb.learner_id = lu.id
        AND lcb.instructor_id = ${instructor.id}
        AND lcb.school_id = ${schoolId}
+      LEFT JOIN flexible_package_balances fpb
+        ON fpb.learner_id = lu.id
+       AND fpb.school_id = ${schoolId}
       WHERE lu.school_id = ${schoolId}
         AND lu.archived_at IS NULL
         AND COALESCE((

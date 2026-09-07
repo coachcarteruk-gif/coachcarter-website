@@ -2083,10 +2083,15 @@ function filterAddLessonLearners() {
       const tag = l.is_your_learner
         ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
         : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
+      const lessonCreditMinutes = Number(l.balance_minutes || 0);
+      const flexibleMinutes = Number(l.flexible_package_remaining_minutes || 0);
+      const balanceParts = [];
+      balanceParts.push(`${formatBalanceMins(lessonCreditMinutes)} with you`);
+      if (flexibleMinutes > 0) balanceParts.push(`${formatBalanceMins(flexibleMinutes)} Flexible Hours`);
       return `
-      <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance-minutes="${l.balance_minutes || 0}">
+      <div class="learner-option" data-action="select-learner" data-id="${l.id}" data-name="${esc(l.name)}" data-phone="${esc(l.phone || l.email)}" data-balance-minutes="${lessonCreditMinutes}" data-flexible-balance-minutes="${flexibleMinutes}">
         <div class="learner-opt-name">${esc(l.name)}${tag}</div>
-        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${formatBalanceMins(l.balance_minutes || 0)} with you</div>
+        <div class="learner-opt-detail">${esc(l.phone || '')} ${l.phone && l.email ? '·' : ''} ${esc(l.email || '')} · ${balanceParts.join(' · ')}</div>
       </div>
     `;
     }).join('');
@@ -2094,7 +2099,7 @@ function filterAddLessonLearners() {
   dropdown.classList.add('open');
 }
 
-function selectLearner(id, name, detail, balanceMinutes) {
+function selectLearner(id, name, detail, balanceMinutes, flexibleBalanceMinutes) {
   clearPaymentLinkSuccess();
   selectedLearnerId = id;
   document.getElementById('addLessonSearch').value = '';
@@ -2104,7 +2109,7 @@ function selectLearner(id, name, detail, balanceMinutes) {
   document.getElementById('addLessonSelectedDetail').textContent = detail;
 
   // Update credit note
-  updateCreditNote(balanceMinutes);
+  updateCreditNote(balanceMinutes, flexibleBalanceMinutes);
 }
 
 function clearSelectedLearner() {
@@ -2115,9 +2120,10 @@ function clearSelectedLearner() {
   document.getElementById('addLessonSearch').focus();
 }
 
-function updateCreditNote(balanceMinutes) {
+function updateCreditNote(balanceMinutes, flexibleBalanceMinutes) {
   const noteEl = document.getElementById('addLessonCreditNote');
   const payMethod = document.querySelector('input[name="addLessonPay"]:checked')?.value;
+  const flexibleMinutes = Number(flexibleBalanceMinutes || 0);
   if (!selectedLearnerId) {
     noteEl.style.display = 'none';
     return;
@@ -2130,8 +2136,10 @@ function updateCreditNote(balanceMinutes) {
     noteEl.style.color = balanceMinutes > 0 ? 'var(--muted)' : 'var(--red)';
   } else if (payMethod === 'flexible_package') {
     noteEl.style.display = 'block';
-    noteEl.textContent = 'Use learner flexible package credits.';
-    noteEl.style.color = 'var(--muted)';
+    noteEl.textContent = flexibleMinutes > 0
+      ? `Learner has ${formatBalanceMins(flexibleMinutes)} school-wide Flexible Hours.`
+      : 'Learner has no school-wide Flexible Hours. Choose Cash or Free instead.';
+    noteEl.style.color = flexibleMinutes > 0 ? 'var(--muted)' : 'var(--red)';
   } else {
     noteEl.style.display = 'none';
   }
@@ -2152,7 +2160,10 @@ function updateAddLessonPaymentUi() {
   const learner = selectedLearnerId
     ? addLessonLearners.find(l => l.id === selectedLearnerId)
     : null;
-  updateCreditNote(learner ? learner.balance_minutes || 0 : 0);
+  updateCreditNote(
+    learner ? learner.balance_minutes || 0 : 0,
+    learner ? learner.flexible_package_remaining_minutes || 0 : 0
+  );
 }
 
 function clearPaymentLinkSuccess() {
@@ -3124,7 +3135,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'history-book-lesson') { closeHistoryModal(); openAddLessonModal(); }
   else if (a === 'retry-booking-history') renderBookingHistory();
   else if (a === 'retry-current-view') renderCurrentView();
-  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balanceMinutes, 10));
+  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.phone, parseInt(t.dataset.balanceMinutes, 10), parseInt(t.dataset.flexibleBalanceMinutes, 10));
   else if (a === 'offer-select-learner') selectOfferLearner(parseInt(t.dataset.id, 10), t.dataset.name, t.dataset.detail);
   else if (a === 'cancel-pending-offer') cancelPendingOffer(parseInt(t.dataset.id, 10), t);
   else if (a === 'delete-availability-override') deleteAvailabilityOverride(parseInt(t.dataset.id, 10), t);

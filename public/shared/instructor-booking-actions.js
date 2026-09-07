@@ -29,6 +29,7 @@
   let addLessonLearners = [];
   let addLessonSelectedId = null;
   let addLessonSelectedBalanceMinutes = 0;
+  let addLessonSelectedFlexibleMinutes = 0;
 
   function formatBalanceMins(mins) {
     var m = Number(mins || 0);
@@ -483,6 +484,7 @@
     opts = opts || {};
     addLessonSelectedId = null;
     addLessonSelectedBalanceMinutes = 0;
+    addLessonSelectedFlexibleMinutes = 0;
     document.getElementById('ba-add-search').value = '';
     document.getElementById('ba-add-selected').style.display = 'none';
     document.getElementById('ba-add-notes').value = '';
@@ -557,13 +559,16 @@
     dd.innerHTML = matches.map(function (l) {
       var name = l.name || '';
       var detail = l.email || l.phone || '';
-      var balanceMinutes = l.balance_minutes || 0;
+      var balanceMinutes = Number(l.balance_minutes || 0);
+      var flexibleMinutes = Number(l.flexible_package_remaining_minutes || 0);
+      var balanceParts = [formatBalanceMins(balanceMinutes) + ' with this instructor'];
+      if (flexibleMinutes > 0) balanceParts.push(formatBalanceMins(flexibleMinutes) + ' Flexible Hours');
       var tag = l.is_your_learner
         ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
         : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
-      return '<div class="ba-learner-row" data-id="' + l.id + '" data-name="' + _esc(name) + '" data-detail="' + _esc(detail) + '" data-balance-minutes="' + balanceMinutes + '" style="padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border)">' +
+      return '<div class="ba-learner-row" data-id="' + l.id + '" data-name="' + _esc(name) + '" data-detail="' + _esc(detail) + '" data-balance-minutes="' + balanceMinutes + '" data-flexible-balance-minutes="' + flexibleMinutes + '" style="padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border)">' +
         '<div style="font-weight:600">' + _esc(name) + tag + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--muted)">' + _esc(detail) + ' · ' + formatBalanceMins(balanceMinutes) + ' with this instructor</div></div>';
+        '<div style="font-size:0.78rem;color:var(--muted)">' + _esc(detail) + ' · ' + balanceParts.join(' · ') + '</div></div>';
     }).join('');
 
     // Wire up per-row click + hover (previously inline onclick / onmouseover / onmouseout)
@@ -575,7 +580,8 @@
             parseInt(row.dataset.id, 10),
             row.dataset.name,
             row.dataset.detail,
-            parseInt(row.dataset.balanceMinutes, 10)
+            parseInt(row.dataset.balanceMinutes, 10),
+            parseInt(row.dataset.flexibleBalanceMinutes, 10)
           );
         });
         row.addEventListener('mouseover', function () { row.style.background = 'var(--surface)'; });
@@ -584,9 +590,10 @@
     }
   }
 
-  function _selectLearner(id, name, detail, balanceMinutes) {
+  function _selectLearner(id, name, detail, balanceMinutes, flexibleBalanceMinutes) {
     addLessonSelectedId = id;
     addLessonSelectedBalanceMinutes = balanceMinutes;
+    addLessonSelectedFlexibleMinutes = flexibleBalanceMinutes;
     document.getElementById('ba-add-search').value = '';
     document.getElementById('ba-add-dropdown').style.display = 'none';
     document.getElementById('ba-add-selected').style.display = 'flex';
@@ -606,11 +613,14 @@
   function _updateCreditNote() {
     const pay = document.querySelector('input[name="ba-add-pay"]:checked')?.value;
     const note = document.getElementById('ba-add-credit-note');
+    const flexibleMinutes = Number(addLessonSelectedFlexibleMinutes || 0);
     if (pay === 'credit' && addLessonSelectedId) {
       note.textContent = 'Hours with this instructor: ' + formatBalanceMins(addLessonSelectedBalanceMinutes);
       note.style.display = 'block';
     } else if (pay === 'flexible_package' && addLessonSelectedId) {
-      note.textContent = 'Use learner flexible package credits.';
+      note.textContent = flexibleMinutes > 0
+        ? 'School-wide Flexible Hours: ' + formatBalanceMins(flexibleMinutes)
+        : 'No school-wide Flexible Hours. Choose Cash or Free instead.';
       note.style.display = 'block';
     } else {
       note.style.display = 'none';

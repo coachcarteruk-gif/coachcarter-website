@@ -354,16 +354,20 @@ function filterLearners() {
       var tag = l.is_your_learner
         ? '<span style="font-size:0.7rem;font-weight:600;color:var(--green,#1f8a4c);background:rgba(31,138,76,0.1);padding:1px 6px;border-radius:4px;margin-left:6px">Your learner</span>'
         : '<span style="font-size:0.7rem;font-weight:600;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px;margin-left:6px">New to you</span>';
-      return '<div class="learner-option" data-action="select-learner" data-learner-id="' + l.id + '" data-name="' + esc(l.name) + '" data-det="' + esc(det) + '" data-balance-minutes="' + (l.balance_minutes || 0) + '">' +
+      var lessonCreditMinutes = Number(l.balance_minutes || 0);
+      var flexibleMinutes = Number(l.flexible_package_remaining_minutes || 0);
+      var balanceParts = [formatBalanceMins(lessonCreditMinutes) + ' with you'];
+      if (flexibleMinutes > 0) balanceParts.push(formatBalanceMins(flexibleMinutes) + ' Flexible Hours');
+      return '<div class="learner-option" data-action="select-learner" data-learner-id="' + l.id + '" data-name="' + esc(l.name) + '" data-det="' + esc(det) + '" data-balance-minutes="' + lessonCreditMinutes + '" data-flexible-balance-minutes="' + flexibleMinutes + '">' +
         '<div class="learner-opt-name">' + esc(l.name) + tag + '</div>' +
-        '<div class="learner-opt-detail">' + esc(det) + '</div>' +
+        '<div class="learner-opt-detail">' + esc(det) + ' · ' + balanceParts.join(' · ') + '</div>' +
       '</div>';
     }).join('');
   }
   dd.classList.add('open');
 }
 
-function selectLearner(id, name, detail, balanceMinutes) {
+function selectLearner(id, name, detail, balanceMinutes, flexibleBalanceMinutes) {
   clearPaymentLinkSuccess();
   selectedLearnerId = id;
   selectedLearnerBalanceMinutes = balanceMinutes;
@@ -372,7 +376,7 @@ function selectLearner(id, name, detail, balanceMinutes) {
   document.getElementById('bookSelectedName').textContent = name;
   document.getElementById('bookSelectedDetail').textContent = detail;
   document.getElementById('bookSelected').classList.add('show');
-  updateBookCreditNote(balanceMinutes);
+  updateBookCreditNote(balanceMinutes, flexibleBalanceMinutes);
 }
 
 function clearLearner() {
@@ -384,9 +388,10 @@ function clearLearner() {
   document.getElementById('bookSearch').value = '';
 }
 
-function updateBookCreditNote(balanceMinutes) {
+function updateBookCreditNote(balanceMinutes, flexibleBalanceMinutes) {
   var payMethod = document.querySelector('input[name="bookPay"]:checked')?.value || 'cash';
   var note = document.getElementById('bookCreditNote');
+  var flexibleMinutes = Number(flexibleBalanceMinutes || 0);
   if (!note) return;
   if (!selectedLearnerId) {
     note.style.display = 'none';
@@ -405,8 +410,10 @@ function updateBookCreditNote(balanceMinutes) {
     return;
   }
   if (payMethod === 'flexible_package') {
-    note.textContent = 'Use learner flexible package credits.';
-    note.style.color = 'var(--muted)';
+    note.textContent = flexibleMinutes > 0
+      ? 'Learner has ' + formatBalanceMins(flexibleMinutes) + ' school-wide Flexible Hours.'
+      : 'Learner has no school-wide Flexible Hours. Choose Cash or Free instead.';
+    note.style.color = flexibleMinutes > 0 ? 'var(--muted)' : 'var(--red)';
     note.style.display = 'block';
     return;
   }
@@ -419,7 +426,11 @@ function updateBookPaymentUi() {
   var btn = document.getElementById('bookBtn');
   if (linkNote) linkNote.style.display = payMethod === 'payment_link' ? 'block' : 'none';
   if (btn && !btn.disabled) btn.textContent = payMethod === 'payment_link' ? 'Send payment link' : 'Book lesson';
-  updateBookCreditNote(selectedLearnerBalanceMinutes);
+  var learner = selectedLearnerId ? allLearners.find(function (l) { return l.id === selectedLearnerId; }) : null;
+  updateBookCreditNote(
+    selectedLearnerBalanceMinutes,
+    learner ? learner.flexible_package_remaining_minutes || 0 : 0
+  );
 }
 
 function clearPaymentLinkSuccess() {
@@ -797,7 +808,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-book-modal') { closeDashAddMenu(); openBookModal(); }
   else if (a === 'open-late-modal') openLateModal();
   else if (a === 'open-detail') openDetail(parseInt(t.dataset.detailIdx, 10));
-  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balanceMinutes, 10));
+  else if (a === 'select-learner') selectLearner(parseInt(t.dataset.learnerId, 10), t.dataset.name, t.dataset.det, parseInt(t.dataset.balanceMinutes, 10), parseInt(t.dataset.flexibleBalanceMinutes, 10));
   else if (a === 'cancel-from-detail') cancelFromDetail();
   else if (a === 'not-delivered-from-detail') notDeliveredFromDetail();
   else if (a === 'accept-request' || a === 'decline-request') decideRequest(t.dataset.requestId, a, t);

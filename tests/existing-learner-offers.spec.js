@@ -197,6 +197,7 @@ test.describe('existing learner lesson offers', () => {
     const body = functionBody(read('api/instructor.js'), 'handleSchoolLearners');
 
     expect(body).toContain('FROM learner_users lu');
+    expect(body).toContain('COALESCE(fpb.remaining_minutes, 0)::int AS flexible_package_remaining_minutes');
     expect(body).toContain('WHERE lu.school_id = ${schoolId}');
     expect(body).toContain('AND lu.archived_at IS NULL');
     expect(body).toContain('EXISTS (');
@@ -204,8 +205,25 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('FROM instructor_learner_notes iln');
     expect(body).toContain('OR lu.primary_instructor_id = ${instructor.id}');
     expect(body).toContain('OR lcb.id IS NOT NULL');
+    expect(body).toContain('LEFT JOIN flexible_package_balances fpb');
     expect(body).toContain(') AS is_your_learner');
     expect(body).toContain('ORDER BY lu.name ASC');
+  });
+
+  test('instructor booking pickers show school-wide Flexible Hours separately from instructor credit', () => {
+    const portalJs = read('public/instructor/index.js');
+    const dashboardJs = read('public/instructor/dashboard.js');
+    const sharedJs = read('public/shared/instructor-booking-actions.js');
+
+    for (const js of [portalJs, dashboardJs, sharedJs]) {
+      expect(js).toContain('flexible_package_remaining_minutes');
+      expect(js).toContain('data-flexible-balance-minutes');
+      expect(js).toContain('Flexible Hours');
+    }
+
+    expect(portalJs).toContain('Learner has ${formatBalanceMins(flexibleMinutes)} school-wide Flexible Hours.');
+    expect(dashboardJs).toContain('Learner has ' + "' + formatBalanceMins(flexibleMinutes) + '" + ' school-wide Flexible Hours.');
+    expect(sharedJs).toContain('School-wide Flexible Hours: ');
   });
 
   test('instructor UI reports offer delivery state and keeps manual copy fallback visible', () => {
