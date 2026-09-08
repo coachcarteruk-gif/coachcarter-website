@@ -26,7 +26,7 @@ function parseTrialPreferences(body, now = new Date()) {
     requested: emailCourse || intensive,
     message: [
       'Free trial course preferences (v1). Contact by email about selected courses only.',
-      '30 Day to Pass Your Test email course: ' + (emailCourse ? 'Yes' : 'No'),
+      '30 Days to Pass Your Test email course: ' + (emailCourse ? 'Yes' : 'No'),
       'Intensive course information: ' + (intensive ? 'Yes' : 'No'),
       'Preferred intensive start months: ' + (intensive ? (months.join(', ') || 'Not sure yet') : 'Not requested')
     ].join('\n')

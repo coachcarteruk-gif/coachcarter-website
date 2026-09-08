@@ -1,6 +1,6 @@
 # Free trial course preferences
 
-The free-trial form offers two optional, initially unticked requests: the “30 Day to Pass Your Test” email course and intensive course information by email. Intensive interest reveals a multi-select of the current London calendar month plus the following eleven months, with explicit years. Months are optional for undecided learners. Unticking intensive interest clears them.
+The free-trial form offers two optional, initially unticked requests: the “30 Days to Pass Your Test” email course and intensive course information by email. Intensive interest reveals a multi-select of the current London calendar month plus the following eleven months, with explicit years. Months are optional for undecided learners. Unticking intensive interest clears them.
 
 The booking endpoint validates Boolean choices and the month window before booking. A successful trial with either request creates a `free-trial-courses` enquiry in the same SQL statement as the booking, so a storage failure cannot leave a booked trial with a silently lost request. Existing clients omitting preferences remain supported.
 
