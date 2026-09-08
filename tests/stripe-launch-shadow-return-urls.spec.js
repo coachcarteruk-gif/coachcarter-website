@@ -169,7 +169,7 @@ test.describe('fail-closed Stripe launch shadow Checkout return URLs', () => {
       ['direct_slot_guest', functionBody(slots, 'handleCheckoutSlotGuest')],
       ['test_date_direct', functionBody(slots, 'handleCheckoutTestDate')],
       ['captured_request', functionBody(slots, 'handleCheckoutRequest')],
-      ['one_off_offer', offers.slice(offers.indexOf('const launchMetadata = !isFlexible'))],
+      ['one_off_offer', offers.slice(offers.indexOf('const launchMetadata = !isExtension && !isFlexible'))],
     ];
     for (const [name, source] of slices) {
       const resolver = source.indexOf('resolveStripeCheckoutReturnUrls({');

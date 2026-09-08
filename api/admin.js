@@ -99,6 +99,10 @@ const {
 } = require('./_bcs-refund-marker');
 const { transferBookingFunding } = require('./_instructor-switch-transfer');
 const {
+  expireExtensionCheckoutSessions,
+  invalidatePendingBookingExtensions,
+} = require('./_booking-extension-invalidation');
+const {
   InstructorRescheduleSlotError,
   listEligibleRescheduleInstructors,
   validateInstructorRescheduleSlot,
@@ -1228,7 +1232,15 @@ async function handleEditBooking(req, res) {
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
-             COALESCE(lt.duration_minutes, 90) AS type_duration_minutes
+             COALESCE(
+               CASE
+                 WHEN lb.end_time > lb.start_time
+                 THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+                 ELSE NULL
+               END,
+               lt.duration_minutes,
+               90
+             ) AS type_duration_minutes
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i ON i.id = lb.instructor_id
@@ -1305,6 +1317,31 @@ async function handleEditBooking(req, res) {
       return res.status(409).json({
         error: 'conflict', message: 'This time overlaps with another booking',
         conflicts: conflictDetails, can_force: true
+      });
+    }
+
+    await invalidatePendingBookingExtensions(sql, {
+      bookingId,
+      instructorId: booking.instructor_id,
+      schoolId,
+    });
+    const [freshBooking] = await sql`
+      SELECT status, scheduled_date::text AS scheduled_date,
+             start_time::text AS start_time, end_time::text AS end_time,
+             lesson_type_id, minutes_deducted, list_price_pence
+      FROM lesson_bookings
+      WHERE id = ${bookingId} AND school_id = ${schoolId}
+    `;
+    const bookingChanged = !freshBooking || freshBooking.status !== booking.status ||
+      freshBooking.scheduled_date !== booking.scheduled_date ||
+      String(freshBooking.start_time).slice(0, 5) !== oldStart ||
+      String(freshBooking.end_time).slice(0, 5) !== oldEnd ||
+      Number(freshBooking.lesson_type_id || 0) !== Number(booking.lesson_type_id || 0) ||
+      Number(freshBooking.minutes_deducted || 0) !== Number(booking.minutes_deducted || 0) ||
+      Number(freshBooking.list_price_pence || 0) !== Number(booking.list_price_pence || 0);
+    if (bookingChanged) {
+      return res.status(409).json({
+        error: 'This booking changed while you were editing it. Refresh the booking and try again.',
       });
     }
 
@@ -1500,14 +1537,14 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
            old_i.phone AS old_instructor_phone,
            lt.name AS lesson_type_name,
            lt.slug AS lesson_type_slug,
-           COALESCE(
-             lt.duration_minutes,
-             CASE WHEN lb.end_time > lb.start_time
-               THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
-               ELSE NULL
-             END,
-             90
-           )::int AS duration_minutes,
+            COALESCE(
+              CASE WHEN lb.end_time > lb.start_time
+                THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+                ELSE NULL
+              END,
+              lt.duration_minutes,
+              90
+            )::int AS duration_minutes,
            EXISTS (
              SELECT 1
                FROM recurring_slot_block_items rsbi
@@ -1737,6 +1774,15 @@ async function handleAdminRescheduleBooking(req, res) {
 
   try {
     const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const invalidatedExtensions = await client.query(
+        `UPDATE lesson_offers
+            SET status = 'cancelled'
+          WHERE extension_booking_id = $1
+            AND school_id = $2
+            AND status = 'pending'
+          RETURNING stripe_session_id`,
+        [bookingId, schoolId]
+      );
       const locked = await client.query(
         `SELECT id
            FROM lesson_bookings
@@ -1876,8 +1922,11 @@ async function handleAdminRescheduleBooking(req, res) {
         newBooking,
         newEndTime: availability.newEndTime,
         instructorChanged,
+        invalidatedExtensionSessionIds: invalidatedExtensions.rows.map(row => row.stripe_session_id),
       };
     });
+
+    await expireExtensionCheckoutSessions(result.invalidatedExtensionSessionIds);
 
     try {
       await notifyAdminReschedule({
@@ -1955,6 +2004,15 @@ async function handleReservedGoodwillMove(req, res) {
 
   try {
     const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const invalidatedExtensions = await client.query(
+        `UPDATE lesson_offers
+            SET status = 'cancelled'
+          WHERE extension_booking_id = $1
+            AND school_id = $2
+            AND status = 'pending'
+          RETURNING stripe_session_id`,
+        [bookingId, schoolId]
+      );
       const bookingResult = await client.query(
         `SELECT
            lb.id,
@@ -2283,8 +2341,11 @@ async function handleReservedGoodwillMove(req, res) {
         old_slot: { date: oldDate, start_time: oldStart, end_time: String(booking.end_time).slice(0, 5) },
         new_slot: { date: newDate, start_time: newStartTime, end_time: newEndTime },
         copied_booking_credit_source_count: refundedBcsIds.length,
+        invalidatedExtensionSessionIds: invalidatedExtensions.rows.map(row => row.stripe_session_id),
       };
     });
+
+    await expireExtensionCheckoutSessions(result.invalidatedExtensionSessionIds);
 
     const sql = neon(process.env.POSTGRES_URL);
     await logAudit(sql, {

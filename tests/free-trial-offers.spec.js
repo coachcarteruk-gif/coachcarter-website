@@ -44,7 +44,7 @@ test.describe('free trial lesson offers', () => {
     expect(body).toContain('Ask your instructor to send a dated trial offer');
     expect(body).toContain('if (isTrialOffer) {');
     expect(body).toContain('pricePence = 0;');
-    expect(body).toContain('if (pricePence === 0 && !isFlexible)');
+    expect(body).toContain('if (pricePence === 0 && !isFlexible && !isExtension)');
     expect(body).toContain('return await handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, resolvedEmail, repeatWeeksClean)');
   });
 });

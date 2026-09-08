@@ -574,14 +574,15 @@ function renderPlannerCard(item) {
   }
 
   if (item._kind === 'offer') {
+    const isExtension = !!item.extension_booking_id;
     const offerMeta = [
-      item.lesson_type_name || 'Lesson offer',
+      isExtension ? `+${item.extension_minutes} minute lesson extension` : (item.lesson_type_name || 'Lesson offer'),
       item.expires_at ? requestExpiryLabel(item.expires_at) : 'Waiting for learner'
     ].filter(Boolean).join(' · ');
     return `<article class="day-card offer">
       <div>
         <div class="day-card-time">${esc(time)}</div>
-        <div class="day-card-type">Offer</div>
+        <div class="day-card-type">${isExtension ? 'Extension' : 'Offer'}</div>
       </div>
       <div class="day-card-main">
         <div class="day-card-title">${esc(item.learner_name || item.recipient_name || 'Pending learner')}</div>
@@ -1646,6 +1647,7 @@ function openBookingDetail(bookingId) {
     actions.innerHTML = `
       <button class="btn-modal-cancel" style="color:var(--red)" data-action="open-cancel-modal" data-id="${b.id}">Cancel lesson</button>
       <button class="btn-modal-cancel" style="color:var(--accent)" data-action="open-reschedule-modal" data-id="${b.id}" data-date="${b.scheduled_date}" data-start="${b.start_time.slice(0,5)}" data-end="${b.end_time.slice(0,5)}" data-name="${esc(b.learner_name)}">Reschedule</button>
+      <button class="btn-modal-cancel" style="color:var(--accent)" data-action="open-extension-modal" data-id="${b.id}">Request extension</button>
       <button class="btn-modal-cancel" data-action="open-edit-booking-modal" data-id="${b.id}">Edit</button>
       ${b.can_report_not_delivered ? `<button class="btn-modal-cancel" style="color:var(--red)" data-action="open-not-delivered-modal" data-id="${b.id}">Mark as not delivered</button>` : ''}
       <button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
@@ -1730,6 +1732,104 @@ async function openLearnerHistory(learnerId) {
 
 function closeHistoryModal() {
   document.getElementById('historyModal').classList.remove('open');
+}
+
+// ─── Paid lesson extension request ──────────────────────────────────────────
+let extensionOfferBooking = null;
+
+function findCachedBooking(bookingId) {
+  if (selectedBooking && selectedBooking.id === bookingId) return selectedBooking;
+  for (const dateKey in bookingCache) {
+    const found = bookingCache[dateKey].find(item => item.id === bookingId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function extensionEndTime(endTime, extraMinutes) {
+  const parts = String(endTime || '').slice(0, 5).split(':').map(Number);
+  const total = parts[0] * 60 + parts[1] + extraMinutes;
+  if (total >= 24 * 60) return null;
+  return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+}
+
+function updateExtensionSummary() {
+  if (!extensionOfferBooking) return;
+  const extra = parseInt(document.getElementById('extensionMinutes').value, 10) || 30;
+  const newEnd = extensionEndTime(extensionOfferBooking.end_time, extra);
+  const date = new Date(extensionOfferBooking.scheduled_date + 'T00:00:00Z').toLocaleString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
+  });
+  document.getElementById('extensionBookingSummary').innerHTML =
+    '<strong>' + esc(extensionOfferBooking.learner_name) + '</strong><br>' +
+    date + ' · ' + extensionOfferBooking.start_time.slice(0, 5) + '–' + extensionOfferBooking.end_time.slice(0, 5) +
+    (newEnd ? '<br><span style="color:var(--accent);font-weight:700">New finish: ' + newEnd + '</span>' : '<br><span style="color:var(--red)">Extension would run past midnight</span>');
+}
+
+function openExtensionOfferModal(bookingId) {
+  const booking = findCachedBooking(bookingId);
+  if (!booking) return;
+  extensionOfferBooking = booking;
+  closeBookingModal();
+  document.getElementById('extensionMinutes').value = '30';
+  document.getElementById('extensionPrice').value = '';
+  document.getElementById('extensionOfferError').style.display = 'none';
+  document.getElementById('extensionOfferSuccess').style.display = 'none';
+  document.getElementById('extensionOfferSendBtn').disabled = false;
+  document.getElementById('extensionOfferSendBtn').textContent = 'Send request';
+  updateExtensionSummary();
+  document.getElementById('extensionOfferModal').classList.add('open');
+}
+
+function closeExtensionOfferModal() {
+  document.getElementById('extensionOfferModal').classList.remove('open');
+  extensionOfferBooking = null;
+}
+
+async function sendExtensionOffer() {
+  if (!extensionOfferBooking) return;
+  const errorEl = document.getElementById('extensionOfferError');
+  const successEl = document.getElementById('extensionOfferSuccess');
+  const button = document.getElementById('extensionOfferSendBtn');
+  const extensionMinutes = parseInt(document.getElementById('extensionMinutes').value, 10);
+  const priceText = document.getElementById('extensionPrice').value.trim();
+  const payload = { booking_id: extensionOfferBooking.id, extension_minutes: extensionMinutes };
+  if (priceText) {
+    const price = Number(priceText);
+    if (!Number.isFinite(price) || price <= 0) {
+      errorEl.textContent = 'Enter a valid positive price.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    payload.offer_price_pence = Math.round(price * 100);
+  }
+
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+  button.disabled = true;
+  button.textContent = 'Sending…';
+  try {
+    const response = await ccAuth.fetchAuthed('/api/instructor?action=create-extension-offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create extension request');
+
+    const deliveries = [];
+    if (data.email_sent) deliveries.push('email');
+    if (data.message_sent) deliveries.push('text message');
+    const deliveryText = deliveries.length ? 'Sent by ' + deliveries.join(' and ') + '.' : 'Delivery did not complete, so copy the link below.';
+    successEl.innerHTML = deliveryText + '<br><a href="' + data.accept_url + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;word-break:break-all">' + data.accept_url + '</a>';
+    successEl.style.display = 'block';
+    button.textContent = 'Sent ✓';
+  } catch (error) {
+    errorEl.textContent = error.message || 'Failed to create extension request';
+    errorEl.style.display = 'block';
+    button.disabled = false;
+    button.textContent = 'Send request';
+  }
 }
 
 // ─── Cancel Booking ───────────────────────────────────────────────────────────
@@ -3131,6 +3231,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-not-delivered-modal') openNotDeliveredModal(parseInt(t.dataset.id, 10));
   else if (a === 'open-reschedule-modal') openRescheduleModal(parseInt(t.dataset.id, 10), t.dataset.date, t.dataset.start, t.dataset.end, t.dataset.name);
   else if (a === 'open-edit-booking-modal') openEditBookingModal(parseInt(t.dataset.id, 10));
+  else if (a === 'open-extension-modal') openExtensionOfferModal(parseInt(t.dataset.id, 10));
   else if (a === 'close-booking-modal') closeBookingModal();
   else if (a === 'history-book-lesson') { closeHistoryModal(); openAddLessonModal(); }
   else if (a === 'retry-booking-history') renderBookingHistory();
@@ -3206,6 +3307,9 @@ document.querySelectorAll('[data-toolbar-of]').forEach(function (btn) {
   var editType = document.getElementById('editBookingType');
   if (editType) editType.addEventListener('change', updateEditEndTime);
   bind('btn-close-edit-booking', closeEditBookingModal);
+  bind('btn-close-extension-offer', closeExtensionOfferModal);
+  bind('extensionOfferSendBtn', sendExtensionOffer);
+  bind('extensionMinutes', updateExtensionSummary, 'change');
   bind('editBookingSaveBtn', confirmEditBooking);
   var addLessonModal = document.getElementById('addLessonModal');
   if (addLessonModal) addLessonModal.addEventListener('click', function (e) { if (e.target === addLessonModal) closeAddLessonModal(); });
