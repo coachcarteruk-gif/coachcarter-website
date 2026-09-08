@@ -383,6 +383,7 @@ async function loadEnquiries() {
     
     const enquiryTypeLabels = {
       'general': 'General',
+      'free-trial-courses': 'Trial course preferences',
       'booking': 'Booking',
       'pass-guarantee': 'Test Ready Guarantee',
       'free-consultation': 'Free Consultation',
@@ -453,6 +454,7 @@ function viewEnquiry(id) {
       const e = data.enquiry;
       const enquiryTypeLabels = {
         'general': 'General Question',
+        'free-trial-courses': 'Free trial course preferences',
         'booking': 'Booking Enquiry',
         'pass-guarantee': 'Test Ready Guarantee Programme',
         'free-consultation': 'Free Learner Driver Consultation',

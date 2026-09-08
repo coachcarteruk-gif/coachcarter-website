@@ -171,6 +171,10 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasCurriculumProgress = await curriculumProgressTablesExist(sql);
 
   const txn = [
+    sql`DELETE FROM enquiries e USING learner_users lu
+        WHERE lu.id = ${learnerId} AND e.school_id = lu.school_id
+          AND LOWER(e.email) = LOWER(lu.email)
+          AND e.enquiry_type = 'free-trial-courses'`,
     // 1. Anonymise financial records (7-year retention).
     sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learnerId}`,
     sql`UPDATE lesson_bookings SET learner_id = NULL, learner_anonymized = true WHERE learner_id = ${learnerId}`,

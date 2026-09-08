@@ -44,7 +44,7 @@ test.describe('free trial passwordless journey', () => {
 
     await expect(page.getByText('No password is needed')).toBeVisible();
     await expect(page.getByText('6-digit code')).toBeVisible();
-    await expect(page.getByText('All fields are required.')).toBeVisible();
+    await expect(page.getByText('Your contact details are required. Course preferences are optional.')).toBeVisible();
 
     const submit = page.getByRole('button', { name: 'Choose a time above' });
     await expect(submit).toBeEnabled();

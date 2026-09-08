@@ -29,6 +29,7 @@
 //   - 48-hour cancellation policy for hours return
 
 const { neon }    = require('@neondatabase/serverless');
+const { parseTrialPreferences } = require('./_trial-preferences');
 const jwt         = require('jsonwebtoken');
 const crypto      = require('crypto');
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
@@ -5929,6 +5930,13 @@ function isSelfServeFreeTrialBooking(booking) {
 async function handleBookFreeTrial(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  let coursePreferences;
+  try {
+    coursePreferences = parseTrialPreferences(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
   const { instructor_id, date, start_time, end_time,
            guest_name, guest_email, guest_phone, guest_pickup_address,
           referral_code, transmission_type } = req.body;
@@ -6247,6 +6255,7 @@ async function handleBookFreeTrial(req, res) {
     let booking;
     try {
       const [b] = await sql`
+        WITH trial_booking AS (
         INSERT INTO lesson_bookings
           (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
            created_by, payment_method, lesson_type_id, minutes_deducted,
@@ -6258,6 +6267,16 @@ async function handleBookFreeTrial(req, res) {
            ${cleanAddr}, ${schoolId}, ${cleanPhone}, ${bookingTransmissionType},
            0, 'live_compute_insert')
         RETURNING id, scheduled_date::text, start_time::text, end_time::text
+        ), course_enquiry AS (
+          INSERT INTO enquiries
+            (name, email, phone, enquiry_type, message, marketing_consent, school_id)
+          SELECT ${cleanName}, ${cleanEmail}, ${cleanPhone}, 'free-trial-courses',
+                 ${coursePreferences.message}, FALSE, ${schoolId}
+          FROM trial_booking
+          WHERE ${coursePreferences.requested}
+          RETURNING id
+        )
+        SELECT * FROM trial_booking
       `;
       booking = b;
     } catch (insertErr) {

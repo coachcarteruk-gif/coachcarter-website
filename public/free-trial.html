@@ -291,6 +291,13 @@ a:hover { color: var(--accent-text); }
   display: none;
 }
 
+.course-preferences { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 0 0 24px; min-width: 0; }
+.course-preferences legend { font-weight: 700; padding: 0 6px; }
+.preference-option { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; cursor: pointer; line-height: 1.5; }
+.preference-option input { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; accent-color: var(--accent); }
+.intensive-months { border: 0; padding: 12px 0 0; margin: 0; min-width: 0; }
+.intensive-months[hidden] { display: none; }
+.month-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .required-note {
   color: var(--faint);
   font-size: 13px;
@@ -420,7 +427,7 @@ a:hover { color: var(--accent-text); }
     <section class="card" aria-labelledby="step-2-heading">
       <h2 id="step-2-heading"><span class="step-num">2</span>Your details</h2>
       <p class="helper">We'll email your booking confirmation. No password is needed—when you sign in later, we'll send a 6-digit code.</p>
-      <p class="required-note">All fields are required.</p>
+      <p class="required-note">Your contact details are required. Course preferences are optional.</p>
 
       <div id="summaryBar" class="summary-bar" style="display:none"></div>
       <div id="formError" class="form-error" role="alert"></div>
@@ -452,6 +459,24 @@ a:hover { color: var(--accent-text); }
           <div class="field-help" id="guest_pickup_address_help">Enter the exact address where you'd like your instructor to meet you.</div>
           <div class="field-error" id="guest_pickup_address_error" aria-live="polite"></div>
         </div>
+
+        <fieldset class="course-preferences">
+          <legend>Course preferences (optional)</legend>
+          <label class="preference-option" for="email_course_opt_in">
+            <input type="checkbox" id="email_course_opt_in" name="email_course_opt_in">
+            <span>Would you like to receive our &ldquo;30 Day to Pass Your Test&rdquo; email course?</span>
+          </label>
+          <label class="preference-option" for="intensive_interest">
+            <input type="checkbox" id="intensive_interest" name="intensive_interest" aria-controls="intensiveMonths" aria-expanded="false">
+            <span>Would you like to know more about our intensive courses?</span>
+          </label>
+          <p class="field-help">Tick either box to request that course information by email.</p>
+          <fieldset id="intensiveMonths" class="intensive-months" hidden disabled>
+            <legend>Tick your preferred month(s) to start an intensive course</legend>
+            <p class="field-help">Choose as many as you like, or leave blank if you're not sure yet.</p>
+            <div id="monthOptions" class="month-options"></div>
+          </fieldset>
+        </fieldset>
 
         <div class="submit-dock">
           <div id="stickySummary" class="sticky-summary" aria-hidden="true"></div>

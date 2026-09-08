@@ -2000,12 +2000,19 @@ async function handleExportData(req, res) {
       }
     }
 
+    const trialCoursePreferences = await sql`
+      SELECT enquiry_type, message, submitted_at, status
+      FROM enquiries
+      WHERE school_id = ${schoolId} AND LOWER(email) = LOWER(${profile.email})
+        AND enquiry_type = 'free-trial-courses'
+      ORDER BY submitted_at DESC`;
+
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
         data_categories: [
-          'profile', 'onboarding', 'bookings', 'transactions',
+          'profile', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences',
           'driving_sessions', 'skill_ratings', 'quiz_results',
           'mock_tests', 'mock_test_faults', 'focused_practice',
           'referral_code', 'referrals_made',
@@ -2025,6 +2032,7 @@ async function handleExportData(req, res) {
         ]
       },
       profile: profile || {},
+      trial_course_preferences: trialCoursePreferences,
       onboarding: onboarding[0] || null,
       bookings,
       transactions,
