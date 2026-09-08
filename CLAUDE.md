@@ -190,6 +190,10 @@ Per-instructor `instructors.request_to_book` toggle: learners request slots inst
 6. Declined/expired guest emails must state the card was never charged (only authorised).
 7. No weekly repeats and no social-video discount on requests (v1 — deliberate).
 
+## Paid lesson extensions (September 2026)
+
+An extension offer is a `lesson_offers` row with `extension_booking_id` and `extension_minutes`. It charges only the added time and mutates the existing lesson after a verified paid webhook; it must never create a second adjacent booking. Extension checks deliberately ignore availability windows and travel buffers, but reject real overlaps with bookings, busy blocks, pending offers/requests, and reservations. Fulfilment must remain school/instructor/learner scoped, metadata checked, Stripe-session idempotent, and atomic across the `slot_purchase`, appended BCS attribution, booking end/minutes/list-price update, and offer acceptance. Editing/cancelling the source booking or cancelling/expiring the extension closes open Checkout sessions; if payment wins that race, the webhook records an idempotent `booking_extension_unfulfilled` refund intent and returns the full extension charge through Stripe, with failures retained as `manual_review`. Do not enable promotion codes or weekly repeats for extensions, and do not broaden refunds or payout engines beyond that race compensation.
+
 ## Multi-instructor franchise model
 
 > Full plans: [`FRANCHISE-MODEL-PLAN.md`](FRANCHISE-MODEL-PLAN.md), [`INSTRUCTOR-EXPERIENCE-PLAN.md`](INSTRUCTOR-EXPERIENCE-PLAN.md)

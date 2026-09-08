@@ -72,6 +72,13 @@
 
     // Broadcast offer (first-come-first-served): swap copy + show banner.
     var isBroadcast = o.kind === 'broadcast';
+    var isExtension = o.is_extension === true;
+    if (isExtension) {
+      document.getElementById('page-title').textContent = 'Extend your lesson';
+      document.getElementById('page-sub').textContent = o.instructor_name + ' has invited you to add more time';
+      document.getElementById('offer-duration-label').textContent = 'Added time';
+      document.getElementById('pickup-field').style.display = 'none';
+    }
     if (isBroadcast) {
       var bannerEl = document.getElementById('broadcast-banner');
       var bannerBody = document.getElementById('broadcast-banner-body');
@@ -179,6 +186,8 @@
     var btn = document.getElementById('accept-btn');
     if (o.price_pence === 0) {
       btn.textContent = 'Accept free lesson →';
+    } else if (isExtension) {
+      btn.textContent = 'Add time & pay →';
     } else if (isBroadcast) {
       btn.textContent = 'Book this slot →';
     }
@@ -272,7 +281,7 @@
         errorEl.textContent = data.message || data.error || 'Something went wrong. Please try again.';
         errorEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
+        btn.textContent = (offerData && offerData.is_extension) ? 'Add time & pay →' : (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
         return;
       }
 
@@ -288,7 +297,7 @@
       errorEl.textContent = 'Connection failed. Please try again.';
       errorEl.style.display = 'block';
       btn.disabled = false;
-      btn.textContent = (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
+      btn.textContent = (offerData && offerData.is_extension) ? 'Add time & pay →' : (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
     }
   }
 

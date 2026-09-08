@@ -82,6 +82,10 @@ const {
   loadInstructorScheduleWarnings,
   sendScheduleOverrideRequired,
 } = require('./_instructor-schedule-warnings');
+const {
+  expireExtensionCheckoutSessions,
+  invalidatePendingBookingExtensions,
+} = require('./_booking-extension-invalidation');
 
 
 const TOKEN_EXPIRY_MINUTES = 30;
@@ -303,6 +307,7 @@ module.exports = async (req, res) => {
   if (action === 'accept-request')       return handleAcceptRequest(req, res);
   if (action === 'decline-request')      return handleDeclineRequest(req, res);
   if (action === 'create-offer')         return handleCreateOffer(req, res);
+  if (action === 'create-extension-offer') return handleCreateExtensionOffer(req, res);
   if (action === 'share-package-link')   return handleSharePackageLink(req, res);
   if (action === 'list-offers')          return handleListOffers(req, res);
   if (action === 'cancel-offer')         return handleCancelOffer(req, res);
@@ -535,7 +540,14 @@ async function handleSchedule(req, res) {
           END AS transmission_type,
           lt.name AS lesson_type_name,
           lt.colour AS lesson_type_colour,
-          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+          COALESCE(
+            CASE WHEN lb.end_time > lb.start_time
+              THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+              ELSE NULL
+            END,
+            lt.duration_minutes,
+            90
+          ) AS duration_minutes
         FROM lesson_bookings lb
         JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
         JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
@@ -582,7 +594,14 @@ async function handleSchedule(req, res) {
           CASE WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic' ELSE 'manual' END AS transmission_type,
           lt.name AS lesson_type_name,
           lt.colour AS lesson_type_colour,
-          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+          COALESCE(
+            CASE WHEN lb.end_time > lb.start_time
+              THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+              ELSE NULL
+            END,
+            lt.duration_minutes,
+            90
+          ) AS duration_minutes
         FROM lesson_bookings lb
         JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
         JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
@@ -701,7 +720,14 @@ async function handleScheduleRange(req, res) {
           COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
           lt.name AS lesson_type_name,
           lt.colour AS lesson_type_colour,
-          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+          COALESCE(
+            CASE WHEN lb.end_time > lb.start_time
+              THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+              ELSE NULL
+            END,
+            lt.duration_minutes,
+            90
+          ) AS duration_minutes
         FROM lesson_bookings lb
         JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
         JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
@@ -748,7 +774,14 @@ async function handleScheduleRange(req, res) {
           COALESCE(lu.prefer_contact_before, false) AS prefer_contact_before,
           lt.name AS lesson_type_name,
           lt.colour AS lesson_type_colour,
-          COALESCE(lt.duration_minutes, 90) AS duration_minutes
+          COALESCE(
+            CASE WHEN lb.end_time > lb.start_time
+              THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+              ELSE NULL
+            END,
+            lt.duration_minutes,
+            90
+          ) AS duration_minutes
         FROM lesson_bookings lb
         JOIN learner_users lu ON lu.id = lb.learner_id AND COALESCE(lu.school_id, 1) = ${schoolId}
         JOIN instructors i ON i.id = lb.instructor_id AND COALESCE(i.school_id, 1) = ${schoolId}
@@ -786,10 +819,12 @@ async function handleScheduleRange(req, res) {
           o.discount_pct,
           o.expires_at,
           o.kind,
+          o.extension_booking_id,
+          o.extension_minutes,
           lt.id    AS lesson_type_id,
           lt.name  AS lesson_type_name,
           lt.colour AS lesson_type_colour,
-          COALESCE(lt.duration_minutes, 90) AS duration_minutes,
+          COALESCE(o.extension_minutes, lt.duration_minutes, 90) AS duration_minutes,
           COALESCE(lt.price_pence, 8250)    AS lesson_type_price_pence,
           lu.name  AS learner_name
         FROM lesson_offers o
@@ -1896,6 +1931,16 @@ async function handleCancelBooking(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = instructor.school_id || 1;
+
+    // Close and expire any unpaid extension before reading the booking. If
+    // payment won the race, the row is already accepted and the fresh read
+    // below observes the fulfilled duration/source before cancellation.
+    await invalidatePendingBookingExtensions(sql, {
+      bookingId: booking_id,
+      instructorId: instructor.id,
+      schoolId,
+    });
 
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
@@ -1907,6 +1952,7 @@ async function handleCancelBooking(req, res) {
       JOIN learner_users lu ON lu.id = lb.learner_id
       JOIN instructors i ON i.id = lb.instructor_id
       WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
@@ -2183,6 +2229,16 @@ async function handleRescheduleBooking(req, res) {
   const schoolId = instructor.school_id || 1;
   try {
     const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const invalidatedExtensions = await client.query(
+        `UPDATE lesson_offers
+            SET status = 'cancelled'
+          WHERE extension_booking_id = $1
+            AND instructor_id = $2
+            AND school_id = $3
+            AND status = 'pending'
+          RETURNING stripe_session_id`,
+        [bookingId, instructor.id, schoolId]
+      );
       const locked = await client.query(
         `SELECT id
            FROM lesson_bookings
@@ -2300,8 +2356,11 @@ async function handleRescheduleBooking(req, res) {
         newBooking,
         newEndTime: availability.newEndTime,
         instructorChanged,
+        invalidatedExtensionSessionIds: invalidatedExtensions.rows.map(row => row.stripe_session_id),
       };
     });
+
+    await expireExtensionCheckoutSessions(result.invalidatedExtensionSessionIds);
 
     await notifyInstructorReschedule({
       booking: result.booking,
@@ -2423,11 +2482,11 @@ async function loadManagedInstructorRescheduleBooking(sql, { bookingId, instruct
            lt.name AS lesson_type_name,
            lt.slug AS lesson_type_slug,
            COALESCE(
-             lt.duration_minutes,
              CASE WHEN lb.end_time > lb.start_time
                THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
                ELSE NULL
              END,
+             lt.duration_minutes,
              90
            )::int AS duration_minutes,
            EXISTS (
@@ -2578,7 +2637,7 @@ async function handleEditBooking(req, res) {
     const schoolId = instructor.school_id || 1;
 
     // Load booking — must belong to this instructor
-    const [booking] = await sql`
+    let [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
@@ -2614,7 +2673,13 @@ async function handleEditBooking(req, res) {
     let newDate = scheduled_date || booking.scheduled_date;
     let newStartTime = start_time || String(booking.start_time).slice(0, 5);
     let newLessonTypeId = lesson_type_id || booking.lesson_type_id;
-    let newDuration = parseInt(booking.type_duration_minutes) || 90;
+    const existingStartMinutes = Number(String(booking.start_time).slice(0, 2)) * 60
+      + Number(String(booking.start_time).slice(3, 5));
+    const existingEndMinutes = Number(String(booking.end_time).slice(0, 2)) * 60
+      + Number(String(booking.end_time).slice(3, 5));
+    let newDuration = existingEndMinutes > existingStartMinutes
+      ? existingEndMinutes - existingStartMinutes
+      : (parseInt(booking.type_duration_minutes) || 90);
     let newTransmissionType = normaliseLessonTransmissionType(booking.transmission_type)
       || defaultLessonTransmissionForInstructor(booking.instructor_transmission_type);
 
@@ -2706,6 +2771,37 @@ async function handleEditBooking(req, res) {
     if (busyBlock) {
       return res.status(409).json({ error: 'That time is blocked as busy. Remove the busy block or choose another time.' });
     }
+
+    // Only invalidate after the requested edit has passed validation. A paid
+    // webhook that already holds the offer row wins this race; in that case
+    // the fresh read below detects its booking mutation and asks the instructor
+    // to retry instead of overwriting paid extension minutes with stale data.
+    await invalidatePendingBookingExtensions(sql, {
+      bookingId: booking_id,
+      instructorId: instructor.id,
+      schoolId,
+    });
+    const [freshBooking] = await sql`
+      SELECT status, scheduled_date::text AS scheduled_date,
+             start_time::text AS start_time, end_time::text AS end_time,
+             lesson_type_id, minutes_deducted
+        FROM lesson_bookings
+       WHERE id = ${booking_id}
+         AND instructor_id = ${instructor.id}
+         AND school_id = ${schoolId}
+    `;
+    const bookingChanged = !freshBooking || freshBooking.status !== booking.status ||
+      freshBooking.scheduled_date !== booking.scheduled_date ||
+      String(freshBooking.start_time).slice(0, 5) !== String(booking.start_time).slice(0, 5) ||
+      String(freshBooking.end_time).slice(0, 5) !== String(booking.end_time).slice(0, 5) ||
+      Number(freshBooking.lesson_type_id || 0) !== Number(booking.lesson_type_id || 0) ||
+      Number(freshBooking.minutes_deducted || 0) !== Number(booking.minutes_deducted || 0);
+    if (bookingChanged) {
+      return res.status(409).json({
+        error: 'This booking changed while you were editing it. Refresh the schedule and try again.',
+      });
+    }
+    booking = { ...booking, ...freshBooking };
 
     // Credit/balance adjustment
     const oldMinutes = parseInt(booking.minutes_deducted) || 0;
@@ -3973,7 +4069,14 @@ async function handleEarningsWeek(req, res) {
           THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
           ELSE COALESCE(lt.price_pence, 8250)
         END AS price_pence,
-        COALESCE(lt.duration_minutes, 90) AS duration_minutes
+          COALESCE(
+            CASE WHEN lb.end_time > lb.start_time
+              THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
+              ELSE NULL
+            END,
+            lt.duration_minutes,
+            90
+          ) AS duration_minutes
       FROM lesson_bookings lb
       LEFT JOIN learner_users lu ON lu.id = lb.learner_id
       LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
@@ -5017,6 +5120,254 @@ async function handleCreateOffer(req, res) {
   }
 }
 
+// ── POST /api/instructor?action=create-extension-offer ─────────────────────
+// Body: { booking_id, extension_minutes, offer_price_pence? }
+// Creates a paid request that extends an existing lesson after Stripe payment.
+// Availability windows and travel buffers deliberately do not apply because
+// this is a continuation of the same session. Actual calendar overlaps do.
+async function handleCreateExtensionOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = instructor.school_id || 1;
+
+  const bookingId = parseInt(req.body?.booking_id, 10);
+  const extensionMinutes = parseInt(req.body?.extension_minutes, 10);
+  const explicitPrice = req.body?.offer_price_pence;
+  if (!Number.isInteger(bookingId) || bookingId <= 0) {
+    return res.status(400).json({ error: 'booking_id must be a positive integer' });
+  }
+  if (!Number.isInteger(extensionMinutes) || extensionMinutes < 30 || extensionMinutes > 180 || extensionMinutes % 30 !== 0) {
+    return res.status(400).json({ error: 'Extension must be between 30 and 180 minutes, in 30-minute steps.' });
+  }
+  if (explicitPrice != null && explicitPrice !== '') {
+    const parsedPrice = Number(explicitPrice);
+    if (!Number.isInteger(parsedPrice) || parsedPrice < 1) {
+      return res.status(400).json({ error: 'Extension price must be a positive whole number of pence.' });
+    }
+  }
+
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const staleOffers = await sql`
+      UPDATE lesson_offers SET status = 'expired'
+      WHERE school_id = ${schoolId} AND status = 'pending' AND expires_at <= NOW()
+      RETURNING extension_booking_id, stripe_session_id
+    `;
+    await expireExtensionCheckoutSessions(
+      staleOffers.filter(row => row.extension_booking_id).map(row => row.stripe_session_id)
+    );
+    const [booking] = await sql`
+      SELECT lb.id, lb.school_id, lb.learner_id, lb.instructor_id,
+             lb.scheduled_date::text AS scheduled_date,
+             lb.start_time::text AS start_time, lb.end_time::text AS end_time,
+             (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
+             lb.status, lb.lesson_type_id, lb.list_price_pence, lb.payment_method,
+             lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+             i.name AS instructor_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
+      JOIN instructors i ON i.id = lb.instructor_id AND i.school_id = lb.school_id
+      WHERE lb.id = ${bookingId}
+        AND lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
+    `;
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (booking.status !== SCHEDULED) {
+      return res.status(409).json({ error: 'Only a scheduled lesson can be extended.' });
+    }
+    if (booking.lesson_has_ended) {
+      return res.status(409).json({ error: 'A lesson that has already ended cannot be extended.' });
+    }
+    if (!booking.learner_email) {
+      return res.status(409).json({ error: 'This learner needs an email address before you can send an extension request.' });
+    }
+
+    const currentEnd = String(booking.end_time).slice(0, 5);
+    const [endHour, endMinute] = currentEnd.split(':').map(Number);
+    const newEndMinutes = endHour * 60 + endMinute + extensionMinutes;
+    if (newEndMinutes >= 24 * 60) {
+      return res.status(400).json({ error: 'The extended lesson must finish before midnight.' });
+    }
+    const newEndTime = `${String(Math.floor(newEndMinutes / 60)).padStart(2, '0')}:${String(newEndMinutes % 60).padStart(2, '0')}`;
+
+    const [bookingConflict] = await sql`
+      SELECT lb.id, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
+             lu.name AS learner_name
+      FROM lesson_bookings lb
+      JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
+      WHERE lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
+        AND lb.scheduled_date = ${booking.scheduled_date}::date
+        AND lb.id <> ${bookingId}
+        AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
+        AND lb.start_time < ${newEndTime}::time
+        AND lb.end_time > ${currentEnd}::time
+      ORDER BY lb.start_time
+      LIMIT 1
+    `;
+    if (bookingConflict) {
+      return res.status(409).json({
+        error: `The extension would overlap ${bookingConflict.learner_name}'s ${String(bookingConflict.start_time).slice(0, 5)} lesson.`,
+      });
+    }
+
+    const [busyConflict] = await sql`
+      SELECT id FROM instructor_busy_blocks
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND block_date = ${booking.scheduled_date}::date
+        AND start_time < ${newEndTime}::time
+        AND end_time > ${currentEnd}::time
+      LIMIT 1
+    `;
+    if (busyConflict) return res.status(409).json({ error: 'The extension would overlap a busy block.' });
+
+    const [offerConflict] = await sql`
+      SELECT id FROM lesson_offers
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${booking.scheduled_date}::date
+        AND status = 'pending' AND expires_at > NOW()
+        AND start_time < ${newEndTime}::time AND end_time > ${currentEnd}::time
+      LIMIT 1
+    `;
+    if (offerConflict) return res.status(409).json({ error: 'The extension would overlap a pending lesson offer.' });
+
+    const [requestConflict] = await sql`
+      SELECT id FROM lesson_requests
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${booking.scheduled_date}::date
+        AND status = 'pending' AND expires_at > NOW()
+        AND start_time < ${newEndTime}::time AND end_time > ${currentEnd}::time
+      LIMIT 1
+    `;
+    if (requestConflict) return res.status(409).json({ error: 'The extension would overlap a pending lesson request.' });
+
+    const [reservationConflict] = await sql`
+      SELECT id FROM slot_reservations
+      WHERE instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND scheduled_date = ${booking.scheduled_date}::date
+        AND expires_at > NOW()
+        AND start_time < ${newEndTime}::time AND end_time > ${currentEnd}::time
+      LIMIT 1
+    `;
+    if (reservationConflict) return res.status(409).json({ error: 'Someone is currently booking time needed by this extension.' });
+
+    const pricing = await calcOfferLessonPrice(sql, {
+      schoolId,
+      instructorId: instructor.id,
+      learnerId: booking.learner_id,
+      durationMinutes: extensionMinutes,
+      explicitPricePence: explicitPrice,
+      discountPct: 0,
+    });
+    if (pricing.pricePence < 1) {
+      return res.status(400).json({ error: 'A paid extension must have a positive price.' });
+    }
+
+    const [startHour, startMinute] = String(booking.start_time).slice(0, 5).split(':').map(Number);
+    const originalDurationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+    if (!Number.isInteger(originalDurationMinutes) || originalDurationMinutes <= 0) {
+      return res.status(409).json({ error: 'This booking has an invalid time range and cannot be extended.' });
+    }
+    const basePricing = booking.list_price_pence != null
+      ? { pricePence: Number(booking.list_price_pence) }
+      : booking.payment_method === 'free'
+        ? { pricePence: 0 }
+      : await calcOfferLessonPrice(sql, {
+          schoolId,
+          instructorId: instructor.id,
+          learnerId: booking.learner_id,
+          durationMinutes: originalDurationMinutes,
+          discountPct: 0,
+        });
+
+    const token = generateToken();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const [offer] = await sql`
+      INSERT INTO lesson_offers
+        (token, instructor_id, learner_email, learner_name, learner_id,
+         scheduled_date, start_time, end_time, lesson_type_id,
+         discount_pct, offer_price_pence, status, expires_at, school_id,
+         kind, extension_booking_id, extension_minutes, extension_base_list_price_pence)
+      VALUES
+        (${token}, ${instructor.id}, ${booking.learner_email}, ${booking.learner_name}, ${booking.learner_id},
+         ${booking.scheduled_date}, ${currentEnd}, ${newEndTime}, ${booking.lesson_type_id},
+         0, ${pricing.pricePence}, 'pending', ${expiresAt}, ${schoolId},
+         'manual', ${bookingId}, ${extensionMinutes}, ${basePricing.pricePence})
+      RETURNING id, expires_at
+    `;
+
+    const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+    const acceptUrl = `${baseUrl}/accept-offer.html?token=${token}`;
+    const dateStr = new Date(`${booking.scheduled_date}T00:00:00Z`).toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
+    });
+    const firstName = String(booking.learner_name || '').split(' ')[0] || 'there';
+    const priceStr = `£${(pricing.pricePence / 100).toFixed(2)}`;
+
+    let emailSent = false;
+    try {
+      const mailer = createTransporter();
+      await mailer.sendMail({
+        from: 'CoachCarter <bookings@coachcarter.uk>',
+        to: booking.learner_email,
+        subject: `Extend your lesson with ${booking.instructor_name}`,
+        html: `
+          <div style="font-family:Arial,Helvetica,sans-serif;max-width:580px;margin:0 auto">
+            <h2>Hi ${firstName},</h2>
+            <p>${booking.instructor_name} has invited you to extend your lesson on ${dateStr}.</p>
+            <table style="border-collapse:collapse;margin:16px 0">
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Added time</td><td>+${extensionMinutes} minutes</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Lesson now ends</td><td>${newEndTime}</td></tr>
+              <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td>${priceStr}</td></tr>
+            </table>
+            <p><a href="${acceptUrl}" style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Accept &amp; pay →</a></p>
+            <p style="font-size:0.85rem;color:#797879">This request expires in 24 hours. Your lesson changes only after payment succeeds.</p>
+          </div>`,
+      });
+      emailSent = true;
+    } catch (emailErr) {
+      console.error('Failed to send extension offer email:', emailErr);
+    }
+
+    let messageSent = false;
+    if (booking.learner_phone) {
+      try {
+        const result = await sendWhatsApp(
+          booking.learner_phone,
+          `Hi ${firstName}, ${booking.instructor_name} has invited you to extend your ${dateStr} lesson by ${extensionMinutes} minutes for ${priceStr}.\n\nAccept and pay within 24 hours: ${acceptUrl}`,
+          { purpose: 'offer.extension_created_learner', learnerId: booking.learner_id, instructorId: instructor.id, schoolId }
+        );
+        messageSent = !!result?.ok;
+      } catch (messageErr) {
+        console.error('Failed to send extension offer message:', messageErr);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      offer_id: offer.id,
+      expires_at: offer.expires_at,
+      accept_url: acceptUrl,
+      price_pence: pricing.pricePence,
+      new_end_time: newEndTime,
+      email_sent: emailSent,
+      message_sent: messageSent,
+    });
+  } catch (err) {
+    console.error('create-extension-offer error:', err);
+    if (err.code === '23505' || String(err.message || '').includes('uq_lesson_offers_pending_extension')) {
+      return res.status(409).json({ error: 'This lesson already has a pending extension request.' });
+    }
+    reportError('/api/instructor?action=create-extension-offer', err);
+    return res.status(500).json({ error: 'Failed to create extension request' });
+  }
+}
+
 // ── POST /api/instructor?action=share-package-link ───────────────────────────
 // Sends the school's ordinary Packages catalogue link. The instructor does not
 // select or price a product: catalogue visibility, terms and Checkout
@@ -5259,14 +5610,22 @@ async function handleCancelOffer(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = instructor.school_id || 1;
 
     const [updated] = await sql`
       UPDATE lesson_offers SET status = 'cancelled'
-      WHERE id = ${offer_id} AND instructor_id = ${instructor.id} AND status = 'pending'
-      RETURNING id, learner_email
+      WHERE id = ${offer_id}
+        AND instructor_id = ${instructor.id}
+        AND school_id = ${schoolId}
+        AND status = 'pending'
+      RETURNING id, learner_email, extension_booking_id, stripe_session_id
     `;
     if (!updated)
       return res.status(404).json({ error: 'Offer not found or already processed' });
+
+    if (updated.extension_booking_id) {
+      await expireExtensionCheckoutSessions([updated.stripe_session_id]);
+    }
 
     return res.json({ ok: true, cancelled_id: updated.id });
   } catch (err) {

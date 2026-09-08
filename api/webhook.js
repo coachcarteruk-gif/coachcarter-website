@@ -1,5 +1,6 @@
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
 const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
+let extensionRefundStripe = null;
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -34,6 +35,12 @@ const {
   materializeLaunchPaymentContract,
   isStripeLaunchSchemaUnavailable,
 } = require('./_stripe-launch-payment-contracts');
+
+function dateOnly(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
 
 
 function concreteLessonTransmissionType(value) {
@@ -2373,6 +2380,20 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       return;
     }
 
+    const [offerShape] = await sql`
+      SELECT instructor_id, extension_booking_id, extension_minutes,
+             extension_base_list_price_pence, offer_price_pence,
+             scheduled_date::text AS scheduled_date,
+             start_time::text AS start_time, end_time::text AS end_time,
+             stripe_session_id
+      FROM lesson_offers
+      WHERE id = ${offer.id} AND school_id = ${offer.school_id}
+    `;
+    if (!offerShape) {
+      throw new Error(`lesson_offer ${session.id}: canonical offer shape disappeared`);
+    }
+    Object.assign(offer, offerShape);
+
     const schoolId = offer.school_id;
     const rejectOfferMetadata = (reason) => {
       const err = new Error(`lesson_offer ${session.id}: ${reason}`);
@@ -2418,6 +2439,7 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       `;
       if (existingOfferCreditTx) {
         const fundingEvidence = await fetchSessionFundingEvidence(session);
+        const isExtension = !!offer.extension_booking_id;
         if (!isFlexible && repeatWeeks === 1 && offer.booking_id) {
           await ensureSlotBookingBcs(sql, {
             schoolId,
@@ -2437,7 +2459,7 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
             stripeEventType: payoutV2Receipt.stripeEventType,
             launchEnabled: true,
           } : {},
-          launchContract: !isFlexible && repeatWeeks === 1 && offer.booking_id
+          launchContract: !isExtension && !isFlexible && repeatWeeks === 1 && offer.booking_id
             ? {
                 bookingId: Number(offer.booking_id),
                 metadata,
@@ -2445,6 +2467,46 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
               }
             : null,
         });
+      }
+      return;
+    }
+
+    if (offer.extension_booking_id) {
+      const fundingEvidence = await fetchSessionFundingEvidence(session);
+      const extensionResult = await fulfilPaidBookingExtension({
+        session,
+        offer,
+        fundingEvidence,
+        metadata,
+        metadataLearnerId,
+        metadataSchoolId,
+        instructorId,
+        amountPence,
+        durationMins,
+      });
+      if (extensionResult.refundRequired) {
+        await settleUnfulfilledBookingExtensionRefund({
+          sql,
+          session,
+          result: extensionResult,
+        });
+        return;
+      }
+      await ensurePayoutV2StripeSource({
+        sql,
+        schoolId,
+        creditTransactionId: extensionResult.creditTransactionId,
+        sourceKind: PAYOUT_V2_SOURCE_KINDS.DIRECT_BOOKING,
+        fundingEvidence,
+        eventContext: payoutV2Receipt ? {
+          stripeEventId: payoutV2Receipt.stripeEventId,
+          stripeEventType: payoutV2Receipt.stripeEventType,
+          launchEnabled: true,
+        } : {},
+        launchContract: null,
+      });
+      if (extensionResult.applied) {
+        await notifyPaidBookingExtension(extensionResult);
       }
       return;
     }
@@ -2991,6 +3053,519 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
   }
 }
 
+async function fulfilPaidBookingExtension({
+  session,
+  offer,
+  fundingEvidence,
+  metadata,
+  metadataLearnerId,
+  metadataSchoolId,
+  instructorId,
+  amountPence,
+  durationMins,
+  transactionRunner = withNeonTransaction,
+  connectionString = process.env.POSTGRES_URL,
+}) {
+  const schoolId = Number(offer.school_id);
+  const learnerId = Number(offer.learner_id);
+  const canonicalInstructorId = Number(offer.instructor_id);
+  const extensionMinutes = Number(offer.extension_minutes);
+  const bookingId = Number(offer.extension_booking_id);
+  const canonicalAmountPence = Number(offer.offer_price_pence);
+  const baseListPricePence = Number(offer.extension_base_list_price_pence);
+  const oldEndTime = String(offer.start_time || '').slice(0, 5);
+  const newEndTime = String(offer.end_time || '').slice(0, 5);
+  const scheduledDate = dateOnly(offer.scheduled_date);
+
+  if (!schoolId || !learnerId || !canonicalInstructorId || !bookingId ||
+      !extensionMinutes || !Number.isInteger(baseListPricePence) || baseListPricePence < 0 ||
+      !scheduledDate || !oldEndTime || !newEndTime) {
+    throw new Error(`lesson_extension ${session.id}: canonical offer shape is incomplete`);
+  }
+  if (metadataSchoolId && metadataSchoolId !== schoolId) {
+    throw new Error(`lesson_extension ${session.id}: school metadata mismatch`);
+  }
+  if (instructorId !== canonicalInstructorId || metadataLearnerId !== learnerId) {
+    throw new Error(`lesson_extension ${session.id}: learner/instructor metadata mismatch`);
+  }
+  if (Number(metadata.extension_booking_id) !== bookingId ||
+      Number(metadata.extension_minutes) !== extensionMinutes ||
+      durationMins !== extensionMinutes || amountPence !== canonicalAmountPence) {
+    throw new Error(`lesson_extension ${session.id}: extension metadata mismatch`);
+  }
+  if (offer.stripe_session_id && offer.stripe_session_id !== session.id) {
+    throw new Error(`lesson_extension ${session.id}: Checkout session is not the offer's active session`);
+  }
+
+  const paymentIntentId = typeof session.payment_intent === 'string'
+    ? session.payment_intent
+    : session.payment_intent?.id || null;
+  if (!paymentIntentId || !Number.isInteger(canonicalAmountPence) || canonicalAmountPence <= 0 ||
+      Number(session.amount_total) !== canonicalAmountPence || String(session.currency || '').toLowerCase() !== 'gbp') {
+    throw new Error(`lesson_extension ${session.id}: paid session identity mismatch`);
+  }
+  const stripeFeePence = fundingEvidence.feePence;
+  if (!Number.isSafeInteger(stripeFeePence) || stripeFeePence < 0) {
+    const error = new Error(`lesson_extension ${session.id}: exact Stripe fee evidence is unavailable`);
+    error.code = 'LESSON_EXTENSION_FEE_EVIDENCE_UNAVAILABLE';
+    throw error;
+  }
+
+  return transactionRunner(connectionString, async client => {
+    await client.query('SELECT pg_advisory_xact_lock($1, $2)', [schoolId, canonicalInstructorId]);
+    const lockedOfferResult = await client.query(
+      `SELECT id, status, booking_id, stripe_session_id,
+              (expires_at <= NOW()) AS is_expired
+         FROM lesson_offers
+        WHERE id = $1 AND school_id = $2
+        FOR UPDATE`,
+      [offer.id, schoolId]
+    );
+    const lockedOffer = lockedOfferResult.rows[0];
+    if (!lockedOffer) throw new Error(`lesson_extension ${session.id}: offer disappeared`);
+
+    const requireRefund = async (resolutionReason) => {
+      const idempotencyKey = `lesson_extension_unfulfilled_${session.id}`;
+      const refundMetadata = JSON.stringify({
+        resolution: 'booking_extension_unfulfilled',
+        resolution_reason: resolutionReason,
+        offer_id: Number(offer.id),
+        booking_id: bookingId,
+        stripe_session_id: session.id,
+        instructor_id: canonicalInstructorId,
+        extension_minutes: extensionMinutes,
+      });
+      const intentResult = await client.query(
+        `INSERT INTO refund_events
+           (school_id, learner_id, refund_type, status,
+            gross_refund_pence, processing_fee_withheld_pence, net_refund_pence,
+            stripe_payment_intent_id, idempotency_key, reason, metadata)
+         VALUES ($1, $2, 'booking_extension_unfulfilled', 'processing',
+                 $3, 0, $3, $4, $5, $6, $7::jsonb)
+         ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+         RETURNING id, status, school_id, learner_id, gross_refund_pence,
+                   stripe_payment_intent_id, refund_type`,
+        [
+          schoolId,
+          learnerId,
+          canonicalAmountPence,
+          paymentIntentId,
+          idempotencyKey,
+          `Paid booking extension could not be fulfilled: ${resolutionReason}`,
+          refundMetadata,
+        ]
+      );
+      let refundEvent = intentResult.rows[0];
+      if (!refundEvent) {
+        const existingResult = await client.query(
+          `SELECT id, status, school_id, learner_id, gross_refund_pence,
+                  stripe_payment_intent_id, refund_type
+             FROM refund_events
+            WHERE idempotency_key = $1 AND school_id = $2
+            FOR UPDATE`,
+          [idempotencyKey, schoolId]
+        );
+        refundEvent = existingResult.rows[0];
+      }
+      if (!refundEvent || Number(refundEvent.school_id) !== schoolId ||
+          Number(refundEvent.learner_id) !== learnerId ||
+          Number(refundEvent.gross_refund_pence) !== canonicalAmountPence ||
+          refundEvent.stripe_payment_intent_id !== paymentIntentId ||
+          refundEvent.refund_type !== 'booking_extension_unfulfilled') {
+        throw new Error(`lesson_extension ${session.id}: refund intent identity contradiction`);
+      }
+
+      if (lockedOffer.status === 'pending') {
+        await client.query(
+          `UPDATE lesson_offers SET status = 'cancelled'
+            WHERE id = $1 AND school_id = $2 AND status = 'pending'`,
+          [offer.id, schoolId]
+        );
+      }
+      return {
+        applied: false,
+        refundRequired: true,
+        refundEventId: Number(refundEvent.id),
+        refundEventStatus: refundEvent.status,
+        refundIdempotencyKey: idempotencyKey,
+        resolutionReason,
+        bookingId,
+        schoolId,
+        learnerId,
+        instructorId: canonicalInstructorId,
+        amountPence: canonicalAmountPence,
+        paymentIntentId,
+      };
+    };
+
+    if (lockedOffer.status === 'accepted') {
+      const existing = await client.query(
+        `SELECT id FROM credit_transactions
+          WHERE stripe_session_id = $1 AND school_id = $2 AND type = 'slot_purchase'
+          LIMIT 1`,
+        [session.id, schoolId]
+      );
+      if (existing.rowCount !== 1) {
+        throw new Error(`lesson_extension ${session.id}: accepted offer has no funding source`);
+      }
+      return {
+        applied: false,
+        creditTransactionId: Number(existing.rows[0].id),
+        bookingId,
+        schoolId,
+      };
+    }
+    if (lockedOffer.status !== 'pending') {
+      return requireRefund(`offer_${lockedOffer.status}`);
+    }
+    if (lockedOffer.is_expired) {
+      return requireRefund('offer_expired');
+    }
+
+    const bookingResult = await client.query(
+      `SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
+              lb.scheduled_date::text AS scheduled_date,
+              lb.start_time::text AS start_time, lb.end_time::text AS end_time,
+              (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
+              lb.minutes_deducted, lb.list_price_pence,
+              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
+              i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone
+         FROM lesson_bookings lb
+         JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
+         JOIN instructors i ON i.id = lb.instructor_id AND i.school_id = lb.school_id
+        WHERE lb.id = $1 AND lb.school_id = $2
+        FOR UPDATE OF lb`,
+      [bookingId, schoolId]
+    );
+    const booking = bookingResult.rows[0];
+    if (!booking || booking.status !== SCHEDULED || booking.lesson_has_ended ||
+        Number(booking.learner_id) !== learnerId ||
+        Number(booking.instructor_id) !== canonicalInstructorId ||
+        dateOnly(booking.scheduled_date) !== scheduledDate ||
+        String(booking.end_time).slice(0, 5) !== oldEndTime) {
+      return requireRefund('booking_changed_or_cancelled');
+    }
+
+    const overlap = await client.query(
+      `SELECT id FROM lesson_bookings
+        WHERE instructor_id = $1 AND school_id = $2
+          AND scheduled_date = $3::date AND id <> $4
+          AND status = ANY($5::text[])
+          AND start_time < $6::time AND end_time > $7::time
+        LIMIT 1`,
+      [canonicalInstructorId, schoolId, scheduledDate, bookingId, BLOCKING_STATUSES, newEndTime, oldEndTime]
+    );
+    if (overlap.rowCount > 0) return requireRefund('booking_overlap');
+
+    const busy = await client.query(
+      `SELECT id FROM instructor_busy_blocks
+        WHERE instructor_id = $1 AND school_id = $2 AND block_date = $3::date
+          AND start_time < $4::time AND end_time > $5::time
+        LIMIT 1`,
+      [canonicalInstructorId, schoolId, scheduledDate, newEndTime, oldEndTime]
+    );
+    if (busy.rowCount > 0) return requireRefund('busy_block_overlap');
+
+    const competingOffer = await client.query(
+      `SELECT id FROM lesson_offers
+        WHERE instructor_id = $1 AND school_id = $2 AND scheduled_date = $3::date
+          AND id <> $4 AND status = 'pending' AND expires_at > NOW()
+          AND start_time < $5::time AND end_time > $6::time
+        LIMIT 1`,
+      [canonicalInstructorId, schoolId, scheduledDate, offer.id, newEndTime, oldEndTime]
+    );
+    if (competingOffer.rowCount > 0) return requireRefund('pending_offer_overlap');
+
+    const request = await client.query(
+      `SELECT id FROM lesson_requests
+        WHERE instructor_id = $1 AND school_id = $2 AND scheduled_date = $3::date
+          AND status = 'pending' AND expires_at > NOW()
+          AND start_time < $4::time AND end_time > $5::time
+        LIMIT 1`,
+      [canonicalInstructorId, schoolId, scheduledDate, newEndTime, oldEndTime]
+    );
+    if (request.rowCount > 0) return requireRefund('pending_request_overlap');
+
+    const reservation = await client.query(
+      `SELECT id FROM slot_reservations
+        WHERE instructor_id = $1 AND school_id = $2 AND scheduled_date = $3::date
+          AND expires_at > NOW() AND start_time < $4::time AND end_time > $5::time
+        LIMIT 1`,
+      [canonicalInstructorId, schoolId, scheduledDate, newEndTime, oldEndTime]
+    );
+    if (reservation.rowCount > 0) return requireRefund('slot_reservation_overlap');
+
+    const sourceResult = await client.query(
+      `INSERT INTO credit_transactions
+         (learner_id, type, credits, amount_pence, payment_method, stripe_session_id,
+          minutes, school_id, stripe_fee_pence, instructor_id,
+          effective_rate_pence_per_minute, stripe_payment_intent_id, source)
+       VALUES ($1, 'slot_purchase', 1, $2, 'card', $3,
+               $4, $5, $6, $7, $8, $9, 'stripe')
+       RETURNING id`,
+      [
+        learnerId, canonicalAmountPence, session.id, extensionMinutes, schoolId,
+        stripeFeePence, canonicalInstructorId,
+        Math.round(canonicalAmountPence / extensionMinutes), paymentIntentId,
+      ]
+    );
+    const creditTransactionId = Number(sourceResult.rows[0].id);
+
+    await client.query(
+      `INSERT INTO booking_credit_sources
+         (school_id, booking_id, credit_transaction_id, minutes_drawn,
+          rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)`,
+      [
+        schoolId, bookingId, creditTransactionId, extensionMinutes,
+        Math.round(canonicalAmountPence / extensionMinutes), canonicalAmountPence,
+        stripeFeePence ?? 0,
+      ]
+    );
+
+    await client.query(
+      `UPDATE lesson_bookings
+          SET end_time = $1::time,
+              minutes_deducted = COALESCE(minutes_deducted, 0) + $2,
+              list_price_pence = COALESCE(list_price_pence, $3) + $4,
+              list_price_source = COALESCE(list_price_source, 'stripe_metadata'),
+              edited_at = NOW()
+        WHERE id = $5 AND school_id = $6`,
+      [newEndTime, extensionMinutes, baseListPricePence, canonicalAmountPence, bookingId, schoolId]
+    );
+
+    await client.query(
+      `UPDATE lesson_offers
+          SET status = 'accepted', booking_id = $1, accepted_at = NOW()
+        WHERE id = $2 AND school_id = $3 AND status = 'pending'`,
+      [bookingId, offer.id, schoolId]
+    );
+
+    return {
+      applied: true,
+      creditTransactionId,
+      bookingId,
+      schoolId,
+      learnerId,
+      instructorId: canonicalInstructorId,
+      learnerName: booking.learner_name,
+      learnerEmail: booking.learner_email,
+      learnerPhone: booking.learner_phone,
+      instructorName: booking.instructor_name,
+      instructorEmail: booking.instructor_email,
+      instructorPhone: booking.instructor_phone,
+      scheduledDate,
+      startTime: String(booking.start_time).slice(0, 5),
+      oldEndTime,
+      newEndTime,
+      extensionMinutes,
+      amountPence: canonicalAmountPence,
+    };
+  });
+}
+
+async function settleUnfulfilledBookingExtensionRefund({
+  sql,
+  session,
+  result,
+  stripeClient = null,
+  transactionRunner = withNeonTransaction,
+  connectionString = process.env.POSTGRES_URL,
+}) {
+  const [event] = await sql`
+    SELECT id, status, school_id, learner_id, refund_type,
+           gross_refund_pence, stripe_payment_intent_id, stripe_refund_id
+      FROM refund_events
+     WHERE id = ${result.refundEventId}
+       AND school_id = ${result.schoolId}
+       AND idempotency_key = ${result.refundIdempotencyKey}
+  `;
+  if (!event || event.refund_type !== 'booking_extension_unfulfilled' ||
+      Number(event.learner_id) !== result.learnerId ||
+      Number(event.gross_refund_pence) !== result.amountPence ||
+      event.stripe_payment_intent_id !== result.paymentIntentId) {
+    throw new Error(`lesson_extension ${session.id}: durable refund intent mismatch`);
+  }
+  if (event.status === 'executed') {
+    return { refunded: true, idempotentReplay: true, stripeRefundId: event.stripe_refund_id };
+  }
+  if (event.status === 'manual_review') {
+    return { refunded: false, manualReview: true, idempotentReplay: true };
+  }
+
+  const refunds = stripeClient || (extensionRefundStripe ||= createPlatformStripeClient({
+    purpose: STRIPE_CLIENT_PURPOSES.REFUNDS,
+  }));
+  let stripeRefund;
+  try {
+    stripeRefund = await refunds.refunds.create({
+      payment_intent: result.paymentIntentId,
+      amount: result.amountPence,
+      metadata: {
+        resolution: 'booking_extension_unfulfilled',
+        offer_id: String(session.metadata?.offer_id || ''),
+        booking_id: String(result.bookingId),
+        stripe_session_id: session.id,
+      },
+    }, { idempotencyKey: result.refundIdempotencyKey });
+  } catch (error) {
+    await sql`
+      UPDATE refund_events
+         SET status = 'manual_review',
+             metadata = metadata || ${JSON.stringify({
+               stripe_refund_error_code: typeof error?.code === 'string' ? error.code : 'stripe_error',
+               operator_action_required: true,
+             })}::jsonb
+       WHERE id = ${result.refundEventId}
+         AND school_id = ${result.schoolId}
+         AND status <> 'executed'
+    `;
+    const alert = new Error(
+      `Automatic refund requires manual review for paid unfulfilled booking extension session ${session.id}`
+    );
+    reportError('/api/webhook (booking extension compensation)', alert);
+    return { refunded: false, manualReview: true, idempotentReplay: false };
+  }
+
+  const stripeRefundId = typeof stripeRefund?.id === 'string' ? stripeRefund.id : null;
+  if (!stripeRefundId) {
+    throw new Error(`lesson_extension ${session.id}: Stripe refund returned no id`);
+  }
+  const stripeChargeId = typeof stripeRefund.charge === 'string'
+    ? stripeRefund.charge
+    : stripeRefund.charge?.id || null;
+  const balanceTransactionId = typeof stripeRefund.balance_transaction === 'string'
+    ? stripeRefund.balance_transaction
+    : stripeRefund.balance_transaction?.id || null;
+
+  if (stripeRefund.status !== 'succeeded') {
+    await sql`
+      UPDATE refund_events
+         SET status = 'manual_review',
+             stripe_refund_id = ${stripeRefundId},
+             stripe_charge_id = COALESCE(stripe_charge_id, ${stripeChargeId}),
+             stripe_balance_transaction_id = COALESCE(stripe_balance_transaction_id, ${balanceTransactionId}),
+             metadata = metadata || ${JSON.stringify({
+               stripe_refund_status: stripeRefund.status || 'unknown',
+               operator_action_required: true,
+             })}::jsonb
+       WHERE id = ${result.refundEventId}
+         AND school_id = ${result.schoolId}
+         AND status <> 'executed'
+    `;
+    const alert = new Error(
+      `Automatic refund is not confirmed for paid unfulfilled booking extension session ${session.id}`
+    );
+    reportError('/api/webhook (booking extension compensation)', alert);
+    return {
+      refunded: false,
+      manualReview: true,
+      idempotentReplay: false,
+      stripeRefundId,
+      stripeRefundStatus: stripeRefund.status || null,
+    };
+  }
+
+  return transactionRunner(connectionString, async client => {
+    const lockedResult = await client.query(
+      `SELECT id, status, stripe_refund_id
+         FROM refund_events
+        WHERE id = $1 AND school_id = $2 AND idempotency_key = $3
+        FOR UPDATE`,
+      [result.refundEventId, result.schoolId, result.refundIdempotencyKey]
+    );
+    const locked = lockedResult.rows[0];
+    if (!locked) throw new Error(`lesson_extension ${session.id}: refund intent disappeared`);
+    if (locked.status === 'executed') {
+      if (locked.stripe_refund_id !== stripeRefundId) {
+        throw new Error(`lesson_extension ${session.id}: refund id contradiction`);
+      }
+      return { refunded: true, idempotentReplay: true, stripeRefundId };
+    }
+
+    await client.query(
+      `INSERT INTO refund_event_lines
+         (school_id, refund_event_id, lesson_booking_id,
+          gross_pence_removed, source_fee_pence_used, fee_withheld_pence,
+          net_refund_pence, minutes_adjusted)
+       VALUES ($1, $2, $3, $4, 0, 0, $4, 0)`,
+      [result.schoolId, result.refundEventId, result.bookingId, result.amountPence]
+    );
+    await client.query(
+      `UPDATE refund_events
+          SET status = 'executed', stripe_refund_id = $1,
+              stripe_charge_id = COALESCE(stripe_charge_id, $2),
+              stripe_balance_transaction_id = COALESCE(stripe_balance_transaction_id, $3),
+              metadata = metadata || $4::jsonb
+        WHERE id = $5 AND school_id = $6`,
+      [
+        stripeRefundId,
+        stripeChargeId,
+        balanceTransactionId,
+        JSON.stringify({ stripe_refund_status: stripeRefund.status || null }),
+        result.refundEventId,
+        result.schoolId,
+      ]
+    );
+    return { refunded: true, idempotentReplay: false, stripeRefundId };
+  });
+}
+
+async function notifyPaidBookingExtension(result) {
+  const dateStr = new Date(`${result.scheduledDate}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
+  });
+  const firstName = String(result.learnerName || '').split(' ')[0] || 'there';
+  const priceStr = `£${(result.amountPence / 100).toFixed(2)}`;
+
+  const learnerMail = {
+    _log: {
+      purpose: 'offer.extension_accepted_learner',
+      learnerId: result.learnerId,
+      instructorId: result.instructorId,
+      schoolId: result.schoolId,
+    },
+    from: 'CoachCarter <bookings@coachcarter.uk>',
+    to: result.learnerEmail,
+    subject: `Lesson extended — ${dateStr}`,
+    html: `<h2>Hi ${firstName},</h2><p>Your ${priceStr} payment was successful.</p><p>Your lesson with ${result.instructorName} on ${dateStr} now runs from <strong>${result.startTime} to ${result.newEndTime}</strong> (+${result.extensionMinutes} minutes).</p>`,
+  };
+  const instructorMail = result.instructorEmail ? {
+    _log: {
+      purpose: 'offer.extension_accepted_instructor',
+      learnerId: result.learnerId,
+      instructorId: result.instructorId,
+      schoolId: result.schoolId,
+    },
+    from: 'CoachCarter <system@coachcarter.uk>',
+    to: result.instructorEmail,
+    subject: `${result.learnerName} accepted the lesson extension`,
+    html: `<h2>Extension accepted</h2><p>${result.learnerName}'s lesson on ${dateStr} now ends at <strong>${result.newEndTime}</strong>.</p>`,
+  } : null;
+  await deliverPostCommitBookingEmails({ learnerMail, instructorMail });
+
+  const messageResults = await Promise.allSettled([
+    sendWhatsApp(
+      result.learnerPhone,
+      `✅ Lesson extended!\n\n📅 ${dateStr}\n⏰ ${result.startTime} – ${result.newEndTime}\n➕ ${result.extensionMinutes} minutes\n\nView bookings: https://coachcarter.uk/learner/`,
+      { purpose: 'offer.extension_confirmation_learner', learnerId: result.learnerId, instructorId: result.instructorId, schoolId: result.schoolId }
+    ),
+    sendWhatsApp(
+      result.instructorPhone,
+      `Lesson extension accepted\n\n${result.learnerName}\n${dateStr}\n${result.startTime} – ${result.newEndTime}`,
+      { purpose: 'offer.extension_confirmation_instructor', learnerId: result.learnerId, instructorId: result.instructorId, schoolId: result.schoolId }
+    ),
+  ]);
+  for (const messageResult of messageResults) {
+    if (messageResult.status === 'rejected') {
+      console.warn('[lesson_extension] Confirmation message failed', {
+        error_code: typeof messageResult.reason?.code === 'string' ? messageResult.reason.code : 'message_error',
+      });
+      reportError('/api/webhook (booking extension confirmation)', messageResult.reason);
+    }
+  }
+}
+
 // Helper to get raw body for Stripe
 async function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -3005,3 +3580,5 @@ module.exports._handleCreditPurchase = handleCreditPurchase;
 module.exports._paymentIntentToCreditSession = paymentIntentToCreditSession;
 module.exports._validatePayoutV2ReceiptScope = validatePayoutV2ReceiptScope;
 module.exports._deliverPostCommitBookingEmails = deliverPostCommitBookingEmails;
+module.exports._fulfilPaidBookingExtension = fulfilPaidBookingExtension;
+module.exports._settleUnfulfilledBookingExtensionRefund = settleUnfulfilledBookingExtensionRefund;

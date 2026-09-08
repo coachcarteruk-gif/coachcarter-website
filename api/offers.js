@@ -29,6 +29,7 @@ const {
 } = require('./_stripe-launch-payment-contracts');
 const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-return-urls');
 const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
+const { expireExtensionCheckoutSessions } = require('./_booking-extension-invalidation');
 
 function dateOnly(value) {
   if (!value) return null;
@@ -352,16 +353,23 @@ async function handleGetOffer(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Lazy-expire stale offers
-    await sql`
+    const staleOffers = await sql`
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
+        AND token = ${token}
+      RETURNING extension_booking_id, stripe_session_id
     `;
+    await expireExtensionCheckoutSessions(
+      staleOffers.filter(row => row.extension_booking_id).map(row => row.stripe_session_id),
+      { stripeClient: stripe }
+    );
 
     const [offer] = await sql`
       SELECT o.id, o.school_id, o.learner_email, o.learner_id, o.learner_name AS offer_learner_name,
              o.scheduled_date::text,
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence, o.max_repeat_weeks,
+             o.extension_booking_id, o.extension_minutes,
              o.kind, o.trigger,
              lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
@@ -401,8 +409,10 @@ async function handleGetOffer(req, res) {
           id: offer.id,
           learner_email: offer.learner_email,
           instructor_name: offer.instructor_name,
-          duration_minutes: offer.duration_minutes || 90,
+          duration_minutes: offer.extension_minutes || offer.duration_minutes || 90,
           is_flexible: !offer.scheduled_date && !offer.start_time,
+          is_extension: !!offer.extension_booking_id,
+          extension_minutes: offer.extension_minutes || null,
           scheduled_date: offer.scheduled_date || null,
           start_time: offer.start_time || null,
           end_time: offer.end_time || null,
@@ -419,7 +429,8 @@ async function handleGetOffer(req, res) {
 
     // Determine what details the learner still needs to provide
     // Prefer offer's own learner_name, fall back to joined learner_users name
-    const isFlexible = !offer.scheduled_date && !offer.start_time;
+    const isExtension = !!offer.extension_booking_id;
+    const isFlexible = !isExtension && !offer.scheduled_date && !offer.start_time;
     const incompatibleProductsRetired = await loadRetiredProductState(sql, Number(offer.school_id));
     if (incompatibleProductsRetired && isFlexible) {
       return sendRetiredProduct(res, 'flexible_offer');
@@ -434,7 +445,10 @@ async function handleGetOffer(req, res) {
     // null-price offers expose a lesson-type "original" price for was/now UI.
     let finalPricePence;
     let displayOriginalPricePence = originalPricePence;
-    if (isTrialOffer) {
+    if (isExtension) {
+      finalPricePence = Number(offer.offer_price_pence);
+      displayOriginalPricePence = finalPricePence;
+    } else if (isTrialOffer) {
       finalPricePence = 0;
       displayOriginalPricePence = 0;
     } else if (offer.offer_price_pence != null) {
@@ -455,13 +469,16 @@ async function handleGetOffer(req, res) {
         expires_at: offer.expires_at,
         instructor_name: offer.instructor_name,
         lesson_type_name: offer.lesson_type_name || 'Standard Lesson',
-        duration_minutes: offer.duration_minutes || 90,
+        duration_minutes: offer.extension_minutes || offer.duration_minutes || 90,
         price_pence: finalPricePence,
         original_price_pence: displayOriginalPricePence,
         discount_pct: offer.discount_pct || 0,
         kind: offer.kind || 'manual',
         trigger: offer.trigger || null,
         max_repeat_weeks: offer.max_repeat_weeks || null,
+        is_extension: isExtension,
+        extension_booking_id: offer.extension_booking_id || null,
+        extension_minutes: offer.extension_minutes || null,
         is_flexible: isFlexible,
         incompatible_products_retired: incompatibleProductsRetired,
         learner_email: offer.learner_email,
@@ -491,10 +508,16 @@ async function handleAcceptOffer(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Lazy-expire stale offers
-    await sql`
+    const staleOffers = await sql`
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
+        AND token = ${token}
+      RETURNING extension_booking_id, stripe_session_id
     `;
+    await expireExtensionCheckoutSessions(
+      staleOffers.filter(row => row.extension_booking_id).map(row => row.stripe_session_id),
+      { stripeClient: stripe }
+    );
 
     // Fetch the offer with full details
     const [offer] = await sql`
@@ -561,17 +584,42 @@ async function handleAcceptOffer(req, res) {
     };
 
     const offerDateText = dateOnly(offer.scheduled_date_text || offer.scheduled_date);
-    const isFlexible = !offerDateText && !offer.start_time;
+    const isExtension = !!offer.extension_booking_id;
+    const isFlexible = !isExtension && !offerDateText && !offer.start_time;
     const isTrialOffer = offer.lesson_type_slug === 'trial';
     const originalPricePence = offer.price_pence ?? 8250;
     if (isTrialOffer && isFlexible)
       return res.status(400).json({ error: 'Free trial offers must be for a fixed slot. Ask your instructor to send a dated trial offer.' });
 
+    if (isExtension) {
+      if (!offer.learner_id || !boundLearner || !offer.extension_minutes) {
+        return res.status(409).json({ error: 'This extension request is no longer valid.' });
+      }
+      const [extensionBooking] = await sql`
+        SELECT id, status, end_time::text AS end_time
+        FROM lesson_bookings
+        WHERE id = ${offer.extension_booking_id}
+          AND learner_id = ${offer.learner_id}
+          AND instructor_id = ${offer.instructor_id}
+          AND school_id = ${schoolId}
+      `;
+      if (!extensionBooking || extensionBooking.status !== SCHEDULED ||
+          String(extensionBooking.end_time).slice(0, 5) !== String(offer.start_time).slice(0, 5)) {
+        const invalidated = await sql`
+          UPDATE lesson_offers SET status = 'cancelled'
+          WHERE id = ${offer.id} AND school_id = ${schoolId} AND status = 'pending'
+          RETURNING stripe_session_id
+        `;
+        await expireExtensionCheckoutSessions(invalidated.map(row => row.stripe_session_id), { stripeClient: stripe });
+        return res.status(409).json({ error: 'The lesson has changed, so this extension request is no longer valid. Ask your instructor to send a new one.' });
+      }
+    }
+
     // Resolve weekly-repeat count. The offer's max_repeat_weeks is the ceiling
     // the instructor set (null/1 = single lesson only). Learner-supplied count
     // is clamped to that ceiling. Repeats are slot-pinned only — flexible
     // offers credit the learner instead and let them book themselves.
-    const offerMaxRepeat = (offer.max_repeat_weeks && !isFlexible) ? parseInt(offer.max_repeat_weeks, 10) : 1;
+    const offerMaxRepeat = (offer.max_repeat_weeks && !isFlexible && !isExtension) ? parseInt(offer.max_repeat_weeks, 10) : 1;
     let repeatWeeksClean = 1;
     if (repeat_weeks != null && repeat_weeks !== '') {
       const rw = parseInt(repeat_weeks, 10);
@@ -587,7 +635,12 @@ async function handleAcceptOffer(req, res) {
 
     // offer_price_pence (custom price) takes precedence over discount_pct
     let pricePence;
-    if (isTrialOffer) {
+    if (isExtension) {
+      pricePence = Number(offer.offer_price_pence);
+      if (!Number.isInteger(pricePence) || pricePence <= 0) {
+        return res.status(409).json({ error: 'This extension request has no valid frozen price.' });
+      }
+    } else if (isTrialOffer) {
       pricePence = 0;
     } else if (offer.offer_price_pence != null) {
       pricePence = offer.offer_price_pence;
@@ -596,7 +649,7 @@ async function handleAcceptOffer(req, res) {
       pricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
     }
 
-    const durationMins = offer.duration_minutes || 90;
+    const durationMins = isExtension ? Number(offer.extension_minutes) : (offer.duration_minutes || 90);
     const durationStr = durationMins >= 60
       ? (durationMins % 60 === 0 ? `${durationMins / 60} hour${durationMins / 60 !== 1 ? 's' : ''}` : `${(durationMins / 60).toFixed(1)} hours`)
       : `${durationMins} mins`;
@@ -608,13 +661,28 @@ async function handleAcceptOffer(req, res) {
 
     const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
 
+    let extensionCheckoutExpiresAt = null;
+    if (isExtension) {
+      extensionCheckoutExpiresAt = Math.floor(new Date(offer.expires_at).getTime() / 1000);
+      const stripeMinimumExpiry = Math.floor(Date.now() / 1000) + (30 * 60);
+      if (!Number.isSafeInteger(extensionCheckoutExpiresAt) || extensionCheckoutExpiresAt < stripeMinimumExpiry) {
+        const invalidated = await sql`
+          UPDATE lesson_offers SET status = 'expired'
+          WHERE id = ${offer.id} AND school_id = ${schoolId} AND status = 'pending'
+          RETURNING stripe_session_id
+        `;
+        await expireExtensionCheckoutSessions(invalidated.map(row => row.stripe_session_id), { stripeClient: stripe });
+        return res.status(409).json({ error: 'This extension request is too close to expiry. Ask your instructor to send a new one.' });
+      }
+    }
+
     // Free offer → skip Stripe, confirm directly (only for slot-pinned offers)
-    if (pricePence === 0 && !isFlexible) {
+    if (pricePence === 0 && !isFlexible && !isExtension) {
       return await handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, resolvedEmail, repeatWeeksClean);
     }
 
     // Flexible + free → create/find learner, add credit, redirect to success
-    if (pricePence === 0 && isFlexible) {
+    if (pricePence === 0 && isFlexible && !isExtension) {
       const { createTransporter } = require('./_auth-helpers');
 
       const learnerId = await findOrCreateLearner(sql, resolvedEmail, learnerDetails, schoolId);
@@ -688,7 +756,9 @@ async function handleAcceptOffer(req, res) {
 
     // Build Stripe Checkout label
     let priceLabel;
-    if (isFlexible) {
+    if (isExtension) {
+      priceLabel = `Lesson extension — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
+    } else if (isFlexible) {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — flexible time`;
     } else if (repeatWeeksClean > 1) {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${repeatWeeksClean} weekly lessons from ${lessonDate}`;
@@ -696,7 +766,7 @@ async function handleAcceptOffer(req, res) {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
     }
 
-    const launchMetadata = !isFlexible && repeatWeeksClean === 1
+    const launchMetadata = !isExtension && !isFlexible && repeatWeeksClean === 1
       ? await prepareLaunchPaymentCandidate({
           sql,
           schoolId,
@@ -723,9 +793,11 @@ async function handleAcceptOffer(req, res) {
           unit_amount: pricePence,
           product_data: {
             name: priceLabel,
-            description: repeatWeeksClean > 1
-              ? `${repeatWeeksClean} × ${durationStr} driving lessons with ${offer.instructor_name}`
-              : `${durationStr} driving lesson with ${offer.instructor_name}`
+            description: isExtension
+              ? `${durationStr} added to an existing lesson with ${offer.instructor_name}`
+              : repeatWeeksClean > 1
+                ? `${repeatWeeksClean} × ${durationStr} driving lessons with ${offer.instructor_name}`
+                : `${durationStr} driving lesson with ${offer.instructor_name}`
           }
         },
         quantity: repeatWeeksClean
@@ -750,6 +822,8 @@ async function handleAcceptOffer(req, res) {
         repeat_weeks:      String(repeatWeeksClean),
         school_id:         String(schoolId),
         is_flexible:       isFlexible ? '1' : '0',
+        extension_booking_id: isExtension ? String(offer.extension_booking_id) : '',
+        extension_minutes: isExtension ? String(offer.extension_minutes) : '',
         // Step 4 / Phase 2A: per-minute rate is invariant across the weekly
         // series (Stripe charges quantity = repeatWeeksClean), so the rate
         // computed here is correct for each booked lesson.
@@ -759,17 +833,32 @@ async function handleAcceptOffer(req, res) {
       customer_email: resolvedEmail,
       excluded_payment_method_types: CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES,
       billing_address_collection: 'required',
-      allow_promotion_codes: true,
+      allow_promotion_codes: !isExtension,
+      ...(isExtension ? { expires_at: extensionCheckoutExpiresAt } : {}),
       success_url: checkoutReturnUrls.successUrl,
       cancel_url:  checkoutReturnUrls.cancelUrl
-    });
+    }, isExtension ? { idempotencyKey: `lesson_extension_offer_${offer.id}` } : undefined);
 
     // Store Stripe session ID on the offer
-    await sql`
+    const [storedSession] = await sql`
       UPDATE lesson_offers SET stripe_session_id = ${session.id}
       WHERE id = ${offer.id}
         AND school_id = ${schoolId}
+        AND status = 'pending'
+      RETURNING id
     `;
+    if (!storedSession) {
+      try {
+        await stripe.checkout.sessions.expire(session.id);
+      } catch (expireErr) {
+        console.warn('[lesson_extension] Checkout created after offer invalidation', {
+          offer_id: offer.id,
+          session_id: session.id,
+          error_code: typeof expireErr?.code === 'string' ? expireErr.code : 'stripe_error',
+        });
+      }
+      return res.status(409).json({ error: 'This extension request is no longer available.' });
+    }
 
     return res.json({ ok: true, url: session.url });
   } catch (err) {
@@ -945,8 +1034,12 @@ async function handleExpireOffers(req, res) {
     const expired = await sql`
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
-      RETURNING id, learner_email, scheduled_date::text
+      RETURNING id, learner_email, scheduled_date::text, extension_booking_id, stripe_session_id
     `;
+    await expireExtensionCheckoutSessions(
+      expired.filter(row => row.extension_booking_id).map(row => row.stripe_session_id),
+      { stripeClient: stripe }
+    );
     return { ok: true, expired_count: expired.length };
   });
 }

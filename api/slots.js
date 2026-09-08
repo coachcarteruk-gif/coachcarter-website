@@ -87,6 +87,7 @@ const {
   moveFlexiblePackageBookingAllocations,
   unitsForDuration: flexibleUnitsForDuration,
 } = require('./_flexible-package-ledger');
+const { invalidatePendingBookingExtensions } = require('./_booking-extension-invalidation');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -6416,7 +6417,7 @@ async function handleCancel(req, res) {
     // Load booking — must belong to this learner
     // NOTE: cast scheduled_date and start_time to text — Neon returns a Date object
     // for `date` columns, which breaks `${date}T${time}Z` template-string parsing.
-    const [booking] = await sql`
+    let [booking] = await sql`
       SELECT lb.*,
              lb.scheduled_date::text AS scheduled_date,
              lb.start_time::text     AS start_time,
@@ -6432,6 +6433,19 @@ async function handleCancel(req, res) {
 
     if (!booking)
       return res.status(404).json({ error: 'Booking not found' });
+    await invalidatePendingBookingExtensions(sql, {
+      bookingId: booking_id,
+      instructorId: booking.instructor_id,
+      schoolId,
+    });
+    const [freshBooking] = await sql`
+      SELECT status, end_time::text AS end_time, minutes_deducted, list_price_pence
+      FROM lesson_bookings
+      WHERE id = ${booking_id} AND learner_id = ${user.id}
+        AND COALESCE(school_id, 1) = ${schoolId}
+    `;
+    if (!freshBooking) return res.status(404).json({ error: 'Booking not found' });
+    booking = { ...booking, ...freshBooking };
     const isDemoBooking = booking.instructor_email === 'demo@coachcarter.uk';
 
     let flexibleAllocations = [];
@@ -6522,7 +6536,7 @@ async function handleCancel(req, res) {
     // ── Series cancellation ─────────────────────────────────────────────────
     if (cancel_series && booking.series_id) {
       // Find all future confirmed bookings in this series (including the target)
-      const seriesBookings = await sql`
+      let seriesBookings = await sql`
         SELECT id, scheduled_date::text, start_time::text, end_time::text, minutes_deducted
         FROM lesson_bookings
         WHERE series_id = ${booking.series_id}
@@ -6535,6 +6549,24 @@ async function handleCancel(req, res) {
 
       if (seriesBookings.length === 0)
         return res.status(400).json({ error: 'No future bookings in this series to cancel' });
+
+      for (const seriesBooking of seriesBookings) {
+        await invalidatePendingBookingExtensions(sql, {
+          bookingId: seriesBooking.id,
+          instructorId: booking.instructor_id,
+          schoolId,
+        });
+      }
+      seriesBookings = await sql`
+        SELECT id, scheduled_date::text, start_time::text, end_time::text, minutes_deducted
+        FROM lesson_bookings
+        WHERE series_id = ${booking.series_id}
+          AND learner_id = ${user.id}
+          AND COALESCE(school_id, 1) = ${schoolId}
+          AND status = ${SCHEDULED}
+          AND scheduled_date >= CURRENT_DATE
+        ORDER BY scheduled_date
+      `;
 
       const cancelled = [];
       const refunded = [];
@@ -7466,12 +7498,12 @@ async function handleReschedule(req, res) {
              lu.pickup_address AS learner_pickup_address,
              COALESCE(lb.reschedule_count, 0) AS reschedule_count,
              COALESCE(
-               lt.duration_minutes,
                CASE
                  WHEN lb.end_time > lb.start_time
                  THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
                  ELSE NULL
                END,
+               lt.duration_minutes,
                ${DEFAULT_SLOT_MINUTES}
              ) AS type_duration_minutes,
              lt.name AS lesson_type_name,
@@ -7702,6 +7734,31 @@ async function handleReschedule(req, res) {
         pickupAddress: newPickupAddress,
         excludeBookingId: booking_id,
       })) return;
+    }
+
+    await invalidatePendingBookingExtensions(sql, {
+      bookingId: booking_id,
+      instructorId: booking.instructor_id,
+      schoolId,
+    });
+    const [freshSourceBooking] = await sql`
+      SELECT status, scheduled_date::text AS scheduled_date,
+             start_time::text AS start_time, end_time::text AS end_time,
+             minutes_deducted, list_price_pence
+      FROM lesson_bookings
+      WHERE id = ${booking_id} AND learner_id = ${user.id}
+        AND COALESCE(school_id, 1) = ${schoolId}
+    `;
+    const sourceBookingChanged = !freshSourceBooking || freshSourceBooking.status !== booking.status ||
+      freshSourceBooking.scheduled_date !== booking.scheduled_date ||
+      String(freshSourceBooking.start_time).slice(0, 5) !== String(booking.start_time).slice(0, 5) ||
+      String(freshSourceBooking.end_time).slice(0, 5) !== String(booking.end_time).slice(0, 5) ||
+      Number(freshSourceBooking.minutes_deducted || 0) !== Number(booking.minutes_deducted || 0) ||
+      Number(freshSourceBooking.list_price_pence || 0) !== Number(booking.list_price_pence || 0);
+    if (sourceBookingChanged) {
+      return res.status(409).json({
+        error: 'This booking changed while you were rescheduling it. Refresh your bookings and try again.',
+      });
     }
 
     // Atomically: mark old booking as refunded, create new one
@@ -8143,12 +8200,12 @@ async function handleMyBookings(req, res) {
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(
-          lt.duration_minutes,
           CASE
             WHEN lb.end_time > lb.start_time
             THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
             ELSE NULL
           END,
+          lt.duration_minutes,
           ${DEFAULT_SLOT_MINUTES}
         ) AS duration_minutes
       FROM lesson_bookings lb
@@ -8193,12 +8250,12 @@ async function handleMyBookings(req, res) {
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(
-          lt.duration_minutes,
           CASE
             WHEN lb.end_time > lb.start_time
             THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
             ELSE NULL
           END,
+          lt.duration_minutes,
           ${DEFAULT_SLOT_MINUTES}
         ) AS duration_minutes
       FROM lesson_bookings lb
@@ -8250,12 +8307,12 @@ async function handleMyBookings(req, res) {
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(
-          lt.duration_minutes,
           CASE
             WHEN lb.end_time > lb.start_time
             THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
             ELSE NULL
           END,
+          lt.duration_minutes,
           ${DEFAULT_SLOT_MINUTES}
         ) AS duration_minutes
       FROM lesson_bookings lb
@@ -8301,12 +8358,12 @@ async function handleMyBookings(req, res) {
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
         lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
         COALESCE(
-          lt.duration_minutes,
           CASE
             WHEN lb.end_time > lb.start_time
             THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
             ELSE NULL
           END,
+          lt.duration_minutes,
           ${DEFAULT_SLOT_MINUTES}
         ) AS duration_minutes
       FROM lesson_bookings lb
@@ -8373,12 +8430,12 @@ async function handleSeriesInfo(req, res) {
         lt.name AS lesson_type_name,
         lt.colour AS lesson_type_colour,
         COALESCE(
-          lt.duration_minutes,
           CASE
             WHEN lb.end_time > lb.start_time
             THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
             ELSE NULL
           END,
+          lt.duration_minutes,
           ${DEFAULT_SLOT_MINUTES}
         ) AS duration_minutes
       FROM lesson_bookings lb

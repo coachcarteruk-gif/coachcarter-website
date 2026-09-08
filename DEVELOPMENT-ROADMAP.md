@@ -1,5 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.130 - Paid Lesson Extension Requests (8 September 2026)
+
+Instructors can now open a scheduled lesson and choose **Request extension** to send its learner a 24-hour payment link for 30–180 extra minutes. The familiar offer acceptance and Stripe Checkout journey charges only the added time using the learner/instructor/school pricing fallback or a positive explicit price. Availability-window and travel-buffer separation are ignored because this continues the same session; real overlaps remain blocked.
+
+Migration 060 adds a booking-bound extension shape to `lesson_offers`. Verified paid fulfilment is tenant-scoped, metadata-checked, advisory-lock serialised, and atomic across the `slot_purchase`, appended BCS attribution, booking end/minutes/list-price update, and offer acceptance. A frozen base-price fallback preserves legacy cash-booking value. Checkout has a stable per-offer idempotency key, keeps dynamic payment methods, and disables promotion codes for exact accounting. No automatic refund or payout-engine scope was broadened.
+
+**Files:** `db/migration.sql`, `db/migrations/060_booking_extension_offers.sql`, `api/instructor.js`, `api/offers.js`, `api/webhook.js`, `public/instructor/index.html`, `public/instructor/index.js`, `public/accept-offer.html`, `public/accept-offer.js`, `public/offer-success.html`, `public/offer-success.js`, `tests/booking-extension-offer.spec.js`, `CLAUDE.md`, `PROJECT.md`, `MIGRATION-PLAN.md`, `docs/per-instructor-credits-audit.md`, `docs/stripe-connect.md`, `DEVELOPMENT-ROADMAP.md`.
+
 ## 2.129 - Full Curriculum Matching and Programme Start Controls (13 August 2026)
 
 Added migration 047 and the matching slice for the revised Full Curriculum test foundation. Webhook fulfilment now creates a pending school-scoped matching identity alongside the unstarted enrolment. Admins can assign or explicitly reassign an eligible active same-school instructor; an ordinary instructor can accept or self-assign only themselves and the instructor programme list is restricted to current assignments. Initial assignment remains immutable while assignment, acceptance and rotation evidence is append-only and admin actions are audit logged.

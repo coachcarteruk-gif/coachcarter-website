@@ -24,7 +24,10 @@
     "preflight:stripe-launch-shadow-identity": "node scripts/stripe-launch-shadow-identity-preflight.js --read-only",
     "preflight:payout-v2-schema": "node scripts/payout-v2-schema-preflight.js --production-read-only",
     "apply:payout-v2-schema": "node scripts/payout-v2-schema-apply.js",
-    "postflight:payout-v2-schema": "node scripts/payout-v2-schema-postflight.js --production-read-only"
+    "postflight:payout-v2-schema": "node scripts/payout-v2-schema-postflight.js --production-read-only",
+    "preflight:booking-extension-060": "node scripts/booking-extension-migration-060.js --production-preflight",
+    "apply:booking-extension-060": "node scripts/booking-extension-migration-060.js --production-apply-approved",
+    "postflight:booking-extension-060": "node scripts/booking-extension-migration-060.js --production-postflight"
   },
   "engines": {
     "node": "22.x"
