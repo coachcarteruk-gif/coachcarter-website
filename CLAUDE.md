@@ -263,7 +263,10 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - Small fixes: commit directly to main
 - Bigger features: feature branch + PR
 - Never commit .env files or secrets
-- DB migrations: run via `GET /api/migrate?secret=MIGRATION_SECRET`
+- DB migration governance: run `npm run migrations:check` and follow
+  `docs/migration-governance.md`. The aggregate `/api/migrate` route is a legacy
+  compatibility path, not authority for new migrations; do not invoke or retire
+  it without explicit production approval.
 - **Before pushing to main**, update the relevant docs for any non-trivial change:
   - `PROJECT.md` — API actions, DB table descriptions, flow docs
   - `DEVELOPMENT-ROADMAP.md` — new feature entry with date, description, files changed

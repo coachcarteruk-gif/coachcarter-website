@@ -12,15 +12,16 @@
 
 ## Migrations
 
-### Standard migration via `/api/migrate`
+### Current migration governance
 
-```bash
-curl "https://www.coachcarter.uk/api/migrate?secret=$MIGRATION_SECRET"
-```
+The aggregate `/api/migrate` call shown in older incident notes is a legacy
+compatibility path. Do not invoke it for new work. Run `npm run migrations:check`
+and follow `docs/migration-governance.md`; every production database action still
+requires explicit approval.
 
-- Idempotent by design.
-- Does **not** halt on per-statement errors. So you cannot trust the HTTP response alone — verify against prod with a post-migration diagnostic SQL file at `db/diagnostics/<pr-slug>-post-migration.sql`.
-- Every migration that can fail on existing data must ship with `db/diagnostics/<pr-slug>-{pre,post}-migration.sql` companion files.
+The legacy aggregate does not halt on per-statement errors and is not atomic.
+Historical post-migration diagnostics remain useful evidence, but no HTTP result
+from that endpoint should be treated as an authoritative migration record.
 
 ### Targeted credit migrations (Step 2c / Plan A / B1 / B3 / retro-fixes)
 

@@ -1,0 +1,500 @@
+{
+  "version": 1,
+  "checksumAlgorithm": "sha256-lf-v1",
+  "legacyPrefixCollisions": {
+    "026": [
+      "026a",
+      "026b"
+    ]
+  },
+  "migrations": [
+    {
+      "id": "001",
+      "order": 1,
+      "prefix": "001",
+      "filename": "001_booking_system.sql",
+      "checksum": "ea0d953597d3ee4d0668c1818349feb1fa1ece65ebce9a4c2d27e9bfdfafcf5e",
+      "execution": "baseline"
+    },
+    {
+      "id": "002",
+      "order": 2,
+      "prefix": "002",
+      "filename": "002_admin_users.sql",
+      "checksum": "644ff23dc7808b9e6bd7f939b2407541f7d11d23420be098dd0ee5aabeb014fe",
+      "execution": "baseline"
+    },
+    {
+      "id": "003",
+      "order": 3,
+      "prefix": "003",
+      "filename": "003_calendar_token.sql",
+      "checksum": "26a84375ff18d50db09a357b76a4d30e78fb9ba6846913a8c9d6103bdbc94954",
+      "execution": "baseline"
+    },
+    {
+      "id": "004",
+      "order": 4,
+      "prefix": "004",
+      "filename": "004_instructor_portal.sql",
+      "checksum": "57d6ee1e738609010a1e605c8158f4398cb7c5ed86203b151f969eea7fe09e9d",
+      "execution": "baseline"
+    },
+    {
+      "id": "005",
+      "order": 5,
+      "prefix": "005",
+      "filename": "005_contact_preference.sql",
+      "checksum": "5e5b9da1b35c21a41d22ff16f01e45269384219782dbc632ca593d10f652d1a3",
+      "execution": "baseline"
+    },
+    {
+      "id": "006",
+      "order": 6,
+      "prefix": "006",
+      "filename": "006_pickup_address.sql",
+      "checksum": "c5af8154ac0db4d3514e2df473a8e2990716951a9f93fc5c4d5831bd58b2c14b",
+      "execution": "baseline"
+    },
+    {
+      "id": "007",
+      "order": 7,
+      "prefix": "007",
+      "filename": "007_buffer_minutes.sql",
+      "checksum": "fb428f1d47fcfbf77a5a4256d7c11d47b77a8151ebc7ad95d9a2e62313935501",
+      "execution": "baseline"
+    },
+    {
+      "id": "008",
+      "order": 8,
+      "prefix": "008",
+      "filename": "008_videos.sql",
+      "checksum": "bd409e8f40c466a0c14b195df51210f542448a4aebfe7e7bd37db7b0053aa953",
+      "execution": "baseline"
+    },
+    {
+      "id": "009",
+      "order": 9,
+      "prefix": "009",
+      "filename": "009_blackout_dates.sql",
+      "checksum": "e99daade88dcae5f07bf0d11dc46c4017b83f79de778bcec30a188ce7eaafd42",
+      "execution": "baseline"
+    },
+    {
+      "id": "010",
+      "order": 10,
+      "prefix": "010",
+      "filename": "010_session_booking_link.sql",
+      "checksum": "943e0ffea6eca4a341143df7c93bc8d5fbd986cd5fed2b26635c3c9ea9c83cef",
+      "execution": "baseline"
+    },
+    {
+      "id": "011",
+      "order": 11,
+      "prefix": "011",
+      "filename": "011_video_duration.sql",
+      "checksum": "7ffbe71aca3f05aeeb62e2ae4698fe2e1e7c5a914a61d198ae1fc59c201c5bd7",
+      "execution": "baseline"
+    },
+    {
+      "id": "012",
+      "order": 12,
+      "prefix": "012",
+      "filename": "012_instructor_calendar_token.sql",
+      "checksum": "470248c91758ea57c45cb093fee0c9b53cd13ab08bc4781ae4a1f796c4f2917e",
+      "execution": "baseline"
+    },
+    {
+      "id": "013",
+      "order": 13,
+      "prefix": "013",
+      "filename": "013_instructor_is_admin.sql",
+      "checksum": "1f937a6216c843b348005249da2220e2c4584a8a07702c99f5f9237ffcd39b6e",
+      "execution": "baseline"
+    },
+    {
+      "id": "014",
+      "order": 14,
+      "prefix": "014",
+      "filename": "014_qa_system.sql",
+      "checksum": "bf386c49d45867725e617a3f65d6a6b6b96a249a9de908dacfdf49ad5b70c934",
+      "execution": "baseline"
+    },
+    {
+      "id": "015",
+      "order": 15,
+      "prefix": "015",
+      "filename": "015_google_reviews.sql",
+      "checksum": "3ed02cf67fc3072cc2f9b220e1c4d4123c18348ace611e7202b2e3d1f305bd6c",
+      "execution": "baseline"
+    },
+    {
+      "id": "016",
+      "order": 16,
+      "prefix": "016",
+      "filename": "016_seed_google_reviews.sql",
+      "checksum": "dda13b05ebe5c9682e597e4b4f9494a8d750cbc927412663188960f1c3f6bc14",
+      "execution": "baseline"
+    },
+    {
+      "id": "017",
+      "order": 17,
+      "prefix": "017",
+      "filename": "017_competency_system.sql",
+      "checksum": "e71028145451c03171a0ba3ba4fdd6d513fc84327aecfa8cd553d04cbd1bc918",
+      "execution": "baseline"
+    },
+    {
+      "id": "018",
+      "order": 18,
+      "prefix": "018",
+      "filename": "018_learner_onboarding.sql",
+      "checksum": "0fa6388e7c6332953806e2423548bfd552584839058778d0b488e9528ae9e6f9",
+      "execution": "baseline"
+    },
+    {
+      "id": "019",
+      "order": 19,
+      "prefix": "019",
+      "filename": "019_subcategory_faults.sql",
+      "checksum": "e7ab8a8d3a9bdaa3fe80b176251f091b56675fe192bf2b42900278afe633b829",
+      "execution": "baseline"
+    },
+    {
+      "id": "020",
+      "order": 20,
+      "prefix": "020",
+      "filename": "020_learner_availability.sql",
+      "checksum": "299d902b37c728a383c2dfd23a3a017a52d5bfce5b42bd692bdf78e2da8bbc37",
+      "execution": "baseline"
+    },
+    {
+      "id": "021",
+      "order": 21,
+      "prefix": "021",
+      "filename": "021_waitlist.sql",
+      "checksum": "d6e64c18bf3f7b2d07a3838384a13cd2c9b63a28a1850f95b13b8af4e9d75405",
+      "execution": "baseline"
+    },
+    {
+      "id": "022",
+      "order": 22,
+      "prefix": "022",
+      "filename": "022_ical_sync.sql",
+      "checksum": "1a4c5d5b2d55686fb792f519962e012c0618f75e8a176f91bd0add98afc0b5d1",
+      "execution": "baseline"
+    },
+    {
+      "id": "023",
+      "order": 23,
+      "prefix": "023",
+      "filename": "023_instructor_availability_overrides.sql",
+      "checksum": "b7498fc8165340fe8404336115cdc68e62e854ac26144ed28a3ccfa7329f45c9",
+      "execution": "baseline"
+    },
+    {
+      "id": "024",
+      "order": 24,
+      "prefix": "024",
+      "filename": "024_instructor_availability_override_transmission.sql",
+      "checksum": "883aa8371464fe99de73da6a1836efa17bd72ed2a67358a072d5551ad8765165",
+      "execution": "baseline"
+    },
+    {
+      "id": "025",
+      "order": 25,
+      "prefix": "025",
+      "filename": "025_lesson_booking_transmission_type.sql",
+      "checksum": "073dba4f612276dfd77ec3e8db26434347a1cbc8a3231a24502b968a4709154b",
+      "execution": "baseline"
+    },
+    {
+      "id": "026a",
+      "order": 26,
+      "prefix": "026",
+      "filename": "026_public_tenant_resolution.sql",
+      "checksum": "03f06fa3511d83b8cfb7467b76712ceb96f35dd4feb2c2948259f3af868d1e49",
+      "execution": "baseline"
+    },
+    {
+      "id": "026b",
+      "order": 27,
+      "prefix": "026",
+      "filename": "026_weekly_availability_transmission.sql",
+      "checksum": "60fdfeccae7fb979d21995f80be54e1abe7bfa2f02b471308faa839091272915",
+      "execution": "baseline"
+    },
+    {
+      "id": "027",
+      "order": 28,
+      "prefix": "027",
+      "filename": "027_refund_event_notes.sql",
+      "checksum": "9baae4f0c29962697f65f11a5a9d1092340a206674e7ba38847e38f1f96d40a4",
+      "execution": "baseline"
+    },
+    {
+      "id": "028",
+      "order": 29,
+      "prefix": "028",
+      "filename": "028_instructor_max_booking_days_ahead.sql",
+      "checksum": "ff5cdcc0b60b1f432dbe7ab3b08c560544ded19aaf5a6010147e993576f3e87d",
+      "execution": "baseline"
+    },
+    {
+      "id": "029",
+      "order": 30,
+      "prefix": "029",
+      "filename": "029_instructor_busy_blocks.sql",
+      "checksum": "e18e6d8127fbee8aa3405a5c538640ead10880fae62081d2d52ebc36a35db4ee",
+      "execution": "baseline"
+    },
+    {
+      "id": "030",
+      "order": 31,
+      "prefix": "030",
+      "filename": "030_learner_feedback.sql",
+      "checksum": "71e6df9540bb083f5a51868fe4481b51ae15bf84fa0bb1e61e52ec5778563676",
+      "execution": "baseline"
+    },
+    {
+      "id": "031",
+      "order": 32,
+      "prefix": "031",
+      "filename": "031_mock_test_supervisor_notes.sql",
+      "checksum": "e0a1a9392aad073f4a39f4e5314e0c43a524cfbcf47cdf139b62129595c9e0b8",
+      "execution": "baseline"
+    },
+    {
+      "id": "032",
+      "order": 33,
+      "prefix": "032",
+      "filename": "032_test_swaps_marketplace.sql",
+      "checksum": "2e1b3dbe03c1bc84639c86884e654bf6472783c5265d8682a754d737785d135a",
+      "execution": "baseline"
+    },
+    {
+      "id": "033",
+      "order": 34,
+      "prefix": "033",
+      "filename": "033_lesson_booking_test_date_metadata.sql",
+      "checksum": "667c89cd3225e6b25e60d3abd4ab60a3e06b467f43d363fd57521c336e2b87d2",
+      "execution": "baseline"
+    },
+    {
+      "id": "034",
+      "order": 35,
+      "prefix": "034",
+      "filename": "034_audit_log_self_service.sql",
+      "checksum": "f7e204a4add007f8a34e48579deb1e12d0ed59441f44f10233b6f392b77edb5f",
+      "execution": "baseline"
+    },
+    {
+      "id": "035",
+      "order": 36,
+      "prefix": "035",
+      "filename": "035_payout_v2_ledger_foundation.sql",
+      "checksum": "7ac172db071fdbc86ff43e98f2e31eb2c03eb5295ba704a52fafec2865a92749",
+      "execution": "baseline"
+    },
+    {
+      "id": "036",
+      "order": 37,
+      "prefix": "036",
+      "filename": "036_instructor_slot_start_interval.sql",
+      "checksum": "acf4813f3afa7691ca5f993817c80b2ccdea7f980e7b9071aa1645070a2d54fb",
+      "execution": "baseline"
+    },
+    {
+      "id": "037",
+      "order": 38,
+      "prefix": "037",
+      "filename": "037_instructor_notes.sql",
+      "checksum": "a8dbc123888988908637bd770373d750072dc21b676d99881a2319f44d0a85e9",
+      "execution": "baseline"
+    },
+    {
+      "id": "038",
+      "order": 39,
+      "prefix": "038",
+      "filename": "038_curriculum_mvp.sql",
+      "checksum": "10b7682d1de16ba4838faf9b6aa0620bf5d3630463cf44b335de5711353bc160",
+      "execution": "baseline"
+    },
+    {
+      "id": "039",
+      "order": 40,
+      "prefix": "039",
+      "filename": "039_stripe_launch_schema_foundation.sql",
+      "checksum": "edb7d36a06535fd2e4e11633a6568ae2372efa70076839546ab1b2f64b2df9b8",
+      "execution": "baseline"
+    },
+    {
+      "id": "040",
+      "order": 41,
+      "prefix": "040",
+      "filename": "040_stripe_launch_payout_source_fill_once_fix.sql",
+      "checksum": "b53962808de540513ad7f846151acbccf62c39e2b7555513842726e3e4bf0fa0",
+      "execution": "baseline"
+    },
+    {
+      "id": "041",
+      "order": 42,
+      "prefix": "041",
+      "filename": "041_connect_v2_onboarding_readiness.sql",
+      "checksum": "60972e20a124819dc0e8bd9092c0c20e992851923c75f5bc50d899af0e103a24",
+      "execution": "deferred"
+    },
+    {
+      "id": "042",
+      "order": 43,
+      "prefix": "042",
+      "filename": "042_instructor_switch_transfers.sql",
+      "checksum": "920ea338c32cebb1544fd745e3a2e9c05761e17c31914f93d472f9f3d4b354fc",
+      "execution": "baseline"
+    },
+    {
+      "id": "043",
+      "order": 44,
+      "prefix": "043",
+      "filename": "043_simon_interim_v1_hardening.sql",
+      "checksum": "a0f467cfb2efb510cb9d0202e4bf9bff8d419771410453706bdd580fcdbc1e92",
+      "execution": "baseline"
+    },
+    {
+      "id": "044",
+      "order": 45,
+      "prefix": "044",
+      "filename": "044_learner_packages_catalogue.sql",
+      "checksum": "a2ba337eb1d6578649ed7c48c11011b32b124835ec1a0145854c343db7029b2a",
+      "execution": "baseline"
+    },
+    {
+      "id": "045",
+      "order": 46,
+      "prefix": "045",
+      "filename": "045_learner_packages_payment_foundation.sql",
+      "checksum": "521436de3dcdfe5dd60dc89b157e16b9708286663493d52fe195c008a580b879",
+      "execution": "baseline"
+    },
+    {
+      "id": "046",
+      "order": 47,
+      "prefix": "046",
+      "filename": "046_full_curriculum_foundation.sql",
+      "checksum": "43fcd7faa0909708457537940bfb2a7776295b3b533da56e3b7d6d6e1955e899",
+      "execution": "baseline"
+    },
+    {
+      "id": "047",
+      "order": 48,
+      "prefix": "047",
+      "filename": "047_full_curriculum_matching.sql",
+      "checksum": "1bee9141c1b48e299f7e274523aedb7c6c02cee405f3a5f01063d333d3e1ea07",
+      "execution": "baseline"
+    },
+    {
+      "id": "048",
+      "order": 49,
+      "prefix": "048",
+      "filename": "048_full_curriculum_consumer_rights.sql",
+      "checksum": "1f3f2c68386be6a75d33009d50e8b1fc83f725a8816a822299bb9ce050209bc2",
+      "execution": "baseline"
+    },
+    {
+      "id": "049",
+      "order": 50,
+      "prefix": "049",
+      "filename": "049_full_curriculum_controlled_pilot.sql",
+      "checksum": "e871efc6c2cd9bea1f52a553ab26818ad54eaac053931002f2d5512554553ed0",
+      "execution": "baseline"
+    },
+    {
+      "id": "050",
+      "order": 51,
+      "prefix": "050",
+      "filename": "050_flexible_hours_packages.sql",
+      "checksum": "3b604d9ca89f5d85312b6be342e98e43c71e85eed32d0f668b3541fdccb5395b",
+      "execution": "baseline"
+    },
+    {
+      "id": "051",
+      "order": 52,
+      "prefix": "051",
+      "filename": "051_flexible_hours_credit_flow.sql",
+      "checksum": "d29a12a4567c2c32aa219534f40fb28d31208c2bbbe910657f6afdc56f75a3ad",
+      "execution": "baseline"
+    },
+    {
+      "id": "052",
+      "order": 53,
+      "prefix": "052",
+      "filename": "052_balance_audit_security_definer.sql",
+      "checksum": "8e85cbd724256d1ad76a67f4181caab207919f28f38d9def3b30e146ee06725f",
+      "execution": "baseline"
+    },
+    {
+      "id": "053",
+      "order": 54,
+      "prefix": "053",
+      "filename": "053_flexible_hours_10_hour_package.sql",
+      "checksum": "927dc9a8d9a844f75a8cd717934bd43c03c5e283d10d8d4e1c101b3c05de9cc3",
+      "execution": "baseline"
+    },
+    {
+      "id": "054",
+      "order": 55,
+      "prefix": "054",
+      "filename": "054_curriculum_progress_beta.sql",
+      "checksum": "1fc2e9ca8e2cd0a3f1d9ca816015fb57bc0ad3a79774d976e58a88fd88a1303a",
+      "execution": "baseline"
+    },
+    {
+      "id": "055",
+      "order": 56,
+      "prefix": "055",
+      "filename": "055_curriculum_progress_runtime_grants.sql",
+      "checksum": "d97d32477855d145469125a902e187bdfb9e786c040d93d43c556580587875e5",
+      "execution": "baseline"
+    },
+    {
+      "id": "056",
+      "order": 57,
+      "prefix": "056",
+      "filename": "056_enquiry_experiment_attribution.sql",
+      "checksum": "7f1c2c1312a61a0410bdd545064bc22b7e03adddb569140df71c566c84ffb783",
+      "execution": "baseline"
+    },
+    {
+      "id": "057",
+      "order": 58,
+      "prefix": "057",
+      "filename": "057_interim_v1_manual_settlement_boundary.sql",
+      "checksum": "339db9c330ef02f6aedfeab616eb11a6c6ce7f902b800a0bc156ed321e9b9787",
+      "execution": "baseline"
+    },
+    {
+      "id": "058",
+      "order": 59,
+      "prefix": "058",
+      "filename": "058_legacy_schoolwide_hours.sql",
+      "checksum": "481990fb9e49fe4d59865373c5beb48f6e9c8ca87d7f65b55147fc38b5e38fb9",
+      "execution": "baseline"
+    },
+    {
+      "id": "059",
+      "order": 60,
+      "prefix": "059",
+      "filename": "059_restore_flexible_balance_view_access.sql",
+      "checksum": "84789aea79e547ffece6c35cfc2d9307d7549caf15b1a83e0aa5cbd620afadb9",
+      "execution": "baseline"
+    },
+    {
+      "id": "060",
+      "order": 61,
+      "prefix": "060",
+      "filename": "060_booking_extension_offers.sql",
+      "checksum": "fdcc1684800e6c88a69efd75fa9008470f09c3949da586a2765782f1a350a4f5",
+      "execution": "baseline"
+    }
+  ]
+}
