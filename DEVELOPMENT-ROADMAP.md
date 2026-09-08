@@ -1,5 +1,11 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.131 - Free Lesson Extensions (8 September 2026)
+
+Instructors can explicitly enter £0 when requesting additional time. The learner sees and accepts a free extension without entering Stripe Checkout. Acceptance is tenant-scoped, lock-serialised and rechecks the source booking plus every real overlap before atomically changing the existing booking end time and accepting the offer. Credit usage, BCS attribution, list price, refundable value and instructor payout value remain unchanged, so the added time is genuinely free.
+
+**Files:** `api/instructor.js`, `api/offers.js`, `public/instructor/index.html`, `public/instructor/index.js`, `public/accept-offer.js`, `public/offer-success.js`, `tests/booking-extension-offer.spec.js`, `CLAUDE.md`, `PROJECT.md`, `docs/per-instructor-credits-audit.md`, `docs/stripe-connect.md`, `DEVELOPMENT-ROADMAP.md`.
+
 ## 2.130 - Paid Lesson Extension Requests (8 September 2026)
 
 Instructors can now open a scheduled lesson and choose **Request extension** to send its learner a 24-hour payment link for 30–180 extra minutes. The familiar offer acceptance and Stripe Checkout journey charges only the added time using the learner/instructor/school pricing fallback or a positive explicit price. Availability-window and travel-buffer separation are ignored because this continues the same session; real overlaps remain blocked.

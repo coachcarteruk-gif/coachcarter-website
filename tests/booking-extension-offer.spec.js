@@ -14,6 +14,7 @@ const {
   _fulfilPaidBookingExtension: fulfilPaidBookingExtension,
   _settleUnfulfilledBookingExtensionRefund: settleUnfulfilledBookingExtensionRefund,
 } = require('../api/webhook');
+const { _acceptFreeBookingExtension: acceptFreeBookingExtension } = require('../api/offers');
 
 function canonicalExtension({ lockedStatus = 'pending' } = {}) {
   const session = {
@@ -137,17 +138,71 @@ test.describe('booking extension offer contract', () => {
     expect(source).not.toContain("payment_method_types: ['card']");
   });
 
-  test('a trial-booking extension stays paid and cannot enter either free-offer path', () => {
+  test('paid and free extensions use separate settlement paths', () => {
     const source = read('api/offers.js');
     const extensionPrice = source.indexOf('if (isExtension) {\n      pricePence = Number(offer.offer_price_pence);');
     const trialPrice = source.indexOf('} else if (isTrialOffer) {', extensionPrice);
     expect(extensionPrice).toBeGreaterThan(-1);
     expect(trialPrice).toBeGreaterThan(extensionPrice);
+    expect(source).toContain('pricePence === 0 && isExtension');
+    expect(source).toContain('await acceptFreeBookingExtension({');
     expect(source).toContain('pricePence === 0 && !isFlexible && !isExtension');
     expect(source).toContain('pricePence === 0 && isFlexible && !isExtension');
     expect(source).toContain('if (isExtension) {\n      finalPricePence = Number(offer.offer_price_pence);');
     expect(source).toContain('extension_booking_id: isExtension ? String(offer.extension_booking_id)');
     expect(read('api/webhook.js')).toContain('await fulfilPaidBookingExtension({');
+  });
+
+  test('free extension acceptance atomically changes only booking time and offer status', async () => {
+    const calls = [];
+    const transactionRunner = async (_connectionString, work) => work({
+      async query(text, values = []) {
+        calls.push({ text, values });
+        if (/pg_advisory_xact_lock/.test(text)) return { rows: [], rowCount: 1 };
+        if (/FROM lesson_offers[\s\S]*FOR UPDATE/.test(text)) {
+          return {
+            rows: [{
+              id: 901, status: 'pending', expired: false, learner_id: 31,
+              instructor_id: 12, school_id: 7, extension_booking_id: 501,
+              extension_minutes: 30, offer_price_pence: 0,
+              scheduled_date: '2026-09-12', start_time: '10:30:00', end_time: '11:00:00',
+            }],
+            rowCount: 1,
+          };
+        }
+        if (/FROM lesson_bookings lb[\s\S]*FOR UPDATE OF lb/.test(text)) {
+          return {
+            rows: [{
+              id: 501, status: 'scheduled', learner_id: 31, instructor_id: 12, school_id: 7,
+              scheduled_date: '2026-09-12', start_time: '09:00:00', end_time: '10:30:00',
+              lesson_has_ended: false, learner_name: 'Taylor Learner',
+              learner_email: 'learner@example.com', learner_phone: null,
+              instructor_name: 'Fraser', instructor_email: 'fraser@example.com', instructor_phone: null,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (/SELECT id FROM (lesson_bookings|instructor_busy_blocks|lesson_offers|lesson_requests|slot_reservations)/.test(text)) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (/UPDATE lesson_bookings/.test(text)) return { rows: [{ id: 501 }], rowCount: 1 };
+        if (/UPDATE lesson_offers/.test(text)) return { rows: [{ id: 901 }], rowCount: 1 };
+        throw new Error(`Unexpected free extension query: ${text}`);
+      },
+    });
+
+    const result = await acceptFreeBookingExtension({
+      offer: { id: 901, school_id: 7, instructor_id: 12 },
+      connectionString: 'test',
+      transactionRunner,
+    });
+
+    expect(result).toMatchObject({ applied: true, bookingId: 501, extensionMinutes: 30, newEndTime: '11:00' });
+    const bookingUpdate = calls.find(call => /UPDATE lesson_bookings/.test(call.text));
+    expect(bookingUpdate.text).toContain('SET end_time = $1::time, edited_at = NOW()');
+    expect(bookingUpdate.text).not.toContain('minutes_deducted');
+    expect(bookingUpdate.text).not.toContain('list_price_pence');
+    expect(calls.some(call => /INSERT INTO (credit_transactions|booking_credit_sources)/.test(call.text))).toBe(false);
   });
 
   test('paid fulfilment updates booking and accounting evidence atomically', () => {
@@ -301,6 +356,8 @@ test.describe('booking extension offer contract', () => {
     expect(read('public/instructor/index.html')).toContain('id="extensionOfferModal"');
     expect(read('public/accept-offer.js')).toContain("document.getElementById('page-title').textContent = 'Extend your lesson'");
     expect(read('public/offer-success.js')).toContain("document.getElementById('s-title').textContent = 'Lesson extended!'");
+    expect(read('public/accept-offer.js')).toContain("btn.textContent = 'Accept free extension →'");
+    expect(read('public/offer-success.js')).toContain("'The free added time is now attached to your lesson.'");
     expect(read('public/offer-success.js')).toContain("offer.start_time.slice(0, 5) + ' \\u2013 ' + offer.end_time.slice(0, 5)");
   });
 
@@ -343,6 +400,40 @@ test.describe('booking extension offer contract', () => {
     await expect(page.locator('#repeat-weeks')).not.toHaveAttribute('id', 'pickup-field');
     await expect(page.locator('#repeat-section .field')).not.toHaveAttribute('id', 'pickup-field');
     await expect(page.locator('#accept-btn')).toHaveText('Add time & pay →');
+  });
+
+  test('accept page labels a zero-price extension as free', async ({ page }) => {
+    await page.route('**/api/offers**', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        offer: {
+          id: 902,
+          scheduled_date: '2026-09-12',
+          start_time: '10:30:00',
+          end_time: '11:00:00',
+          expires_at: new Date(Date.now() + 3600000).toISOString(),
+          instructor_name: 'Fraser',
+          lesson_type_name: 'Standard Lesson',
+          duration_minutes: 30,
+          price_pence: 0,
+          original_price_pence: 0,
+          kind: 'manual',
+          is_extension: true,
+          extension_minutes: 30,
+          is_flexible: false,
+          learner_email: 'learner@example.com',
+          learner_name: 'Taylor Learner',
+          learner_phone: '07123456789',
+          learner_pickup_address: '1 Test Street',
+        },
+      }),
+    }));
+
+    await page.goto('/accept-offer?token=free-extension-test');
+    await expect(page.locator('#offer-price')).toHaveText('FREE');
+    await expect(page.locator('#accept-btn')).toHaveText('Accept free extension →');
   });
 
   test('success page shows the extension interval after payment', async ({ page }) => {
