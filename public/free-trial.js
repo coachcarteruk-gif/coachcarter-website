@@ -29,9 +29,39 @@
 
     document.getElementById('trialForm').addEventListener('submit', handleSubmit);
     setupFieldValidation();
+    setupCoursePreferences();
 
     loadSlots();
   });
+
+  function setupCoursePreferences() {
+    var interest = document.getElementById('intensive_interest');
+    var months = document.getElementById('intensiveMonths');
+    var container = document.getElementById('monthOptions');
+    var parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
+    var year = Number(parts.find(function (p) { return p.type === 'year'; }).value);
+    var month = Number(parts.find(function (p) { return p.type === 'month'; }).value) - 1;
+    for (var i = 0; i < 12; i++) {
+      var date = new Date(Date.UTC(year, month + i, 1));
+      var label = document.createElement('label');
+      label.className = 'preference-option';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = 'intensive_months';
+      input.value = date.toISOString().slice(0, 7);
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })));
+      container.appendChild(label);
+    }
+    function sync() {
+      months.hidden = !interest.checked;
+      months.disabled = !interest.checked;
+      interest.setAttribute('aria-expanded', String(interest.checked));
+      if (!interest.checked) container.querySelectorAll('input').forEach(function (input) { input.checked = false; });
+    }
+    interest.addEventListener('change', sync);
+    sync();
+  }
 
   // ── PostHog helper (no-op if posthog not loaded yet) ────────────────────
   function posthogCapture(event, props) {
@@ -189,7 +219,11 @@
       guest_name: val('guest_name'),
       guest_email: val('guest_email'),
       guest_phone: val('guest_phone'),
-      guest_pickup_address: val('guest_pickup_address')
+      guest_pickup_address: val('guest_pickup_address'),
+      email_course_opt_in: document.getElementById('email_course_opt_in').checked,
+      intensive_interest: document.getElementById('intensive_interest').checked,
+      intensive_months: document.getElementById('intensive_interest').checked
+        ? Array.from(document.querySelectorAll('#monthOptions input:checked')).map(function (input) { return input.value; }) : []
     };
     if (referralCode) payload.referral_code = referralCode;
 
