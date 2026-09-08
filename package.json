@@ -12,6 +12,7 @@
     "test:smoke:codex": "playwright test tests/codex-test-accounts.smoke.spec.js",
     "check:syntax": "node scripts/check-syntax.js",
     "check:c1": "node scripts/check-c1-controls.js",
+    "migrations:check": "node scripts/migration-runner.js --check",
     "audit:payout-v2": "node scripts/payout-v2-audit.js",
     "preview:payout-v2-sources": "node scripts/payout-v2-source-preview.js",
     "shadow:payout-v2": "node scripts/payout-v2-shadow-statement.js",

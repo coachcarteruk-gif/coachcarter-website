@@ -21,6 +21,7 @@ npm install
 | [DEVELOPMENT-ROADMAP.md](DEVELOPMENT-ROADMAP.md) | Chronological feature history and future roadmap |
 | [DESIGN-REVIEW.md](DESIGN-REVIEW.md) | UI/UX design principles, style guide, component standards |
 | [MIGRATION-PLAN.md](MIGRATION-PLAN.md) | React Native app migration strategy |
+| [docs/migration-governance.md](docs/migration-governance.md) | Database migration history, checksums, runner safety, and cleanup phases |
 
 ## Key tech
 

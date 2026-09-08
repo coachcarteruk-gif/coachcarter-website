@@ -27,7 +27,8 @@ const [tbl] = await sql`
 `;
 if (!tbl.rel) {
   console.log('✗ Table platform_balance_snapshots does NOT exist.');
-  console.log('  → Run: curl "https://www.coachcarter.uk/api/migrate?secret=$MIGRATION_SECRET"');
+  console.log('  → Run: npm run migrations:check, then follow docs/migration-governance.md');
+  console.log('  → Production database actions require separate explicit approval.');
   process.exit(1);
 }
 console.log('✓ Table platform_balance_snapshots exists.');

@@ -287,7 +287,9 @@ The implementation is done when:
 
 **Order of work in the session:**
 
-1. Migration first (`db/migration.sql` + run via `GET /api/migrate?secret=…`).
+1. Migration first, using the reviewed production process in
+   `docs/migration-governance.md`; do not use the legacy aggregate endpoint as
+   authority for new work.
 2. `_payout-helpers.js` changes — most of the logic. Hardest part is the partial-coverage maths in the negative-payout branch. The simpler approach (don't partial-recover) was deliberately chosen here for correctness; resist the temptation to add partial-recovery cleverness.
 3. `cron-payouts.js` email body.
 4. Earnings page UI.

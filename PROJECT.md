@@ -50,7 +50,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 | `BASE_URL` | Site base URL for magic links (defaults to `https://coachcarter.uk`) |
 | `ANTHROPIC_API_KEY` | Claude AI for Ask the Examiner and Lesson Advisor |
 | `GOOGLE_PLACES_API_KEY` | Google Places API for address autocomplete (if used) |
-| `MIGRATION_SECRET` | Secret for running DB migrations via `/api/migrate?secret=` |
+| `MIGRATION_SECRET` | Legacy secret used by existing migration endpoints. New migration governance is documented in `docs/migration-governance.md`. |
 | `ERROR_ALERT_EMAIL` | Email address for 500 error alerts (uses SMTP config) |
 
 ---
@@ -63,7 +63,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── _auth-helpers.js            # Shared JWT verification + nodemailer transporter
 │   ├── _shared.js                  # Shared utilities (learner context builder etc.)
 │   ├── _error-alert.js             # Fire-and-forget email error alerting (500 errors)
-│   ├── migrate.js                  # DB migration runner (protected by MIGRATION_SECRET)
+│   ├── migrate.js                  # Legacy aggregate migration endpoint (protected by MIGRATION_SECRET)
 │   ├── learner.js                  # Learner sessions, progress, profile, competency, onboarding
 │   ├── magic-link.js               # Learner magic-link login: send, validate, verify
 │   ├── credits.js                  # Credit balance, retired self-serve credit checkout, verification for in-flight sessions
@@ -159,8 +159,8 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   └── Logo.png                    # CoachCarter logo
 │
 ├── db/
-│   ├── migration.sql               # Single idempotent migration — all 23 tables (run via /api/migrate)
-│   ├── migrations/                 # Legacy per-feature SQL files (superseded by migration.sql)
+│   ├── migration.sql               # Legacy aggregate/fresh-schema compatibility file
+│   ├── migrations/                 # Historical numbered SQL + authoritative checksum manifest
 │   └── seeds/                      # Placeholder data for testing
 │       ├── 001_placeholder_instructors.sql
 │       └── 002_demo_instructor.sql # Creates demo instructor with full 7-day availability
@@ -1137,7 +1137,10 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
 - **Neon sql tagged templates** — the Neon serverless driver does NOT support nested `sql` template literals for conditional queries; always use separate query branches instead
 - **Mobile autoplay** — browsers require videos to start muted; `video.muted = false` after a user gesture unlocks sound
 - **Stripe payment methods** — live Checkout uses dynamic payment methods. Klarna has been removed from Stripe configuration; do not reintroduce local Klarna copy or hardcoded Checkout method lists.
-- **DB migrations** — single file `db/migration.sql` covers all tables; run via `GET /api/migrate?secret=MIGRATION_SECRET`. Legacy per-feature files in `db/migrations/` are superseded
+- **DB migrations** — migration history, current execution paths, checksums, and
+  the phased move to an authoritative numbered runner are documented in
+  `docs/migration-governance.md`. `db/migration.sql` and `/api/migrate` remain
+  legacy compatibility paths and must not be used as authority for new work.
 - **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`. The webhook-driven price increment was retired with PR-J (2026-05-19) when the legacy Stripe checkout was deleted. The Pass Programme is hidden on the marketing site; the table now serves as a read-only admin-override source for `current_price` if it's ever re-enabled.

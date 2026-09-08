@@ -8,7 +8,10 @@
 
 **Frontend:** 58 HTML pages (vanilla HTML/CSS/JS), no framework, no bundler, no build step
 **Backend:** 41 Vercel serverless API route files (excluding `_*.js` shared modules), 100+ actions via `?action=X` routing
-**Database:** Neon PostgreSQL, ~41 tables (single idempotent migration file at `db/migration.sql`; `waitlist` and `qa_*` tables are explicitly dropped near the end)
+**Database:** Neon PostgreSQL. The aggregate `db/migration.sql` is a legacy
+fresh-schema compatibility path; numbered history and checksum governance live
+under `db/migrations/`. See `docs/migration-governance.md`. `waitlist` and
+`qa_*` tables are explicitly retired/dropped.
 **Multi-tenancy:** Every tenant-scoped table has `school_id INTEGER NOT NULL REFERENCES schools(id) DEFAULT 1`. Every SQL query filters by `school_id`. Every JWT carries `school_id`. School #1 is CoachCarter; new schools onboard via the superadmin portal. See `docs/multi-tenancy.md`.
 **Branding:** Two front doors share the same backend — `coachcarter.uk` (driving school) and `instructorbook.co.uk` (national SaaS for instructors). See `INSTRUCTORBOOK-PLAN.md`.
 **Auth:** JWT in httpOnly cookies (display blob in localStorage). All three roles use **email + password** sign-in (May 2026). `api/learner-auth.js` for learners, `api/instructor-auth.js` for instructors, `api/admin.js` for admins. Magic-link login retired. Magic-link infrastructure (`api/magic-link.js`) survives only for SMS code login, learner password-reset codes, and the email-code migration path for legacy learner accounts. Instructors are invite-only — admin sets/resets their password via the admin portal; instructor is forced to change it on first sign-in. Password helpers live in `api/_password.js`. Audit log via `api/_audit.js`.
