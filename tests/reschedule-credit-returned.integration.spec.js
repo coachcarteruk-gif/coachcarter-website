@@ -81,12 +81,12 @@ const ENABLED = process.env.CC_TEST_DB === '1' && !!process.env.POSTGRES_URL_TES
 test.describe.configure({ mode: 'serial' });
 
 const SCHOOL_ID = 1;
-const TARGET_INSTRUCTOR_ID = parseInt(process.env.CC_TEST_INSTRUCTOR_ID || '4', 10);
 
 let sql;
 let retroHandler;
 let runCron;
 let RETRO_MARKER_KEY;
+let targetInstructorId;
 let createdLearnerIds = [];
 let createdBookingIds = [];
 let createdCreditTxIds = [];
@@ -453,20 +453,24 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     `;
     await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
 
+    const instructorEmail = `c3-instructor-${crypto.randomBytes(5).toString('hex')}@coachcarter.test`;
     const [target] = await sql`
-      SELECT id, COALESCE(transmission_type, 'manual') AS transmission_type,
-             COALESCE(max_booking_days_ahead, 84)::int AS max_booking_days_ahead
-        FROM instructors
-       WHERE id = ${TARGET_INSTRUCTOR_ID}
-         AND school_id = ${SCHOOL_ID}
+      INSERT INTO instructors
+        (name, email, active, school_id, transmission_type, max_booking_days_ahead)
+      VALUES
+        ('Chip3 Reschedule Instructor', ${instructorEmail}, TRUE, ${SCHOOL_ID}, 'manual', 84)
+      RETURNING id, transmission_type, max_booking_days_ahead
     `;
-    if (!target) {
-      throw new Error(`Test branch lacks instructors.id = ${TARGET_INSTRUCTOR_ID} — required.`);
-    }
-    // The branch fixture may legitimately be automatic-only. Generate a
-    // compatible booking instead of mutating the instructor's profile.
+    targetInstructorId = target.id;
     targetInstructorTransmissionType = target.transmission_type;
     targetInstructorMaxBookingDaysAhead = target.max_booking_days_ahead;
+    await sql`
+      INSERT INTO instructor_availability
+        (instructor_id, day_of_week, start_time, end_time, active, school_id, transmission_type)
+      SELECT ${targetInstructorId}, day_of_week, '06:00'::time, '22:00'::time,
+             TRUE, ${SCHOOL_ID}, 'manual'
+        FROM generate_series(0, 6) AS day_of_week
+    `;
     const [hasBcsSchoolId] = await sql`
       SELECT 1 FROM information_schema.columns
        WHERE table_schema = 'public'
@@ -517,6 +521,13 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
              AND school_id = ${SCHOOL_ID}
         `;
       }
+      if (targetInstructorId) {
+        await sql`
+          DELETE FROM instructors
+           WHERE id = ${targetInstructorId}
+             AND school_id = ${SCHOOL_ID}
+        `;
+      }
       await sql`DELETE FROM migration_markers WHERE key = ${RETRO_MARKER_KEY}`;
     } catch (_) {}
     if (_originalPostgresUrl !== undefined) process.env.POSTGRES_URL = _originalPostgresUrl;
@@ -529,13 +540,13 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
   test('C1: instructor reschedule flips credit_returned=TRUE on the old booking', async () => {
     const learnerId = await makeLearner('c1');
-    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 30 });
+    const oldBooking = await makeBooking(learnerId, targetInstructorId, { dateOffset: 30 });
 
     // Reschedule to a slot far enough away to avoid uq_instructor_slot collision.
-    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 14);
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(targetInstructorId, 14);
 
     const instructorHandler = require('../api/instructor');
-    const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
+    const jwt = makeInstructorJwt(targetInstructorId);
 
     const req = fakeReq({
       method: 'POST',
@@ -565,9 +576,9 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
   test('C1b: instructor reschedule refunds old BCS and copies allocation to replacement booking', async () => {
     const learnerId = await makeLearner('c1b');
-    await seedLcb(learnerId, TARGET_INSTRUCTOR_ID, 90);
-    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
-    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 32 });
+    await seedLcb(learnerId, targetInstructorId, 90);
+    const creditTxId = await makeCreditSource(learnerId, targetInstructorId, 180);
+    const oldBooking = await makeBooking(learnerId, targetInstructorId, { dateOffset: 32 });
     const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90, {
       ratePencePerMinute: 91,
       contributionPence: 8190,
@@ -575,10 +586,10 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
       absorbedBy: 'platform',
     });
 
-    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 16);
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(targetInstructorId, 16);
 
     const instructorHandler = require('../api/instructor');
-    const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
+    const jwt = makeInstructorJwt(targetInstructorId);
 
     const req = fakeReq({
       method: 'POST',
@@ -609,7 +620,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(newBcsRows[0].stripe_fee_pence).toBe(143);
     expect(newBcsRows[0].absorbed_by).toBe('platform');
 
-    const recomputed = await recomputePair(learnerId, TARGET_INSTRUCTOR_ID);
+    const recomputed = await recomputePair(learnerId, targetInstructorId);
     expect(recomputed.granted_minutes).toBe(180);
     expect(recomputed.unattributed_booking_draw_minutes).toBe(0);
     expect(recomputed.active_bcs_draw_minutes).toBe(90);
@@ -618,26 +629,26 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(recomputed.drift_minutes).toBe(0);
 
     const cron = await runCron(sql, { sendAlerts: false });
-    const row = cron.drift_summary.find(r => r.learner_id === learnerId && r.instructor_id === TARGET_INSTRUCTOR_ID);
+    const row = cron.drift_summary.find(r => r.learner_id === learnerId && r.instructor_id === targetInstructorId);
     expect(row).toBeUndefined();
   });
 
   test('C2: instructor reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
     const learnerId = await makeLearner('c2');
-    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
-    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 31 });
+    const creditTxId = await makeCreditSource(learnerId, targetInstructorId, 180);
+    const oldBooking = await makeBooking(learnerId, targetInstructorId, { dateOffset: 31 });
     const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
 
     // Pre-seed a CLASH at the target slot to force the INSERT to 23505.
     const clashLearnerId = await makeLearner('c2-clash');
     const { newDate, newStartTime } = await insertClashBooking(
       clashLearnerId,
-      TARGET_INSTRUCTOR_ID,
+      targetInstructorId,
       18
     );
 
     const instructorHandler = require('../api/instructor');
-    const jwt = makeInstructorJwt(TARGET_INSTRUCTOR_ID);
+    const jwt = makeInstructorJwt(targetInstructorId);
 
     const req = fakeReq({
       method: 'POST',
@@ -677,9 +688,9 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const learnerId = await makeLearner('c3');
     // Learner reschedule needs ≥48h notice — schedule the OLD booking
     // 5 days out so the policy check passes.
-    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 35 });
+    const oldBooking = await makeBooking(learnerId, targetInstructorId, { dateOffset: 35 });
 
-    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 20);
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(targetInstructorId, 20);
 
     const slotsHandler = require('../api/slots');
     const jwt = makeLearnerJwt(learnerId);
@@ -712,9 +723,9 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
 
   test('C3b: learner reschedule refunds old BCS and copies allocation to replacement booking', async () => {
     const learnerId = await makeLearner('c3b');
-    await seedLcb(learnerId, TARGET_INSTRUCTOR_ID, 90);
-    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
-    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 37 });
+    await seedLcb(learnerId, targetInstructorId, 90);
+    const creditTxId = await makeCreditSource(learnerId, targetInstructorId, 180);
+    const oldBooking = await makeBooking(learnerId, targetInstructorId, { dateOffset: 37 });
     const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90, {
       ratePencePerMinute: 92,
       contributionPence: 8280,
@@ -722,7 +733,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
       absorbedBy: 'platform',
     });
 
-    const { newDate, newStartTime } = await findFreeRescheduleSlot(TARGET_INSTRUCTOR_ID, 21);
+    const { newDate, newStartTime } = await findFreeRescheduleSlot(targetInstructorId, 21);
 
     const slotsHandler = require('../api/slots');
     const jwt = makeLearnerJwt(learnerId);
@@ -760,7 +771,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(newBcsRows[0].stripe_fee_pence).toBe(144);
     expect(newBcsRows[0].absorbed_by).toBe('platform');
 
-    const recomputed = await recomputePair(learnerId, TARGET_INSTRUCTOR_ID);
+    const recomputed = await recomputePair(learnerId, targetInstructorId);
     expect(recomputed.granted_minutes).toBe(180);
     expect(recomputed.unattributed_booking_draw_minutes).toBe(0);
     expect(recomputed.active_bcs_draw_minutes).toBe(90);
@@ -769,21 +780,21 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     expect(recomputed.drift_minutes).toBe(0);
 
     const cron = await runCron(sql, { sendAlerts: false });
-    const row = cron.drift_summary.find(r => r.learner_id === learnerId && r.instructor_id === TARGET_INSTRUCTOR_ID);
+    const row = cron.drift_summary.find(r => r.learner_id === learnerId && r.instructor_id === targetInstructorId);
     expect(row).toBeUndefined();
   });
 
   test('C4: learner reschedule INSERT-failure rollback flips credit_returned BACK to FALSE', async () => {
     const learnerId = await makeLearner('c4');
-    const creditTxId = await makeCreditSource(learnerId, TARGET_INSTRUCTOR_ID, 180);
-    const oldBooking = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, { dateOffset: 36 });
+    const creditTxId = await makeCreditSource(learnerId, targetInstructorId, 180);
+    const oldBooking = await makeBooking(learnerId, targetInstructorId, { dateOffset: 36 });
     const oldBcsId = await attachBcs(oldBooking.id, creditTxId, 90);
 
     // Pre-seed a clash to force INSERT failure.
     const clashLearnerId = await makeLearner('c4-clash');
     const { newDate, newStartTime } = await insertClashBooking(
       clashLearnerId,
-      TARGET_INSTRUCTOR_ID,
+      targetInstructorId,
       22
     );
 
@@ -834,31 +845,31 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
     const learnerId = await makeLearner('m-setup');
 
     // Will flip.
-    const wf = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+    const wf = await makeBooking(learnerId, targetInstructorId, {
       dateOffset: 100, status: 'refunded', creditReturned: false, minutesDeducted: 90,
     });
     m_targetBooking = wf.id;
 
     // Already TRUE — left alone.
-    const af = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+    const af = await makeBooking(learnerId, targetInstructorId, {
       dateOffset: 101, status: 'refunded', creditReturned: true, minutesDeducted: 90,
     });
     m_alreadyFlippedBooking = af.id;
 
     // Forfeited late-cancel — left alone.
-    const ff = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+    const ff = await makeBooking(learnerId, targetInstructorId, {
       dateOffset: 102, status: 'refunded', creditReturned: false, creditForfeited: true, minutesDeducted: 90,
     });
     m_forfeitedBooking = ff.id;
 
     // Status=scheduled — left alone.
-    const sc = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+    const sc = await makeBooking(learnerId, targetInstructorId, {
       dateOffset: 103, status: 'scheduled', creditReturned: false, minutesDeducted: 90,
     });
     m_scheduledBooking = sc.id;
 
     // Zero minutes — left alone.
-    const zm = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+    const zm = await makeBooking(learnerId, targetInstructorId, {
       dateOffset: 104, status: 'refunded', creditReturned: false, minutesDeducted: 0,
     });
     m_zeroMinutesBooking = zm.id;
@@ -953,7 +964,7 @@ test.describe('chip #3: reschedule credit_returned + retro-fix', () => {
   // ─────────────────────────────────────────────────────────────────────────
   test('M5: cron drift_count drops by exactly 1 after fresh fixture + rerun', async () => {
     const learnerId = await makeLearner('m5');
-    const bug = await makeBooking(learnerId, TARGET_INSTRUCTOR_ID, {
+    const bug = await makeBooking(learnerId, targetInstructorId, {
       dateOffset: 200, status: 'refunded', creditReturned: false, minutesDeducted: 90,
     });
 

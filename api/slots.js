@@ -6669,30 +6669,11 @@ async function handleCancel(req, res) {
 
     // ── Single booking cancellation (existing logic) ────────────────────────
 
-    // Calculate hours until lesson
-    let hoursUntil;
-    if (flexiblePackageFunding) {
-      const [flexibleSchool] = await sql`
-        SELECT config FROM schools
-         WHERE id = ${schoolId} AND active = TRUE
-         LIMIT 1
-      `;
-      hoursUntil = hoursUntilFlexibleLesson({
-        scheduledDate: booking.scheduled_date,
-        startTime: booking.start_time,
-        schoolConfig: flexibleSchool?.config,
-      });
-      if (hoursUntil === null) {
-        return res.status(409).json({
-          error: true,
-          code: 'FLEXIBLE_PACKAGE_LESSON_TIME_INVALID',
-          message: 'This Flexible Hours booking time could not be validated safely.'
-        });
-      }
-    } else {
-      const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
-      hoursUntil = (lessonDateTime - Date.now()) / 3600000;
-    }
+    // Flexible Hours bookings return above through their package-specific,
+    // transactional cancellation path. Remaining bookings use the standard
+    // UTC cancellation cutoff calculation.
+    const lessonDateTime = new Date(`${booking.scheduled_date}T${booking.start_time}Z`);
+    const hoursUntil = (lessonDateTime - Date.now()) / 3600000;
     // Demo bookings are free, so no hours to return
     const minsToReturn   = booking.minutes_deducted != null ? booking.minutes_deducted : DEFAULT_SLOT_MINUTES;
     const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);
