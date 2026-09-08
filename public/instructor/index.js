@@ -1796,8 +1796,8 @@ async function sendExtensionOffer() {
   const payload = { booking_id: extensionOfferBooking.id, extension_minutes: extensionMinutes };
   if (priceText) {
     const price = Number(priceText);
-    if (!Number.isFinite(price) || price <= 0) {
-      errorEl.textContent = 'Enter a valid positive price.';
+    if (!Number.isFinite(price) || price < 0) {
+      errorEl.textContent = 'Enter a valid price of 0 or more.';
       errorEl.style.display = 'block';
       return;
     }

@@ -181,10 +181,11 @@
       document.getElementById('email-field').style.display = '';
     }
 
-    // Update button text: broadcast offers say "Book this slot" (race-aware
-    // urgency), free lessons override that to "Accept free lesson".
+    // Update button text: extensions distinguish free acceptance from payment.
     var btn = document.getElementById('accept-btn');
-    if (o.price_pence === 0) {
+    if (isExtension && o.price_pence === 0) {
+      btn.textContent = 'Accept free extension →';
+    } else if (o.price_pence === 0) {
       btn.textContent = 'Accept free lesson →';
     } else if (isExtension) {
       btn.textContent = 'Add time & pay →';
@@ -281,7 +282,7 @@
         errorEl.textContent = data.message || data.error || 'Something went wrong. Please try again.';
         errorEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = (offerData && offerData.is_extension) ? 'Add time & pay →' : (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
+        btn.textContent = acceptButtonLabel();
         return;
       }
 
@@ -297,8 +298,15 @@
       errorEl.textContent = 'Connection failed. Please try again.';
       errorEl.style.display = 'block';
       btn.disabled = false;
-      btn.textContent = (offerData && offerData.is_extension) ? 'Add time & pay →' : (offerData && offerData.kind === 'broadcast') ? 'Book this slot →' : 'Accept & pay →';
+      btn.textContent = acceptButtonLabel();
     }
+  }
+
+  function acceptButtonLabel() {
+    if (offerData && offerData.is_extension && offerData.price_pence === 0) return 'Accept free extension →';
+    if (offerData && offerData.is_extension) return 'Add time & pay →';
+    if (offerData && offerData.kind === 'broadcast') return 'Book this slot →';
+    return 'Accept & pay →';
   }
 
   function showError(title, message) {

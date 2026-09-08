@@ -5142,8 +5142,8 @@ async function handleCreateExtensionOffer(req, res) {
   }
   if (explicitPrice != null && explicitPrice !== '') {
     const parsedPrice = Number(explicitPrice);
-    if (!Number.isInteger(parsedPrice) || parsedPrice < 1) {
-      return res.status(400).json({ error: 'Extension price must be a positive whole number of pence.' });
+    if (!Number.isInteger(parsedPrice) || parsedPrice < 0) {
+      return res.status(400).json({ error: 'Extension price must be zero or a positive whole number of pence.' });
     }
   }
 
@@ -5264,10 +5264,6 @@ async function handleCreateExtensionOffer(req, res) {
       explicitPricePence: explicitPrice,
       discountPct: 0,
     });
-    if (pricing.pricePence < 1) {
-      return res.status(400).json({ error: 'A paid extension must have a positive price.' });
-    }
-
     const [startHour, startMinute] = String(booking.start_time).slice(0, 5).split(':').map(Number);
     const originalDurationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
     if (!Number.isInteger(originalDurationMinutes) || originalDurationMinutes <= 0) {
@@ -5307,7 +5303,9 @@ async function handleCreateExtensionOffer(req, res) {
       weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
     });
     const firstName = String(booking.learner_name || '').split(' ')[0] || 'there';
-    const priceStr = `£${(pricing.pricePence / 100).toFixed(2)}`;
+    const isFreeExtension = pricing.pricePence === 0;
+    const priceStr = isFreeExtension ? 'FREE' : `£${(pricing.pricePence / 100).toFixed(2)}`;
+    const acceptLabel = isFreeExtension ? 'Accept free extension →' : 'Accept &amp; pay →';
 
     let emailSent = false;
     try {
@@ -5325,8 +5323,8 @@ async function handleCreateExtensionOffer(req, res) {
               <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Lesson now ends</td><td>${newEndTime}</td></tr>
               <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td>${priceStr}</td></tr>
             </table>
-            <p><a href="${acceptUrl}" style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">Accept &amp; pay →</a></p>
-            <p style="font-size:0.85rem;color:#797879">This request expires in 24 hours. Your lesson changes only after payment succeeds.</p>
+            <p><a href="${acceptUrl}" style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">${acceptLabel}</a></p>
+            <p style="font-size:0.85rem;color:#797879">This request expires in 24 hours. Your lesson changes only after you accept${isFreeExtension ? '' : ' and payment succeeds'}.</p>
           </div>`,
       });
       emailSent = true;
@@ -5339,7 +5337,7 @@ async function handleCreateExtensionOffer(req, res) {
       try {
         const result = await sendWhatsApp(
           booking.learner_phone,
-          `Hi ${firstName}, ${booking.instructor_name} has invited you to extend your ${dateStr} lesson by ${extensionMinutes} minutes for ${priceStr}.\n\nAccept and pay within 24 hours: ${acceptUrl}`,
+          `Hi ${firstName}, ${booking.instructor_name} has invited you to extend your ${dateStr} lesson by ${extensionMinutes} minutes for ${priceStr}.\n\n${isFreeExtension ? 'Accept' : 'Accept and pay'} within 24 hours: ${acceptUrl}`,
           { purpose: 'offer.extension_created_learner', learnerId: booking.learner_id, instructorId: instructor.id, schoolId }
         );
         messageSent = !!result?.ok;

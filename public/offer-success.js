@@ -88,8 +88,9 @@
       document.getElementById('s-time').textContent =
         offer.start_time.slice(0, 5) + ' \u2013 ' + offer.end_time.slice(0, 5);
       document.getElementById('s-title').textContent = 'Lesson extended!';
-      document.getElementById('s-subtitle').textContent =
-        'Your payment was received and the added time is now attached to your lesson.';
+      document.getElementById('s-subtitle').textContent = isFree
+        ? 'The free added time is now attached to your lesson.'
+        : 'Your payment was received and the added time is now attached to your lesson.';
       document.querySelector('#s-duration-row .details-label').textContent = 'Added time';
       document.getElementById('s-info').innerHTML = '<strong>All set.</strong> Your existing lesson now finishes at the later time shown above.';
     } else if (flexible) {
