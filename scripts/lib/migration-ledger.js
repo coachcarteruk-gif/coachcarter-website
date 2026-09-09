@@ -242,7 +242,13 @@ function directDatabaseUrl(env = process.env) {
   if (parsed.hostname.toLowerCase().includes('-pooler')) {
     fail('POOLED_URL_REFUSED', 'Ledger tooling refuses pooled database URLs');
   }
-  return databaseUrl;
+  // pg 8 currently treats sslmode=require/verify-ca as verify-full but warns
+  // that pg 9 will weaken those aliases to libpq semantics. Keep this operator
+  // path explicitly certificate- and hostname-verifying across that change.
+  if (['require', 'verify-ca'].includes(parsed.searchParams.get('sslmode'))) {
+    parsed.searchParams.set('sslmode', 'verify-full');
+  }
+  return parsed.toString();
 }
 
 function fingerprint(databaseUrl) {

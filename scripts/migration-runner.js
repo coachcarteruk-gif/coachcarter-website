@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { Client, neonConfig } = require('@neondatabase/serverless');
+const { Client } = require('pg');
 const {
   MigrationGovernanceError,
   executeMigration,
@@ -62,10 +62,14 @@ function fingerprint(databaseUrl) {
 function directDatabaseUrl() {
   const databaseUrl = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL_UNPOOLED;
   if (!databaseUrl) throw new MigrationGovernanceError('DIRECT_URL_MISSING', 'A direct database URL is required');
-  if (new URL(databaseUrl).hostname.includes('-pooler')) {
+  const parsed = new URL(databaseUrl);
+  if (parsed.hostname.includes('-pooler')) {
     throw new MigrationGovernanceError('POOLED_URL_REFUSED', 'The migration runner refuses pooled database URLs');
   }
-  return databaseUrl;
+  if (['require', 'verify-ca'].includes(parsed.searchParams.get('sslmode'))) {
+    parsed.searchParams.set('sslmode', 'verify-full');
+  }
+  return parsed.toString();
 }
 
 async function readLedger(client) {
@@ -104,8 +108,8 @@ async function run() {
     throw new MigrationGovernanceError('TARGET_NOT_APPROVED', 'Approved target fingerprint does not match');
   }
 
-  neonConfig.webSocketConstructor = globalThis.WebSocket;
   const client = new Client({ connectionString: databaseUrl });
+  client.on('error', () => {});
   let lockHeld = false;
   try {
     await client.connect();

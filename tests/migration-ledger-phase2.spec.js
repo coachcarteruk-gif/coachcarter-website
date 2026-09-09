@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const path = require('path');
+const { spawnSync } = require('child_process');
 const { MigrationGovernanceError } = require('../scripts/lib/migration-governance');
 const { validateLedger } = require('../scripts/lib/migration-governance');
 const {
@@ -44,6 +46,58 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
       () => directDatabaseUrl({ MIGRATION_LEDGER_DIRECT_URL: 'postgresql://owner:pw@ep-example-pooler.test/db' }),
       'POOLED_URL_REFUSED'
     );
+    expect(directDatabaseUrl({
+      MIGRATION_LEDGER_DIRECT_URL: 'postgresql://owner:pw@ep-example.test/db?sslmode=require',
+    })).toContain('sslmode=verify-full');
+  });
+
+  test('sanitizes direct connection failures and exits non-zero', () => {
+    const script = path.join(__dirname, '..', 'scripts', 'migration-ledger-rehearsal.js');
+    const result = spawnSync(process.execPath, [script, '--preflight'], {
+      cwd: path.join(__dirname, '..'),
+      encoding: 'utf8',
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        MIGRATION_LEDGER_DIRECT_URL: 'postgresql://operator:do-not-print@127.0.0.1:1/neondb?sslmode=require&connect_timeout=1',
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    const failure = JSON.parse(result.stderr.trim());
+    expect(failure).toEqual({
+      ok: false,
+      code: 'MIGRATION_LEDGER_OPERATION_FAILED',
+      error: 'Migration ledger operation blocked; inspect private database logs',
+    });
+    expect(result.stderr).not.toContain('do-not-print');
+    expect(result.stderr).not.toContain('127.0.0.1');
+    expect(result.stderr).not.toContain('node:internal');
+    expect(result.stderr).not.toContain('at ');
+
+    const runner = spawnSync(process.execPath, [
+      path.join(__dirname, '..', 'scripts', 'migration-runner.js'),
+      '--status',
+    ], {
+      cwd: path.join(__dirname, '..'),
+      encoding: 'utf8',
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        POSTGRES_URL_NON_POOLING: 'postgresql://operator:do-not-print@127.0.0.1:1/neondb?sslmode=verify-full&connect_timeout=1',
+        DATABASE_URL_UNPOOLED: '',
+      },
+    });
+    expect(runner.status).toBe(1);
+    expect(runner.stdout).toBe('');
+    expect(JSON.parse(runner.stderr.trim())).toEqual({
+      ok: false,
+      code: 'MIGRATION_RUNNER_FAILED',
+      error: 'Migration runner blocked',
+    });
+    expect(runner.stderr).not.toContain('do-not-print');
+    expect(runner.stderr).not.toContain('node:internal');
   });
 
   test('fingerprints bind the target but never the password', () => {
