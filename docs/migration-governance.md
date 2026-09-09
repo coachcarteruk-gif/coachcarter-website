@@ -1,6 +1,6 @@
 # Migration governance audit and phased cleanup
 
-Status: **Phase 1 repository groundwork only**
+Status: **Phase 2 repository rehearsal package prepared; production ledger absent**
 
 Audit date: 2026-09-08
 
@@ -180,8 +180,8 @@ the endpoint unchanged pending explicit production approval.
 
 ## Authoritative ledger design
 
-The proposed append-only `schema_migration_history` table has one row per
-attempt:
+The reviewed append-only `schema_migration_history` table has one row per
+execution attempt or historical-baseline receipt:
 
 | Field | Contract |
 |---|---|
@@ -189,6 +189,9 @@ attempt:
 | `migration_id TEXT NOT NULL` | Stable manifest ID (`026a`/`026b` resolve the legacy collision) |
 | `filename TEXT NOT NULL` | Exact reviewed filename |
 | `checksum CHAR(64) NOT NULL` | Canonical `sha256-lf-v1` checksum |
+| `checksum_algorithm TEXT NOT NULL` | Frozen checksum algorithm identity |
+| `record_kind TEXT NOT NULL` | `execution` or `baseline` |
+| `evidence_kind TEXT NOT NULL` | Exact execution, structural equivalence, intentional removal, or numbered execution |
 | `status TEXT NOT NULL` | `running`, `succeeded`, or `failed` |
 | `started_at TIMESTAMPTZ NOT NULL` | Attempt start |
 | `executed_at TIMESTAMPTZ` | Completion/failure timestamp |
@@ -196,19 +199,23 @@ attempt:
 | `error_code TEXT` | Sanitized SQLSTATE or `MIGRATION_ERROR`; never raw SQL text |
 | `execution_context JSONB` | Optional non-secret Git/operator/target evidence |
 
-A partial unique index on `migration_id WHERE status='succeeded'` prevents two
-successful applications. A second constraint requires completion time and
-duration for terminal rows, and an append-only trigger forbids UPDATE/DELETE
-except the runner's narrowly scoped `running` to terminal transition. The
+A partial unique index on `migration_id WHERE status='succeeded'` and a matching
+filename index prevent duplicate successful receipts. Terminal-state
+constraints require completion time and duration, and append-only triggers
+forbid UPDATE/DELETE/TRUNCATE except the runner's narrowly scoped `running` to
+terminal transition. The
 runner writes `running` first, then executes the migration and success update in
 one transaction. On error it rolls back the migration, records only a sanitized
 failure code in a separate statement, and stops. A lost connection leaves
 `running`, which blocks every later run until reviewed.
 
-The ledger schema and production baseline are deliberately not installed in
-Phase 1. Their DDL, privileges, append-only trigger, baseline rows, exact
-checksums/evidence classes, and recovery snapshot require a separate review and
-explicit production approval.
+Phase 2 adds reviewed repository artifacts for this design without installing
+them in production. Baseline rows add `record_kind=baseline` and an explicit
+`evidence_kind`, so a successful baseline receipt means the disposition was
+recorded successfully rather than falsely claiming exact file execution. The
+core timestamp columns record the baseline statement; proved historical times
+remain in non-secret evidence context. See
+`docs/migration-ledger-phase2-operator-packet.md`.
 
 ## Fail-closed runner contract
 
@@ -241,19 +248,34 @@ errors.
 
 Rollback: revert the repository commit. No database rollback is needed.
 
-### Phase 2 — requires explicit approval
+### Phase 2 — repository rehearsal complete; production operation requires approval
 
-1. Resolve the migration-005 filesystem ACL outside the runner.
-2. Review ledger DDL/privileges and test it on an isolated production clone.
-3. Define a signed production baseline packet. Record exact apply evidence for
-   035/039/060 and marker operations; label structural-only evidence honestly.
-4. Decide the permanent 041 disposition (`deferred`, explicitly skipped, or a
-   separately approved apply). Do not fake a success row.
-5. Install the ledger and baseline in one controlled transaction with snapshot,
-   direct connection, advisory lock, timeouts, pre/postflight and retained
-   evidence.
-6. Mark only new, reviewed migrations `execution=numbered`; rehearse the runner
-   on a production clone and add it to CI.
+Completed in the repository:
+
+1. reviewed ledger DDL, terminal-state constraints, success uniqueness,
+   running-to-terminal guard, and update/delete/truncate protection;
+2. a 61-entry baseline packet distinguishing exact execution, structural
+   equivalence, intentional removal, and deferred 041;
+3. ten marker receipts sourced from their real database timestamps at
+   preflight rather than copied or inferred;
+4. direct-only, fingerprint-bound preflight/rehearsal/install/postflight and
+   isolated-cleanup tooling with an advisory lock, transaction, timeouts, and
+   sanitized output;
+5. a successful disposable-database rehearsal covering rollback, idempotency,
+   append-only enforcement, failure states, ordering/checksum rejection, and
+   Phase 1 runner compatibility.
+
+Still requiring separate production approval:
+
+1. resolve or explicitly accept the migration-005 workstation ACL condition;
+2. repeat rehearsal on the exact approved production clone if required by the
+   reviewer;
+3. create and verify a new Neon snapshot from production `main`;
+4. run production preflight, install the ledger and 60 baseline receipts in one
+   controlled transaction, and run postflight;
+5. decide the permanent 041 disposition; no success row exists;
+6. mark only future reviewed migrations `execution=numbered`, then separately
+   approve Phase 3 runner/CI authority.
 
 Rollback before commit is transaction rollback. After commit, leave the inert
 ledger in place unless it causes a demonstrated incident; restore from the
