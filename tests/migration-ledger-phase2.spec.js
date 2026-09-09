@@ -75,6 +75,29 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
     expect(result.stderr).not.toContain('127.0.0.1');
     expect(result.stderr).not.toContain('node:internal');
     expect(result.stderr).not.toContain('at ');
+
+    const runner = spawnSync(process.execPath, [
+      path.join(__dirname, '..', 'scripts', 'migration-runner.js'),
+      '--status',
+    ], {
+      cwd: path.join(__dirname, '..'),
+      encoding: 'utf8',
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        POSTGRES_URL_NON_POOLING: 'postgresql://operator:do-not-print@127.0.0.1:1/neondb?sslmode=verify-full&connect_timeout=1',
+        DATABASE_URL_UNPOOLED: '',
+      },
+    });
+    expect(runner.status).toBe(1);
+    expect(runner.stdout).toBe('');
+    expect(JSON.parse(runner.stderr.trim())).toEqual({
+      ok: false,
+      code: 'MIGRATION_RUNNER_FAILED',
+      error: 'Migration runner blocked',
+    });
+    expect(runner.stderr).not.toContain('do-not-print');
+    expect(runner.stderr).not.toContain('node:internal');
   });
 
   test('fingerprints bind the target but never the password', () => {

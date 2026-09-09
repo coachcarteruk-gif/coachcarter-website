@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { test, expect } = require('@playwright/test');
-const { Client, neonConfig } = require('@neondatabase/serverless');
+const { Client } = require('pg');
 const { validateLedger } = require('../scripts/lib/migration-governance');
 const {
   EXPECTED_MARKERS,
@@ -89,7 +89,6 @@ test.describe('migration ledger Phase 2 disposable database rehearsal', () => {
       throw new Error('REFUSING: the isolated test target matches the production target');
     }
 
-    neonConfig.webSocketConstructor = globalThis.WebSocket;
     admin = new Client({ connectionString: TEST_URL });
     await admin.connect();
     const existing = await admin.query(
