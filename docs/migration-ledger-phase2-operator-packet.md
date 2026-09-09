@@ -67,8 +67,12 @@ Production identity, if later approved:
 Use only a direct/non-pooled owner connection supplied by the approved secret
 manager. The hostname must not contain `-pooler`. Never paste or echo the URL,
 credentials, or API keys into a task, terminal transcript, evidence file, or
-command. The CLI reads only `MIGRATION_LEDGER_DIRECT_URL` and prints a SHA-256
-target fingerprint, never connection material.
+command. The CLI reads only `MIGRATION_LEDGER_DIRECT_URL`, connects with
+`node-postgres` over the direct PostgreSQL endpoint, normalizes Neon's
+`sslmode=require` connection parameter to explicit `sslmode=verify-full`, and
+prints a SHA-256 target fingerprint, never connection material. Connection
+failures must return the sanitized CLI error envelope with a non-zero exit; any
+stack trace or connection detail in operator output is an incident boundary.
 
 ## Repository and rehearsal checks
 

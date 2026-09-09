@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const { Client, neonConfig } = require('@neondatabase/serverless');
+const { Client } = require('pg');
 const { MigrationGovernanceError } = require('./lib/migration-governance');
 const {
   cleanupRehearsal,
@@ -45,8 +45,11 @@ async function run() {
     requireMutationApproval(mode, targetFingerprint);
   }
 
-  neonConfig.webSocketConstructor = globalThis.WebSocket;
   const client = new Client({ connectionString: databaseUrl });
+  // node-postgres reports idle connection failures through EventEmitter. Keep
+  // those failures inside the CLI's sanitized error boundary instead of
+  // allowing an unhandled event to print a stack trace or connection details.
+  client.on('error', () => {});
   try {
     await client.connect();
     let result;
