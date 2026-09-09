@@ -1,5 +1,30 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.132 - Migration Governance Phase 2 Rehearsal Package (9 September 2026)
+
+Prepared—but did not operate—the reviewed append-only migration ledger and
+honest 61-entry historical baseline. The package distinguishes exact execution
+evidence for 035/039/060 from structural equivalence, records 014/021 as
+intentionally removed, preserves 026a/026b, sources the ten legacy marker
+timestamps directly, and leaves 041 deferred with no false success row.
+
+Direct-only operator tooling defaults to read-only, binds mutations to an exact
+target fingerprint and explicit gate, uses a transaction, advisory lock and
+timeouts, and sanitizes errors. A confirmed non-production direct Neon endpoint
+hosted a statically named disposable database; the complete rehearsal proved
+rollback, installation, idempotency, append-only/terminal enforcement,
+duplicate/checksum/order/failure rejection, Phase 1 runner compatibility, and
+cleanup, then dropped the disposable database. Production was not modified.
+
+**Files:** `db/migration-governance/schema-migration-history.sql`,
+`db/migration-governance/production-baseline.json`,
+`scripts/lib/migration-ledger.js`, `scripts/migration-ledger-rehearsal.js`,
+`tests/migration-ledger-phase2.spec.js`,
+`tests/migration-ledger-phase2.integration.spec.js`,
+`docs/migration-governance.md`,
+`docs/migration-ledger-phase2-operator-packet.md`, `PROJECT.md`, `package.json`,
+`DEVELOPMENT-ROADMAP.md`.
+
 ## 2.131 - Free Lesson Extensions (8 September 2026)
 
 Instructors can explicitly enter £0 when requesting additional time. The learner sees and accepts a free extension without entering Stripe Checkout. Acceptance is tenant-scoped, lock-serialised and rechecks the source booking plus every real overlap before atomically changing the existing booking end time and accepting the offer. Credit usage, BCS attribution, list price, refundable value and instructor payout value remain unchanged, so the added time is genuinely free.

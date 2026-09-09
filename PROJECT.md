@@ -1141,6 +1141,12 @@ Set `MAINTENANCE_MODE=true` in Vercel environment variables to redirect all visi
   the phased move to an authoritative numbered runner are documented in
   `docs/migration-governance.md`. `db/migration.sql` and `/api/migrate` remain
   legacy compatibility paths and must not be used as authority for new work.
+  Phase 2 repository artifacts under `db/migration-governance/` define the
+  reviewed append-only ledger DDL and honest 61-entry production baseline;
+  `scripts/migration-ledger-rehearsal.js` defaults read-only and requires a
+  direct connection, exact target fingerprint, explicit mutation gate, and a
+  separately approved Neon snapshot for production. No production ledger has
+  been installed or baselined.
 - **Magic link tokens** — two-step flow (validate then verify) prevents email-client link prefetchers from consuming tokens; `verify` is POST-only
 - **Slot reservations** — 10-minute TTL; expired reservations are excluded from availability but cleaned up lazily (on next webhook or when table is queried)
 - **Dynamic pricing table** — `guarantee_pricing` is auto-created and seeded on first call to `/api/guarantee-price`. The webhook-driven price increment was retired with PR-J (2026-05-19) when the legacy Stripe checkout was deleted. The Pass Programme is hidden on the marketing site; the table now serves as a read-only admin-override source for `current_price` if it's ever re-enabled.
