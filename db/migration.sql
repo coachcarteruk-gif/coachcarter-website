@@ -11230,3 +11230,39 @@ ALTER TABLE refund_events
   ADD CONSTRAINT refund_events_status_check CHECK (
     status IN ('previewed', 'processing', 'manual_review', 'blocked', 'executed')
   );
+
+-- Interim v1 manual-boundary runtime permission repair.
+-- Migration 057 filtered discovered grantees to LOGIN roles, but production
+-- application access is inherited from a NOLOGIN group role. Mirror the
+-- existing interim-v1 control-table privileges without granting mutation
+-- privileges beyond the already-authorised INSERT capability.
+DO $restore_interim_v1_boundary_access$
+DECLARE
+  grantee RECORD;
+BEGIN
+  FOR grantee IN
+    SELECT DISTINCT r.oid, r.rolname
+      FROM pg_class c
+      CROSS JOIN LATERAL aclexplode(c.relacl) a
+      JOIN pg_roles r ON r.oid = a.grantee
+     WHERE c.oid = 'public.interim_v1_instructor_controls'::regclass
+       AND a.grantee <> c.relowner
+       AND a.privilege_type = 'SELECT'
+  LOOP
+    EXECUTE format(
+      'GRANT SELECT ON TABLE public.interim_v1_manual_settlement_boundaries TO %I',
+      grantee.rolname
+    );
+    IF has_table_privilege(
+      grantee.oid,
+      'public.interim_v1_instructor_controls',
+      'INSERT'
+    ) THEN
+      EXECUTE format(
+        'GRANT INSERT ON TABLE public.interim_v1_manual_settlement_boundaries TO %I',
+        grantee.rolname
+      );
+    END IF;
+  END LOOP;
+END;
+$restore_interim_v1_boundary_access$;

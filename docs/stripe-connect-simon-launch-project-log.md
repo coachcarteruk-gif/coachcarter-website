@@ -5798,3 +5798,41 @@ not be retried.
   `cc:connect-v1:1:6:live:express`, mapping state `succeeded`, original payout
   start `2026-08-14`, onboarding complete and `payouts_paused=true`. No payout
   preview was generated and no Stripe API operation was performed.
+
+## 10 September 2026 - interim-v1 payout preview runtime grant defect diagnosed
+
+- The owner-reported `Interim v1 payout operation failed` response was traced
+  to the read-only preview route. Its unexpected-error catch returned a generic
+  500 and emitted no structured runtime log.
+- Read-only Production catalogue checks proved the active login
+  `cc_prod_runtime_20260830` inherits `SELECT` on
+  `interim_v1_instructor_controls` from the NOLOGIN grant role
+  `cc_prod_runtime_20260816`, but had no `SELECT` on
+  `interim_v1_manual_settlement_boundaries`.
+- Migration 057 incorrectly restricted grant discovery to `rolcanlogin`, so it
+  skipped the inherited production grant role. The prepared Production repair
+  grants the already-verified role only `SELECT, INSERT`; the cumulative schema
+  now discovers control-table grantees without the login filter and mirrors
+  `INSERT` only where that grantee already has it. Neither path grants
+  `UPDATE`, `DELETE`, or `TRUNCATE`.
+- The handler now maps SQLSTATE `42501` to a safe, specific 503 response and
+  emits sanitized internal context for unexpected failures. Raw database
+  messages remain hidden from the client.
+- The exact one-statement Production repair was rehearsed on temporary branch
+  `br-morning-glitter-ab5f0ynm`, cloned from protected Production `main`.
+  Both `cc_prod_runtime_20260816` and its active login member
+  `cc_prod_runtime_20260830` then had `SELECT=true` and `INSERT=true` on the
+  boundary table, while `UPDATE`, `DELETE`, and `TRUNCATE` remained false. The
+  existing boundary row count remained exactly `1`.
+- After explicit owner approval, migration operation
+  `3d58b092-40a6-4f97-aeac-237b4914499d` applied that exact `SELECT, INSERT`
+  grant to protected Production `main`; Neon then deleted temporary branch
+  `br-morning-glitter-ab5f0ynm`.
+- Read-only Production postflight proved the active login can select all nine
+  relations used by the preview query. Boundary `SELECT` and `INSERT` are true,
+  combined `UPDATE, DELETE, TRUNCATE` is false, and the boundary row count
+  remains exactly `1`.
+- No payout preview was invoked during the repair. No payout approval, payout
+  row, Stripe API request, transfer, unpause, deployment, invitation, or
+  learner-credit change occurred. Deploying the diagnostic code hardening
+  remains a separate repository operation.

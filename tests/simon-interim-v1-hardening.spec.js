@@ -19,6 +19,7 @@ const {
   classifyFundingRow,
   createInterimV1PayoutHandler,
   evidenceRecord,
+  interimV1PayoutFailureResponse,
   validateManualBoundaryDates,
   validateTransfer,
 } = require('../api/_interim-v1-payout');
@@ -323,6 +324,36 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(branch).not.toContain('stripe.');
     expect(branch).not.toMatch(/INSERT INTO (interim_v1_payout_approvals|instructor_payouts|payout_line_items|interim_v1_transfer)/);
     expect(branch).not.toContain('payouts_paused = FALSE');
+  });
+
+  test('restores boundary access to inherited runtime roles without broad writes', () => {
+    const repair = read('db/diagnostics/interim-v1-manual-boundary-runtime-grant-repair.sql');
+    const repairStatements = repair.replace(/^--.*$/gm, '');
+    expect(repairStatements).toContain('GRANT SELECT, INSERT');
+    expect(repairStatements).toContain('ON TABLE public.interim_v1_manual_settlement_boundaries');
+    expect(repairStatements).toContain('TO cc_prod_runtime_20260816');
+    expect(repairStatements).not.toContain('rolcanlogin');
+    expect(repairStatements).not.toMatch(/GRANT\s+(?:UPDATE|DELETE|TRUNCATE)/i);
+
+    const cumulative = read('db/migration.sql');
+    expect(cumulative).toContain('$restore_interim_v1_boundary_access$');
+    const cumulativeRepair = cumulative.slice(cumulative.indexOf('$restore_interim_v1_boundary_access$'));
+    expect(cumulativeRepair).toContain("'public.interim_v1_instructor_controls'::regclass");
+    expect(cumulativeRepair).toContain('has_table_privilege(');
+    expect(cumulativeRepair).not.toContain('rolcanlogin');
+  });
+
+  test('reports database permission failures safely and specifically', () => {
+    expect(interimV1PayoutFailureResponse({ code: '42501' })).toEqual({
+      status: 503,
+      code: 'INTERIM_V1_DATABASE_PERMISSION_REQUIRED',
+      message: 'Interim v1 payout review is temporarily unavailable while database access is repaired',
+    });
+    expect(interimV1PayoutFailureResponse(new Error('private database detail'))).toEqual({
+      status: 500,
+      code: 'INTERIM_V1_PAYOUT_FAILED',
+      message: 'Interim v1 payout operation failed',
+    });
   });
 
   test('admin UI labels legacy bulk payout and gates interim controls to platform owner', () => {
