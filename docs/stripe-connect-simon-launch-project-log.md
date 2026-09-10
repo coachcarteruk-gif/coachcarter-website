@@ -5836,3 +5836,29 @@ not be retried.
   row, Stripe API request, transfer, unpause, deployment, invitation, or
   learner-credit change occurred. Deploying the diagnostic code hardening
   remains a separate repository operation.
+
+## 10 September 2026 - payout overview made boundary-aware locally
+
+- The owner reconfirmed that Simon's manual payments cover every lesson before
+  Friday 4 September 2026 at 12:00 Europe/London and requested that the payout
+  system reflect that settlement.
+- Production already contained the append-only boundary recorded on 7
+  September. The defect was isolated to the legacy admin payout overview: it
+  still estimated controlled instructors from `payouts_start_date`, so it
+  presented Simon's pre-handoff chargeable backlog as an upcoming payout.
+- The local read-model change routes controlled-instructor estimates through
+  the existing exact interim-v1 preview. The overview now returns the stored
+  half-open boundary, the count of chargeable rows classified
+  `MANUALLY_SETTLED_BEFORE_CUTOFF`, the exact controlled proposed transfer and
+  its blocker state. A preview failure is shown as unavailable rather than as a
+  false zero-value payout. Non-controlled instructors retain the legacy
+  calculation unchanged.
+- The admin payout table now labels the manual-payment cutoff and controlled
+  owner-review status. It no longer presents the legacy backlog estimate as
+  Simon's next payout.
+- Focused local verification passed `43/43` tests covering the new read model,
+  Simon interim-v1 hardening and the payout read model. Direct syntax checks
+  and `git diff --check` passed.
+- This work did not alter the recorded Production boundary, booking, credit,
+  payout, approval or transfer rows. It made no Stripe request, moved no money,
+  did not unpause Simon and did not deploy to Production.

@@ -58,7 +58,12 @@ const { createTransporter, generateToken } = require('./_auth-helpers');
 const { sendWhatsApp } = require('./_whatsapp');
 const { lockBalanceAndMutate } = require('./_credit-grant');
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
-const { createInterimV1PayoutHandler } = require('./_interim-v1-payout');
+const { createInterimV1PayoutHandler, loadInterimV1Preview } = require('./_interim-v1-payout');
+const {
+  buildControlledPayoutOverviewEstimate,
+  buildLegacyPayoutOverviewEstimate,
+  buildUnavailableControlledPayoutOverviewEstimate,
+} = require('./_payout-overview');
 const {
   validateGoodwillRequest,
   validateReconciliationRequest,
@@ -4762,12 +4767,16 @@ async function handlePayoutOverview(req, res) {
       SELECT i.id, i.school_id, i.name, i.email, i.active, i.commission_rate, i.weekly_franchise_fee_pence,
              i.stripe_account_id, i.stripe_onboarding_complete, i.payouts_paused, i.payouts_start_date,
              c.id AS interim_v1_control_id, c.funding_policy AS interim_v1_funding_policy,
-             ci.state AS interim_v1_account_state
+             ci.state AS interim_v1_account_state,
+             mb.id AS manual_settlement_boundary_id, mb.settled_before_at,
+             mb.first_system_period_end_at, mb.time_zone AS manual_settlement_time_zone
         FROM instructors i
         LEFT JOIN interim_v1_instructor_controls c
           ON c.school_id = i.school_id AND c.instructor_id = i.id
         LEFT JOIN connect_v1_account_creation_intents ci
           ON ci.school_id = c.school_id AND ci.id = c.account_creation_intent_id
+        LEFT JOIN interim_v1_manual_settlement_boundaries mb
+          ON mb.school_id = i.school_id AND mb.instructor_id = i.id
        WHERE i.school_id = ${schoolId} ORDER BY i.name ASC
     `;
 
@@ -4775,30 +4784,29 @@ async function handlePayoutOverview(req, res) {
     const estimates = [];
     for (const inst of instructors) {
       if (!inst.active || !inst.stripe_onboarding_complete) continue;
-      const bookings = await getEligibleBookings(sql, inst.id, inst.payouts_start_date || null);
-      if (!bookings.length) continue;
 
-      const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;
-      let grossPence = 0;
-      for (const b of bookings) grossPence += parseInt(b.price_pence);
-
-      let estimatedPence;
-      if (franchiseFee != null) {
-        estimatedPence = grossPence - Math.min(franchiseFee, grossPence);
-      } else {
-        const rate = parseFloat(inst.commission_rate) || 0.85;
-        estimatedPence = 0;
-        for (const b of bookings) estimatedPence += Math.round(parseInt(b.price_pence) * rate);
+      // Controlled instructors have an immutable manual-settlement handoff and
+      // a dedicated exact-funding planner. Never show the legacy date-floor
+      // backlog as though it were their next payout.
+      if (inst.interim_v1_control_id) {
+        try {
+          const preview = await loadInterimV1Preview(sql, schoolId, inst.id);
+          estimates.push(buildControlledPayoutOverviewEstimate(inst, preview));
+        } catch (error) {
+          console.error('[payout-overview] controlled preview unavailable', {
+            school_id: schoolId,
+            instructor_id: inst.id,
+            error_name: error?.name || 'Error',
+            error_code: error?.code || null,
+          });
+          estimates.push(buildUnavailableControlledPayoutOverviewEstimate(inst));
+        }
+        continue;
       }
 
-      estimates.push({
-        instructor_id: inst.id,
-        name: inst.name,
-        eligible_lessons: bookings.length,
-        estimated_pence: estimatedPence,
-        paused: inst.payouts_paused,
-        fee_model: franchiseFee != null ? 'franchise' : 'commission'
-      });
+      const bookings = await getEligibleBookings(sql, inst.id, inst.payouts_start_date || null);
+      const estimate = buildLegacyPayoutOverviewEstimate(inst, bookings);
+      if (estimate) estimates.push(estimate);
     }
 
     // Recent payouts (scoped via instructor school_id)
@@ -4839,7 +4847,13 @@ async function handlePayoutOverview(req, res) {
         payouts_start_date: i.payouts_start_date,
         interim_v1_controlled: !!i.interim_v1_control_id,
         interim_v1_funding_policy: i.interim_v1_funding_policy || null,
-        interim_v1_account_state: i.interim_v1_account_state || null
+        interim_v1_account_state: i.interim_v1_account_state || null,
+        manual_settlement_boundary: i.manual_settlement_boundary_id ? {
+          id: i.manual_settlement_boundary_id,
+          settled_before_at: i.settled_before_at,
+          first_system_period_end_at: i.first_system_period_end_at,
+          time_zone: i.manual_settlement_time_zone
+        } : null
       })),
       estimates,
       recent_payouts: recentPayouts,

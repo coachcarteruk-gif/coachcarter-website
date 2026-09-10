@@ -3243,8 +3243,11 @@ async function loadPayouts() {
         const feeLabel = i.fee_model === 'franchise'
           ? `\u00A3${(i.weekly_franchise_fee_pence / 100).toFixed(0)}/wk`
           : `${Math.round((i.commission_rate || 0.85) * 100)}%`;
+        const boundaryCopy = i.manual_settlement_boundary?.settled_before_at
+          ? `<div style="margin-top:4px;color:var(--muted);font-size:0.72rem;">Manual payments settled before ${esc(new Date(i.manual_settlement_boundary.settled_before_at).toLocaleString('en-GB', { timeZone: i.manual_settlement_boundary.time_zone || 'Europe/London' }))}</div>`
+          : '';
         return `<tr>
-          <td>${esc(i.name)}</td>
+          <td>${esc(i.name)}${boundaryCopy}</td>
           <td>${statusBadge}</td>
           <td>${esc(feeLabel)}</td>
           <td>${i.payouts_paused ? '<span style="color:#b45309;font-weight:600;">Paused</span>' : (i.connect_status === 'active' ? 'Active' : '\u2014')}</td>
@@ -3254,12 +3257,25 @@ async function loadPayouts() {
 
     // Upcoming estimates
     document.getElementById('payout-estimates-body').innerHTML = data.estimates.length > 0
-      ? data.estimates.map(e => `<tr>
-          <td>${esc(e.name)}</td>
+      ? data.estimates.map(e => {
+        const controlled = e.payout_path === 'interim_v1_controlled';
+        const cutoff = e.manual_settlement_boundary?.settled_before_at
+          ? new Date(e.manual_settlement_boundary.settled_before_at).toLocaleString('en-GB', { timeZone: e.manual_settlement_boundary.time_zone || 'Europe/London' })
+          : null;
+        const details = controlled
+          ? `<div style="margin-top:4px;color:var(--muted);font-size:0.72rem;">Controlled preview${cutoff ? ` · paid manually before ${esc(cutoff)}` : ''}${Number.isInteger(e.manually_settled_lessons) ? ` · ${e.manually_settled_lessons} historical lessons excluded` : ''}</div>`
+          : '';
+        const amount = e.estimate_unavailable ? 'Unavailable' : fmtPence(e.estimated_pence);
+        const status = controlled
+          ? '<span style="color:#b45309;">Controlled — owner review required</span>'
+          : e.paused ? '<span style="color:#b45309;">Paused</span>' : 'Ready';
+        return `<tr>
+          <td>${esc(e.name)}${details}</td>
           <td>${parseInt(e.eligible_lessons) || 0}</td>
-          <td style="font-weight:700;">${fmtPence(e.estimated_pence)}</td>
-          <td>${e.paused ? '<span style="color:#b45309;">Paused</span>' : 'Ready'}</td>
-        </tr>`).join('')
+          <td style="font-weight:700;">${amount}</td>
+          <td>${status}</td>
+        </tr>`;
+      }).join('')
       : '<tr><td colspan="4" style="color:var(--muted);">No pending payouts</td></tr>';
 
     // Recent payouts
