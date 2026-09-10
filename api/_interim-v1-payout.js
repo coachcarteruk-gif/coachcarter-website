@@ -29,6 +29,24 @@ class InterimV1PayoutError extends Error {
   }
 }
 
+function interimV1PayoutFailureResponse(error) {
+  if (error instanceof InterimV1PayoutError) {
+    return { status: error.status, code: error.code, message: error.message };
+  }
+  if (error?.code === '42501') {
+    return {
+      status: 503,
+      code: 'INTERIM_V1_DATABASE_PERMISSION_REQUIRED',
+      message: 'Interim v1 payout review is temporarily unavailable while database access is repaired',
+    };
+  }
+  return {
+    status: 500,
+    code: error?.code || 'INTERIM_V1_PAYOUT_FAILED',
+    message: 'Interim v1 payout operation failed',
+  };
+}
+
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -861,8 +879,17 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
       });
       res.status(202).json({ ok: false, code: matches.length ? 'INTERIM_V1_TRANSFER_MANUAL_REVIEW' : 'INTERIM_V1_TRANSFER_RECONCILING', message: 'No replacement transfer was submitted', payouts_paused: true }); return true;
     } catch (error) {
-      const status = error instanceof InterimV1PayoutError ? error.status : 500;
-      res.status(status).json({ error: true, code: error.code || 'INTERIM_V1_PAYOUT_FAILED', message: error instanceof InterimV1PayoutError ? error.message : 'Interim v1 payout operation failed' });
+      if (!(error instanceof InterimV1PayoutError)) {
+        console.error('[interim-v1-payout] operation failed', {
+          action,
+          school_id: schoolId,
+          instructor_id: instructorId,
+          error_name: error?.name || 'Error',
+          error_code: error?.code || null,
+        });
+      }
+      const failure = interimV1PayoutFailureResponse(error);
+      res.status(failure.status).json({ error: true, code: failure.code, message: failure.message });
       return true;
     }
   };
@@ -872,6 +899,7 @@ module.exports = {
   ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION, RECONCILE_CONFIRMATION,
   InterimV1PayoutError, allocateInstructorAmounts, buildPreviewFromRows,
   classifyFundingRow, createInterimV1PayoutHandler, evidenceRecord, fingerprint,
+  interimV1PayoutFailureResponse,
   loadInterimV1Preview, recordInterimV1FundingEvidence, stableJson,
   validateManualBoundaryDates, validateTransfer,
 };
