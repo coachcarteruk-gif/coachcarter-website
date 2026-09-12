@@ -1182,7 +1182,6 @@ function createInterimV1PayoutHandler({
                  AND evidence_status = 'pending'
                  AND evidence_json ->> 'evidenceSchema' = ${FLEXIBLE_PAYMENT_OBJECT_PENDING_SCHEMA}
                ORDER BY observed_at DESC, id DESC
-               FOR SHARE
             `;
             if (storedObservations.length !== 1) {
               throw new InterimV1PayoutError(
