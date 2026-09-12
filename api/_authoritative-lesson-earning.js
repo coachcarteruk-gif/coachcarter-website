@@ -114,8 +114,9 @@ function packageEvidence(entry) {
   const legacyChargeChain = typeof evidence?.chargeId === 'string'
     && evidence.chargeId.startsWith('ch_')
     && evidence.balanceTransactionType === 'charge';
-  const paymentObjectChain = evidence?.evidenceSchema === 'payout-flexible-source-evidence/2'
-    && evidence.paymentObjectType === 'payment'
+  const paymentObjectChain = evidence?.evidenceSchema === 'payout-flexible-source-evidence/3'
+    && evidence.paymentObjectType === 'charge'
+    && evidence.paymentIdentitySemantics === 'stripe_py_payment'
     && typeof evidence.chargeId === 'string'
     && evidence.chargeId.startsWith('py_')
     && evidence.balanceTransactionType === 'payment';

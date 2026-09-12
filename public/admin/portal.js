@@ -3551,8 +3551,8 @@ async function reconcileSimonFlexibleEvidence(instructorId, schoolId) {
     && Date.now() - simonFlexibleEvidenceConfirmation.armedAt < 60000;
   if (!confirmationFresh) {
     simonFlexibleEvidenceConfirmation = { token: confirmationToken, armedAt: Date.now() };
-    if (button) button.textContent = 'Confirm Stripe read + flexible evidence append (1)';
-    return toast(`Review exact scope: booking ${scope.bookingId}, Flexible Hours source ${scope.sourceId}. Click the confirmation button within 60 seconds to append one evidence row and its required audit row only. This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.`, '');
+    if (button) button.textContent = 'Confirm stored evidence classification (no Stripe read)';
+    return toast(`Review exact scope: booking ${scope.bookingId}, Flexible Hours source ${scope.sourceId}. Click within 60 seconds to classify the exact stored payment observation and append one terminal evidence row plus its required audit row. No Stripe read will occur. This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.`, '');
   }
   simonFlexibleEvidenceConfirmation = null;
   if (button) {
@@ -3568,6 +3568,7 @@ async function reconcileSimonFlexibleEvidence(instructorId, schoolId) {
         booking_id: scope.bookingId,
         expected_flexible_source_id: scope.sourceId,
         allow_payment_object_evidence: true,
+        reuse_existing_payment_observation: true,
         operator_go: 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED'
       })
     });
@@ -3575,7 +3576,8 @@ async function reconcileSimonFlexibleEvidence(instructorId, schoolId) {
     const observation = Array.isArray(data.observations) ? data.observations[0] : null;
     if (!res.ok || data.ok !== true || Number(data.booking_id) !== scope.bookingId
       || data.stripe_reads_only !== true || data.observations?.length !== 1
-      || !observation?.id || !['complete', 'pending', 'contradictory'].includes(observation.evidence_status)) {
+      || data.stripe_read_performed !== false
+      || !observation?.id || observation.evidence_status !== 'complete') {
       throw new Error(data.message || data.code || 'Flexible Hours reconciliation response was not exact');
     }
     toast(`Flexible Hours source ${scope.sourceId} evidence recorded as ${observation.evidence_status}; Simon remains paused and no payout was created`, 'success');

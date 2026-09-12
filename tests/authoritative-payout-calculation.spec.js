@@ -104,8 +104,9 @@ function exactPackageEvidence(gross, fee, suffix = 'package') {
 function exactPaymentObjectPackageEvidence(gross, fee, suffix = 'package-payment') {
   return {
     ...exactPackageEvidence(gross, fee, suffix),
-    evidenceSchema: 'payout-flexible-source-evidence/2',
-    paymentObjectType: 'payment',
+    evidenceSchema: 'payout-flexible-source-evidence/3',
+    paymentObjectType: 'charge',
+    paymentIdentitySemantics: 'stripe_py_payment',
     chargeId: `py_${suffix}`,
     balanceTransactionSourceId: `py_${suffix}`,
     balanceTransactionType: 'payment',
@@ -273,7 +274,7 @@ test.describe('authoritative lesson earning', () => {
     });
   });
 
-  test('accepts only versioned exact py_/payment package evidence', () => {
+  test('accepts only versioned exact py_/payment package evidence from Stripe charge-shaped data', () => {
     const evidence = exactPaymentObjectPackageEvidence(81000, 425);
     const flexibleSource = {
       allocation_id: 10, source_id: 3, units_allocated: 2, unit_minutes: 30,
@@ -290,7 +291,8 @@ test.describe('authoritative lesson earning', () => {
     });
     for (const invalidEvidence of [
       { ...evidence, evidenceSchema: undefined },
-      { ...evidence, paymentObjectType: 'charge' },
+      { ...evidence, paymentObjectType: 'payment' },
+      { ...evidence, paymentIdentitySemantics: undefined },
       { ...evidence, balanceTransactionType: 'charge' },
       { ...evidence, balanceTransactionSourceId: 'py_other' },
     ]) {

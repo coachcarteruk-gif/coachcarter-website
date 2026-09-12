@@ -379,10 +379,12 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(script).toContain('reconcile-simon-flexible-evidence');
     expect(script).toContain('expected_flexible_source_id: scope.sourceId');
     expect(script).toContain('allow_payment_object_evidence: true');
-    expect(script).toContain('Confirm Stripe read + flexible evidence append (1)');
+    expect(script).toContain('reuse_existing_payment_observation: true');
+    expect(script).toContain('Confirm stored evidence classification (no Stripe read)');
+    expect(script).toContain('No Stripe read will occur.');
     expect(script).toContain('Date.now() - simonFlexibleEvidenceConfirmation.armedAt < 60000');
     expect(script).toContain('This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.');
-    expect(html).toContain('simon-payment-object-evidence');
+    expect(html).toContain('simon-payment-observation-replay');
   });
 
   test('expected Flexible Hours source guard fails closed on identity drift', () => {
@@ -410,7 +412,7 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
 
   test('authorized py_/payment evidence appends under a versioned fingerprint and stays exact', () => {
     const fundingEvidence = {
-      source: 'balance_transaction', paymentObjectType: 'payment',
+      source: 'balance_transaction', paymentObjectType: 'charge',
       checkoutSessionId: 'cs_live_source_3', paymentIntentId: 'pi_live_source_3',
       paymentIntentStatus: 'succeeded', chargeId: 'py_live_source_3',
       chargePaid: true, chargeCaptured: true, chargePaymentIntentId: 'pi_live_source_3',
@@ -431,12 +433,15 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(pending.evidence_status).toBe('pending');
     expect(complete).toMatchObject({
       evidence_status: 'complete',
-      evidence_json: { evidenceSchema: 'payout-flexible-source-evidence/2' },
+      evidence_json: {
+        evidenceSchema: 'payout-flexible-source-evidence/3',
+        paymentIdentitySemantics: 'stripe_py_payment',
+      },
     });
     expect(complete.evidence_fingerprint).not.toBe(pending.evidence_fingerprint);
     expect(flexibleEvidenceObservation({
       schoolId: 1, sourceId: 3,
-      fundingEvidence: { ...fundingEvidence, paymentObjectType: 'charge' },
+      fundingEvidence: { ...fundingEvidence, paymentObjectType: 'payment' },
       providerLivemode: true, allowPaymentObjectEvidence: true,
     }).evidence_status).toBe('pending');
     expect(flexibleEvidenceObservation({
@@ -453,7 +458,12 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     const writer = source.slice(start, end);
     expect(writer).toContain('INSERT INTO payout_flexible_source_evidence');
     expect(writer).not.toMatch(/\b(?:UPDATE|DELETE)\s+(?:FROM\s+)?payout_flexible_source_evidence\b/i);
-    expect(source).toContain("FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/2'");
+    expect(source).toContain("FLEXIBLE_PAYMENT_OBJECT_PENDING_SCHEMA = 'payout-flexible-source-evidence/2'");
+    expect(source).toContain("FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/3'");
+    expect(source).toContain('if (storedObservations.length !== 1)');
+    expect(source).toContain("evidence_json ->> 'evidenceSchema'");
+    expect(source).toContain('if (!reuseExistingPaymentObservation)');
+    expect(source).toContain('stripe_read_performed: !reuseExistingPaymentObservation');
   });
 
   test('transfer validation is exact and live', () => {

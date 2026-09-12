@@ -28,7 +28,8 @@ const RECONCILE_CONFIRMATION = 'RECONCILE_INTERIM_V1_TRANSFER_CONFIRMED';
 const RECONCILE_FUNDING_CONFIRMATION = 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED';
 const RECORD_FUNDING_BASIS_CONFIRMATION = 'RECORD_INTERIM_V1_FUNDING_BASIS_CONFIRMED';
 const PLANNER_VERSION = 'interim-v1-payout/3';
-const FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/2';
+const FLEXIBLE_PAYMENT_OBJECT_PENDING_SCHEMA = 'payout-flexible-source-evidence/2';
+const FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/3';
 const AUTHORIZED_FLEXIBLE_PAYMENT_OBJECT_SCOPE = Object.freeze({
   schoolId: 1,
   instructorId: 6,
@@ -538,7 +539,8 @@ function evidenceComplete(facts, { allowPaymentObject = false } = {}) {
   const legacyChargeChain = exactId(facts.stripe_charge_id, 'ch')
     && facts.stripe_balance_transaction_type === 'charge';
   const paymentObjectChain = allowPaymentObject
-    && facts.stripe_payment_object_type === 'payment'
+    && facts.stripe_payment_object_type === 'charge'
+    && facts.stripe_payment_identity_semantics === 'stripe_py_payment'
     && exactId(facts.stripe_charge_id, 'py')
     && facts.stripe_balance_transaction_type === 'payment';
   return facts.provider_livemode && exactId(facts.stripe_checkout_session_id, 'cs')
@@ -849,6 +851,7 @@ function flexibleEvidenceObservation({
     providerLivemode: providerLivemode === true,
     ...(allowPaymentObjectEvidence ? {
       evidenceSchema: FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA,
+      paymentIdentitySemantics: 'stripe_py_payment',
     } : {}),
   };
   const complete = evidenceComplete({
@@ -857,6 +860,7 @@ function flexibleEvidenceObservation({
     stripe_payment_intent_id: facts.paymentIntentId,
     stripe_payment_intent_status: facts.paymentIntentStatus,
     stripe_payment_object_type: facts.paymentObjectType,
+    stripe_payment_identity_semantics: facts.paymentIdentitySemantics,
     stripe_charge_id: facts.chargeId,
     stripe_charge_paid: facts.chargePaid,
     stripe_charge_captured: facts.chargeCaptured,
@@ -1108,6 +1112,14 @@ function createInterimV1PayoutHandler({
           bookingId,
           expectedSourceId: req.body?.expected_flexible_source_id,
         });
+        const reuseExistingPaymentObservation = req.body?.reuse_existing_payment_observation === true;
+        if (reuseExistingPaymentObservation && !allowPaymentObjectEvidence) {
+          throw new InterimV1PayoutError(
+            409,
+            'FLEXIBLE_PAYMENT_OBSERVATION_REUSE_FORBIDDEN',
+            'Stored Stripe payment observation reuse is not authorized for this scope'
+          );
+        }
         if (directRows.length > 1) throw new InterimV1PayoutError(409, 'DIRECT_FUNDING_NOT_ONE_TO_ONE', 'Direct funding must have exactly one active source');
         if (!directRows.length && !flexibleRows.length) {
           throw new InterimV1PayoutError(409, 'RECONCILABLE_FUNDING_IDENTITY_MISSING', 'No exact Stripe funding identity is attached to this booking');
@@ -1141,16 +1153,63 @@ function createInterimV1PayoutHandler({
             ),
           };
         };
-        if (directRows[0]) {
-          const fetched = await fetchEvidence(directRows[0]);
-          observations.push({ kind: 'direct', row: directRows[0], ...fetched });
-        }
-        for (const source of flexibleRows) {
-          observations.push({ kind: 'flexible', row: source, ...(await fetchEvidence(source)) });
+        if (!reuseExistingPaymentObservation) {
+          if (directRows[0]) {
+            const fetched = await fetchEvidence(directRows[0]);
+            observations.push({ kind: 'direct', row: directRows[0], ...fetched });
+          }
+          for (const source of flexibleRows) {
+            observations.push({ kind: 'flexible', row: source, ...(await fetchEvidence(source)) });
+          }
+        } else if (directRows.length !== 0 || flexibleRows.length !== 1) {
+          throw new InterimV1PayoutError(
+            409,
+            'FLEXIBLE_PAYMENT_OBSERVATION_SCOPE_CHANGED',
+            'Stored Stripe payment observation reuse requires exactly one Flexible Hours source and no direct source'
+          );
         }
         const recorded = await runTransaction(async (txSql) => {
           await txSql`SELECT pg_advisory_xact_lock(${schoolId}, ${instructorId})`;
           const results = [];
+          let reusedObservationId = null;
+          if (reuseExistingPaymentObservation) {
+            const expected = AUTHORIZED_FLEXIBLE_PAYMENT_OBJECT_SCOPE;
+            const storedObservations = await txSql`
+              SELECT id, evidence_status, evidence_json
+                FROM payout_flexible_source_evidence
+               WHERE school_id = ${schoolId}
+                 AND source_id = ${expected.sourceId}
+                 AND evidence_status = 'pending'
+                 AND evidence_json ->> 'evidenceSchema' = ${FLEXIBLE_PAYMENT_OBJECT_PENDING_SCHEMA}
+               ORDER BY observed_at DESC, id DESC
+               FOR SHARE
+            `;
+            if (storedObservations.length !== 1) {
+              throw new InterimV1PayoutError(
+                409,
+                'FLEXIBLE_PAYMENT_OBSERVATION_NOT_EXACT',
+                'Exactly one authorized pending Stripe payment observation is required'
+              );
+            }
+            const [storedObservation] = storedObservations;
+            const result = await recordFlexibleSourceEvidence(txSql, {
+              schoolId,
+              sourceId: expected.sourceId,
+              fundingEvidence: storedObservation.evidence_json,
+              providerLivemode: storedObservation.evidence_json?.providerLivemode === true,
+              allowPaymentObjectEvidence: true,
+              adminId: admin.id,
+            });
+            if (result.evidence_status !== 'complete') {
+              throw new InterimV1PayoutError(
+                409,
+                'FLEXIBLE_PAYMENT_OBSERVATION_STILL_INCOMPLETE',
+                'The exact stored Stripe payment observation is not terminal under the reviewed compatibility contract'
+              );
+            }
+            results.push(result);
+            reusedObservationId = storedObservation.id;
+          }
           for (const observation of observations) {
             if (observation.kind === 'direct') {
               results.push(await recordDirectEvidenceObservation(txSql, {
@@ -1178,18 +1237,26 @@ function createInterimV1PayoutHandler({
             details: {
               instructor_id: instructorId,
               observations: results.map((result, index) => ({
-                kind: observations[index].kind,
+                kind: reuseExistingPaymentObservation ? 'flexible' : observations[index].kind,
                 id: result.id || null,
                 evidence_status: result.evidence_status || null,
                 reused: result.reused === true,
               })),
               stripe_reads_only: true, payout_created: false, transfer_created: false,
               flexible_payment_object_compatibility: allowPaymentObjectEvidence,
+              stripe_read_performed: !reuseExistingPaymentObservation,
+              reused_observation_id: reusedObservationId,
             },
           });
           return results;
         });
-        res.json({ ok: true, booking_id: bookingId, observations: recorded, stripe_reads_only: true });
+        res.json({
+          ok: true,
+          booking_id: bookingId,
+          observations: recorded,
+          stripe_reads_only: true,
+          stripe_read_performed: !reuseExistingPaymentObservation,
+        });
         return true;
       }
 
