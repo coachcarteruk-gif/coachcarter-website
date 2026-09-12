@@ -257,6 +257,7 @@ function normalizeBooking(booking, index, schoolId, payoutRoute) {
     payout_route: booking.payoutRoute,
     is_test_account: booking.isTestAccount === true,
     existing_v2_earning: booking.existingV2Earning === true,
+    existing_manual_payout_settlement: booking.existingManualPayoutSettlement === true,
     existing_v1_routes: existingRoutes,
     zero_funding_class: booking.zeroFundingClass || null,
   };
@@ -386,6 +387,9 @@ function initialBookingResult(booking, normalized) {
   if (normalized.destination_scope_error) return block(normalized.destination_scope_error);
   if (normalized.policy_blocker) return block(normalized.policy_blocker);
   if (booking.existing_v2_earning) return block('booking_already_materialized_v2');
+  if (booking.existing_manual_payout_settlement) {
+    return block('booking_already_settled_external_manual_payout');
+  }
   if (booking.existing_v1_routes.length > 1) return block('booking_claimed_by_both_v1_routes');
   if (booking.existing_v1_routes.length === 1) {
     return block(`booking_already_claimed_v1_${booking.existing_v1_routes[0]}`);

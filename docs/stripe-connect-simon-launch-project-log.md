@@ -5929,3 +5929,37 @@ not be retried.
 - No commit, push, deployment, Production read or write, Stripe call, evidence
   append, approval, payout, transfer, refund, unpause or customer communication
   was performed by this review.
+
+## 12 September 2026 - append-only manual payout settlement implemented locally
+
+- New owner-authoritative evidence supersedes the former £1,131.02 transfer
+  target: Simon was paid £1,041.02 by bank transfer on 11 September under
+  reference `4th sept-11th sept`, covering all 22 obligations in
+  `[2026-09-04 12:00, 2026-09-11 12:00)` Europe/London after exactly one £90
+  weekly franchise-fee deduction. Nothing further is payable for the interval.
+- Migration 062 adds one immutable settlement header and amountless per-booking
+  coverage claims. Bidirectional advisory-lock guards reject overlap with
+  instructor v1 lines, school v1 lines, payout-v2 earnings, and launch-ledger
+  earnings. It seeds no data and grants runtime roles only `SELECT, INSERT`.
+- The dedicated superadmin recording operation requires an exact confirmation,
+  boundary UUID, deterministic settlement UUID/idempotency key/fingerprint,
+  reconciled integer-pence arithmetic, evidence text, and the complete locked
+  chargeable booking set. It is one transaction with one required audit row;
+  any stale booking, prior claim, approval/transfer identity, pause change, or
+  non-zero postflight rolls everything back. An exact replay is a no-op.
+- The shared interim read model moves covered rows to `manually_settled` while
+  retaining each source diagnostic. A complete claim set reports historical
+  bank payment 104,102p, historical fee deduction 9,000p, new proposed transfer
+  0p, new franchise deduction 0p, remaining payable 0p, and cannot be approved.
+  Generic v1 selectors, both payout-v2 comparisons, and the instructor
+  not-delivered path also recognize the manual claim.
+- Focused local tests passed, including the 22-booking zero-payable fixture and
+  fail-closed incomplete-set behavior. Migration 062 applied successfully on
+  the isolated Neon test branch inside a transaction; prerequisites 057 and
+  061 plus migration 062 were rolled back, the checked-in Production preflight SQL
+  parsed successfully, and no settlement rows persisted.
+- No deployment, Production read or write, Production migration, Stripe call,
+  evidence/funding-basis append, BCS or Flexible Hours allocation change,
+  approval, payout, payout line, transfer, refund, boundary change, or unpause
+  was performed. Production preflight, migration and recording remain separate
+  approval gates.

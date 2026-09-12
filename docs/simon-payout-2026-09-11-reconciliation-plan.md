@@ -2,6 +2,34 @@
 
 Status: implementation and review plan only. It does not authorise a deployment, Production mutation, payout approval, unpause, Stripe refund, payout, or transfer.
 
+## 12 September 2026 owner-authoritative supersession
+
+The owner has confirmed that Simon was manually paid **£1,041.02** on 11
+September 2026 under bank reference `4th sept-11th sept`. That payment covered
+every Simon lesson and obligation in the complete Friday-noon interval and was
+the former £1,131.02 reviewed target less the single £90 weekly franchise fee.
+Nothing further is payable for this interval. The £1,131.02 target below is
+retained only as historical reconciliation context; it must not be approved or
+transferred.
+
+Migration 062 and the dedicated
+`interim-v1-record-manual-payout-settlement` superadmin operation implement the
+reviewed append-only treatment. One immutable settlement header records the
+bank-payment arithmetic and one amountless coverage claim records each of the
+22 booking identities. The source diagnostics remain visible; no BCS, Flexible
+Hours allocation, funding evidence, funding-basis event, payout, payout line,
+approval, transfer, refund, boundary, or instructor-control row is rewritten.
+The coverage claims exclude and database-guard the bookings from all current
+v1, payout-v2, and launch-ledger payout claim paths. A complete settlement is a
+terminal read-model state with a new payable amount of £0 and a new franchise
+fee deduction of £0.
+
+The implementation and rolled-back non-Production rehearsal do not authorise
+deployment, migration 062 on Production, or the recording operation. Both
+Production actions require separately reviewed approval. Do not run the former
+reconciliation/approval sequence below unless the owner explicitly withdraws
+this superseding evidence and a new accounting review provides a safe path.
+
 ## Fixed authority
 
 - School and instructor scope must match Simon's stored interim-v1 control.

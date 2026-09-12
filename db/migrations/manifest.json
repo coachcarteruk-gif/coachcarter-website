@@ -503,6 +503,14 @@
       "filename": "061_authoritative_payout_evidence.sql",
       "checksum": "aae931004ff9108ff2c90662a587dfac1295d909d0c222b6814a5a655376aee8",
       "execution": "numbered"
+    },
+    {
+      "id": "062",
+      "order": 63,
+      "prefix": "062",
+      "filename": "062_interim_v1_manual_payout_settlements.sql",
+      "checksum": "8af79a5aba226a3b87c49b9071ca4357b193060e7c17f4a470a7a6d8b7884f84",
+      "execution": "numbered"
     }
   ]
 }

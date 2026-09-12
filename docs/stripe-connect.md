@@ -38,6 +38,16 @@ For a commission instructor, the per-lesson rule is `round((attributable custome
 
 `POST /api/admin?action=interim-v1-reconcile-funding-evidence` is a superadmin-only, exact-confirmation reconciliation read against already-recorded Stripe identities. It may append direct/package evidence observations and an audit row; it cannot approve a payout, create a payout/claim, unpause an instructor, refund, or transfer. Direct observations deliberately supersede provisional `py_` evidence without updating or deleting the historical row. `POST /api/admin?action=interim-v1-record-funding-basis` appends a versioned, idempotent operator classification; it requires a reason and evidence reference, keeps Simon paused, and refuses claimed bookings.
 
+Migration 062 adds the separate append-only path for an owner-confirmed payout
+already made outside CoachCarter. The exact-confirmation superadmin action
+`interim-v1-record-manual-payout-settlement` records one bank-settlement header
+and amountless booking coverage claims only. It locks and verifies the complete
+boundary interval, rejects any v1/v2/launch claim overlap, preserves unresolved
+source diagnostics, writes one audit row, and must postflight to £0 remaining
+payable while the instructor is still paused. It never creates a zero-value
+payout line, applies another franchise fee, or calls Stripe. Migration and use
+of the operation are separate Production approvals.
+
 Controlled payout line items persist the authoritative value semantics and nullable gross, actual-fee and net dimensions beside the legacy non-null compatibility columns. For audited net/final bases the compatibility projection remains arithmetically usable, while the authoritative fee stays `NULL`; it is not fee evidence and must not be displayed or reused as an actual zero Stripe fee. An already-final basis is persisted at rate `1.000`, preventing a second commission application.
 
 The three-state lifecycle and 48-hour/calendar rule remain authoritative. Do not add routine instructor outcome confirmation; use the existing pre-payout `mark-not-delivered` exception. Negative/insufficient weeks remain human-handled. Account onboarding, the first reviewed payout and any later unattended payouts require separate authority, and one successful run must not enable the next.
