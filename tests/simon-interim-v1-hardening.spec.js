@@ -365,6 +365,11 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(script).toContain('isPlatformOwner && i.interim_v1_controlled');
     expect(script).toContain('Approval does not move money');
     expect(script).toContain('instructor remains paused');
+    expect(script).toContain('SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE');
+    expect(script).toContain('reconcile-simon-direct-evidence');
+    expect(script).toContain('RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED');
+    expect(script).toContain('This cannot approve or pay a payout, create a transfer or refund, or unpause Simon.');
+    expect(script).toContain('for (const bookingId of bookingIds)');
   });
 
   test('transfer validation is exact and live', () => {

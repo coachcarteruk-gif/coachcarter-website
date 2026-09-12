@@ -3202,6 +3202,30 @@ function escapeHtml(s) {
 
 let currentInterimV1Preview = null;
 let currentInterimV1Approval = null;
+const SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE = Object.freeze({
+  schoolId: 1,
+  instructorId: 6,
+  bookingIds: Object.freeze([530, 534, 540, 555, 559, 560, 563, 564, 565, 566, 567, 570, 571, 588])
+});
+const DIRECT_EVIDENCE_RECONCILIATION_REASONS = new Set([
+  'STRIPE_EVIDENCE_PENDING',
+  'EXACT_STRIPE_EVIDENCE_MISSING'
+]);
+
+function authorizedSimonDirectEvidenceBookingIds(preview, schoolId) {
+  if (!isPlatformOwner || !preview || Number(schoolId) !== SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE.schoolId
+    || Number(preview.instructor?.id) !== SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE.instructorId) return [];
+  const allowed = new Set(SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE.bookingIds);
+  const directCandidates = (preview.excluded || []).filter(line =>
+    DIRECT_EVIDENCE_RECONCILIATION_REASONS.has(line.reason)
+  );
+  if (directCandidates.some(line => !allowed.has(Number(line.booking_id)))) return [];
+  return directCandidates
+    .filter(line => !line.direct_evidence_observation_id)
+    .map(line => Number(line.booking_id))
+    .filter(Number.isSafeInteger)
+    .sort((left, right) => left - right);
+}
 
 async function loadPayouts() {
   // Fire the balance fetch in parallel - independent network call, no need to chain.
@@ -3402,6 +3426,10 @@ function renderInterimV1Preview(preview, schoolId) {
   const blockerCopy = preview.blockers.length ? preview.blockers.join(', ').replaceAll('_', ' ') : 'None';
   const approveButton = preview.ready_for_approval
     ? `<button class="btn btn-sm" data-action="approve-interim-v1" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Approve this exact preview</button>` : '';
+  const directEvidenceBookingIds = authorizedSimonDirectEvidenceBookingIds(preview, schoolId);
+  const directEvidenceButton = directEvidenceBookingIds.length
+    ? `<button class="btn btn-sm" data-action="reconcile-simon-direct-evidence" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Reconcile authorized direct Stripe evidence (${directEvidenceBookingIds.length})</button>`
+    : '';
   const boundary = preview.manual_settlement_boundary;
   const boundaryCopy = boundary
     ? `System window: ${esc(new Date(boundary.settled_before_at).toLocaleString('en-GB', { timeZone: boundary.time_zone }))} (inclusive) to ${esc(new Date(boundary.first_system_period_end_at).toLocaleString('en-GB', { timeZone: boundary.time_zone }))} (exclusive), ${esc(boundary.time_zone)}`
@@ -3420,7 +3448,7 @@ function renderInterimV1Preview(preview, schoolId) {
     <p><strong>Blockers:</strong> ${esc(blockerCopy)} · <strong>Fingerprint:</strong> <code>${esc(preview.preview_fingerprint)}</code></p>
     <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Included booking</th><th>Date</th><th>Learner</th><th>PaymentIntent</th><th>Charge</th><th>Gross</th><th>Fee</th></tr></thead><tbody>${included || '<tr><td colspan="7">No included lessons</td></tr>'}</tbody></table></div>
     <div style="overflow-x:auto;margin-top:10px"><table class="data-table"><thead><tr><th>Excluded booking</th><th>Date</th><th colspan="4">Reason</th></tr></thead><tbody>${excluded || '<tr><td colspan="6">No exclusions</td></tr>'}</tbody></table></div>
-    <div style="display:flex;gap:8px;margin-top:12px;">${boundaryButton}${approveButton}<span id="interim-v1-process-slot"></span></div>`;
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">${boundaryButton}${directEvidenceButton}${approveButton}<span id="interim-v1-process-slot"></span></div>`;
 }
 
 async function reviewInterimV1(instructorId, schoolId) {
@@ -3432,6 +3460,49 @@ async function reviewInterimV1(instructorId, schoolId) {
     currentInterimV1Approval = null;
     renderInterimV1Preview(data.preview, schoolId);
   } catch (error) { toast(error.message, 'error'); }
+}
+
+async function reconcileSimonDirectEvidence(instructorId, schoolId) {
+  if (!currentInterimV1Preview || Number(currentInterimV1Preview.instructor?.id) !== instructorId
+    || Number(currentInterimV1Preview.school_id) !== schoolId) {
+    return toast('Reload Simon\'s exact controlled preview first', 'error');
+  }
+  const bookingIds = authorizedSimonDirectEvidenceBookingIds(currentInterimV1Preview, schoolId);
+  if (!bookingIds.length) return toast('No authorized unreconciled direct Stripe bookings are available', 'error');
+  if (!confirm(`Read Stripe and append one direct-evidence observation plus its required audit row for each of these bookings: ${bookingIds.join(', ')}? This cannot approve or pay a payout, create a transfer or refund, or unpause Simon.`)) return;
+
+  const button = document.querySelector('[data-action="reconcile-simon-direct-evidence"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = `Reconciling 0/${bookingIds.length}...`;
+  }
+  let completed = 0;
+  try {
+    for (const bookingId of bookingIds) {
+      const res = await fetchAdmin('/api/admin?action=interim-v1-reconcile-funding-evidence', {
+        method: 'POST',
+        body: JSON.stringify({
+          school_id: schoolId,
+          instructor_id: instructorId,
+          booking_id: bookingId,
+          operator_go: 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok !== true || Number(data.booking_id) !== bookingId
+        || data.stripe_reads_only !== true || !Array.isArray(data.observations)
+        || data.observations.length !== 1) {
+        throw new Error(`Booking ${bookingId}: ${data.message || data.code || 'reconciliation response was not exact'}`);
+      }
+      completed += 1;
+      if (button) button.textContent = `Reconciling ${completed}/${bookingIds.length}...`;
+    }
+    toast(`Direct Stripe evidence reconciled for ${completed} booking${completed === 1 ? '' : 's'}; Simon remains paused and no payout was created`, 'success');
+  } catch (error) {
+    toast(`Stopped after ${completed}/${bookingIds.length}: ${error.message}`, 'error');
+  } finally {
+    await reviewInterimV1(instructorId, schoolId);
+  }
 }
 
 async function recordInterimV1ManualBoundary(instructorId, schoolId) {
@@ -4720,6 +4791,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'prepare-interim-v1') prepareInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'send-interim-v1-invite') sendInterimV1Invite(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'review-interim-v1') reviewInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'reconcile-simon-direct-evidence') reconcileSimonDirectEvidence(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'record-interim-v1-manual-boundary') recordInterimV1ManualBoundary(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'approve-interim-v1') approveInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'process-interim-v1') processInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
