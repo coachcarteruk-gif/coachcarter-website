@@ -1750,7 +1750,6 @@ function createInterimV1PayoutHandler({
                    pli.id AS direct_claim_id,
                    school_claim.id AS school_claim_id,
                    earning.id AS v2_earning_id,
-                   launch_earning.id AS launch_earning_id,
                    existing_manual.settlement_id AS manual_settlement_id
               FROM lesson_bookings lb
               JOIN learner_users lu
@@ -1767,9 +1766,6 @@ function createInterimV1PayoutHandler({
               ) school_claim ON TRUE
               LEFT JOIN booking_earnings earning
                 ON earning.school_id = lb.school_id AND earning.booking_id = lb.id
-              LEFT JOIN stripe_launch_booking_earnings launch_earning
-                ON launch_earning.school_id = lb.school_id
-               AND launch_earning.payment_contract_id = lb.lesson_payment_contract_id
               LEFT JOIN interim_v1_manual_payout_settlement_bookings existing_manual
                 ON existing_manual.school_id = lb.school_id AND existing_manual.booking_id = lb.id
              WHERE lb.school_id = ${schoolId}
@@ -1787,9 +1783,11 @@ function createInterimV1PayoutHandler({
           if (stableJson(actualBookingIds) !== stableJson(input.coveredBookingIds)) {
             throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_BOOKING_SET_CHANGED', 'The complete chargeable booking set no longer matches the reviewed claim set');
           }
+          // Migration 062's SECURITY DEFINER claim trigger is the authoritative
+          // guard for the restricted runtime's unreadable Stripe-launch ledger.
           if (bookings.some((booking) => (
             booking.direct_claim_id || booking.school_claim_id
-              || booking.v2_earning_id || booking.launch_earning_id
+              || booking.v2_earning_id
               || booking.manual_settlement_id
           ))) {
             throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_BOOKING_ALREADY_CLAIMED', 'A covered booking already has an accounting claim');

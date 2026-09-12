@@ -209,9 +209,23 @@ test.describe('Simon append-only manual payout settlement', () => {
     expect(branch).toContain('INSERT INTO interim_v1_manual_payout_settlements');
     expect(branch).toContain('INSERT INTO interim_v1_manual_payout_settlement_bookings');
     expect(branch).toContain("action: 'payout.interim_v1_manual_payout_settlement_recorded'");
+    expect(branch).not.toContain('stripe_launch_booking_earnings');
+    expect(branch).not.toContain('launch_earning_id');
     expect(branch).not.toContain('stripe.');
     expect(branch).not.toMatch(/INSERT INTO (interim_v1_payout_approvals|instructor_payouts|payout_line_items|interim_v1_transfer|refund)/);
     expect(branch).not.toMatch(/UPDATE\s+(interim_v1_manual_settlement_boundaries|booking_credit_sources|credit_transactions|flexible_package_booking_allocations|instructors)/i);
+  });
+
+  test('migration 062 keeps the hidden launch-ledger check in its security-definer claim trigger', () => {
+    const migration = read('db/migrations/062_interim_v1_manual_payout_settlements.sql');
+    const start = migration.indexOf('CREATE OR REPLACE FUNCTION interim_v1_guard_manual_payout_booking_claim()');
+    const end = migration.indexOf('CREATE OR REPLACE FUNCTION interim_v1_guard_payout_claim_against_manual_settlement()', start);
+    const guard = migration.slice(start, end);
+    expect(guard).toContain('SECURITY DEFINER');
+    expect(guard).toContain('SET search_path = pg_catalog, public');
+    expect(guard).toContain('JOIN stripe_launch_booking_earnings launch_earning');
+    expect(guard).toContain("RAISE EXCEPTION 'booking already has a payout claim'");
+    expect(migration).toContain('REVOKE ALL ON FUNCTION interim_v1_guard_manual_payout_booking_claim() FROM PUBLIC');
   });
 
   test('all current payout selectors and instructor correction path recognize the manual claim', () => {
