@@ -214,6 +214,14 @@ test.describe('Simon manual payout settlement migration 062', () => {
       await client.query('ROLLBACK TO SAVEPOINT denied_launch_read');
       await client.query('RELEASE SAVEPOINT denied_launch_read');
 
+      const replay = await client.query(
+        `SELECT * FROM interim_v1_manual_payout_settlements
+          WHERE school_id = 1 AND (id = $1 OR idempotency_key = $2)
+          LIMIT 1`,
+        [crypto.randomUUID(), `cc-interim-v1-manual-settlement-${crypto.randomUUID()}`]
+      );
+      expect(replay.rows).toEqual([]);
+
       const bookings = await client.query(
         `SELECT lb.id AS booking_id,
                 ((lb.scheduled_date + lb.end_time) AT TIME ZONE mb.time_zone) AS booking_ends_at,

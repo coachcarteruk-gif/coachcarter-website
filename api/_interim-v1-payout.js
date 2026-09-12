@@ -1694,12 +1694,14 @@ function createInterimV1PayoutHandler({
             throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_FINGERPRINT_MISMATCH', 'The settlement fingerprint does not match the locked interval and evidence');
           }
 
+          // The instructor-scoped advisory lock above serializes this identity.
+          // Keep this a plain read: the append-only runtime has SELECT/INSERT but
+          // deliberately no UPDATE privilege, which PostgreSQL row locks require.
           const [replay] = await txSql`
             SELECT * FROM interim_v1_manual_payout_settlements
              WHERE school_id = ${schoolId}
                AND (id = ${input.settlementId} OR idempotency_key = ${input.idempotencyKey})
              LIMIT 1
-             FOR SHARE
           `;
           if (replay) {
             const claims = await txSql`

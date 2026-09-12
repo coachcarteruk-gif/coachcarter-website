@@ -206,6 +206,11 @@ test.describe('Simon append-only manual payout settlement', () => {
     expect(branch).toContain('MANUAL_PAYOUT_SETTLEMENT_CONFIRMATION');
     expect(branch).toContain('MANUAL_PAYOUT_SETTLEMENT_BOOKING_SET_CHANGED');
     expect(branch).toContain('MANUAL_PAYOUT_SETTLEMENT_POSTFLIGHT_FAILED');
+    const replayStart = branch.indexOf('SELECT * FROM interim_v1_manual_payout_settlements');
+    const replayEnd = branch.indexOf('if (replay)', replayStart);
+    const replayLookup = branch.slice(replayStart, replayEnd);
+    expect(replayLookup).toContain('idempotency_key');
+    expect(replayLookup).not.toContain('FOR SHARE');
     expect(branch).toContain('INSERT INTO interim_v1_manual_payout_settlements');
     expect(branch).toContain('INSERT INTO interim_v1_manual_payout_settlement_bookings');
     expect(branch).toContain("action: 'payout.interim_v1_manual_payout_settlement_recorded'");
