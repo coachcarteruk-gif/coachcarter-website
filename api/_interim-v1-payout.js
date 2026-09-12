@@ -261,6 +261,7 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
       charge_id: authoritativeRow.stripe_charge_id || null,
       balance_transaction_id: authoritativeRow.stripe_balance_transaction_id || null,
       funding_evidence_id: directObservation.evidence_id || row.evidence_id || null,
+      direct_evidence_observation_id: directObservation.evidence_id || null,
       audited_funding_basis_id: row.audited_basis_id || null,
     };
     if (classification.eligible) included.push({ ...identity, ...classification });
