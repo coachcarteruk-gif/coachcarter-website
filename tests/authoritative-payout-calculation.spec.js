@@ -13,6 +13,7 @@ const {
 const {
   buildPreviewFromRows,
   directEvidenceObservation,
+  flexibleEvidenceObservation,
   payoutLinePersistenceProjection,
   recordDirectEvidenceObservation,
   validateAuditedFundingBasis,
@@ -97,6 +98,17 @@ function exactPackageEvidence(gross, fee, suffix = 'package') {
     paymentCreatedAt: '2026-09-01T10:00:00.000Z',
     fundsAvailableAt: '2026-09-03T10:00:00.000Z',
     amountPence: gross, feePence: fee, currency: 'gbp',
+  };
+}
+
+function exactPaymentObjectPackageEvidence(gross, fee, suffix = 'package-payment') {
+  return {
+    ...exactPackageEvidence(gross, fee, suffix),
+    evidenceSchema: 'payout-flexible-source-evidence/2',
+    paymentObjectType: 'payment',
+    chargeId: `py_${suffix}`,
+    balanceTransactionSourceId: `py_${suffix}`,
+    balanceTransactionType: 'payment',
   };
 }
 
@@ -211,7 +223,7 @@ test.describe('authoritative lesson earning', () => {
         retrieve: async () => ({
           id: 'pi_exact_only', object: 'payment_intent', status: 'succeeded',
           amount_received: 5500, currency: 'gbp', latest_charge: {
-            id: 'py_not_a_charge', paid: true, captured: true,
+            id: 'py_not_a_charge', object: 'payment', paid: true, captured: true,
             payment_intent: 'pi_exact_only', balance_transaction: null,
           },
         }),
@@ -226,14 +238,14 @@ test.describe('authoritative lesson earning', () => {
     const evidence = await fetchSessionFundingEvidence(
       { id: 'pi_exact_only', object: 'payment_intent' },
       stripeClient,
-      { allowChargeListLookup: false }
+      { allowChargeListLookup: false, includePaymentObjectType: true }
     );
     expect(listCalls).toBe(0);
     expect(evidence).toMatchObject({
-      paymentIntentId: 'pi_exact_only', chargeId: 'py_not_a_charge',
+      paymentIntentId: 'pi_exact_only', paymentObjectType: 'payment', chargeId: 'py_not_a_charge',
       balanceTransactionId: null, feePence: null, source: null,
     });
-    expect(read('api/_interim-v1-payout.js')).toContain('{ allowChargeListLookup: false }');
+    expect(read('api/_interim-v1-payout.js')).toContain('allowChargeListLookup: false');
   });
 
   test('allocates one package gross and fee exactly once across immutable units', () => {
@@ -259,6 +271,38 @@ test.describe('authoritative lesson earning', () => {
       eligible: true, gross_pence: 5400, stripe_fee_pence: 28,
       instructor_amount_pence: 4835, reason: 'EXACT_FLEXIBLE_PACKAGE_ALLOCATION',
     });
+  });
+
+  test('accepts only versioned exact py_/payment package evidence', () => {
+    const evidence = exactPaymentObjectPackageEvidence(81000, 425);
+    const flexibleSource = {
+      allocation_id: 10, source_id: 3, units_allocated: 2, unit_minutes: 30,
+      preceding_active_units: 0, initial_units: 30, contribution_pence: 5400,
+      original_value_pence: 81000, legacy_conversion: null,
+      source_evidence_id: 'package-payment-evidence', evidence_status: 'complete',
+      evidence_json: evidence,
+    };
+    expect(calculateAuthoritativeLessonEarning(baseRow({
+      duration_minutes: 60, flexible_sources: [flexibleSource],
+    }), instructor)).toMatchObject({
+      eligible: true, gross_pence: 5400, stripe_fee_pence: 30,
+      instructor_amount_pence: 4833, reason: 'EXACT_FLEXIBLE_PACKAGE_ALLOCATION',
+    });
+    for (const invalidEvidence of [
+      { ...evidence, evidenceSchema: undefined },
+      { ...evidence, paymentObjectType: 'charge' },
+      { ...evidence, balanceTransactionType: 'charge' },
+      { ...evidence, balanceTransactionSourceId: 'py_other' },
+    ]) {
+      expect(calculateAuthoritativeLessonEarning(baseRow({
+        duration_minutes: 60,
+        flexible_sources: [{ ...flexibleSource, evidence_json: invalidEvidence }],
+      }), instructor).reason).toBe('FLEXIBLE_SOURCE_EVIDENCE_INVALID');
+    }
+    expect(flexibleEvidenceObservation({
+      schoolId: 1, sourceId: 3, fundingEvidence: evidence,
+      providerLivemode: true, allowPaymentObjectEvidence: true,
+    }).evidence_status).toBe('complete');
   });
 
   test('requires an audited classification for legacy and applies commission at most once', () => {

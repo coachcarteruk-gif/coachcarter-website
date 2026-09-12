@@ -28,6 +28,13 @@ const RECONCILE_CONFIRMATION = 'RECONCILE_INTERIM_V1_TRANSFER_CONFIRMED';
 const RECONCILE_FUNDING_CONFIRMATION = 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED';
 const RECORD_FUNDING_BASIS_CONFIRMATION = 'RECORD_INTERIM_V1_FUNDING_BASIS_CONFIRMED';
 const PLANNER_VERSION = 'interim-v1-payout/3';
+const FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/2';
+const AUTHORIZED_FLEXIBLE_PAYMENT_OBJECT_SCOPE = Object.freeze({
+  schoolId: 1,
+  instructorId: 6,
+  bookingId: 568,
+  sourceId: 3,
+});
 
 class InterimV1PayoutError extends Error {
   constructor(status, code, message) {
@@ -120,6 +127,24 @@ function assertExpectedFlexibleSourceScope(expectedSourceId, directRows, flexibl
       || Number(flexibleRows[0].source_id) !== sourceId) {
     throw new InterimV1PayoutError(409, 'FLEXIBLE_FUNDING_IDENTITY_CHANGED', 'Flexible funding identity changed during reconciliation');
   }
+}
+
+function assertAuthorizedFlexiblePaymentObjectScope({
+  enabled, schoolId, instructorId, bookingId, expectedSourceId,
+}) {
+  if (enabled !== true) return false;
+  const expected = AUTHORIZED_FLEXIBLE_PAYMENT_OBJECT_SCOPE;
+  if (Number(schoolId) !== expected.schoolId
+      || Number(instructorId) !== expected.instructorId
+      || Number(bookingId) !== expected.bookingId
+      || Number(expectedSourceId) !== expected.sourceId) {
+    throw new InterimV1PayoutError(
+      409,
+      'FLEXIBLE_PAYMENT_OBJECT_SCOPE_FORBIDDEN',
+      'Stripe payment-object evidence compatibility is not authorized for this scope'
+    );
+  }
+  return true;
 }
 
 function classifyFundingRow(row, now = new Date()) {
@@ -509,15 +534,21 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
   return buildPreviewFromRows(instructor, rows, now);
 }
 
-function evidenceComplete(facts) {
+function evidenceComplete(facts, { allowPaymentObject = false } = {}) {
+  const legacyChargeChain = exactId(facts.stripe_charge_id, 'ch')
+    && facts.stripe_balance_transaction_type === 'charge';
+  const paymentObjectChain = allowPaymentObject
+    && facts.stripe_payment_object_type === 'payment'
+    && exactId(facts.stripe_charge_id, 'py')
+    && facts.stripe_balance_transaction_type === 'payment';
   return facts.provider_livemode && exactId(facts.stripe_checkout_session_id, 'cs')
-    && exactId(facts.stripe_payment_intent_id, 'pi') && exactId(facts.stripe_charge_id, 'ch')
+    && exactId(facts.stripe_payment_intent_id, 'pi')
+    && (legacyChargeChain || paymentObjectChain)
     && facts.stripe_payment_intent_status === 'succeeded'
     && facts.stripe_charge_paid === true && facts.stripe_charge_captured === true
     && facts.stripe_charge_payment_intent_id === facts.stripe_payment_intent_id
     && exactId(facts.stripe_balance_transaction_id, 'txn')
     && facts.stripe_balance_transaction_source_id === facts.stripe_charge_id
-    && facts.stripe_balance_transaction_type === 'charge'
     && facts.stripe_balance_transaction_amount_pence === facts.gross_collected_pence
     && facts.stripe_balance_transaction_currency === 'gbp'
     && ['available', 'pending'].includes(facts.stripe_balance_transaction_status)
@@ -810,16 +841,22 @@ async function recordDirectEvidenceObservation(sql, input) {
   return { recorded: true, reused: false, ...saved };
 }
 
-function flexibleEvidenceObservation({ schoolId, sourceId, fundingEvidence, providerLivemode }) {
+function flexibleEvidenceObservation({
+  schoolId, sourceId, fundingEvidence, providerLivemode, allowPaymentObjectEvidence = false,
+}) {
   const facts = {
     ...fundingEvidence,
     providerLivemode: providerLivemode === true,
+    ...(allowPaymentObjectEvidence ? {
+      evidenceSchema: FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA,
+    } : {}),
   };
   const complete = evidenceComplete({
     provider_livemode: facts.providerLivemode,
     stripe_checkout_session_id: facts.checkoutSessionId,
     stripe_payment_intent_id: facts.paymentIntentId,
     stripe_payment_intent_status: facts.paymentIntentStatus,
+    stripe_payment_object_type: facts.paymentObjectType,
     stripe_charge_id: facts.chargeId,
     stripe_charge_paid: facts.chargePaid,
     stripe_charge_captured: facts.chargeCaptured,
@@ -835,7 +872,7 @@ function flexibleEvidenceObservation({ schoolId, sourceId, fundingEvidence, prov
     gross_collected_pence: facts.amountPence,
     stripe_fee_pence: facts.feePence,
     currency: facts.currency,
-  });
+  }, { allowPaymentObject: allowPaymentObjectEvidence });
   const evidenceStatus = complete ? 'complete' : 'pending';
   return {
     school_id: Number(schoolId),
@@ -843,7 +880,9 @@ function flexibleEvidenceObservation({ schoolId, sourceId, fundingEvidence, prov
     evidence_status: evidenceStatus,
     evidence_json: facts,
     evidence_fingerprint: fingerprint({
-      schema: 'payout-flexible-source-evidence/1',
+      schema: allowPaymentObjectEvidence
+        ? FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA
+        : 'payout-flexible-source-evidence/1',
       school_id: Number(schoolId), source_id: Number(sourceId), facts,
     }),
   };
@@ -1062,6 +1101,13 @@ function createInterimV1PayoutHandler({
           directRows,
           flexibleRows
         );
+        const allowPaymentObjectEvidence = assertAuthorizedFlexiblePaymentObjectScope({
+          enabled: req.body?.allow_payment_object_evidence === true,
+          schoolId,
+          instructorId,
+          bookingId,
+          expectedSourceId: req.body?.expected_flexible_source_id,
+        });
         if (directRows.length > 1) throw new InterimV1PayoutError(409, 'DIRECT_FUNDING_NOT_ONE_TO_ONE', 'Direct funding must have exactly one active source');
         if (!directRows.length && !flexibleRows.length) {
           throw new InterimV1PayoutError(409, 'RECONCILABLE_FUNDING_IDENTITY_MISSING', 'No exact Stripe funding identity is attached to this booking');
@@ -1088,7 +1134,10 @@ function createInterimV1PayoutHandler({
             fundingEvidence: await fetchSessionFundingEvidence(
               providerObject,
               reconciliationStripe,
-              { allowChargeListLookup: false }
+              {
+                allowChargeListLookup: false,
+                includePaymentObjectType: allowPaymentObjectEvidence,
+              }
             ),
           };
         };
@@ -1117,6 +1166,7 @@ function createInterimV1PayoutHandler({
                 schoolId, sourceId: Number(observation.row.source_id),
                 fundingEvidence: observation.fundingEvidence,
                 providerLivemode: observation.providerObject.livemode === true,
+                allowPaymentObjectEvidence,
                 adminId: admin.id,
               }));
             }
@@ -1134,6 +1184,7 @@ function createInterimV1PayoutHandler({
                 reused: result.reused === true,
               })),
               stripe_reads_only: true, payout_created: false, transfer_created: false,
+              flexible_payment_object_compatibility: allowPaymentObjectEvidence,
             },
           });
           return results;
@@ -1542,7 +1593,8 @@ module.exports = {
   ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION,
   RECONCILE_CONFIRMATION, RECONCILE_FUNDING_CONFIRMATION, RECORD_FUNDING_BASIS_CONFIRMATION,
   InterimV1PayoutError, allocateInstructorAmounts, buildPreviewFromRows,
-  assertExpectedFlexibleSourceScope, classifyFundingRow, createInterimV1PayoutHandler,
+  assertAuthorizedFlexiblePaymentObjectScope, assertExpectedFlexibleSourceScope,
+  classifyFundingRow, createInterimV1PayoutHandler,
   evidenceRecord, fingerprint,
   payoutLinePersistenceProjection,
   directEvidenceObservation, flexibleEvidenceObservation, recordDirectEvidenceObservation,

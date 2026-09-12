@@ -15,11 +15,13 @@ const {
   validateProviderAccount,
 } = require('../api/_connect-v1-interim');
 const {
+  assertAuthorizedFlexiblePaymentObjectScope,
   assertExpectedFlexibleSourceScope,
   buildPreviewFromRows,
   classifyFundingRow,
   createInterimV1PayoutHandler,
   evidenceRecord,
+  flexibleEvidenceObservation,
   interimV1PayoutFailureResponse,
   validateManualBoundaryDates,
   validateTransfer,
@@ -376,10 +378,11 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(script).toContain('SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE');
     expect(script).toContain('reconcile-simon-flexible-evidence');
     expect(script).toContain('expected_flexible_source_id: scope.sourceId');
+    expect(script).toContain('allow_payment_object_evidence: true');
     expect(script).toContain('Confirm Stripe read + flexible evidence append (1)');
     expect(script).toContain('Date.now() - simonFlexibleEvidenceConfirmation.armedAt < 60000');
     expect(script).toContain('This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.');
-    expect(html).toContain('simon-flexible-source-evidence');
+    expect(html).toContain('simon-payment-object-evidence');
   });
 
   test('expected Flexible Hours source guard fails closed on identity drift', () => {
@@ -389,6 +392,68 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(() => assertExpectedFlexibleSourceScope(3, [{ id: 1 }], [{ source_id: 3 }])).toThrow(/identity changed/i);
     expect(() => assertExpectedFlexibleSourceScope(3, [], [{ source_id: 4 }])).toThrow(/identity changed/i);
     expect(() => assertExpectedFlexibleSourceScope(3, [], [{ source_id: 3 }, { source_id: 4 }])).toThrow(/identity changed/i);
+  });
+
+  test('Stripe payment-object compatibility is restricted to the authorized Simon source', () => {
+    const exact = {
+      enabled: true, schoolId: 1, instructorId: 6, bookingId: 568, expectedSourceId: 3,
+    };
+    expect(assertAuthorizedFlexiblePaymentObjectScope(exact)).toBe(true);
+    expect(assertAuthorizedFlexiblePaymentObjectScope({ ...exact, enabled: false })).toBe(false);
+    for (const patch of [
+      { schoolId: 2 }, { instructorId: 7 }, { bookingId: 569 }, { expectedSourceId: 5 },
+    ]) {
+      expect(() => assertAuthorizedFlexiblePaymentObjectScope({ ...exact, ...patch }))
+        .toThrow(/not authorized for this scope/i);
+    }
+  });
+
+  test('authorized py_/payment evidence appends under a versioned fingerprint and stays exact', () => {
+    const fundingEvidence = {
+      source: 'balance_transaction', paymentObjectType: 'payment',
+      checkoutSessionId: 'cs_live_source_3', paymentIntentId: 'pi_live_source_3',
+      paymentIntentStatus: 'succeeded', chargeId: 'py_live_source_3',
+      chargePaid: true, chargeCaptured: true, chargePaymentIntentId: 'pi_live_source_3',
+      balanceTransactionId: 'txn_live_source_3',
+      balanceTransactionSourceId: 'py_live_source_3', balanceTransactionType: 'payment',
+      balanceTransactionAmountPence: 81000, balanceTransactionCurrency: 'gbp',
+      balanceTransactionStatus: 'available', paymentCreatedAt: '2026-08-18T11:42:26.000Z',
+      fundsAvailableAt: '2026-08-21T00:00:00.000Z', amountPence: 81000,
+      feePence: 425, currency: 'gbp',
+    };
+    const pending = flexibleEvidenceObservation({
+      schoolId: 1, sourceId: 3, fundingEvidence, providerLivemode: true,
+    });
+    const complete = flexibleEvidenceObservation({
+      schoolId: 1, sourceId: 3, fundingEvidence, providerLivemode: true,
+      allowPaymentObjectEvidence: true,
+    });
+    expect(pending.evidence_status).toBe('pending');
+    expect(complete).toMatchObject({
+      evidence_status: 'complete',
+      evidence_json: { evidenceSchema: 'payout-flexible-source-evidence/2' },
+    });
+    expect(complete.evidence_fingerprint).not.toBe(pending.evidence_fingerprint);
+    expect(flexibleEvidenceObservation({
+      schoolId: 1, sourceId: 3,
+      fundingEvidence: { ...fundingEvidence, paymentObjectType: 'charge' },
+      providerLivemode: true, allowPaymentObjectEvidence: true,
+    }).evidence_status).toBe('pending');
+    expect(flexibleEvidenceObservation({
+      schoolId: 1, sourceId: 3,
+      fundingEvidence: { ...fundingEvidence, balanceTransactionType: 'charge' },
+      providerLivemode: true, allowPaymentObjectEvidence: true,
+    }).evidence_status).toBe('pending');
+  });
+
+  test('Flexible Hours evidence writer remains append-only', () => {
+    const source = read('api/_interim-v1-payout.js');
+    const start = source.indexOf('async function recordFlexibleSourceEvidence');
+    const end = source.indexOf('function validateAuditedFundingBasis', start);
+    const writer = source.slice(start, end);
+    expect(writer).toContain('INSERT INTO payout_flexible_source_evidence');
+    expect(writer).not.toMatch(/\b(?:UPDATE|DELETE)\s+(?:FROM\s+)?payout_flexible_source_evidence\b/i);
+    expect(source).toContain("FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/2'");
   });
 
   test('transfer validation is exact and live', () => {

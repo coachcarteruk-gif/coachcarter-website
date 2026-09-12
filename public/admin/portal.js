@@ -3567,6 +3567,7 @@ async function reconcileSimonFlexibleEvidence(instructorId, schoolId) {
         instructor_id: instructorId,
         booking_id: scope.bookingId,
         expected_flexible_source_id: scope.sourceId,
+        allow_payment_object_evidence: true,
         operator_go: 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED'
       })
     });

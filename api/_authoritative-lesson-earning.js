@@ -111,6 +111,14 @@ function packageEvidence(entry) {
   const evidence = entry?.evidence_json;
   const gross = integer(entry?.original_value_pence);
   const fee = integer(evidence?.feePence);
+  const legacyChargeChain = typeof evidence?.chargeId === 'string'
+    && evidence.chargeId.startsWith('ch_')
+    && evidence.balanceTransactionType === 'charge';
+  const paymentObjectChain = evidence?.evidenceSchema === 'payout-flexible-source-evidence/2'
+    && evidence.paymentObjectType === 'payment'
+    && typeof evidence.chargeId === 'string'
+    && evidence.chargeId.startsWith('py_')
+    && evidence.balanceTransactionType === 'payment';
   if (entry?.legacy_conversion) return { ok: false, reason: 'LEGACY_VALUE_CLASSIFICATION_REQUIRED' };
   if (entry?.evidence_status !== 'complete') {
     return { ok: false, reason: entry?.evidence_status === 'contradictory'
@@ -123,11 +131,10 @@ function packageEvidence(entry) {
       || evidence.paymentIntentStatus !== 'succeeded'
       || evidence.chargePaid !== true || evidence.chargeCaptured !== true
       || evidence.chargePaymentIntentId !== evidence.paymentIntentId
-      || typeof evidence.chargeId !== 'string' || !evidence.chargeId.startsWith('ch_')
+      || (!legacyChargeChain && !paymentObjectChain)
       || typeof evidence.balanceTransactionId !== 'string'
       || !evidence.balanceTransactionId.startsWith('txn_')
       || evidence.balanceTransactionSourceId !== evidence.chargeId
-      || evidence.balanceTransactionType !== 'charge'
       || integer(evidence.balanceTransactionAmountPence) !== gross
       || evidence.balanceTransactionCurrency !== 'gbp'
       || !['available', 'pending'].includes(evidence.balanceTransactionStatus)
