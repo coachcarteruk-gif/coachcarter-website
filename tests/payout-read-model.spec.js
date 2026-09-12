@@ -10,6 +10,7 @@ const path = require('path');
 
 const {
   getEligibleBookings,
+  payoutEvidenceBlockers,
   processPayoutForInstructor,
   simulatePayoutForInstructor,
 } = require('../api/_payout-helpers');
@@ -131,13 +132,16 @@ const eligibleBcsFundedBooking = {
 };
 
 test.describe('payout Step 5 read model', () => {
-  test('getEligibleBookings prefers list_price_pence over live lesson-type pricing', () => {
+  test('getEligibleBookings uses immutable BCS contribution or booking snapshot, never live pricing', () => {
     const source = helperSource();
+    const selection = source.slice(
+      source.indexOf('async function getEligibleBookings'),
+      source.indexOf('async function processPayoutForInstructor')
+    );
 
-    expect(source).toContain('COALESCE(');
-    expect(source).toContain('lb.list_price_pence');
-    expect(source.indexOf('lb.list_price_pence'))
-      .toBeLessThan(source.indexOf('CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL'));
+    expect(selection).toContain('THEN active_bcs_fees.contribution_pence');
+    expect(selection).toContain('lb.list_price_pence');
+    expect(selection).not.toContain('CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL');
   });
 
   test('getEligibleBookings uses active BCS stripe fees when present', () => {
@@ -151,10 +155,23 @@ test.describe('payout Step 5 read model', () => {
     expect(source).toContain('THEN active_bcs_fees.stripe_fee_pence');
   });
 
-  test('bookings without active BCS still fall back to lesson_bookings stripe_fee_pence then zero', () => {
+  test('bookings without actual fee evidence never fall back to fee zero', () => {
     const source = helperSource();
 
-    expect(source).toContain('ELSE COALESCE(lb.stripe_fee_pence, 0)');
+    expect(source).toContain('ELSE lb.stripe_fee_pence');
+    expect(source).not.toContain('ELSE COALESCE(lb.stripe_fee_pence, 0)');
+    expect(payoutEvidenceBlockers([{ booking_id: 9, price_pence: 5500, stripe_fee_pence: null }]))
+      .toEqual([{ booking_id: 9, reason: 'ACTUAL_PROCESSING_FEE_EVIDENCE_MISSING' }]);
+  });
+
+  test('getEligibleBookings keeps every join and source check school-scoped', () => {
+    const source = helperSource();
+    expect(source).toContain('active_bcs_fees.school_id = lb.school_id');
+    expect(source).toContain('pli.school_id = lb.school_id');
+    expect(source).toContain('absorbed_bcs.school_id = lb.school_id');
+    expect(source).toContain('lb.school_id = ${schoolId}::int');
+    expect(source).toContain("AT TIME ZONE 'Europe/London') >= ${periodStartAt}::timestamptz");
+    expect(source).toContain("AT TIME ZONE 'Europe/London') < ${periodEndAt}::timestamptz");
   });
 
   test('getEligibleBookings excludes active instructor-absorbed BCS bookings', () => {
@@ -180,6 +197,25 @@ test.describe('payout Step 5 read model', () => {
     });
     expect(calls).toHaveLength(1);
     expect(calls[0].text).toContain('SELECT lb.id AS booking_id');
+  });
+
+  test('legacy processor applies commission after the actual fee and blocks absent evidence', async () => {
+    const exact = makeSqlMock({ eligibleRows: [{
+      ...eligibleBcsFundedBooking, price_pence: 5500, stripe_fee_pence: 103,
+    }] });
+    await expect(simulatePayoutForInstructor(exact.sql, {
+      ...instructor, commission_rate: '0.9',
+    })).resolves.toMatchObject({ amount_pence: 4857 });
+
+    const missing = makeSqlMock({ eligibleRows: [{
+      ...eligibleBcsFundedBooking, price_pence: 5500, stripe_fee_pence: null,
+    }] });
+    await expect(processPayoutForInstructor(missing.sql, {
+      transfers: { create: async () => { throw new Error('must not transfer'); } },
+    }, instructor)).rejects.toMatchObject({
+      code: 'PAYOUT_FUNDING_RECONCILIATION_REQUIRED',
+      blockers: [{ booking_id: 501, reason: 'ACTUAL_PROCESSING_FEE_EVIDENCE_MISSING' }],
+    });
   });
 
   test('Next Payout Preview totals include snapshotted BCS gross and active BCS fees', async () => {

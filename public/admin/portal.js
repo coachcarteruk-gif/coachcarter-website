@@ -3394,7 +3394,10 @@ async function sendInterimV1Invite(instructorId, schoolId) {
 
 function renderInterimV1Preview(preview, schoolId) {
   const target = document.getElementById('interim-v1-payout-review');
-  const included = preview.included.map(line => `<tr><td>${line.booking_id}</td><td>${esc(line.scheduled_date)}</td><td>${esc(line.learner_name || '—')}</td><td>${esc(line.payment_intent_id)}</td><td>${esc(line.charge_id)}</td><td>${fmtPence(line.gross_pence)}</td><td>${fmtPence(line.stripe_fee_pence)}</td></tr>`).join('');
+  const evidenceMoney = (value, semantics) => value == null
+    ? (semantics === 'final_instructor_payable' ? 'Classified final amount' : 'Not available')
+    : fmtPence(value);
+  const included = preview.included.map(line => `<tr><td>${line.booking_id}</td><td>${esc(line.scheduled_date)}</td><td>${esc(line.learner_name || '—')}</td><td>${esc(line.payment_intent_id)}</td><td>${esc(line.charge_id)}</td><td>${evidenceMoney(line.gross_pence, line.value_semantics)}</td><td>${evidenceMoney(line.stripe_fee_pence, line.value_semantics)}</td></tr>`).join('');
   const excluded = preview.excluded.map(line => `<tr><td>${line.booking_id}</td><td>${esc(line.scheduled_date)}</td><td colspan="4">${esc(line.reason.replaceAll('_', ' '))}</td></tr>`).join('');
   const blockerCopy = preview.blockers.length ? preview.blockers.join(', ').replaceAll('_', ' ') : 'None';
   const approveButton = preview.ready_for_approval
@@ -3408,8 +3411,8 @@ function renderInterimV1Preview(preview, schoolId) {
   target.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">
       <div><strong>${esc(preview.instructor.name)}</strong><br><span style="color:var(--muted);">Start ${esc(preview.instructor.payouts_start_date)}</span></div>
-      <div>Gross<br><strong>${fmtPence(preview.totals.gross_pence)}</strong></div>
-      <div>Exact Stripe fees<br><strong>${fmtPence(preview.totals.stripe_fees_pence)}</strong></div>
+      <div>Gross<br><strong>${evidenceMoney(preview.totals.gross_pence)}</strong></div>
+      <div>Exact Stripe fees<br><strong>${evidenceMoney(preview.totals.stripe_fees_pence)}</strong></div>
       <div>Configured weekly fee<br><strong>${preview.totals.weekly_franchise_fee_pence == null ? 'Commission model' : fmtPence(preview.totals.weekly_franchise_fee_pence)}</strong></div>
       <div>Proposed transfer<br><strong>${fmtPence(preview.totals.proposed_transfer_pence)}</strong></div>
     </div>

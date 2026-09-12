@@ -838,7 +838,7 @@ inputs:
 4. Block any missing, conflicting, cross-school, over-allocated, or ambiguous
    source.
 5. Sum actual source-backed gross and Stripe fee allocations.
-6. Apply the snapshotted commission or franchise model.
+6. For commission, calculate each lesson as `round((gross - actual attributable processing fee) × commission basis points)`; never calculate gross-share and subtract the whole fee afterwards. Apply the snapshotted franchise model separately.
 7. Apply prior-shortfall policy. Vehicle deposits are handled entirely
    off-system by owner decision and must always remain zero in Payout v2.
 8. Allocate rounding differences deterministically so line totals equal the

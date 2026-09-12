@@ -5,8 +5,9 @@ Status: **repository rehearsal complete; production operation not approved**
 Date prepared: 2026-09-09
 
 This packet covers only installation of `schema_migration_history` and the
-reviewed 61-entry historical disposition. It does not approve migration 041,
-any numbered or aggregate migration, any endpoint change, any production
+reviewed 61-entry historical disposition and records migration 061 honestly as
+pending numbered work. It does not approve migration 041 or 061, any numbered
+or aggregate migration, any endpoint change, any production
 configuration change, or any financial/data mutation.
 
 ## Reviewed artifacts
@@ -28,9 +29,9 @@ rehearsal are repeated.
 
 ## Baseline meaning
 
-The packet contains all 61 manifest identities, including `026a` and `026b`.
-It creates 60 successful `record_kind=baseline` receipts and creates no row for
-041.
+The packet contains all 62 manifest identities, including `026a`, `026b`, and
+pending numbered 061. It creates 60 successful `record_kind=baseline` receipts
+and creates no row for 041 or 061.
 
 The ledger is global migration infrastructure, not tenant-owned application
 data, so it intentionally has no `school_id`. The DDL grants no access to the
@@ -47,6 +48,8 @@ owner performs ledger operations.
   file execution.
 - 041 is `deferred`; it is omitted from the ledger rather than recorded as a
   false success.
+- 061 is `pending_numbered`; it is omitted from the historical baseline and
+  can run only through the separately approved numbered-migration gate.
 - the ten legacy marker keys are exact evidence. Their real non-null
   `migration_markers.completed_at` values are read from the target during
   preflight and stored in the baseline context. The checked-in packet contains
@@ -87,7 +90,7 @@ npm.cmd test -- tests/migration-governance.spec.js tests/migration-ledger-phase2
 Expected results:
 
 ```text
-Migration check: ok=true, migrations=61, collisions.026=[026a,026b]
+Migration check: ok=true, migrations=62, collisions.026=[026a,026b]
 Focused unit tests: all passed
 ```
 
@@ -137,8 +140,9 @@ sanitized JSON shape before installation:
   "mode": "preflight",
   "targetFingerprint": "<64 lowercase hex characters>",
   "ledger": "absent",
-  "manifestEntries": 61,
+  "manifestEntries": 62,
   "baselineRows": 0,
+  "pendingNumbered": ["061"],
   "deferred": ["041"],
   "exactExecutionEvidence": ["035", "039", "060"],
   "legacyMarkers": ["<ten key/timestamp objects from production>"],
@@ -248,6 +252,7 @@ Expected output:
   "structuralEquivalence": 55,
   "intentionallyRemoved": ["014", "021"],
   "deferred": ["041"],
+  "pendingNumbered": ["061"],
   "status": "BASELINE_INSTALLED_AND_VALID"
 }
 ```
@@ -259,8 +264,8 @@ $env:POSTGRES_URL_NON_POOLING=$env:MIGRATION_LEDGER_DIRECT_URL
 node scripts/migration-runner.js --status
 ```
 
-Expected values are `applied: 60` and `pending: []`. This does not make the
-runner authoritative and does not run a migration.
+Expected values are `applied: 60` and `pending: ["061"]`. This does not run
+the pending migration. Applying 061 remains a separate authorization boundary.
 
 Retain the install and postflight outputs with the approval record, snapshot
 ID, commit, reviewer, operator, and maintenance-window timestamps.

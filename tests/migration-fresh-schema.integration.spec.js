@@ -554,7 +554,7 @@ test.describe('fresh-schema migration bootstrap', () => {
       ) VALUES (1,$1,$2,$3,$4,2,30,2700,5400) RETURNING id
     `, [learner.rows[0].id, source.rows[0].id, booking.rows[0].id, instructor.rows[0].id]);
     const spent = await client.query(`SELECT remaining_units FROM flexible_package_balances WHERE school_id = 1 AND learner_id = $1`, [learner.rows[0].id]);
-    expect(spent.rows[0].remaining_units).toBe(28);
+    expect(Number(spent.rows[0].remaining_units)).toBe(28);
     await client.query('SAVEPOINT flexible_partial_return');
     await expect(client.query(`
       INSERT INTO flexible_package_allocation_returns (
@@ -568,7 +568,7 @@ test.describe('fresh-schema migration bootstrap', () => {
       ) VALUES (1,$1,$2,2,'learner_cancelled_48h_plus')
     `, [allocation.rows[0].id, booking.rows[0].id]);
     const returned = await client.query(`SELECT remaining_units FROM flexible_package_balances WHERE school_id = 1 AND learner_id = $1`, [learner.rows[0].id]);
-    expect(returned.rows[0].remaining_units).toBe(30);
+    expect(Number(returned.rows[0].remaining_units)).toBe(30);
     await client.query('SAVEPOINT flexible_double_return');
     await expect(client.query(`
       INSERT INTO flexible_package_allocation_returns (

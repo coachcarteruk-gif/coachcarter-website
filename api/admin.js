@@ -235,6 +235,7 @@ function createStripeClient(purpose = STRIPE_CLIENT_PURPOSES.PLATFORM_V1) {
 
 const handleInterimV1Payout = createInterimV1PayoutHandler({
   stripe: createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.PAYOUTS }),
+  reconciliationStripe: createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION }),
 });
 
 // Helper: derive schoolId from admin JWT (superadmins can pass ?school_id= to target a specific school)

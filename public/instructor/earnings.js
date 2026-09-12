@@ -98,7 +98,9 @@
             <div class="lesson-learner">${l.learner_name || '(Deleted learner)'} &middot; ${l.lesson_type_name}</div>
             <div class="lesson-time">${formatTime(l.start_time)} \u2013 ${formatTime(l.end_time)} (${l.duration_minutes} min)</div>
           </div>
-          <div class="lesson-pay">${formatPence(l.instructor_pay_pence)}</div>
+          <div class="lesson-pay">${l.instructor_pay_pence == null
+            ? '<span title="Funding evidence must be reconciled before payout">Reconciliation required</span>'
+            : formatPence(l.instructor_pay_pence)}</div>
         </div>
       `).join('');
     }
@@ -106,7 +108,7 @@
     return `
       <div class="section-card" id="week-section">
         <div class="section-header">
-          <div class="section-title">This Week's Pay</div>
+          <div class="section-title">Calendar-week earnings</div>
           <div class="section-total">${formatPence(data.total_pence)}</div>
         </div>
         <div class="week-nav">
@@ -335,14 +337,19 @@
   }
 
   function renderNextPayout(preview) {
-    if (!preview.onboarding_complete || preview.eligible_lessons === 0) return '';
+    if (!preview.onboarding_complete) return '';
+    const blocked = Number(preview.blocked_lessons || 0);
+    const period = preview.payout_period;
+    const periodCopy = period?.settled_before_at && period?.first_system_period_end_at
+      ? `${formatDateShort(period.settled_before_at)} noon to ${formatDateShort(period.first_system_period_end_at)} noon`
+      : null;
     return `
       <div class="next-payout-card">
         <div>
-          <div class="next-payout-label">Next Payout &middot; Friday ${formatDateShort(preview.next_payout_date)}</div>
-          <div class="next-payout-detail">${preview.eligible_lessons} lesson${preview.eligible_lessons === 1 ? '' : 's'} ready${preview.payouts_paused ? ' (paused)' : ''}</div>
+          <div class="next-payout-label">Next payout period &middot; Friday ${formatDateShort(preview.next_payout_date)}</div>
+          <div class="next-payout-detail">${periodCopy ? `${periodCopy} &middot; ` : ''}${preview.eligible_lessons} lesson${preview.eligible_lessons === 1 ? '' : 's'} ready${blocked ? ` &middot; ${blocked} blocked for reconciliation` : ''}${preview.payouts_paused ? ' (paused)' : ''}</div>
         </div>
-        <div class="next-payout-amount">${formatPence(preview.estimated_pence)}</div>
+        <div class="next-payout-amount">${blocked ? 'Blocked' : formatPence(preview.estimated_pence)}</div>
       </div>
     `;
   }

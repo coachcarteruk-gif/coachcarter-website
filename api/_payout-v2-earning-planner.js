@@ -12,8 +12,9 @@ const {
 const {
   planFullOffsetRecovery,
 } = require('./_payout-v2-recovery');
+const { roundBasisPoints: authoritativeRoundBasisPoints } = require('./_authoritative-lesson-earning');
 
-const PAYOUT_V2_EARNING_CALCULATION_VERSION = 'payout-v2-earning-planner-v1';
+const PAYOUT_V2_EARNING_CALCULATION_VERSION = 'payout-v2-earning-planner-v2-net-before-share';
 const PAYOUT_ROUTES = Object.freeze(['instructor_direct', 'school']);
 const POLICY_KINDS = Object.freeze([
   'commission',
@@ -60,9 +61,7 @@ function dateOnly(value, field) {
 }
 
 function roundBasisPoints(amountPence, basisPoints) {
-  requireNonNegativePence(amountPence, 'amountPence');
-  requireBasisPoints(basisPoints, 'basisPoints');
-  return Math.floor((amountPence * basisPoints + 5_000) / 10_000);
+  return authoritativeRoundBasisPoints(amountPence, basisPoints);
 }
 
 /**
@@ -515,11 +514,10 @@ function applyCommercialPolicy(results, normalized) {
   } else {
     for (const result of positive) {
       if (policy.kind === 'commission') {
-        const beforeFee = roundBasisPoints(
-          result.gross_snapshot_pence,
+        result.instructor_earning_pence = roundBasisPoints(
+          result._net_pence,
           policy.commission_rate_bps
         );
-        result.instructor_earning_pence = Math.max(0, beforeFee - result.stripe_fee_pence);
         result.platform_fee_pence =
           result.gross_snapshot_pence -
           result.stripe_fee_pence -

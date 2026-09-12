@@ -12,6 +12,7 @@ const {
   assertV1PayoutEngine,
 } = require('./_payout-engine-version');
 const { sendAlertEmail } = require('./_error-alert');
+const { roundBasisPoints } = require('./_authoritative-lesson-earning');
 
 /**
  * Trigger A — widget-falsifiability alert. After a Stripe transfer fails for a
@@ -92,53 +93,90 @@ async function alertIfWidgetLied(sql, { payout, instructor, error }) {
  * Test-account bookings (learner_users.is_test_account = TRUE) are excluded — they
  * are dev/QA noise, not real revenue, and must never trigger an instructor payout.
  */
-async function getEligibleBookings(sql, instructorId, payoutsStartDate = null) {
+async function getEligibleBookings(
+  sql,
+  instructorId,
+  payoutsStartDate = null,
+  schoolId = null,
+  periodStartAt = null,
+  periodEndAt = null
+) {
   return sql`
     SELECT lb.id AS booking_id,
            lb.scheduled_date,
            lb.start_time,
            lb.end_time,
            lb.status,
-           COALESCE(
-             lb.list_price_pence,
-             CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
-               THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
-               ELSE COALESCE(lt.price_pence, 8250)
-             END
-           ) AS price_pence,
            CASE WHEN active_bcs_fees.active_bcs_count > 0
+             THEN active_bcs_fees.contribution_pence
+             ELSE lb.list_price_pence
+           END AS price_pence,
+           CASE WHEN active_bcs_fees.active_bcs_count > 0
+                  AND active_bcs_fees.fee_evidence_count = active_bcs_fees.active_bcs_count
              THEN active_bcs_fees.stripe_fee_pence
-             ELSE COALESCE(lb.stripe_fee_pence, 0)
+             WHEN lb.payment_method = 'flexible_package' THEN NULL
+             ELSE lb.stripe_fee_pence
            END AS stripe_fee_pence,
            COALESCE(lt.duration_minutes, 90) AS duration_minutes,
            COALESCE(lt.name, 'Standard Lesson') AS lesson_type_name
       FROM lesson_bookings lb
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      LEFT JOIN learner_users lu ON lu.id = lb.learner_id
-      LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND lt.school_id = lb.school_id
+      LEFT JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
       LEFT JOIN (
-        SELECT booking_id,
+        SELECT school_id, booking_id,
+               COALESCE(SUM(contribution_pence), 0)::int AS contribution_pence,
                COALESCE(SUM(stripe_fee_pence), 0)::int AS stripe_fee_pence,
+               COUNT(stripe_fee_pence)::int AS fee_evidence_count,
                COUNT(*)::int AS active_bcs_count
           FROM booking_credit_sources
          WHERE refunded_at IS NULL
-         GROUP BY booking_id
-      ) active_bcs_fees ON active_bcs_fees.booking_id = lb.id
-      LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
+         GROUP BY school_id, booking_id
+      ) active_bcs_fees
+        ON active_bcs_fees.booking_id = lb.id AND active_bcs_fees.school_id = lb.school_id
+      LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id AND pli.school_id = lb.school_id
      WHERE lb.instructor_id = ${instructorId}
+       AND (${schoolId}::int IS NULL OR lb.school_id = ${schoolId}::int)
        AND pli.id IS NULL
        AND (${payoutsStartDate}::date IS NULL OR lb.scheduled_date >= ${payoutsStartDate}::date)
+       AND (${periodStartAt}::timestamptz IS NULL
+         OR ((lb.scheduled_date + lb.end_time) AT TIME ZONE 'Europe/London') >= ${periodStartAt}::timestamptz)
+       AND (${periodEndAt}::timestamptz IS NULL
+         OR ((lb.scheduled_date + lb.end_time) AT TIME ZONE 'Europe/London') < ${periodEndAt}::timestamptz)
        AND lb.status = ${CHARGEABLE}
        AND COALESCE(lu.is_test_account, FALSE) = FALSE
        AND NOT EXISTS (
          SELECT 1
-           FROM booking_credit_sources absorbed_bcs
+          FROM booking_credit_sources absorbed_bcs
           WHERE absorbed_bcs.booking_id = lb.id
+            AND absorbed_bcs.school_id = lb.school_id
             AND absorbed_bcs.refunded_at IS NULL
             AND absorbed_bcs.absorbed_by = 'instructor'
        )
      ORDER BY lb.scheduled_date ASC
   `;
+}
+
+function payoutEvidenceBlockers(bookings) {
+  const blockers = [];
+  for (const booking of bookings || []) {
+    const gross = booking.price_pence == null ? null : Number(booking.price_pence);
+    const fee = booking.stripe_fee_pence == null ? null : Number(booking.stripe_fee_pence);
+    if (!Number.isSafeInteger(gross) || gross < 0) {
+      blockers.push({ booking_id: Number(booking.booking_id), reason: 'IMMUTABLE_GROSS_EVIDENCE_MISSING' });
+    } else if (!Number.isSafeInteger(fee) || fee < 0 || fee > gross) {
+      blockers.push({ booking_id: Number(booking.booking_id), reason: 'ACTUAL_PROCESSING_FEE_EVIDENCE_MISSING' });
+    }
+  }
+  return blockers;
+}
+
+function assertPayoutEvidenceComplete(bookings) {
+  const blockers = payoutEvidenceBlockers(bookings);
+  if (!blockers.length) return;
+  const error = new Error('Payout funding evidence requires reconciliation');
+  error.code = 'PAYOUT_FUNDING_RECONCILIATION_REQUIRED';
+  error.blockers = blockers;
+  throw error;
 }
 
 /**
@@ -156,25 +194,29 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
     err.code = 'INTERIM_V1_DEDICATED_PATH_REQUIRED';
     throw err;
   }
-  const bookings = await getEligibleBookings(sql, instructor.id, instructor.payouts_start_date || null);
+  const bookings = await getEligibleBookings(
+    sql, instructor.id, instructor.payouts_start_date || null, instructor.school_id
+  );
   if (!bookings.length) return null;
+  assertPayoutEvidenceComplete(bookings);
 
   const franchiseFee = instructor.weekly_franchise_fee_pence != null
     ? parseInt(instructor.weekly_franchise_fee_pence) : null;
-  const commissionRate = parseFloat(instructor.commission_rate) || 0.85;
+  const configuredCommissionRate = Number.parseFloat(instructor.commission_rate);
+  const commissionRate = Number.isFinite(configuredCommissionRate) ? configuredCommissionRate : 0.85;
 
   let totalGrossPence = 0;
   let totalStripeFeesPence = 0;
   for (const b of bookings) {
     totalGrossPence += parseInt(b.price_pence);
-    totalStripeFeesPence += parseInt(b.stripe_fee_pence || 0);
+    totalStripeFeesPence += parseInt(b.stripe_fee_pence);
   }
 
   // Step 4f.d — Stripe fees come off totalGross BEFORE the franchise math runs.
   // They are a pass-through cost, never enter the shortfall ledger.
   // For franchise model: deductions math uses netOfStripeGross.
-  // For commission model: commission × gross, then subtract Stripe fees separately
-  // (per locked-in Decision 1 — commission on gross, not net).
+  // For commission model, the authoritative rule applies commission to net
+  // attributable revenue after the actual processing fee.
   const netOfStripeGross = totalGrossPence - totalStripeFeesPence;
 
   let totalInstructorPence;
@@ -246,8 +288,7 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
       shortfallThisWeek = uncoveredFee + uncoveredDeposit + carriedPrior;
     }
   } else {
-    // Commission model: instructor gets commission_rate of gross, MINUS Stripe fees
-    // (per locked-in Decision 1 — commission on gross, fees subtracted from share).
+    // Commission model is calculated per lesson below from net attributable revenue.
     totalInstructorPence = 0;
   }
 
@@ -265,12 +306,12 @@ async function processPayoutForInstructor(sql, stripe, instructor) {
   let lineItemSum = 0;
   const lineItems = bookings.map(b => {
     const pricePence = parseInt(b.price_pence);
-    const stripeFeePence = parseInt(b.stripe_fee_pence || 0);
+    const stripeFeePence = parseInt(b.stripe_fee_pence);
     // For franchise: per-booking share is (price − fee) × effectiveRate.
-    // For commission: per-booking share is (price × rate) − fee.
+    // For commission: per-booking share is (price − actual fee) × rate.
     const instructorPence = franchiseFee != null
       ? Math.round((pricePence - stripeFeePence) * effectiveRate)
-      : Math.round(pricePence * effectiveRate) - stripeFeePence;
+      : roundBasisPoints(pricePence - stripeFeePence, Math.round(effectiveRate * 10000));
     lineItemSum += instructorPence;
     return {
       booking_id: b.booking_id,
@@ -692,18 +733,22 @@ async function processSchoolPayouts(sql, stripe) {
  * transfer_id (none created) and status.
  */
 async function simulatePayoutForInstructor(sql, instructor) {
-  const bookings = await getEligibleBookings(sql, instructor.id, instructor.payouts_start_date || null);
+  const bookings = await getEligibleBookings(
+    sql, instructor.id, instructor.payouts_start_date || null, instructor.school_id
+  );
   if (!bookings.length) return null;
+  assertPayoutEvidenceComplete(bookings);
 
   const franchiseFee = instructor.weekly_franchise_fee_pence != null
     ? parseInt(instructor.weekly_franchise_fee_pence) : null;
-  const commissionRate = parseFloat(instructor.commission_rate) || 0.85;
+  const configuredCommissionRate = Number.parseFloat(instructor.commission_rate);
+  const commissionRate = Number.isFinite(configuredCommissionRate) ? configuredCommissionRate : 0.85;
 
   let totalGrossPence = 0;
   let totalStripeFeesPence = 0;
   for (const b of bookings) {
     totalGrossPence += parseInt(b.price_pence);
-    totalStripeFeesPence += parseInt(b.stripe_fee_pence || 0);
+    totalStripeFeesPence += parseInt(b.stripe_fee_pence);
   }
   const netOfStripeGross = totalGrossPence - totalStripeFeesPence;
 
@@ -767,8 +812,8 @@ async function simulatePayoutForInstructor(sql, instructor) {
     let lineSum = 0;
     for (const b of bookings) {
       const pricePence = parseInt(b.price_pence);
-      const stripeFeePence = parseInt(b.stripe_fee_pence || 0);
-      lineSum += Math.round(pricePence * commissionRate) - stripeFeePence;
+      const stripeFeePence = parseInt(b.stripe_fee_pence);
+      lineSum += roundBasisPoints(pricePence - stripeFeePence, Math.round(commissionRate * 10000));
     }
     totalInstructorPence = lineSum;
   }
@@ -789,4 +834,7 @@ async function simulatePayoutForInstructor(sql, instructor) {
   };
 }
 
-module.exports = { getEligibleBookings, processPayoutForInstructor, processAllPayouts, processSchoolPayouts, simulatePayoutForInstructor };
+module.exports = {
+  getEligibleBookings, payoutEvidenceBlockers, processPayoutForInstructor,
+  processAllPayouts, processSchoolPayouts, simulatePayoutForInstructor,
+};
