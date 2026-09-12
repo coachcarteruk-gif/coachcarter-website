@@ -462,6 +462,11 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(source).toContain("FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/3'");
     expect(source).toContain('if (storedObservations.length !== 1)');
     expect(source).toContain("evidence_json ->> 'evidenceSchema'");
+    const storedObservationRead = source.slice(
+      source.indexOf('const storedObservations = await txSql'),
+      source.indexOf('if (storedObservations.length !== 1)')
+    );
+    expect(storedObservationRead).not.toMatch(/FOR\s+(?:UPDATE|NO KEY UPDATE|SHARE|KEY SHARE)/i);
     expect(source).toContain('if (!reuseExistingPaymentObservation)');
     expect(source).toContain('stripe_read_performed: !reuseExistingPaymentObservation');
   });
