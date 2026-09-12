@@ -3202,6 +3202,7 @@ function escapeHtml(s) {
 
 let currentInterimV1Preview = null;
 let currentInterimV1Approval = null;
+let simonDirectEvidenceConfirmation = null;
 const SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE = Object.freeze({
   schoolId: 1,
   instructorId: 6,
@@ -3458,6 +3459,7 @@ async function reviewInterimV1(instructorId, schoolId) {
     if (!res.ok) throw new Error(data.message || data.code || 'Preview failed');
     currentInterimV1Preview = { ...data.preview, school_id: schoolId };
     currentInterimV1Approval = null;
+    simonDirectEvidenceConfirmation = null;
     renderInterimV1Preview(data.preview, schoolId);
   } catch (error) { toast(error.message, 'error'); }
 }
@@ -3469,9 +3471,17 @@ async function reconcileSimonDirectEvidence(instructorId, schoolId) {
   }
   const bookingIds = authorizedSimonDirectEvidenceBookingIds(currentInterimV1Preview, schoolId);
   if (!bookingIds.length) return toast('No authorized unreconciled direct Stripe bookings are available', 'error');
-  if (!confirm(`Read Stripe and append one direct-evidence observation plus its required audit row for each of these bookings: ${bookingIds.join(', ')}? This cannot approve or pay a payout, create a transfer or refund, or unpause Simon.`)) return;
-
   const button = document.querySelector('[data-action="reconcile-simon-direct-evidence"]');
+  const confirmationToken = `${currentInterimV1Preview.preview_fingerprint}|${bookingIds.join(',')}`;
+  const confirmationFresh = simonDirectEvidenceConfirmation
+    && simonDirectEvidenceConfirmation.token === confirmationToken
+    && Date.now() - simonDirectEvidenceConfirmation.armedAt < 60000;
+  if (!confirmationFresh) {
+    simonDirectEvidenceConfirmation = { token: confirmationToken, armedAt: Date.now() };
+    if (button) button.textContent = `Confirm Stripe read + evidence append (${bookingIds.length})`;
+    return toast(`Review exact scope: ${bookingIds.join(', ')}. Click the confirmation button within 60 seconds to append evidence and audit rows only. This cannot approve or pay a payout, create a transfer or refund, or unpause Simon.`, '');
+  }
+  simonDirectEvidenceConfirmation = null;
   if (button) {
     button.disabled = true;
     button.textContent = `Reconciling 0/${bookingIds.length}...`;

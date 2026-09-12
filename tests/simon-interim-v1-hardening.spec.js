@@ -370,6 +370,8 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(script).toContain('RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED');
     expect(script).toContain('This cannot approve or pay a payout, create a transfer or refund, or unpause Simon.');
     expect(script).toContain('for (const bookingId of bookingIds)');
+    expect(script).toContain('Confirm Stripe read + evidence append');
+    expect(script).toContain('Date.now() - simonDirectEvidenceConfirmation.armedAt < 60000');
   });
 
   test('transfer validation is exact and live', () => {
