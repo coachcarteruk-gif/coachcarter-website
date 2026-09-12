@@ -495,6 +495,14 @@
       "filename": "060_booking_extension_offers.sql",
       "checksum": "fdcc1684800e6c88a69efd75fa9008470f09c3949da586a2765782f1a350a4f5",
       "execution": "baseline"
+    },
+    {
+      "id": "061",
+      "order": 62,
+      "prefix": "061",
+      "filename": "061_authoritative_payout_evidence.sql",
+      "checksum": "aae931004ff9108ff2c90662a587dfac1295d909d0c222b6814a5a655376aee8",
+      "execution": "numbered"
     }
   ]
 }

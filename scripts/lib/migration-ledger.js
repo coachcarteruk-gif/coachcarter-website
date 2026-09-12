@@ -156,6 +156,7 @@ function validateBaselinePacket(packet, manifest, actualManifestChecksum) {
     'structural_equivalence',
     'intentionally_removed',
     'deferred',
+    'pending_numbered',
   ]);
   for (let index = 0; index < manifest.migrations.length; index += 1) {
     const entry = manifest.migrations[index];
@@ -173,7 +174,12 @@ function validateBaselinePacket(packet, manifest, actualManifestChecksum) {
       if (baseline.disposition !== 'deferred' || baseline.evidenceClass !== 'deferred') {
         fail('DEFERRED_BASELINE_MISMATCH', `Deferred migration ${entry.id} cannot be baselined as successful`);
       }
-    } else if (baseline.disposition !== 'baseline' || baseline.evidenceClass === 'deferred') {
+    } else if (entry.execution === 'numbered') {
+      if (baseline.disposition !== 'pending_numbered' || baseline.evidenceClass !== 'pending_numbered') {
+        fail('NUMBERED_BASELINE_MISMATCH', `Pending numbered migration ${entry.id} cannot be recorded as historical success`);
+      }
+    } else if (baseline.disposition !== 'baseline'
+        || ['deferred', 'pending_numbered'].includes(baseline.evidenceClass)) {
       fail('INVALID_BASELINE_DISPOSITION', `Migration ${entry.id} requires an honest baseline disposition`);
     }
     assertNonSecretContext(baseline.evidence || {});
@@ -423,12 +429,14 @@ function baselineContext(entry, packet, packetChecksum, ddlChecksum, markerEvide
 
 function verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint) {
   const expected = bundle.packet.entries.filter(entry => entry.disposition === 'baseline');
-  if (rows.length !== expected.length || rows.some(row => row.migration_id === '041')) {
-    fail('BASELINE_DISPOSITION_MISMATCH', 'Ledger does not contain exactly the reviewed 60 baseline receipts');
+  const baselineRows = rows.filter(row => row.record_kind === 'baseline');
+  if (baselineRows.length !== expected.length
+      || baselineRows.some(row => !expected.some(entry => entry.id === row.migration_id))) {
+    fail('BASELINE_DISPOSITION_MISMATCH', `Ledger does not contain exactly the reviewed ${expected.length} baseline receipts`);
   }
   for (let index = 0; index < expected.length; index += 1) {
     const entry = expected[index];
-    const row = rows[index];
+    const row = baselineRows[index];
     const expectedContext = baselineContext(
       entry,
       bundle.packet,
@@ -446,6 +454,17 @@ function verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint) {
   }
 }
 
+function assertBaselineLedgerState(bundle, rows, plan) {
+  if (plan.pending.some(entry => entry.execution !== 'numbered')) {
+    fail('BASELINE_INCOMPLETE', 'Ledger is missing one or more reviewed historical baseline receipts');
+  }
+  const executionRows = rows.filter(row => row.record_kind === 'execution');
+  if (executionRows.some(row => bundle.manifest.migrations
+    .find(entry => entry.id === row.migration_id)?.execution !== 'numbered')) {
+    fail('BASELINE_DISPOSITION_MISMATCH', 'Ledger contains a numbered execution row for a non-numbered migration');
+  }
+}
+
 async function installBaselineInTransaction(client, bundle, targetFingerprint, options = {}) {
   const alreadyPresent = await ledgerExists(client);
   if (alreadyPresent) {
@@ -453,9 +472,7 @@ async function installBaselineInTransaction(client, bundle, targetFingerprint, o
     verifyLedgerSchema(await inspectLedgerSchema(client));
     const rows = await readLedgerRows(client);
     const plan = validateLedger(bundle.manifest, rows);
-    if (plan.pending.length !== 0 || rows.length !== bundle.manifest.migrations.length - 1) {
-      fail('BASELINE_INCOMPLETE', 'Existing ledger is not the complete reviewed baseline');
-    }
+    assertBaselineLedgerState(bundle, rows, plan);
     const markerEvidence = await readLegacyMarkerEvidence(client, bundle.packet);
     verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint);
     return { alreadyInstalled: true, inserted: 0, rows, markerEvidence };
@@ -467,7 +484,7 @@ async function installBaselineInTransaction(client, bundle, targetFingerprint, o
 
   let inserted = 0;
   for (const entry of bundle.packet.entries) {
-    if (entry.disposition === 'deferred') continue;
+    if (entry.disposition !== 'baseline') continue;
     const context = baselineContext(
       entry,
       bundle.packet,
@@ -494,9 +511,7 @@ async function installBaselineInTransaction(client, bundle, targetFingerprint, o
 
   const rows = await readLedgerRows(client);
   const plan = validateLedger(bundle.manifest, rows);
-  if (plan.pending.length !== 0 || rows.length !== bundle.manifest.migrations.length - 1) {
-    fail('BASELINE_POSTCONDITION_FAILED', 'Baseline rows failed postcondition validation');
-  }
+  assertBaselineLedgerState(bundle, rows, plan);
   verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint);
   return { alreadyInstalled: false, inserted, rows, markerEvidence };
 }
@@ -514,9 +529,7 @@ async function preflight(client, bundle, targetFingerprint) {
       verifyLedgerSchema(await inspectLedgerSchema(client));
       rows = await readLedgerRows(client);
       const plan = validateLedger(bundle.manifest, rows);
-      if (plan.pending.length !== 0 || rows.length !== bundle.manifest.migrations.length - 1) {
-        fail('BASELINE_INCOMPLETE', 'Ledger does not contain exactly the reviewed 60 baseline receipts');
-      }
+      assertBaselineLedgerState(bundle, rows, plan);
       verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint);
       state = 'installed';
     }
@@ -527,7 +540,10 @@ async function preflight(client, bundle, targetFingerprint) {
       targetFingerprint,
       ledger: state,
       manifestEntries: bundle.manifest.migrations.length,
-      baselineRows: rows.length,
+      baselineRows: rows.filter(row => row.record_kind === 'baseline').length,
+      pendingNumbered: bundle.manifest.migrations
+        .filter(entry => entry.execution === 'numbered' && !rows.some(row => row.migration_id === entry.id))
+        .map(entry => entry.id),
       deferred: ['041'],
       exactExecutionEvidence: ['035', '039', '060'],
       legacyMarkers: markerEvidence,
@@ -578,9 +594,7 @@ async function postflight(client, bundle, targetFingerprint) {
     verifyLedgerSchema(await inspectLedgerSchema(client));
     const rows = await readLedgerRows(client);
     const plan = validateLedger(bundle.manifest, rows);
-    if (plan.pending.length !== 0 || rows.length !== 60) {
-      fail('BASELINE_INCOMPLETE', 'Postflight found an incomplete baseline');
-    }
+    assertBaselineLedgerState(bundle, rows, plan);
     const markerEvidence = await readLegacyMarkerEvidence(client, bundle.packet);
     verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint);
     const baselineRows = rows.filter(row => row.record_kind === 'baseline');
@@ -594,6 +608,7 @@ async function postflight(client, bundle, targetFingerprint) {
       structuralEquivalence: baselineRows.filter(row => row.evidence_kind === 'structural_equivalence').length,
       intentionallyRemoved: baselineRows.filter(row => row.evidence_kind === 'intentionally_removed').map(row => row.migration_id),
       deferred: ['041'],
+      pendingNumbered: plan.pending.map(entry => entry.id),
       status: 'BASELINE_INSTALLED_AND_VALID',
     };
   } catch (error) {

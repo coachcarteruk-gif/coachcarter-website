@@ -116,14 +116,14 @@ test.describe('Payout v2 authoritative earning planner', () => {
     expect(first.totals).toMatchObject({
       gross_pence: 10_000,
       stripe_fees_pence: 300,
-      platform_fee_pence: 1_500,
-      net_shadow_transfer_pence: 8_200,
+      platform_fee_pence: 1_455,
+      net_shadow_transfer_pence: 8_245,
     });
     expect(first.bookings[0].funding_allocations[0]).toMatchObject({
       gross_contribution_pence: 10_000,
       stripe_fee_contribution_pence: 300,
-      instructor_earning_contribution_pence: 8_200,
-      platform_fee_contribution_pence: 1_500,
+      instructor_earning_contribution_pence: 8_245,
+      platform_fee_contribution_pence: 1_455,
     });
   });
 
@@ -378,8 +378,8 @@ test.describe('Payout v2 authoritative earning planner', () => {
       }],
     }));
     expect(plan.totals.net_shadow_transfer_pence).toBe(0);
-    expect(plan.totals.recovery_deducted_pence).toBe(8_200);
-    expect(plan.totals.remaining_recovery_pence).toBe(11_800);
+    expect(plan.totals.recovery_deducted_pence).toBe(8_245);
+    expect(plan.totals.remaining_recovery_pence).toBe(11_755);
   });
 
   test('comparison separates deliberate policy differences from unexplained drift', () => {
@@ -392,7 +392,7 @@ test.describe('Payout v2 authoritative earning planner', () => {
     }));
     expect(classifyComparison(deliberatePlan, { transfer_pence: 8_200 }))
       .toMatchObject({
-        difference_pence: -1_000,
+        difference_pence: -955,
         unexplained_difference: false,
         classification: 'deliberate_policy_difference',
       });
@@ -400,7 +400,7 @@ test.describe('Payout v2 authoritative earning planner', () => {
     const matchedPlan = planPayoutV2Earnings(baseInput());
     expect(classifyComparison(matchedPlan, { transfer_pence: 8_199 }))
       .toMatchObject({
-        difference_pence: 1,
+        difference_pence: 46,
         unexplained_difference: true,
         classification: 'unexplained_difference',
       });

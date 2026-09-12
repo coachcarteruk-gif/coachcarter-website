@@ -6,9 +6,16 @@ const { requireAuth, getSchoolId } = require('./_auth');
 const { logAuditRequired } = require('./_audit');
 const { withNeonTransaction } = require('./_db-transaction');
 const { classifyStripeError } = require('./_stripe-clients');
+const { fetchSessionFundingEvidence } = require('./_stripe-fee');
+const {
+  CALCULATION_VERSION,
+  calculateAuthoritativeLessonEarning,
+} = require('./_authoritative-lesson-earning');
 
 const ACTIONS = new Set([
   'interim-v1-payout-preview',
+  'interim-v1-reconcile-funding-evidence',
+  'interim-v1-record-funding-basis',
   'interim-v1-record-manual-settlement-boundary',
   'interim-v1-approve-first-run',
   'interim-v1-process-approved-payout',
@@ -18,7 +25,9 @@ const MANUAL_BOUNDARY_CONFIRMATION = 'RECORD_INTERIM_V1_MANUAL_SETTLEMENT_BOUNDA
 const APPROVE_CONFIRMATION = 'APPROVE_INTERIM_V1_FIRST_RUN_CONFIRMED';
 const PROCESS_CONFIRMATION = 'PROCESS_INTERIM_V1_APPROVED_PAYOUT_CONFIRMED';
 const RECONCILE_CONFIRMATION = 'RECONCILE_INTERIM_V1_TRANSFER_CONFIRMED';
-const PLANNER_VERSION = 'interim-v1-payout/2';
+const RECONCILE_FUNDING_CONFIRMATION = 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED';
+const RECORD_FUNDING_BASIS_CONFIRMATION = 'RECORD_INTERIM_V1_FUNDING_BASIS_CONFIRMED';
+const PLANNER_VERSION = 'interim-v1-payout/3';
 
 class InterimV1PayoutError extends Error {
   constructor(status, code, message) {
@@ -173,12 +182,23 @@ function classifyFundingRow(row, now = new Date()) {
 function allocateInstructorAmounts(included, instructor) {
   const franchiseFee = instructor.weekly_franchise_fee_pence == null
     ? null : Number(instructor.weekly_franchise_fee_pence);
-  const commissionRate = Number(instructor.commission_rate) || 0.85;
+  const configuredRate = Number(instructor.commission_rate);
+  const commissionRate = Number.isFinite(configuredRate) ? configuredRate : 0.85;
   const lines = included.map((line) => ({ ...line }));
-  const gross = lines.reduce((sum, line) => sum + line.gross_pence, 0);
-  const fees = lines.reduce((sum, line) => sum + line.stripe_fee_pence, 0);
+  const grossKnown = lines.every((line) => Number.isSafeInteger(line.gross_pence));
+  const feesKnown = lines.every((line) => Number.isSafeInteger(line.stripe_fee_pence));
+  const gross = grossKnown ? lines.reduce((sum, line) => sum + line.gross_pence, 0) : null;
+  const fees = feesKnown ? lines.reduce((sum, line) => sum + line.stripe_fee_pence, 0) : null;
   let proposed;
   if (franchiseFee != null) {
+    if (!grossKnown || !feesKnown) {
+      return {
+        lines, gross_pence: gross, stripe_fees_pence: fees,
+        weekly_franchise_fee_pence: franchiseFee, commission_rate: null,
+        proposed_transfer_pence: null, insufficient_week: false,
+        unresolved_total_basis: true,
+      };
+    }
     proposed = Math.max(0, gross - fees - franchiseFee);
     let remainingDeduction = Math.min(franchiseFee, gross - fees);
     for (const line of lines) {
@@ -190,8 +210,13 @@ function allocateInstructorAmounts(included, instructor) {
     }
   } else {
     for (const line of lines) {
-      line.instructor_amount_pence = Math.max(0, Math.round(line.gross_pence * commissionRate) - line.stripe_fee_pence);
-      line.commission_rate = commissionRate;
+      if (!Number.isSafeInteger(line.instructor_amount_pence)) {
+        line.instructor_amount_pence = Math.max(
+          0,
+          Math.round(line.net_after_stripe_pence * commissionRate)
+        );
+      }
+      line.commission_rate = line.commission_already_applied === true ? 1 : commissionRate;
     }
     proposed = lines.reduce((sum, line) => sum + line.instructor_amount_pence, 0);
   }
@@ -203,6 +228,7 @@ function allocateInstructorAmounts(included, instructor) {
     commission_rate: franchiseFee == null ? commissionRate : null,
     proposed_transfer_pence: proposed,
     insufficient_week: proposed <= 0,
+    unresolved_total_basis: false,
   };
 }
 
@@ -210,17 +236,32 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
   const included = [];
   const excluded = [];
   for (const row of rows) {
-    const classification = classifyFundingRow(row, now);
+    const directObservation = row.direct_observation_status
+      && row.direct_observation_json && typeof row.direct_observation_json === 'object'
+      ? {
+        ...row.direct_observation_json,
+        evidence_id: row.direct_observation_id,
+        evidence_status: row.direct_observation_status,
+      }
+      : {};
+    const authoritativeRow = {
+      ...row,
+      ...directObservation,
+      school_id: row.school_id ?? instructor.school_id,
+      instructor_id: row.instructor_id ?? instructor.id,
+    };
+    const classification = calculateAuthoritativeLessonEarning(authoritativeRow, instructor, now);
     const identity = {
       booking_id: Number(row.booking_id),
       scheduled_date: dateOnly(row.scheduled_date),
       booking_ends_at: instantIso(row.booking_ends_at),
       learner_name: row.learner_name || null,
-      checkout_session_id: row.stripe_checkout_session_id || null,
-      payment_intent_id: row.stripe_payment_intent_id || null,
-      charge_id: row.stripe_charge_id || null,
-      balance_transaction_id: row.stripe_balance_transaction_id || null,
-      funding_evidence_id: row.evidence_id || null,
+      checkout_session_id: authoritativeRow.stripe_checkout_session_id || null,
+      payment_intent_id: authoritativeRow.stripe_payment_intent_id || null,
+      charge_id: authoritativeRow.stripe_charge_id || null,
+      balance_transaction_id: authoritativeRow.stripe_balance_transaction_id || null,
+      funding_evidence_id: directObservation.evidence_id || row.evidence_id || null,
+      audited_funding_basis_id: row.audited_basis_id || null,
     };
     if (classification.eligible) included.push({ ...identity, ...classification });
     else excluded.push({ ...identity, reason: classification.reason });
@@ -235,6 +276,12 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
   if (instructor.payouts_paused !== true) blockers.push('PAUSE_GUARD_NOT_SET');
   if (!instructor.payouts_start_date) blockers.push('START_DATE_MISSING');
   if (!instructor.manual_settlement_boundary_id) blockers.push('MANUAL_SETTLEMENT_BOUNDARY_MISSING');
+  const unresolved = excluded.filter((line) => ![
+    'MANUALLY_SETTLED_BEFORE_CUTOFF', 'AFTER_FIRST_SYSTEM_PERIOD',
+    'TEST_ACCOUNT', 'ALREADY_CLAIMED',
+  ].includes(line.reason));
+  if (unresolved.length) blockers.push('UNRECONCILED_PAYABLE_LESSONS');
+  if (totals.unresolved_total_basis) blockers.push('FRANCHISE_TOTAL_BASIS_UNAVAILABLE');
   if (!included.length) blockers.push('NO_ELIGIBLE_LESSONS');
   if (totals.insufficient_week) blockers.push('INSUFFICIENT_WEEK_MANUAL_HANDLING');
   const canonical = {
@@ -262,6 +309,9 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
       gross_pence: line.gross_pence,
       stripe_fee_pence: line.stripe_fee_pence,
       instructor_amount_pence: line.instructor_amount_pence,
+      value_semantics: line.value_semantics,
+      calculation_version: line.calculation_version,
+      funding_lines: line.funding_lines,
     })),
     excluded: excluded.map((line) => ({ booking_id: line.booking_id, reason: line.reason })),
     proposed_transfer_pence: totals.proposed_transfer_pence,
@@ -269,6 +319,7 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
   };
   return {
     planner_version: PLANNER_VERSION,
+    lesson_calculation_version: CALCULATION_VERSION,
     instructor: {
       id: Number(instructor.id), name: instructor.name, school_id: Number(instructor.school_id),
       payouts_start_date: dateOnly(instructor.payouts_start_date), payouts_paused: instructor.payouts_paused,
@@ -319,8 +370,10 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
   `;
   if (!instructor) throw new InterimV1PayoutError(404, 'NOT_FOUND', 'Instructor not found');
   const rows = await sql`
-    SELECT lb.id AS booking_id, lb.scheduled_date, lb.status, lu.name AS learner_name,
+    SELECT lb.id AS booking_id, lb.school_id, lb.instructor_id, lb.learner_id,
+           lb.scheduled_date, lb.status, lu.name AS learner_name,
            ((lb.scheduled_date + lb.end_time) AT TIME ZONE 'Europe/London') AS booking_ends_at,
+           ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int AS duration_minutes,
            COALESCE(lu.is_test_account, FALSE) AS is_test_account,
            c.payouts_start_date, mb.settled_before_at, mb.first_system_period_end_at,
            e.id AS evidence_id, e.payment_origin,
@@ -332,13 +385,22 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
            e.stripe_balance_transaction_currency, e.stripe_balance_transaction_status,
            e.stripe_payment_created_at, e.stripe_funds_available_at,
            e.gross_collected_pence, e.stripe_fee_pence, e.currency, e.evidence_status,
+           direct_observation.id AS direct_observation_id,
+           direct_observation.evidence_status AS direct_observation_status,
+           direct_observation.evidence_json AS direct_observation_json,
            bcs.id AS bcs_id, bcs.contribution_pence AS bcs_contribution_pence,
            bcs.stripe_fee_pence AS bcs_stripe_fee_pence, bcs.refunded_at AS bcs_refunded_at,
            bcs.absorbed_by AS bcs_absorbed_by, source_counts.bcs_count,
            ct.type AS ct_type, ct.source AS ct_source, ct.payment_method AS ct_payment_method,
            ct.amount_pence AS ct_amount_pence, ct.stripe_fee_pence AS ct_stripe_fee_pence,
            ct.stripe_session_id AS ct_session_id, ct.stripe_payment_intent_id AS ct_payment_intent_id,
-           pli.payout_id AS claimed_payout_id
+           ct.instructor_id AS ct_instructor_id, ct.learner_id AS ct_learner_id,
+           pli.payout_id AS claimed_payout_id,
+           basis.id AS audited_basis_id, basis.funding_class, basis.value_semantics,
+           basis.payment_processor, basis.gross_pence, basis.actual_processing_fee_pence,
+           basis.net_pence, basis.final_instructor_payable_pence,
+           basis.processing_fee_evidence_reference,
+           COALESCE(flexible.flexible_sources, '[]'::jsonb) AS flexible_sources
       FROM lesson_bookings lb
       JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
       JOIN interim_v1_instructor_controls c
@@ -356,7 +418,77 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
         ON ct.id = bcs.credit_transaction_id AND ct.school_id = lb.school_id
       LEFT JOIN interim_v1_funding_evidence e
         ON e.school_id = lb.school_id AND e.booking_id = lb.id
-      LEFT JOIN payout_line_items pli ON pli.booking_id = lb.id
+      LEFT JOIN LATERAL (
+        SELECT observation.*
+          FROM payout_direct_evidence_observations observation
+         WHERE observation.school_id = lb.school_id
+           AND observation.booking_id = lb.id
+           AND observation.instructor_id = lb.instructor_id
+         ORDER BY CASE observation.evidence_status WHEN 'complete' THEN 0 ELSE 1 END,
+                  observation.observed_at DESC, observation.id DESC
+         LIMIT 1
+      ) direct_observation ON TRUE
+      LEFT JOIN payout_line_items pli
+        ON pli.booking_id = lb.id AND pli.school_id = lb.school_id
+      LEFT JOIN LATERAL (
+        SELECT event.*
+          FROM payout_funding_basis_events event
+         WHERE event.school_id = lb.school_id
+           AND event.booking_id = lb.id
+           AND event.instructor_id = lb.instructor_id
+         ORDER BY event.sequence_no DESC, event.id DESC
+         LIMIT 1
+      ) basis ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT jsonb_agg(jsonb_build_object(
+          'allocation_id', allocation.id,
+          'source_id', allocation.source_id,
+          'units_allocated', allocation.units_allocated,
+          'unit_minutes', allocation.unit_minutes,
+          'contribution_pence', allocation.contribution_pence,
+          'preceding_active_units', COALESCE((
+            SELECT SUM(previous.units_allocated)
+              FROM flexible_package_booking_allocations previous
+             WHERE previous.school_id = allocation.school_id
+               AND previous.source_id = allocation.source_id
+               AND previous.id < allocation.id
+               AND NOT EXISTS (
+                 SELECT 1 FROM flexible_package_allocation_returns previous_return
+                  WHERE previous_return.school_id = previous.school_id
+                    AND previous_return.allocation_id = previous.id
+               )
+          ), 0),
+          'initial_units', source.initial_units,
+          'original_value_pence', source.original_value_pence,
+          'legacy_conversion', source.legacy_conversion,
+          'source_evidence_id', source_evidence.id,
+          'evidence_status', source_evidence.evidence_status,
+          'evidence_json', source_evidence.evidence_json
+        ) ORDER BY allocation.source_id, allocation.id) AS flexible_sources
+          FROM flexible_package_booking_allocations allocation
+          JOIN flexible_package_sources source
+            ON source.id = allocation.source_id
+           AND source.school_id = allocation.school_id
+          LEFT JOIN LATERAL (
+            SELECT observation.*
+              FROM payout_flexible_source_evidence observation
+             WHERE observation.school_id = source.school_id
+               AND observation.source_id = source.id
+             ORDER BY CASE observation.evidence_status WHEN 'complete' THEN 0 ELSE 1 END,
+                      observation.observed_at DESC, observation.id DESC
+             LIMIT 1
+          ) source_evidence ON TRUE
+         WHERE allocation.school_id = lb.school_id
+           AND allocation.booking_id = lb.id
+           AND allocation.instructor_id = lb.instructor_id
+           AND allocation.learner_id = lb.learner_id
+           AND source.learner_id = lb.learner_id
+           AND NOT EXISTS (
+             SELECT 1 FROM flexible_package_allocation_returns returned
+              WHERE returned.school_id = allocation.school_id
+                AND returned.allocation_id = allocation.id
+           )
+      ) flexible ON TRUE
      WHERE lb.school_id = ${schoolId} AND lb.instructor_id = ${instructorId}
        AND lb.status = 'chargeable'
      ORDER BY lb.scheduled_date, lb.id
@@ -537,6 +669,251 @@ async function recordInterimV1FundingEvidence(sql, input) {
   return saved ? { recorded: true, ...saved } : { recorded: false, reason: 'ALREADY_RECORDED' };
 }
 
+function directEvidenceObservation(input) {
+  const record = evidenceRecord(input);
+  const { evidence_fingerprint: ignoredFingerprint, ...facts } = record;
+  return {
+    school_id: Number(input.schoolId),
+    instructor_id: Number(input.instructorId),
+    booking_id: Number(input.bookingId),
+    evidence_status: record.evidence_status,
+    evidence_json: facts,
+    evidence_fingerprint: fingerprint({
+      schema: 'payout-direct-evidence-observation/1',
+      school_id: Number(input.schoolId), instructor_id: Number(input.instructorId),
+      booking_id: Number(input.bookingId), facts,
+    }),
+  };
+}
+
+function payoutLinePersistenceProjection(line) {
+  const semantics = line?.value_semantics;
+  const common = {
+    attributable_gross_pence: Number.isSafeInteger(line?.gross_pence) ? line.gross_pence : null,
+    actual_processing_fee_pence: Number.isSafeInteger(line?.stripe_fee_pence) ? line.stripe_fee_pence : null,
+    net_attributable_revenue_pence: Number.isSafeInteger(line?.net_after_stripe_pence)
+      ? line.net_after_stripe_pence : null,
+    payout_value_semantics: semantics,
+    payout_calculation_version: line?.calculation_version || CALCULATION_VERSION,
+    funding_evidence_json: {
+      funding_evidence_id: line?.funding_evidence_id || null,
+      audited_funding_basis_id: line?.audited_funding_basis_id || null,
+      funding_lines: line?.funding_lines || [],
+    },
+  };
+  if (semantics === 'gross_customer_revenue') {
+    if (!Number.isSafeInteger(common.attributable_gross_pence)
+        || !Number.isSafeInteger(common.actual_processing_fee_pence)
+        || !Number.isSafeInteger(common.net_attributable_revenue_pence)) {
+      throw new InterimV1PayoutError(409, 'PAYOUT_LINE_EVIDENCE_INCOMPLETE', 'Gross payout basis cannot be persisted without exact gross, fee and net values');
+    }
+    return {
+      ...common,
+      price_pence: common.attributable_gross_pence,
+      stripe_fee_pence: common.actual_processing_fee_pence,
+      commission_rate: line.commission_rate,
+    };
+  }
+  if (semantics === 'net_after_processing') {
+    if (!Number.isSafeInteger(common.net_attributable_revenue_pence)) {
+      throw new InterimV1PayoutError(409, 'PAYOUT_LINE_EVIDENCE_INCOMPLETE', 'Net payout basis cannot be persisted without its audited net value');
+    }
+    return {
+      ...common,
+      // Legacy compatibility columns express the amount to which commission is applied.
+      // The authoritative columns retain that gross and actual fee are unknown.
+      price_pence: common.net_attributable_revenue_pence,
+      stripe_fee_pence: 0,
+      commission_rate: line.commission_rate,
+    };
+  }
+  if (semantics === 'final_instructor_payable') {
+    if (!Number.isSafeInteger(line?.instructor_amount_pence)) {
+      throw new InterimV1PayoutError(409, 'PAYOUT_LINE_EVIDENCE_INCOMPLETE', 'Final-payable basis cannot be persisted without its audited final amount');
+    }
+    return {
+      ...common,
+      // The old columns remain arithmetically coherent without pretending this is gross.
+      // Semantic columns make the compatibility projection explicit.
+      price_pence: line.instructor_amount_pence,
+      stripe_fee_pence: 0,
+      commission_rate: 1,
+    };
+  }
+  throw new InterimV1PayoutError(409, 'PAYOUT_LINE_SEMANTICS_MISSING', 'Payout line has no authoritative value semantics');
+}
+
+async function recordDirectEvidenceObservation(sql, input) {
+  const [source] = await sql`
+    SELECT bcs.id AS booking_credit_source_id, bcs.credit_transaction_id,
+           ct.stripe_session_id, ct.stripe_payment_intent_id
+      FROM booking_credit_sources bcs
+      JOIN credit_transactions ct
+        ON ct.id = bcs.credit_transaction_id AND ct.school_id = bcs.school_id
+     WHERE bcs.school_id = ${input.schoolId} AND bcs.booking_id = ${input.bookingId}
+       AND bcs.id = ${input.bookingCreditSourceId} AND bcs.refunded_at IS NULL
+       AND ct.type = 'slot_purchase' AND ct.source = 'stripe'
+  `;
+  if (!source || Number(source.credit_transaction_id) !== Number(input.creditTransactionId)) {
+    throw new InterimV1PayoutError(409, 'DIRECT_FUNDING_IDENTITY_CHANGED', 'Direct funding identity changed during reconciliation');
+  }
+  const observation = directEvidenceObservation({ ...input, bookingCreditSourceId: source.booking_credit_source_id });
+  const facts = observation.evidence_json;
+  if (observation.evidence_status === 'complete' && (
+    facts.stripe_checkout_session_id !== source.stripe_session_id
+    || facts.stripe_payment_intent_id !== source.stripe_payment_intent_id
+  )) observation.evidence_status = 'contradictory';
+  const [terminal] = await sql`
+    SELECT id, evidence_status, evidence_fingerprint
+      FROM payout_direct_evidence_observations
+     WHERE school_id = ${input.schoolId} AND booking_id = ${input.bookingId}
+       AND evidence_status IN ('complete','contradictory')
+     ORDER BY observed_at DESC, id DESC LIMIT 1
+  `;
+  if (terminal) {
+    if (terminal.evidence_fingerprint === observation.evidence_fingerprint) {
+      return { recorded: false, reused: true, ...terminal };
+    }
+    throw new InterimV1PayoutError(409, 'DIRECT_EVIDENCE_CONTRADICTION', 'A terminal direct Stripe observation already exists');
+  }
+  const [same] = await sql`
+    SELECT id, evidence_status, evidence_fingerprint
+      FROM payout_direct_evidence_observations
+     WHERE school_id = ${input.schoolId} AND booking_id = ${input.bookingId}
+       AND evidence_fingerprint = ${observation.evidence_fingerprint}
+     LIMIT 1
+  `;
+  if (same) return { recorded: false, reused: true, ...same };
+  const [saved] = await sql`
+    INSERT INTO payout_direct_evidence_observations (
+      id, school_id, instructor_id, booking_id, evidence_status, evidence_json,
+      evidence_fingerprint, observed_by_admin_id
+    ) VALUES (${crypto.randomUUID()}, ${input.schoolId}, ${input.instructorId},
+      ${input.bookingId}, ${observation.evidence_status},
+      ${JSON.stringify(observation.evidence_json)}::jsonb,
+      ${observation.evidence_fingerprint}, ${input.adminId})
+    RETURNING id, evidence_status, evidence_fingerprint
+  `;
+  return { recorded: true, reused: false, ...saved };
+}
+
+function flexibleEvidenceObservation({ schoolId, sourceId, fundingEvidence, providerLivemode }) {
+  const facts = {
+    ...fundingEvidence,
+    providerLivemode: providerLivemode === true,
+  };
+  const complete = evidenceComplete({
+    provider_livemode: facts.providerLivemode,
+    stripe_checkout_session_id: facts.checkoutSessionId,
+    stripe_payment_intent_id: facts.paymentIntentId,
+    stripe_payment_intent_status: facts.paymentIntentStatus,
+    stripe_charge_id: facts.chargeId,
+    stripe_charge_paid: facts.chargePaid,
+    stripe_charge_captured: facts.chargeCaptured,
+    stripe_charge_payment_intent_id: facts.chargePaymentIntentId,
+    stripe_balance_transaction_id: facts.balanceTransactionId,
+    stripe_balance_transaction_source_id: facts.balanceTransactionSourceId,
+    stripe_balance_transaction_type: facts.balanceTransactionType,
+    stripe_balance_transaction_amount_pence: facts.balanceTransactionAmountPence,
+    stripe_balance_transaction_currency: facts.balanceTransactionCurrency,
+    stripe_balance_transaction_status: facts.balanceTransactionStatus,
+    stripe_payment_created_at: facts.paymentCreatedAt,
+    stripe_funds_available_at: facts.fundsAvailableAt,
+    gross_collected_pence: facts.amountPence,
+    stripe_fee_pence: facts.feePence,
+    currency: facts.currency,
+  });
+  const evidenceStatus = complete ? 'complete' : 'pending';
+  return {
+    school_id: Number(schoolId),
+    source_id: Number(sourceId),
+    evidence_status: evidenceStatus,
+    evidence_json: facts,
+    evidence_fingerprint: fingerprint({
+      schema: 'payout-flexible-source-evidence/1',
+      school_id: Number(schoolId), source_id: Number(sourceId), facts,
+    }),
+  };
+}
+
+async function recordFlexibleSourceEvidence(sql, input) {
+  const observation = flexibleEvidenceObservation(input);
+  const [source] = await sql`
+    SELECT s.id, s.original_value_pence, p.stripe_checkout_session_id,
+           p.stripe_payment_intent_id
+      FROM flexible_package_sources s
+      JOIN flexible_package_purchases p
+        ON p.id = s.purchase_id AND p.school_id = s.school_id
+     WHERE s.id = ${input.sourceId} AND s.school_id = ${input.schoolId}
+  `;
+  if (!source) throw new InterimV1PayoutError(404, 'FLEXIBLE_SOURCE_NOT_FOUND', 'Flexible package source not found');
+  const facts = observation.evidence_json;
+  if (observation.evidence_status === 'complete' && (
+    Number(facts.amountPence) !== Number(source.original_value_pence)
+    || facts.checkoutSessionId !== source.stripe_checkout_session_id
+    || facts.paymentIntentId !== source.stripe_payment_intent_id
+  )) {
+    observation.evidence_status = 'contradictory';
+  }
+  const [terminal] = await sql`
+    SELECT id, evidence_status, evidence_fingerprint
+      FROM payout_flexible_source_evidence
+     WHERE school_id = ${input.schoolId} AND source_id = ${input.sourceId}
+       AND evidence_status IN ('complete','contradictory')
+     ORDER BY observed_at DESC, id DESC LIMIT 1
+  `;
+  if (terminal) {
+    if (terminal.evidence_fingerprint === observation.evidence_fingerprint) {
+      return { recorded: false, reused: true, ...terminal };
+    }
+    throw new InterimV1PayoutError(409, 'FLEXIBLE_SOURCE_EVIDENCE_CONTRADICTION', 'A terminal flexible source observation already exists');
+  }
+  const [same] = await sql`
+    SELECT id, evidence_status, evidence_fingerprint
+      FROM payout_flexible_source_evidence
+     WHERE school_id = ${input.schoolId} AND source_id = ${input.sourceId}
+       AND evidence_fingerprint = ${observation.evidence_fingerprint}
+     LIMIT 1
+  `;
+  if (same) return { recorded: false, reused: true, ...same };
+  const [saved] = await sql`
+    INSERT INTO payout_flexible_source_evidence (
+      id, school_id, source_id, evidence_status, evidence_json,
+      evidence_fingerprint, observed_by_admin_id
+    ) VALUES (${crypto.randomUUID()}, ${input.schoolId}, ${input.sourceId},
+      ${observation.evidence_status}, ${JSON.stringify(observation.evidence_json)}::jsonb,
+      ${observation.evidence_fingerprint}, ${input.adminId})
+    RETURNING id, evidence_status, evidence_fingerprint
+  `;
+  return { recorded: true, reused: false, ...saved };
+}
+
+function validateAuditedFundingBasis(input) {
+  const common = {
+    funding_class: String(input.funding_class || '').trim(),
+    value_semantics: String(input.value_semantics || '').trim(),
+    payment_processor: String(input.payment_processor || '').trim(),
+    gross_pence: input.gross_pence == null ? null : Number(input.gross_pence),
+    actual_processing_fee_pence: input.actual_processing_fee_pence == null
+      ? null : Number(input.actual_processing_fee_pence),
+    net_pence: input.net_pence == null ? null : Number(input.net_pence),
+    final_instructor_payable_pence: input.final_instructor_payable_pence == null
+      ? null : Number(input.final_instructor_payable_pence),
+    processing_fee_evidence_reference: String(input.processing_fee_evidence_reference || '').trim() || null,
+    evidence_reference: String(input.evidence_reference || '').trim(),
+    reason: String(input.reason || '').trim(),
+  };
+  if (!['manual','cash','bank','external','legacy','correction'].includes(common.funding_class)
+      || !['gross_customer_revenue','net_after_processing','final_instructor_payable'].includes(common.value_semantics)
+      || !['none','stripe','external'].includes(common.payment_processor)
+      || !common.evidence_reference || !common.reason) {
+    return { ok: false, code: 'INVALID_AUDITED_FUNDING_BASIS' };
+  }
+  const calculated = require('./_authoritative-lesson-earning').earningFromValueBasis(common, 10000);
+  if (!calculated.ok) return { ok: false, code: calculated.reason };
+  return { ok: true, basis: common };
+}
+
 function clientSqlTag(client) {
   return async (strings, ...values) => {
     let text = '';
@@ -592,7 +969,13 @@ function validateTransfer(transfer, intent) {
   return transfer;
 }
 
-function createInterimV1PayoutHandler({ stripe, connectionString = process.env.POSTGRES_URL, sql: injectedSql = null, transactionRunner } = {}) {
+function createInterimV1PayoutHandler({
+  stripe,
+  reconciliationStripe = stripe,
+  connectionString = process.env.POSTGRES_URL,
+  sql: injectedSql = null,
+  transactionRunner,
+} = {}) {
   const runTransaction = transactionRunner || ((work) => withNeonTransaction(connectionString, async (client) => work(clientSqlTag(client))));
   return async function handleInterimV1Payout(req, res) {
     const action = req.query?.action;
@@ -613,6 +996,221 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
         res.json({ ok: true, preview }); return true;
       }
       if (req.method !== 'POST') throw new InterimV1PayoutError(405, 'METHOD_NOT_ALLOWED', 'POST required');
+
+      if (action === 'interim-v1-reconcile-funding-evidence') {
+        if (req.body?.operator_go !== RECONCILE_FUNDING_CONFIRMATION) {
+          throw new InterimV1PayoutError(400, 'OPERATOR_CONFIRMATION_REQUIRED', `operator_go must equal ${RECONCILE_FUNDING_CONFIRMATION}`);
+        }
+        const bookingId = Number(req.body?.booking_id);
+        if (!Number.isSafeInteger(bookingId) || bookingId <= 0) {
+          throw new InterimV1PayoutError(400, 'BOOKING_ID_REQUIRED', 'A valid booking_id is required');
+        }
+        const [booking] = await sql`
+          SELECT lb.id, lb.learner_id, lb.instructor_id, lb.school_id,
+                 c.id AS control_id, i.payouts_paused
+            FROM lesson_bookings lb
+            JOIN instructors i ON i.id = lb.instructor_id AND i.school_id = lb.school_id
+            JOIN interim_v1_instructor_controls c
+              ON c.instructor_id = lb.instructor_id AND c.school_id = lb.school_id
+           WHERE lb.id = ${bookingId} AND lb.school_id = ${schoolId}
+             AND lb.instructor_id = ${instructorId}
+        `;
+        if (!booking) throw new InterimV1PayoutError(404, 'BOOKING_NOT_FOUND', 'Controlled booking not found');
+        if (booking.payouts_paused !== true) throw new InterimV1PayoutError(409, 'INTERIM_V1_PAUSE_GUARD_REQUIRED', 'Instructor must remain paused');
+        const directRows = await sql`
+          SELECT bcs.id AS booking_credit_source_id, bcs.credit_transaction_id,
+                 ct.stripe_session_id, ct.stripe_payment_intent_id,
+                 ct.source, ct.payment_method, ct.type
+            FROM booking_credit_sources bcs
+            JOIN credit_transactions ct
+              ON ct.id = bcs.credit_transaction_id AND ct.school_id = bcs.school_id
+           WHERE bcs.school_id = ${schoolId} AND bcs.booking_id = ${bookingId}
+             AND bcs.refunded_at IS NULL
+             AND ct.type = 'slot_purchase' AND ct.source = 'stripe'
+        `;
+        const flexibleRows = await sql`
+          SELECT DISTINCT source.id AS source_id, purchase.stripe_checkout_session_id,
+                 purchase.stripe_payment_intent_id
+            FROM flexible_package_booking_allocations allocation
+            JOIN flexible_package_sources source
+              ON source.id = allocation.source_id AND source.school_id = allocation.school_id
+            JOIN flexible_package_purchases purchase
+              ON purchase.id = source.purchase_id AND purchase.school_id = source.school_id
+           WHERE allocation.school_id = ${schoolId} AND allocation.booking_id = ${bookingId}
+             AND NOT EXISTS (
+               SELECT 1 FROM flexible_package_allocation_returns returned
+                WHERE returned.school_id = allocation.school_id
+                  AND returned.allocation_id = allocation.id
+             )
+           ORDER BY source.id
+        `;
+        if (directRows.length > 1) throw new InterimV1PayoutError(409, 'DIRECT_FUNDING_NOT_ONE_TO_ONE', 'Direct funding must have exactly one active source');
+        if (!directRows.length && !flexibleRows.length) {
+          throw new InterimV1PayoutError(409, 'RECONCILABLE_FUNDING_IDENTITY_MISSING', 'No exact Stripe funding identity is attached to this booking');
+        }
+        const observations = [];
+        const fetchEvidence = async (candidate) => {
+          let providerObject;
+          if (candidate.stripe_session_id || candidate.stripe_checkout_session_id) {
+            const sessionId = candidate.stripe_session_id || candidate.stripe_checkout_session_id;
+            providerObject = await reconciliationStripe.checkout.sessions.retrieve(
+              sessionId,
+              { expand: ['payment_intent'] }
+            );
+          } else if (candidate.stripe_payment_intent_id) {
+            providerObject = await reconciliationStripe.paymentIntents.retrieve(
+              candidate.stripe_payment_intent_id,
+              { expand: ['latest_charge.balance_transaction'] }
+            );
+          } else {
+            throw new InterimV1PayoutError(409, 'STRIPE_PAYMENT_IDENTITY_MISSING', 'Stripe session or PaymentIntent identity is required');
+          }
+          return {
+            providerObject,
+            fundingEvidence: await fetchSessionFundingEvidence(
+              providerObject,
+              reconciliationStripe,
+              { allowChargeListLookup: false }
+            ),
+          };
+        };
+        if (directRows[0]) {
+          const fetched = await fetchEvidence(directRows[0]);
+          observations.push({ kind: 'direct', row: directRows[0], ...fetched });
+        }
+        for (const source of flexibleRows) {
+          observations.push({ kind: 'flexible', row: source, ...(await fetchEvidence(source)) });
+        }
+        const recorded = await runTransaction(async (txSql) => {
+          await txSql`SELECT pg_advisory_xact_lock(${schoolId}, ${instructorId})`;
+          const results = [];
+          for (const observation of observations) {
+            if (observation.kind === 'direct') {
+              results.push(await recordDirectEvidenceObservation(txSql, {
+                schoolId, instructorId, learnerId: Number(booking.learner_id), bookingId,
+                bookingCreditSourceId: Number(observation.row.booking_credit_source_id),
+                creditTransactionId: Number(observation.row.credit_transaction_id),
+                fundingEvidence: observation.fundingEvidence,
+                providerLivemode: observation.providerObject.livemode === true,
+                adminId: admin.id,
+              }));
+            } else {
+              results.push(await recordFlexibleSourceEvidence(txSql, {
+                schoolId, sourceId: Number(observation.row.source_id),
+                fundingEvidence: observation.fundingEvidence,
+                providerLivemode: observation.providerObject.livemode === true,
+                adminId: admin.id,
+              }));
+            }
+          }
+          await logAuditRequired(txSql, {
+            adminId: admin.id, adminEmail: admin.email,
+            action: 'payout.interim_v1_funding_evidence_reconciled',
+            targetType: 'lesson_booking', targetId: bookingId, schoolId, req,
+            details: {
+              instructor_id: instructorId,
+              observations: results.map((result, index) => ({
+                kind: observations[index].kind,
+                id: result.id || null,
+                evidence_status: result.evidence_status || null,
+                reused: result.reused === true,
+              })),
+              stripe_reads_only: true, payout_created: false, transfer_created: false,
+            },
+          });
+          return results;
+        });
+        res.json({ ok: true, booking_id: bookingId, observations: recorded, stripe_reads_only: true });
+        return true;
+      }
+
+      if (action === 'interim-v1-record-funding-basis') {
+        if (req.body?.operator_go !== RECORD_FUNDING_BASIS_CONFIRMATION) {
+          throw new InterimV1PayoutError(400, 'OPERATOR_CONFIRMATION_REQUIRED', `operator_go must equal ${RECORD_FUNDING_BASIS_CONFIRMATION}`);
+        }
+        const bookingId = Number(req.body?.booking_id);
+        const requestId = String(req.body?.idempotency_key || '').trim();
+        const validated = validateAuditedFundingBasis(req.body || {});
+        if (!Number.isSafeInteger(bookingId) || bookingId <= 0 || !/^cc-payout-basis-[0-9a-f-]{36}$/.test(requestId)) {
+          throw new InterimV1PayoutError(400, 'INVALID_FUNDING_BASIS_IDENTITY', 'A booking_id and cc-payout-basis UUID idempotency key are required');
+        }
+        if (!validated.ok) throw new InterimV1PayoutError(400, validated.code, 'The audited funding basis is invalid or incomplete');
+        const result = await runTransaction(async (txSql) => {
+          await txSql`SELECT pg_advisory_xact_lock(${schoolId}, ${instructorId})`;
+          const [booking] = await txSql`
+            SELECT lb.id, lb.learner_id, lb.instructor_id, lb.school_id,
+                   i.payouts_paused, c.id AS control_id, pli.payout_id
+              FROM lesson_bookings lb
+              JOIN instructors i ON i.id = lb.instructor_id AND i.school_id = lb.school_id
+              JOIN interim_v1_instructor_controls c
+                ON c.instructor_id = lb.instructor_id AND c.school_id = lb.school_id
+              LEFT JOIN payout_line_items pli
+                ON pli.booking_id = lb.id AND pli.school_id = lb.school_id
+             WHERE lb.id = ${bookingId} AND lb.school_id = ${schoolId}
+               AND lb.instructor_id = ${instructorId}
+             FOR UPDATE OF lb
+          `;
+          if (!booking) throw new InterimV1PayoutError(404, 'BOOKING_NOT_FOUND', 'Controlled booking not found');
+          if (booking.payouts_paused !== true) throw new InterimV1PayoutError(409, 'INTERIM_V1_PAUSE_GUARD_REQUIRED', 'Instructor must remain paused');
+          if (booking.payout_id) throw new InterimV1PayoutError(409, 'BOOKING_ALREADY_CLAIMED', 'A claimed booking cannot receive a new funding basis');
+          const basisFingerprint = fingerprint({
+            schema: 'payout-funding-basis/1', school_id: schoolId,
+            instructor_id: instructorId, booking_id: bookingId,
+            ...validated.basis,
+          });
+          const [replay] = await txSql`
+            SELECT id, basis_fingerprint FROM payout_funding_basis_events
+             WHERE school_id = ${schoolId} AND idempotency_key = ${requestId}
+          `;
+          if (replay) {
+            if (replay.basis_fingerprint !== basisFingerprint) {
+              throw new InterimV1PayoutError(409, 'FUNDING_BASIS_IDEMPOTENCY_MISMATCH', 'The idempotency key is already bound to different evidence');
+            }
+            return { created: false, id: replay.id, basis_fingerprint: basisFingerprint };
+          }
+          const [prior] = await txSql`
+            SELECT id, sequence_no FROM payout_funding_basis_events
+             WHERE school_id = ${schoolId} AND booking_id = ${bookingId}
+             ORDER BY sequence_no DESC, id DESC LIMIT 1
+             FOR SHARE
+          `;
+          const [created] = await txSql`
+            INSERT INTO payout_funding_basis_events (
+              id, school_id, learner_id, instructor_id, booking_id, sequence_no,
+              supersedes_event_id, funding_class, value_semantics, payment_processor,
+              gross_pence, actual_processing_fee_pence, net_pence,
+              final_instructor_payable_pence, processing_fee_evidence_reference,
+              evidence_reference, reason, idempotency_key, basis_fingerprint,
+              created_by_admin_id
+            ) VALUES (${crypto.randomUUID()}, ${schoolId}, ${booking.learner_id},
+              ${instructorId}, ${bookingId}, ${Number(prior?.sequence_no || 0) + 1},
+              ${prior?.id || null}, ${validated.basis.funding_class},
+              ${validated.basis.value_semantics}, ${validated.basis.payment_processor},
+              ${validated.basis.gross_pence}, ${validated.basis.actual_processing_fee_pence},
+              ${validated.basis.net_pence}, ${validated.basis.final_instructor_payable_pence},
+              ${validated.basis.processing_fee_evidence_reference},
+              ${validated.basis.evidence_reference}, ${validated.basis.reason}, ${requestId},
+              ${basisFingerprint}, ${admin.id})
+            RETURNING id, sequence_no, basis_fingerprint
+          `;
+          await logAuditRequired(txSql, {
+            adminId: admin.id, adminEmail: admin.email,
+            action: 'payout.funding_basis_recorded', targetType: 'lesson_booking',
+            targetId: bookingId, schoolId, req,
+            details: {
+              instructor_id: instructorId, funding_basis_id: created.id,
+              sequence_no: created.sequence_no, supersedes_event_id: prior?.id || null,
+              funding_class: validated.basis.funding_class,
+              value_semantics: validated.basis.value_semantics,
+              evidence_reference: validated.basis.evidence_reference,
+              basis_fingerprint: basisFingerprint,
+            },
+          });
+          return { created: true, ...created };
+        });
+        res.status(result.created ? 201 : 200).json({ ok: true, funding_basis: result });
+        return true;
+      }
 
       if (action === 'interim-v1-record-manual-settlement-boundary') {
         if (req.body?.operator_go !== MANUAL_BOUNDARY_CONFIRMATION) {
@@ -792,17 +1390,44 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
           }
           const periodStart = lockedPreview.included[0].scheduled_date;
           const periodEnd = lockedPreview.included[lockedPreview.included.length - 1].scheduled_date;
+          const persistenceLines = lockedPreview.included.map(payoutLinePersistenceProjection);
+          const compatibilityValuePence = persistenceLines.reduce((sum, line) => sum + line.price_pence, 0);
+          const compatibilityFeePence = persistenceLines.reduce((sum, line) => sum + line.stripe_fee_pence, 0);
+          const semantics = new Set(persistenceLines.map(line => line.payout_value_semantics));
+          const payoutValueSemantics = semantics.size === 1 ? [...semantics][0] : 'mixed';
+          const authoritativeGrossPence = persistenceLines.every(line => Number.isSafeInteger(line.attributable_gross_pence))
+            ? persistenceLines.reduce((sum, line) => sum + line.attributable_gross_pence, 0) : null;
+          const authoritativeFeePence = persistenceLines.every(line => Number.isSafeInteger(line.actual_processing_fee_pence))
+            ? persistenceLines.reduce((sum, line) => sum + line.actual_processing_fee_pence, 0) : null;
+          const authoritativeNetPence = persistenceLines.every(line => Number.isSafeInteger(line.net_attributable_revenue_pence))
+            ? persistenceLines.reduce((sum, line) => sum + line.net_attributable_revenue_pence, 0) : null;
           const [payout] = await txSql`
             INSERT INTO instructor_payouts (school_id, instructor_id, amount_pence, platform_fee_pence,
-              franchise_fee_pence, stripe_fees_pence, period_start, period_end, status, shortfall_pence, deposit_deducted_pence)
+              franchise_fee_pence, stripe_fees_pence, period_start, period_end, status, shortfall_pence, deposit_deducted_pence,
+              payout_calculation_version, payout_value_semantics, authoritative_gross_pence,
+              authoritative_processing_fee_pence, authoritative_net_pence)
             VALUES (${schoolId}, ${instructorId}, ${lockedPreview.totals.proposed_transfer_pence},
-              ${lockedPreview.totals.gross_pence - lockedPreview.totals.proposed_transfer_pence}, ${lockedPreview.totals.weekly_franchise_fee_pence},
-              ${lockedPreview.totals.stripe_fees_pence}, ${periodStart}, ${periodEnd}, 'processing', 0, 0)
+              ${compatibilityValuePence - lockedPreview.totals.proposed_transfer_pence}, ${lockedPreview.totals.weekly_franchise_fee_pence},
+              ${compatibilityFeePence}, ${periodStart}, ${periodEnd}, 'processing', 0, 0,
+              ${CALCULATION_VERSION}, ${payoutValueSemantics}, ${authoritativeGrossPence},
+              ${authoritativeFeePence}, ${authoritativeNetPence})
             RETURNING id
           `;
-          for (const line of lockedPreview.included) {
-            await txSql`INSERT INTO payout_line_items (payout_id, booking_id, price_pence, instructor_amount_pence, commission_rate, stripe_fee_pence)
-              VALUES (${payout.id}, ${line.booking_id}, ${line.gross_pence}, ${line.instructor_amount_pence}, ${line.commission_rate}, ${line.stripe_fee_pence})`;
+          for (let index = 0; index < lockedPreview.included.length; index += 1) {
+            const line = lockedPreview.included[index];
+            const persisted = persistenceLines[index];
+            await txSql`INSERT INTO payout_line_items (
+                school_id, payout_id, booking_id, price_pence, instructor_amount_pence,
+                commission_rate, stripe_fee_pence, payout_value_semantics,
+                attributable_gross_pence, actual_processing_fee_pence,
+                net_attributable_revenue_pence, payout_calculation_version, funding_evidence_json
+              ) VALUES (
+                ${schoolId}, ${payout.id}, ${line.booking_id}, ${persisted.price_pence}, ${line.instructor_amount_pence},
+                ${persisted.commission_rate}, ${persisted.stripe_fee_pence}, ${persisted.payout_value_semantics},
+                ${persisted.attributable_gross_pence}, ${persisted.actual_processing_fee_pence},
+                ${persisted.net_attributable_revenue_pence}, ${persisted.payout_calculation_version},
+                ${JSON.stringify(persisted.funding_evidence_json)}::jsonb
+              )`;
           }
           const intentId = crypto.randomUUID();
           const [intent] = await txSql`
@@ -896,9 +1521,13 @@ function createInterimV1PayoutHandler({ stripe, connectionString = process.env.P
 }
 
 module.exports = {
-  ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION, RECONCILE_CONFIRMATION,
+  ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION,
+  RECONCILE_CONFIRMATION, RECONCILE_FUNDING_CONFIRMATION, RECORD_FUNDING_BASIS_CONFIRMATION,
   InterimV1PayoutError, allocateInstructorAmounts, buildPreviewFromRows,
   classifyFundingRow, createInterimV1PayoutHandler, evidenceRecord, fingerprint,
+  payoutLinePersistenceProjection,
+  directEvidenceObservation, flexibleEvidenceObservation, recordDirectEvidenceObservation,
+  recordFlexibleSourceEvidence, validateAuditedFundingBasis,
   interimV1PayoutFailureResponse,
   loadInterimV1Preview, recordInterimV1FundingEvidence, stableJson,
   validateManualBoundaryDates, validateTransfer,

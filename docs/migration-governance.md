@@ -14,11 +14,11 @@ or any financial/data mutation.
 
 ## Confirmed file sequence
 
-`db/migrations/` contains 61 SQL files:
+`db/migrations/` contains 62 SQL files:
 
 - one file for every prefix from 001 through 025;
 - two independent files with prefix 026;
-- one file for every prefix from 027 through 060.
+- one file for every prefix from 027 through 061.
 
 The duplicate prefix is historical, not duplicate content:
 
@@ -35,8 +35,9 @@ their actual introduction. New duplicate prefixes are forbidden.
 
 The complete authoritative repository inventory and canonical LF-normalised
 SHA-256 values are in `db/migrations/manifest.json`. All current entries are
-`baseline` except 041, which is `deferred`; none of the historical files is
-automatically replayed by Phase 1.
+`baseline` except 041, which is `deferred`, and new migration 061, which is
+`numbered` and deliberately pending separate execution approval. None of the
+historical files is automatically replayed by Phase 1.
 
 ## Production receipt: what can and cannot be proved
 
@@ -239,7 +240,7 @@ errors.
 
 ### Phase 1 — completed in this branch
 
-- Freeze the 61-file inventory and canonical checksums in a manifest.
+- Freeze the then-current 61-file historical inventory and canonical checksums in a manifest.
 - Encode 026a/026b and mark 041 deferred.
 - Add fail-closed manifest/ledger planning and transactional execution logic.
 - Add focused tests and replace top-level “GET aggregate is authoritative”
@@ -254,8 +255,9 @@ Completed in the repository:
 
 1. reviewed ledger DDL, terminal-state constraints, success uniqueness,
    running-to-terminal guard, and update/delete/truncate protection;
-2. a 61-entry baseline packet distinguishing exact execution, structural
-   equivalence, intentional removal, and deferred 041;
+2. a baseline packet covering the 61 historical identities plus any later
+   pending numbered identities, distinguishing exact execution, structural
+   equivalence, intentional removal, deferred 041, and unapplied numbered work;
 3. ten marker receipts sourced from their real database timestamps at
    preflight rather than copied or inferred;
 4. direct-only, fingerprint-bound preflight/rehearsal/install/postflight and

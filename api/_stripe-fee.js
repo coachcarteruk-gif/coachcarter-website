@@ -3,7 +3,10 @@
 // to existing payment handling; Payout v2 classifies the source manual_review.
 
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
-const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
+
+function reconciliationStripeClient() {
+  return createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
+}
 
 function stripeObjectId(value) {
   if (typeof value === 'string') return value;
@@ -38,7 +41,9 @@ function emptyFundingEvidence({ checkoutSessionId = null, paymentIntentId = null
  * Resolve immutable Stripe payment, charge, balance-transaction, amount, and
  * fee evidence for a successful Checkout Session/PaymentIntent-shaped object.
  */
-async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
+async function fetchSessionFundingEvidence(session, stripeClient = null, options = {}) {
+  const client = stripeClient || reconciliationStripeClient();
+  const allowChargeListLookup = options.allowChargeListLookup !== false;
   const checkoutSessionId = session?.object === 'checkout.session' ? session.id : null;
   const suppliedPaymentIntentId = session?.object === 'payment_intent'
     ? session.id
@@ -54,7 +59,7 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
   }
 
   try {
-    const paymentIntent = await stripeClient.paymentIntents.retrieve(
+    const paymentIntent = await client.paymentIntents.retrieve(
       suppliedPaymentIntentId,
       { expand: ['latest_charge.balance_transaction'] }
     );
@@ -63,7 +68,7 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
       ? paymentIntent.latest_charge
       : null;
     if (!charge && typeof paymentIntent?.latest_charge === 'string') {
-      charge = await stripeClient.charges.retrieve(
+      charge = await client.charges.retrieve(
         paymentIntent.latest_charge,
         { expand: ['balance_transaction'] }
       );
@@ -74,10 +79,11 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
     // this PaymentIntent instead of accepting an ambiguous object identifier.
     if (
       (!charge?.id || !charge.id.startsWith('ch_')) &&
-      stripeClient.charges?.list
+      allowChargeListLookup &&
+      client.charges?.list
     ) {
       try {
-        const charges = await stripeClient.charges.list({
+        const charges = await client.charges.list({
           payment_intent: paymentIntent.id,
           limit: 10,
           expand: ['data.balance_transaction'],
@@ -94,9 +100,9 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
     if (
       !balanceTransaction &&
       typeof charge?.balance_transaction === 'string' &&
-      stripeClient.balanceTransactions?.retrieve
+      client.balanceTransactions?.retrieve
     ) {
-      balanceTransaction = await stripeClient.balanceTransactions.retrieve(
+      balanceTransaction = await client.balanceTransactions.retrieve(
         charge.balance_transaction
       );
     }
@@ -159,16 +165,17 @@ async function fetchSessionFundingEvidence(session, stripeClient = stripe) {
  * on the PaymentIntent. This is read-only and deliberately refuses an
  * identity-less candidate instead of listing/searching Stripe heuristically.
  */
-async function fetchLaunchPaymentObject(candidate, stripeClient = stripe) {
+async function fetchLaunchPaymentObject(candidate, stripeClient = null) {
+  const client = stripeClient || reconciliationStripeClient();
   const checkoutSessionId = candidate?.stripe_checkout_session_id || null;
   const paymentIntentId = candidate?.stripe_payment_intent_id || null;
   if (checkoutSessionId) {
-    return stripeClient.checkout.sessions.retrieve(checkoutSessionId, {
+    return client.checkout.sessions.retrieve(checkoutSessionId, {
       expand: ['payment_intent'],
     });
   }
   if (paymentIntentId) {
-    return stripeClient.paymentIntents.retrieve(paymentIntentId, {
+    return client.paymentIntents.retrieve(paymentIntentId, {
       expand: ['latest_charge.balance_transaction'],
     });
   }

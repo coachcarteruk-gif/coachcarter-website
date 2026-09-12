@@ -43,7 +43,8 @@ const { requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
-const { getEligibleBookings }  = require('./_payout-helpers');
+const { getEligibleBookings, payoutEvidenceBlockers }  = require('./_payout-helpers');
+const { loadInterimV1Preview } = require('./_interim-v1-payout');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
@@ -76,7 +77,10 @@ const {
   listEligibleRescheduleInstructors,
   validateInstructorRescheduleSlot,
 } = require('./_instructor-reschedule-slot');
-const { bookFlexiblePackageSlotTransaction } = require('./_flexible-package-ledger');
+const {
+  bookFlexiblePackageSlotTransaction,
+  moveFlexiblePackageBookingAllocations,
+} = require('./_flexible-package-ledger');
 const {
   SCHEDULE_OVERRIDE_REQUIRED,
   loadInstructorScheduleWarnings,
@@ -2282,19 +2286,6 @@ async function handleRescheduleBooking(req, res) {
       });
       const instructorChanged = Number(targetInstructorId) !== Number(booking.instructor_id);
 
-      const oldUpdated = await client.query(
-        `UPDATE lesson_bookings
-            SET status = $1, credit_returned = TRUE, cancelled_at = NOW()
-          WHERE id = $2
-            AND instructor_id = $3
-            AND school_id = $4
-            AND status = $5`,
-        [REFUNDED, bookingId, instructor.id, schoolId, SCHEDULED]
-      );
-      if (oldUpdated.rowCount !== 1) {
-        throw new InstructorRescheduleSlotError('BOOKING_CHANGED', 'This booking changed while it was being rescheduled.');
-      }
-
       const inserted = await client.query(
         `INSERT INTO lesson_bookings
            (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
@@ -2325,7 +2316,22 @@ async function handleRescheduleBooking(req, res) {
       );
       const newBooking = inserted.rows[0];
 
-      if (instructorChanged) {
+      if (booking.has_flexible_package_allocation === true) {
+        const moved = await moveFlexiblePackageBookingAllocations(client, {
+          learnerId: booking.learner_id,
+          schoolId,
+          oldBookingId: bookingId,
+          newBookingId: newBooking.id,
+          newInstructorId: targetInstructorId,
+        });
+        if (moved.minutes !== Number(booking.minutes_deducted || 0)
+            || moved.minutes !== Number(availability.bookingDuration || 0)) {
+          throw new InstructorRescheduleSlotError(
+            'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION',
+            'The Flexible Hours allocation does not match this lesson duration.'
+          );
+        }
+      } else if (instructorChanged) {
         const fundingTransfer = await transferBookingFunding(client, {
           oldBookingId: bookingId,
           newBookingId: newBooking.id,
@@ -2348,6 +2354,19 @@ async function handleRescheduleBooking(req, res) {
           newBookingId: newBooking.id,
           schoolId,
         });
+      }
+
+      const oldUpdated = await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1, credit_returned = TRUE, cancelled_at = NOW()
+          WHERE id = $2
+            AND instructor_id = $3
+            AND school_id = $4
+            AND status = $5`,
+        [REFUNDED, bookingId, instructor.id, schoolId, SCHEDULED]
+      );
+      if (oldUpdated.rowCount !== 1) {
+        throw new InstructorRescheduleSlotError('BOOKING_CHANGED', 'This booking changed while it was being rescheduled.');
       }
 
       return {
@@ -2502,7 +2521,17 @@ async function loadManagedInstructorRescheduleBooking(sql, { bookingId, instruct
                 AND rsbi.school_id = lb.school_id
                 AND rsbi.instructor_id = lb.instructor_id
                 AND rsbi.status = 'booked'
-           ) AS is_reserved_weekly_slot
+             ) AS is_reserved_weekly_slot
+             , EXISTS (
+               SELECT 1 FROM flexible_package_booking_allocations allocation
+                WHERE allocation.school_id = lb.school_id
+                  AND allocation.booking_id = lb.id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM flexible_package_allocation_returns returned
+                     WHERE returned.school_id = allocation.school_id
+                       AND returned.allocation_id = allocation.id
+                  )
+             ) AS has_flexible_package_allocation
       FROM lesson_bookings lb
       JOIN learner_users lu
         ON lu.id = lb.learner_id
@@ -2651,11 +2680,21 @@ async function handleEditBooking(req, res) {
              COALESCE(i.transmission_type, 'manual') AS instructor_transmission_type,
              COALESCE(i.buffer_minutes, 30) AS buffer_minutes,
              COALESCE(lt.duration_minutes, 90) AS type_duration_minutes,
-             lt.name AS lesson_type_name
+             lt.name AS lesson_type_name,
+             EXISTS (
+               SELECT 1 FROM flexible_package_booking_allocations allocation
+                WHERE allocation.school_id = lb.school_id
+                  AND allocation.booking_id = lb.id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM flexible_package_allocation_returns returned
+                     WHERE returned.school_id = allocation.school_id
+                       AND returned.allocation_id = allocation.id
+                  )
+             ) AS has_flexible_package_allocation
       FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
-      JOIN instructors i ON i.id = lb.instructor_id
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
+      JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
+      JOIN instructors i ON i.id = lb.instructor_id AND i.school_id = lb.school_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND lt.school_id = lb.school_id
       WHERE lb.id = ${booking_id} AND lb.instructor_id = ${instructor.id}
         AND COALESCE(lb.school_id, 1) = ${schoolId}
     `;
@@ -2665,7 +2704,12 @@ async function handleEditBooking(req, res) {
 
     // Check if already paid out (block lesson type changes)
     if (lesson_type_id && lesson_type_id !== booking.lesson_type_id) {
-      const [paidOut] = await sql`SELECT id FROM payout_line_items WHERE booking_id = ${booking_id}`;
+      const [paidOut] = await sql`
+        SELECT id
+        FROM payout_line_items
+        WHERE booking_id = ${booking_id}
+          AND school_id = ${schoolId}
+      `;
       if (paidOut) return res.status(400).json({ error: 'Cannot change lesson type — this booking has already been included in a payout' });
     }
 
@@ -2700,6 +2744,14 @@ async function handleEditBooking(req, res) {
       newDuration = newType.duration_minutes;
     }
 
+    const requestedDurationDelta = Number(newDuration) - Number(booking.minutes_deducted || 0);
+    if (booking.has_flexible_package_allocation === true && requestedDurationDelta !== 0) {
+      return res.status(409).json({
+        error: 'Flexible Hours lesson duration cannot be edited in place. Cancel and rebook so its immutable package units remain exact.',
+        code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
+      });
+    }
+
     // Calculate new end time
     const startParts = newStartTime.split(':').map(Number);
     const startMins = startParts[0] * 60 + startParts[1];
@@ -2712,8 +2764,9 @@ async function handleEditBooking(req, res) {
       SELECT lb.id, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lb.pickup_address, lu.name AS learner_name
       FROM lesson_bookings lb
-      JOIN learner_users lu ON lu.id = lb.learner_id
+      JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
       WHERE lb.instructor_id = ${booking.instructor_id}
+        AND lb.school_id = ${schoolId}
         AND lb.scheduled_date = ${newDate}
         AND lb.id != ${booking_id}
         AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
@@ -2857,6 +2910,9 @@ async function handleEditBooking(req, res) {
           minutes_deducted = ${oldMinutes > 0 ? newMinutes : 0},
           edited_at = NOW()
       WHERE id = ${booking_id}
+        AND instructor_id = ${booking.instructor_id}
+        AND school_id = ${schoolId}
+        AND status = ${booking.status}
     `;
 
     // Email learner if date/time changed and notify is not explicitly false
@@ -4038,15 +4094,27 @@ async function handleEarningsWeek(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = Number(instructor.school_id);
+  if (!Number.isSafeInteger(schoolId) || schoolId <= 0) {
+    return res.status(401).json({ error: 'Authenticated school scope is missing' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Get commission rate and franchise fee
     const [inst] = await sql`
-      SELECT COALESCE(commission_rate, 0.85) AS commission_rate, weekly_franchise_fee_pence
-      FROM instructors WHERE id = ${instructor.id}
+      SELECT id, school_id, name, COALESCE(commission_rate, 0.85) AS commission_rate,
+             weekly_franchise_fee_pence,
+             EXISTS (
+               SELECT 1 FROM interim_v1_instructor_controls control
+                WHERE control.school_id = instructors.school_id
+                  AND control.instructor_id = instructors.id
+             ) AS interim_v1_controlled
+      FROM instructors
+      WHERE id = ${instructor.id} AND school_id = ${schoolId}
     `;
+    if (!inst) return res.status(404).json({ error: 'Instructor not found' });
     const rate = parseFloat(inst.commission_rate);
     const franchiseFee = inst.weekly_franchise_fee_pence != null ? parseInt(inst.weekly_franchise_fee_pence) : null;
     const feeModel = franchiseFee != null ? 'franchise' : 'commission';
@@ -4065,10 +4133,10 @@ async function handleEarningsWeek(req, res) {
         lb.status,
         lu.name AS learner_name,
         lt.name AS lesson_type_name,
-        CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
+        COALESCE(lb.list_price_pence, CASE WHEN iln.custom_hourly_rate_pence IS NOT NULL
           THEN ROUND(iln.custom_hourly_rate_pence * COALESCE(lt.duration_minutes, 90) / 60.0)
           ELSE COALESCE(lt.price_pence, 8250)
-        END AS price_pence,
+        END) AS price_pence,
           COALESCE(
             CASE WHEN lb.end_time > lb.start_time
               THEN ROUND(EXTRACT(EPOCH FROM (lb.end_time - lb.start_time)) / 60)::int
@@ -4078,15 +4146,25 @@ async function handleEarningsWeek(req, res) {
             90
           ) AS duration_minutes
       FROM lesson_bookings lb
-      LEFT JOIN learner_users lu ON lu.id = lb.learner_id
-      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id
-      LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id
+      LEFT JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
+      LEFT JOIN lesson_types lt ON lt.id = lb.lesson_type_id AND lt.school_id = lb.school_id
+      LEFT JOIN instructor_learner_notes iln ON iln.instructor_id = lb.instructor_id AND iln.learner_id = lb.learner_id AND iln.school_id = lb.school_id
       WHERE lb.instructor_id = ${instructor.id}
+        AND lb.school_id = ${schoolId}
         AND lb.status = ANY(${BLOCKING_STATUSES}::text[])
         AND lb.scheduled_date >= ${weekRow.week_start}
         AND lb.scheduled_date <= ${weekRow.week_end}
       ORDER BY lb.scheduled_date ASC, lb.start_time ASC
     `;
+
+    let authoritativePreview = null;
+    const authoritativeIncluded = new Map();
+    const authoritativeExcluded = new Map();
+    if (inst.interim_v1_controlled === true) {
+      authoritativePreview = await loadInterimV1Preview(sql, Number(inst.school_id), Number(inst.id));
+      for (const line of authoritativePreview.included) authoritativeIncluded.set(Number(line.booking_id), line);
+      for (const line of authoritativePreview.excluded) authoritativeExcluded.set(Number(line.booking_id), line);
+    }
 
     let grossPence = 0;
     let completedCount = 0;
@@ -4096,6 +4174,8 @@ async function handleEarningsWeek(req, res) {
       grossPence += pricePence;
       if (l.status === CHARGEABLE) completedCount++;
       else confirmedCount++;
+      const authoritative = authoritativeIncluded.get(Number(l.id));
+      const exclusion = authoritativeExcluded.get(Number(l.id));
       return {
         id: l.id,
         date: l.date,
@@ -4106,14 +4186,25 @@ async function handleEarningsWeek(req, res) {
         lesson_type_name: l.lesson_type_name || 'Standard Lesson',
         duration_minutes: parseInt(l.duration_minutes),
         price_pence: pricePence,
-        instructor_pay_pence: Math.round(pricePence * rate) // per-lesson (for display)
+        instructor_pay_pence: authoritativePreview
+          ? (authoritative ? authoritative.instructor_amount_pence : null)
+          : Math.round(pricePence * rate),
+        earning_calculation_version: authoritative?.calculation_version || null,
+        earning_blocker: exclusion?.reason || (l.status !== CHARGEABLE ? 'NOT_YET_CHARGEABLE' : null),
       };
     });
 
     // Calculate total based on fee model
     let totalPence;
     let franchiseFeeApplied = null;
-    if (feeModel === 'franchise') {
+    if (authoritativePreview) {
+      grossPence = mapped.reduce((sum, lesson) => {
+        const line = authoritativeIncluded.get(Number(lesson.id));
+        return sum + Number(line?.gross_pence || 0);
+      }, 0);
+      totalPence = mapped.reduce((sum, lesson) => sum + Number(lesson.instructor_pay_pence || 0), 0);
+      franchiseFeeApplied = null;
+    } else if (feeModel === 'franchise') {
       franchiseFeeApplied = Math.min(franchiseFee, grossPence);
       totalPence = grossPence - franchiseFeeApplied;
     } else {
@@ -4131,7 +4222,10 @@ async function handleEarningsWeek(req, res) {
       lessons: mapped,
       total_pence: totalPence,
       completed_count: completedCount,
-      confirmed_count: confirmedCount
+      confirmed_count: confirmedCount,
+      view_kind: 'calendar_week',
+      payout_period: authoritativePreview?.manual_settlement_boundary || null,
+      payout_blockers: authoritativePreview?.blockers || []
     });
   } catch (err) {
     console.error('instructor earnings-week error:', err);
@@ -6138,42 +6232,127 @@ async function handlePayoutHistory(req, res) {
 // ── GET /api/instructor?action=next-payout-preview ──
 // Returns estimated next payout amount based on unpaid eligible bookings.
 async function handleNextPayoutPreview(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const user = verifyInstructorAuth(req);
   if (!user) return res.status(401).json({ error: 'Not authenticated' });
+  const schoolId = Number(user.school_id);
+  if (!Number.isSafeInteger(schoolId) || schoolId <= 0) {
+    return res.status(401).json({ error: 'Authenticated school scope is missing' });
+  }
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
     const [instructor] = await sql`
-      SELECT commission_rate, weekly_franchise_fee_pence, stripe_onboarding_complete, payouts_paused, payouts_start_date
-        FROM instructors WHERE id = ${user.id}
+      SELECT id, school_id, name, commission_rate, weekly_franchise_fee_pence,
+             stripe_onboarding_complete, payouts_paused, payouts_start_date,
+             EXISTS (
+               SELECT 1 FROM interim_v1_instructor_controls control
+                WHERE control.school_id = instructors.school_id
+                  AND control.instructor_id = instructors.id
+             ) AS interim_v1_controlled
+        FROM instructors
+       WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
 
-    const bookings = await getEligibleBookings(sql, user.id, instructor.payouts_start_date || null);
-    const rate = parseFloat(instructor.commission_rate) || 0.85;
+    if (instructor.interim_v1_controlled === true) {
+      const preview = await loadInterimV1Preview(
+        sql,
+        Number(instructor.school_id),
+        Number(instructor.id)
+      );
+      const periodEnd = preview.manual_settlement_boundary?.first_system_period_end_at;
+      return res.json({
+        ok: true,
+        payout_path: 'interim_v1_controlled',
+        calculation_version: preview.lesson_calculation_version,
+        preview_fingerprint: preview.preview_fingerprint,
+        gross_pence: preview.totals.gross_pence,
+        stripe_fees_pence: preview.totals.stripe_fees_pence,
+        estimated_pence: preview.totals.proposed_transfer_pence,
+        eligible_lessons: preview.included.length,
+        blocked_lessons: preview.excluded.filter(row => ![
+          'MANUALLY_SETTLED_BEFORE_CUTOFF', 'AFTER_FIRST_SYSTEM_PERIOD',
+          'TEST_ACCOUNT', 'ALREADY_CLAIMED',
+        ].includes(row.reason)).length,
+        blockers: preview.blockers,
+        lessons: preview.included,
+        excluded: preview.excluded,
+        payout_period: preview.manual_settlement_boundary,
+        next_payout_date: periodEnd ? String(periodEnd).slice(0, 10) : null,
+        onboarding_complete: !!instructor.stripe_onboarding_complete,
+        payouts_paused: !!instructor.payouts_paused,
+      });
+    }
+
+    const [payoutPeriod] = await sql`
+      WITH local_clock AS (
+        SELECT NOW() AT TIME ZONE 'Europe/London' AS local_now
+      ), closing AS (
+        SELECT CASE
+          WHEN EXTRACT(ISODOW FROM local_now)::int < 5
+            THEN local_now::date + (5 - EXTRACT(ISODOW FROM local_now)::int)
+          WHEN EXTRACT(ISODOW FROM local_now)::int = 5 AND local_now::time < TIME '12:00'
+            THEN local_now::date
+          ELSE local_now::date + (12 - EXTRACT(ISODOW FROM local_now)::int)
+        END AS closing_date
+        FROM local_clock
+      )
+      SELECT ((closing_date - 7) + TIME '12:00') AT TIME ZONE 'Europe/London' AS period_start_at,
+             (closing_date + TIME '12:00') AT TIME ZONE 'Europe/London' AS period_end_at,
+             closing_date::text AS closing_date
+        FROM closing
+    `;
+    const bookings = await getEligibleBookings(
+      sql, user.id, instructor.payouts_start_date || null, instructor.school_id,
+      payoutPeriod.period_start_at, payoutPeriod.period_end_at
+    );
+    const configuredRate = Number.parseFloat(instructor.commission_rate);
+    const rate = Number.isFinite(configuredRate) ? configuredRate : 0.85;
     const franchiseFee = instructor.weekly_franchise_fee_pence != null ? parseInt(instructor.weekly_franchise_fee_pence) : null;
     const feeModel = franchiseFee != null ? 'franchise' : 'commission';
 
+    const evidenceBlockers = payoutEvidenceBlockers(bookings);
+    if (evidenceBlockers.length) {
+      return res.json({
+        ok: true,
+        payout_path: 'legacy_v1_reconciliation_required',
+        gross_pence: null,
+        stripe_fees_pence: null,
+        estimated_pence: null,
+        eligible_lessons: 0,
+        blocked_lessons: evidenceBlockers.length,
+        blockers: evidenceBlockers,
+        payout_period: {
+          settled_before_at: payoutPeriod.period_start_at,
+          first_system_period_end_at: payoutPeriod.period_end_at,
+          time_zone: 'Europe/London',
+        },
+        next_payout_date: payoutPeriod.closing_date,
+        onboarding_complete: !!instructor.stripe_onboarding_complete,
+        payouts_paused: !!instructor.payouts_paused,
+      });
+    }
     let grossPence = 0;
     for (const b of bookings) grossPence += parseInt(b.price_pence);
+    const stripeFeesPence = bookings.reduce(
+      (sum, booking) => sum + parseInt(booking.stripe_fee_pence), 0
+    );
 
     let estimatedPence;
     let franchiseFeeApplied = null;
     if (feeModel === 'franchise') {
-      franchiseFeeApplied = Math.min(franchiseFee, grossPence);
-      estimatedPence = grossPence - franchiseFeeApplied;
+      const netGrossPence = grossPence - stripeFeesPence;
+      franchiseFeeApplied = Math.min(franchiseFee, netGrossPence);
+      estimatedPence = netGrossPence - franchiseFeeApplied;
     } else {
       estimatedPence = 0;
-      for (const b of bookings) estimatedPence += Math.round(parseInt(b.price_pence) * rate);
+      for (const b of bookings) {
+        estimatedPence += Math.round(
+          (parseInt(b.price_pence) - parseInt(b.stripe_fee_pence)) * rate
+        );
+      }
     }
-
-    // Calculate next Friday
-    const now = new Date();
-    const dayOfWeek = now.getUTCDay(); // 0=Sun, 5=Fri
-    const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
-    const nextFriday = new Date(now);
-    nextFriday.setUTCDate(now.getUTCDate() + daysUntilFriday);
-    const nextPayoutDate = nextFriday.toISOString().split('T')[0];
 
     return res.json({
       ok: true,
@@ -6181,9 +6360,15 @@ async function handleNextPayoutPreview(req, res) {
       weekly_franchise_fee_pence: franchiseFee,
       franchise_fee_applied_pence: franchiseFeeApplied,
       gross_pence: grossPence,
+      stripe_fees_pence: stripeFeesPence,
       estimated_pence: estimatedPence,
       eligible_lessons: bookings.length,
-      next_payout_date: nextPayoutDate,
+      payout_period: {
+        settled_before_at: payoutPeriod.period_start_at,
+        first_system_period_end_at: payoutPeriod.period_end_at,
+        time_zone: 'Europe/London',
+      },
+      next_payout_date: payoutPeriod.closing_date,
       onboarding_complete: !!instructor.stripe_onboarding_complete,
       payouts_paused: !!instructor.payouts_paused
     });

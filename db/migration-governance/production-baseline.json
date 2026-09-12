@@ -2,7 +2,7 @@
   "version": 1,
   "packetId": "coachcarter-production-history-v1",
   "manifestPath": "db/migrations/manifest.json",
-  "manifestChecksum": "49ddb858f68d9c19a92a0d19cd6c27020dc72732eb1713412790527313be035e",
+  "manifestChecksum": "92fd66890868f7a00a653853c917bafc7c4dd1a29975b7469135a3e581596650",
   "ledgerDdlPath": "db/migration-governance/schema-migration-history.sql",
   "timestampPolicy": "Never infer historical timestamps. Core ledger timestamps for baseline rows are database-generated baseline-recording times; proved historical times remain inside evidence.",
   "successSemantics": "For record_kind=baseline, succeeded means the reviewed historical disposition was recorded successfully; evidenceClass states what is actually proved.",
@@ -692,6 +692,17 @@
         "readyDeploymentId": "dpl_E4EzYUi9G5RBF3m1cnSHfbynBPgF",
         "historicalExecutionTimestamp": null,
         "claim": "The supplied operator record identifies the production apply and retained snapshot/deployment; Phase 1 read-only catalog checks confirmed all expected terminal effects. No historical timestamp is asserted."
+      }
+    },
+    {
+      "id": "061",
+      "filename": "061_authoritative_payout_evidence.sql",
+      "checksum": "aae931004ff9108ff2c90662a587dfac1295d909d0c222b6814a5a655376aee8",
+      "disposition": "pending_numbered",
+      "evidenceClass": "pending_numbered",
+      "evidence": {
+        "source": "docs/simon-payout-2026-09-11-reconciliation-plan.md",
+        "claim": "New additive migration awaiting a separately approved numbered execution; no Production execution or structural-equivalence receipt is claimed."
       }
     }
   ],

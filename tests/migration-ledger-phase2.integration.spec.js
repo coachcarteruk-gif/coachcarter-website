@@ -147,6 +147,7 @@ test.describe('migration ledger Phase 2 disposable database rehearsal', () => {
     expect(preflightResult).toMatchObject({
       ledger: 'installed',
       baselineRows: 60,
+      pendingNumbered: ['061'],
       next: 'ALREADY_INSTALLED_AND_VALID',
     });
     const result = await postflight(client, bundle, targetFingerprint);
@@ -155,6 +156,7 @@ test.describe('migration ledger Phase 2 disposable database rehearsal', () => {
       exactExecutionEvidence: ['035', '039', '060'],
       intentionallyRemoved: ['014', '021'],
       deferred: ['041'],
+      pendingNumbered: ['061'],
     });
   });
 
@@ -237,7 +239,10 @@ test.describe('migration ledger Phase 2 disposable database rehearsal', () => {
 
   test('rejects checksum drift, out-of-order success, and remains compatible with the Phase 1 planner', async () => {
     const rows = await readLedgerRows(client);
-    expect(validateLedger(bundle.manifest, rows)).toMatchObject({ applied: 60, pending: [] });
+    expect(validateLedger(bundle.manifest, rows)).toMatchObject({
+      applied: 60,
+      pending: [expect.objectContaining({ id: '061', execution: 'numbered' })],
+    });
 
     const runnerStatus = JSON.parse(execFileSync(
       process.execPath,
@@ -252,7 +257,7 @@ test.describe('migration ledger Phase 2 disposable database rehearsal', () => {
         },
       }
     ));
-    expect(runnerStatus).toMatchObject({ ok: true, applied: 60, pending: [] });
+    expect(runnerStatus).toMatchObject({ ok: true, applied: 60, pending: ['061'] });
 
     const checksumDrift = rows.map(row => ({ ...row }));
     checksumDrift[0].checksum = 'f'.repeat(64);

@@ -5862,3 +5862,70 @@ not be retried.
 - This work did not alter the recorded Production boundary, booking, credit,
   payout, approval or transfer rows. It made no Stripe request, moved no money,
   did not unpause Simon and did not deploy to Production.
+
+## 11 September 2026 - authoritative lesson earnings and reconciliation prepared locally
+
+- Work started from current `main` at `bb62ef5` on fresh branch
+  `codex/simon-authoritative-payout-v2`. Production was not queried or mutated.
+- The controlled planner now calculates commission lessons as
+  `round((attributable gross - actual attributable processing fee) × rate)`.
+  Direct Stripe evidence uses the exact charge and balance transaction. Flexible
+  Hours allocate the original package gross and its single actual fee across
+  30-minute units with deterministic penny conservation. Manual/external and
+  legacy values require append-only audited semantics; final-payable evidence
+  cannot receive commission twice.
+- Migration 061 is additive and inert. It creates append-only observations for
+  direct and package Stripe reconciliation plus versioned funding-basis events.
+  The superadmin reconciliation action reads only exact stored Stripe identities
+  and cannot approve, claim, unpause, refund, pay or transfer.
+- Simon's owner preview, instructor next-payout preview, calendar-week lesson
+  lines, admin overview, approval and processor now consume the same controlled
+  preview. The recorded Friday-noon half-open boundary remains authoritative;
+  missing funding is shown as a blocker rather than a zero earning.
+- Controlled payout persistence now stores explicit value semantics plus
+  nullable authoritative gross, actual-fee and net dimensions. The legacy
+  non-null line-item fields are a labelled compatibility projection only; an
+  unknown fee remains `NULL` in the authoritative record and an already-final
+  instructor value is stored at rate `1.000`, so it cannot be commissioned twice.
+- The Viba discrepancy was traced to instructor edit-in-place changing duration
+  without changing Flexible Hours units. Future duration edits are refused and
+  instructor-managed reschedules now move the exact allocations transactionally.
+  The historical one-unit correction remains a separately reviewed append-only
+  Production repair described in
+  `docs/simon-payout-2026-09-11-reconciliation-plan.md`; it was not applied.
+- The evidence-backed acceptance fixture derives 22 included lessons and
+  113,102 pence without learner/booking conditionals in production code. Local
+  unit suites, syntax and migration governance passed. The isolated test DB
+  passed the new rolled-back migration DDL test and 25 credit/reschedule
+  integration cases; payout-v2 materialisation could not start because that
+  branch lacked its required non-test fixture.
+- Deployments, Production database writes, Production Stripe reads, payout
+  approvals, payout rows, transfer intents, transfers, refunds, unpauses and
+  customer communications were all zero.
+
+## 11 September 2026 - authoritative payout local review completed
+
+- A second high-risk review found and corrected three fail-closed defects before
+  commit: the controlled evidence reconciler can no longer fall back to a
+  heuristic Charge list when an exact PaymentIntent has no Charge identity; the
+  funding-basis idempotency replay is explicitly school-scoped; and the touched
+  instructor edit query plus payout-claim check now bind every join/read to the
+  authenticated booking school.
+- Migration 061 is now honestly classified as a pending numbered migration, not
+  a historical baseline. The migration ledger packet installs only the 60
+  evidenced historical receipts, reports 061 as pending, and preserves 041 as
+  deferred. The fresh-schema and disposable-ledger rollback rehearsals each
+  passed `5/5` on the explicitly gated non-production Neon test branch.
+- The full focused payout, booking-status, Flexible Hours, credit, tenant and
+  migration selection passed `251/251`; the serialized database integration
+  selection passed `75` with `2` environment-shape skips. Syntax checked all 240
+  JavaScript files, migration-manifest validation reported 62 migrations, and
+  `git diff --check` passed with line-ending warnings only.
+- The authoritative acceptance fixture still produces exactly 22 lessons and
+  113,102 pence with the reviewed per-date and per-lesson statement. The Payout
+  v2 materialisation integration remains honestly blocked before writes because
+  the isolated branch has no non-test same-school learner/instructor fixture;
+  its test and safety gate were not weakened.
+- No commit, push, deployment, Production read or write, Stripe call, evidence
+  append, approval, payout, transfer, refund, unpause or customer communication
+  was performed by this review.
