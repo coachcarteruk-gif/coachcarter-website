@@ -44,6 +44,7 @@ function emptyFundingEvidence({ checkoutSessionId = null, paymentIntentId = null
 async function fetchSessionFundingEvidence(session, stripeClient = null, options = {}) {
   const client = stripeClient || reconciliationStripeClient();
   const allowChargeListLookup = options.allowChargeListLookup !== false;
+  const includePaymentObjectType = options.includePaymentObjectType === true;
   const checkoutSessionId = session?.object === 'checkout.session' ? session.id : null;
   const suppliedPaymentIntentId = session?.object === 'payment_intent'
     ? session.id
@@ -114,6 +115,9 @@ async function fetchSessionFundingEvidence(session, stripeClient = null, options
       checkoutSessionId,
       paymentIntentId: paymentIntent?.id || suppliedPaymentIntentId,
       paymentIntentStatus: paymentIntent?.status || null,
+      ...(includePaymentObjectType ? {
+        paymentObjectType: typeof charge?.object === 'string' ? charge.object : null,
+      } : {}),
       chargeId: charge?.id || null,
       chargePaid: charge?.paid === true,
       chargeCaptured: charge?.captured === true,
