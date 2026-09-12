@@ -110,6 +110,18 @@ function exactId(value, prefix) {
   return typeof value === 'string' && value.startsWith(`${prefix}_`) ? value : null;
 }
 
+function assertExpectedFlexibleSourceScope(expectedSourceId, directRows, flexibleRows) {
+  if (expectedSourceId == null) return;
+  const sourceId = Number(expectedSourceId);
+  if (!Number.isSafeInteger(sourceId) || sourceId <= 0) {
+    throw new InterimV1PayoutError(400, 'INVALID_FLEXIBLE_SOURCE_SCOPE', 'A valid expected flexible source is required');
+  }
+  if (directRows.length !== 0 || flexibleRows.length !== 1
+      || Number(flexibleRows[0].source_id) !== sourceId) {
+    throw new InterimV1PayoutError(409, 'FLEXIBLE_FUNDING_IDENTITY_CHANGED', 'Flexible funding identity changed during reconciliation');
+  }
+}
+
 function classifyFundingRow(row, now = new Date()) {
   const startDate = dateOnly(row.payouts_start_date);
   const bookingDate = dateOnly(row.scheduled_date);
@@ -1045,6 +1057,11 @@ function createInterimV1PayoutHandler({
              )
            ORDER BY source.id
         `;
+        assertExpectedFlexibleSourceScope(
+          req.body?.expected_flexible_source_id,
+          directRows,
+          flexibleRows
+        );
         if (directRows.length > 1) throw new InterimV1PayoutError(409, 'DIRECT_FUNDING_NOT_ONE_TO_ONE', 'Direct funding must have exactly one active source');
         if (!directRows.length && !flexibleRows.length) {
           throw new InterimV1PayoutError(409, 'RECONCILABLE_FUNDING_IDENTITY_MISSING', 'No exact Stripe funding identity is attached to this booking');
@@ -1525,7 +1542,8 @@ module.exports = {
   ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION,
   RECONCILE_CONFIRMATION, RECONCILE_FUNDING_CONFIRMATION, RECORD_FUNDING_BASIS_CONFIRMATION,
   InterimV1PayoutError, allocateInstructorAmounts, buildPreviewFromRows,
-  classifyFundingRow, createInterimV1PayoutHandler, evidenceRecord, fingerprint,
+  assertExpectedFlexibleSourceScope, classifyFundingRow, createInterimV1PayoutHandler,
+  evidenceRecord, fingerprint,
   payoutLinePersistenceProjection,
   directEvidenceObservation, flexibleEvidenceObservation, recordDirectEvidenceObservation,
   recordFlexibleSourceEvidence, validateAuditedFundingBasis,

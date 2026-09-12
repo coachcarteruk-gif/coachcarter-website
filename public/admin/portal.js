@@ -3203,10 +3203,17 @@ function escapeHtml(s) {
 let currentInterimV1Preview = null;
 let currentInterimV1Approval = null;
 let simonDirectEvidenceConfirmation = null;
+let simonFlexibleEvidenceConfirmation = null;
 const SIMON_STEP_3_DIRECT_EVIDENCE_SCOPE = Object.freeze({
   schoolId: 1,
   instructorId: 6,
   bookingIds: Object.freeze([530, 534, 540, 555, 559, 560, 563, 564, 565, 566, 567, 570, 571, 588])
+});
+const SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE = Object.freeze({
+  schoolId: 1,
+  instructorId: 6,
+  bookingId: 568,
+  sourceId: 3
 });
 const DIRECT_EVIDENCE_RECONCILIATION_REASONS = new Set([
   'STRIPE_EVIDENCE_PENDING',
@@ -3226,6 +3233,16 @@ function authorizedSimonDirectEvidenceBookingIds(preview, schoolId) {
     .map(line => Number(line.booking_id))
     .filter(Number.isSafeInteger)
     .sort((left, right) => left - right);
+}
+
+function authorizedSimonFlexibleEvidenceScope(preview, schoolId) {
+  if (!isPlatformOwner || !preview || Number(schoolId) !== SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE.schoolId
+    || Number(preview.instructor?.id) !== SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE.instructorId) return null;
+  const candidate = (preview.excluded || []).find(line =>
+    Number(line.booking_id) === SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE.bookingId
+  );
+  if (!candidate || candidate.reason !== 'FLEXIBLE_SOURCE_EVIDENCE_INCOMPLETE') return null;
+  return SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE;
 }
 
 async function loadPayouts() {
@@ -3431,6 +3448,10 @@ function renderInterimV1Preview(preview, schoolId) {
   const directEvidenceButton = directEvidenceBookingIds.length
     ? `<button class="btn btn-sm" data-action="reconcile-simon-direct-evidence" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Reconcile authorized direct Stripe evidence (${directEvidenceBookingIds.length})</button>`
     : '';
+  const flexibleEvidenceScope = authorizedSimonFlexibleEvidenceScope(preview, schoolId);
+  const flexibleEvidenceButton = flexibleEvidenceScope
+    ? `<button class="btn btn-sm" data-action="reconcile-simon-flexible-evidence" data-id="${preview.instructor.id}" data-school-id="${schoolId}">Reconcile authorized Flexible Hours evidence (1)</button>`
+    : '';
   const boundary = preview.manual_settlement_boundary;
   const boundaryCopy = boundary
     ? `System window: ${esc(new Date(boundary.settled_before_at).toLocaleString('en-GB', { timeZone: boundary.time_zone }))} (inclusive) to ${esc(new Date(boundary.first_system_period_end_at).toLocaleString('en-GB', { timeZone: boundary.time_zone }))} (exclusive), ${esc(boundary.time_zone)}`
@@ -3449,7 +3470,7 @@ function renderInterimV1Preview(preview, schoolId) {
     <p><strong>Blockers:</strong> ${esc(blockerCopy)} · <strong>Fingerprint:</strong> <code>${esc(preview.preview_fingerprint)}</code></p>
     <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Included booking</th><th>Date</th><th>Learner</th><th>PaymentIntent</th><th>Charge</th><th>Gross</th><th>Fee</th></tr></thead><tbody>${included || '<tr><td colspan="7">No included lessons</td></tr>'}</tbody></table></div>
     <div style="overflow-x:auto;margin-top:10px"><table class="data-table"><thead><tr><th>Excluded booking</th><th>Date</th><th colspan="4">Reason</th></tr></thead><tbody>${excluded || '<tr><td colspan="6">No exclusions</td></tr>'}</tbody></table></div>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">${boundaryButton}${directEvidenceButton}${approveButton}<span id="interim-v1-process-slot"></span></div>`;
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">${boundaryButton}${directEvidenceButton}${flexibleEvidenceButton}${approveButton}<span id="interim-v1-process-slot"></span></div>`;
 }
 
 async function reviewInterimV1(instructorId, schoolId) {
@@ -3460,6 +3481,7 @@ async function reviewInterimV1(instructorId, schoolId) {
     currentInterimV1Preview = { ...data.preview, school_id: schoolId };
     currentInterimV1Approval = null;
     simonDirectEvidenceConfirmation = null;
+    simonFlexibleEvidenceConfirmation = null;
     renderInterimV1Preview(data.preview, schoolId);
   } catch (error) { toast(error.message, 'error'); }
 }
@@ -3510,6 +3532,54 @@ async function reconcileSimonDirectEvidence(instructorId, schoolId) {
     toast(`Direct Stripe evidence reconciled for ${completed} booking${completed === 1 ? '' : 's'}; Simon remains paused and no payout was created`, 'success');
   } catch (error) {
     toast(`Stopped after ${completed}/${bookingIds.length}: ${error.message}`, 'error');
+  } finally {
+    await reviewInterimV1(instructorId, schoolId);
+  }
+}
+
+async function reconcileSimonFlexibleEvidence(instructorId, schoolId) {
+  if (!currentInterimV1Preview || Number(currentInterimV1Preview.instructor?.id) !== instructorId
+    || Number(currentInterimV1Preview.school_id) !== schoolId) {
+    return toast('Reload Simon\'s exact controlled preview first', 'error');
+  }
+  const scope = authorizedSimonFlexibleEvidenceScope(currentInterimV1Preview, schoolId);
+  if (!scope) return toast('The authorized Flexible Hours evidence scope is no longer available', 'error');
+  const button = document.querySelector('[data-action="reconcile-simon-flexible-evidence"]');
+  const confirmationToken = `${currentInterimV1Preview.preview_fingerprint}|${scope.bookingId}|${scope.sourceId}`;
+  const confirmationFresh = simonFlexibleEvidenceConfirmation
+    && simonFlexibleEvidenceConfirmation.token === confirmationToken
+    && Date.now() - simonFlexibleEvidenceConfirmation.armedAt < 60000;
+  if (!confirmationFresh) {
+    simonFlexibleEvidenceConfirmation = { token: confirmationToken, armedAt: Date.now() };
+    if (button) button.textContent = 'Confirm Stripe read + flexible evidence append (1)';
+    return toast(`Review exact scope: booking ${scope.bookingId}, Flexible Hours source ${scope.sourceId}. Click the confirmation button within 60 seconds to append one evidence row and its required audit row only. This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.`, '');
+  }
+  simonFlexibleEvidenceConfirmation = null;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Reconciling Flexible Hours evidence...';
+  }
+  try {
+    const res = await fetchAdmin('/api/admin?action=interim-v1-reconcile-funding-evidence', {
+      method: 'POST',
+      body: JSON.stringify({
+        school_id: schoolId,
+        instructor_id: instructorId,
+        booking_id: scope.bookingId,
+        expected_flexible_source_id: scope.sourceId,
+        operator_go: 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED'
+      })
+    });
+    const data = await res.json();
+    const observation = Array.isArray(data.observations) ? data.observations[0] : null;
+    if (!res.ok || data.ok !== true || Number(data.booking_id) !== scope.bookingId
+      || data.stripe_reads_only !== true || data.observations?.length !== 1
+      || !observation?.id || !['complete', 'pending', 'contradictory'].includes(observation.evidence_status)) {
+      throw new Error(data.message || data.code || 'Flexible Hours reconciliation response was not exact');
+    }
+    toast(`Flexible Hours source ${scope.sourceId} evidence recorded as ${observation.evidence_status}; Simon remains paused and no payout was created`, 'success');
+  } catch (error) {
+    toast(`Flexible Hours reconciliation stopped: ${error.message}`, 'error');
   } finally {
     await reviewInterimV1(instructorId, schoolId);
   }
@@ -4802,6 +4872,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'send-interim-v1-invite') sendInterimV1Invite(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'review-interim-v1') reviewInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'reconcile-simon-direct-evidence') reconcileSimonDirectEvidence(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
+  else if (a === 'reconcile-simon-flexible-evidence') reconcileSimonFlexibleEvidence(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'record-interim-v1-manual-boundary') recordInterimV1ManualBoundary(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'approve-interim-v1') approveInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));
   else if (a === 'process-interim-v1') processInterimV1(parseInt(t.dataset.id, 10), parseInt(t.dataset.schoolId, 10));

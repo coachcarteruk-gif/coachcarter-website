@@ -15,6 +15,7 @@ const {
   validateProviderAccount,
 } = require('../api/_connect-v1-interim');
 const {
+  assertExpectedFlexibleSourceScope,
   buildPreviewFromRows,
   classifyFundingRow,
   createInterimV1PayoutHandler,
@@ -372,6 +373,22 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(script).toContain('for (const bookingId of bookingIds)');
     expect(script).toContain('Confirm Stripe read + evidence append');
     expect(script).toContain('Date.now() - simonDirectEvidenceConfirmation.armedAt < 60000');
+    expect(script).toContain('SIMON_STEP_4_FLEXIBLE_EVIDENCE_SCOPE');
+    expect(script).toContain('reconcile-simon-flexible-evidence');
+    expect(script).toContain('expected_flexible_source_id: scope.sourceId');
+    expect(script).toContain('Confirm Stripe read + flexible evidence append (1)');
+    expect(script).toContain('Date.now() - simonFlexibleEvidenceConfirmation.armedAt < 60000');
+    expect(script).toContain('This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.');
+    expect(html).toContain('simon-flexible-source-evidence');
+  });
+
+  test('expected Flexible Hours source guard fails closed on identity drift', () => {
+    expect(() => assertExpectedFlexibleSourceScope(3, [], [{ source_id: 3 }])).not.toThrow();
+    expect(() => assertExpectedFlexibleSourceScope(null, [{ id: 1 }], [])).not.toThrow();
+    expect(() => assertExpectedFlexibleSourceScope(0, [], [{ source_id: 3 }])).toThrow(/valid expected flexible source/i);
+    expect(() => assertExpectedFlexibleSourceScope(3, [{ id: 1 }], [{ source_id: 3 }])).toThrow(/identity changed/i);
+    expect(() => assertExpectedFlexibleSourceScope(3, [], [{ source_id: 4 }])).toThrow(/identity changed/i);
+    expect(() => assertExpectedFlexibleSourceScope(3, [], [{ source_id: 3 }, { source_id: 4 }])).toThrow(/identity changed/i);
   });
 
   test('transfer validation is exact and live', () => {
