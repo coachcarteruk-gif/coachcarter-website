@@ -21,9 +21,14 @@ const {
 } = require('../api/_platform-balance');
 
 const helperPath = path.join(__dirname, '..', 'api', '_payout-helpers.js');
+const portalPath = path.join(__dirname, '..', 'public', 'admin', 'portal.js');
 
 function helperSource() {
   return fs.readFileSync(helperPath, 'utf8');
+}
+
+function portalSource() {
+  return fs.readFileSync(portalPath, 'utf8');
 }
 
 function normalized(text) {
@@ -53,6 +58,7 @@ function makeSqlMock({ eligibleRows = [] } = {}) {
 function makePlatformBalanceSqlMock({
   instructors = [],
   eligibleRows = [],
+  eligibleRowsByInstructor = null,
   exactRows = [],
   exactNetCashInPence = 0,
 } = {}) {
@@ -71,6 +77,9 @@ function makePlatformBalanceSqlMock({
       return Promise.resolve(instructors);
     }
     if (text.includes('SELECT lb.id AS booking_id')) {
+      if (eligibleRowsByInstructor) {
+        return Promise.resolve(eligibleRowsByInstructor[String(values[0])] || []);
+      }
       return Promise.resolve(eligibleRows);
     }
     if (text.includes('COUNT(lb.id)::int AS chargeable_lessons')) {
@@ -255,6 +264,51 @@ test.describe('payout Step 5 read model', () => {
       lesson_count: 1,
     });
     expect(calls.some(call => call.text.includes('SELECT lb.id AS booking_id'))).toBe(true);
+  });
+
+  test('Next Payout Preview reports missing evidence without hiding reconciled payouts', async () => {
+    const blockedInstructor = { ...instructor, id: 45, name: 'Blocked Instructor' };
+    const readyInstructor = { ...instructor, id: 46, name: 'Ready Instructor' };
+    const { sql } = makePlatformBalanceSqlMock({
+      instructors: [blockedInstructor, readyInstructor],
+      eligibleRowsByInstructor: {
+        45: [{ ...eligibleBcsFundedBooking, booking_id: 609, stripe_fee_pence: null }],
+        46: [{ ...eligibleBcsFundedBooking, booking_id: 610, price_pence: 10000, stripe_fee_pence: 321 }],
+      },
+    });
+    const stripe = {
+      balance: {
+        retrieve: async () => ({
+          available: [{ currency: 'gbp', amount: 20000 }],
+          pending: [],
+        }),
+      },
+    };
+
+    const result = await computePlatformBalance(sql, stripe);
+
+    expect(result).toMatchObject({
+      status: 'red',
+      payout_preview_complete: false,
+      total_payout_pence: 9679,
+      balance_after_payout_pence: 10321,
+      reconciliation_blockers: [{
+        instructor_id: 45,
+        instructor_name: 'Blocked Instructor',
+        blockers: [{ booking_id: 609, reason: 'ACTUAL_PROCESSING_FEE_EVIDENCE_MISSING' }],
+      }],
+    });
+    expect(result.payout_preview).toHaveLength(1);
+    expect(result.payout_preview[0]).toMatchObject({ instructor_id: 46, amount_pence: 9679 });
+  });
+
+  test('admin preview renders reconciliation blockers while payout execution stays fail-closed', () => {
+    const source = portalSource();
+
+    expect(source).toContain('Next payout is blocked 🚨');
+    expect(source).toContain('No amount is assumed for blocked lessons. Payout execution remains fail-closed.');
+    expect(source).toContain('Known transferable total');
+    expect(helperSource()).toContain("error.code = 'PAYOUT_FUNDING_RECONCILIATION_REQUIRED'");
   });
 
   test('cron/global platform balance preview does not default omitted schoolId to school 1', async () => {

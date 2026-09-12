@@ -461,7 +461,7 @@ async function computePlatformBalance(sql, stripe, opts = {}) {
   // 2. Per-instructor payout dry-run. Filter MUST match processAllPayouts.
   const eligibleInstructors = scope.isGlobal
     ? await sql`
-        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
+        SELECT id, school_id, name, email, commission_rate, weekly_franchise_fee_pence,
                stripe_account_id, payouts_start_date
           FROM instructors
          WHERE active = TRUE
@@ -470,7 +470,7 @@ async function computePlatformBalance(sql, stripe, opts = {}) {
            AND stripe_account_id IS NOT NULL
       `
     : await sql`
-        SELECT id, name, email, commission_rate, weekly_franchise_fee_pence,
+        SELECT id, school_id, name, email, commission_rate, weekly_franchise_fee_pence,
                stripe_account_id, payouts_start_date
           FROM instructors
          WHERE active = TRUE
@@ -481,9 +481,24 @@ async function computePlatformBalance(sql, stripe, opts = {}) {
       `;
 
   const payoutPreview = [];
+  const reconciliationBlockers = [];
   let totalPayoutPence = 0;
   for (const inst of eligibleInstructors) {
-    const sim = await simulatePayoutForInstructor(sql, inst);
+    let sim;
+    try {
+      sim = await simulatePayoutForInstructor(sql, inst);
+    } catch (err) {
+      if (err?.code !== 'PAYOUT_FUNDING_RECONCILIATION_REQUIRED') throw err;
+      reconciliationBlockers.push({
+        instructor_id: Number(inst.id),
+        instructor_name: inst.name,
+        blockers: (err.blockers || []).map(blocker => ({
+          booking_id: Number(blocker.booking_id),
+          reason: blocker.reason,
+        })),
+      });
+      continue;
+    }
     if (!sim) continue;
     payoutPreview.push(sim);
     totalPayoutPence += sim.amount_pence;
@@ -622,13 +637,17 @@ async function computePlatformBalance(sql, stripe, opts = {}) {
   const refundExposurePence = Math.min(liveCreditPence, netCashInPence);
   const exactRefundExposure = await computeExactRefundExposure(sql, { schoolId: scope.schoolId });
 
-  // 5. Status — strictly binary. Friday either works or it doesn't.
-  const status = balanceAfterPayoutPence >= 0 ? 'green' : 'red';
+  // 5. Status — strictly binary. Missing authoritative evidence means Friday
+  // would fail for at least one instructor, even when known transfer totals fit.
+  const previewComplete = reconciliationBlockers.length === 0;
+  const status = previewComplete && balanceAfterPayoutPence >= 0 ? 'green' : 'red';
 
   return {
     available_pence: availablePence,
     pending_pence:   pendingPence,
     payout_preview: payoutPreview,
+    payout_preview_complete: previewComplete,
+    reconciliation_blockers: reconciliationBlockers,
     total_payout_pence: totalPayoutPence,
     balance_after_payout_pence: balanceAfterPayoutPence,
     excluded_instructors: excludedInstructors,
