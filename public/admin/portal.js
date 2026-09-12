@@ -3067,9 +3067,13 @@ async function loadPlatformBalance() {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
 
+    const reconciliationBlockers = Array.isArray(data.reconciliation_blockers)
+      ? data.reconciliation_blockers
+      : [];
+    const hasReconciliationBlockers = reconciliationBlockers.length > 0;
     const colour = data.status === 'red' ? '#991b1b' : '#166534';
     const label  = data.status === 'red'
-      ? 'Next payout would fail 🚨'
+      ? (hasReconciliationBlockers ? 'Next payout is blocked 🚨' : 'Next payout would fail 🚨')
       : 'Next payout would succeed';
     statusEl.textContent = label;
     statusEl.style.color = colour;
@@ -3080,7 +3084,7 @@ async function loadPlatformBalance() {
     // Per-instructor rows. Empty state = nothing chargeable yet this week.
     const preview = data.payout_preview || [];
     const rowsHtml = preview.length === 0
-      ? `<div style="color:#6b7280;font-style:italic;padding:8px 0;">No instructors have chargeable lessons to pay right now.</div>`
+      ? `<div style="color:#6b7280;font-style:italic;padding:8px 0;">${hasReconciliationBlockers ? 'No fully reconciled instructor payouts are ready.' : 'No instructors have chargeable lessons to pay right now.'}</div>`
       : preview.map(p => {
           const hasStripeFee = (p.stripe_fees_pence || 0) > 0;
           const commissionPct = p.gross_pence > 0
@@ -3107,6 +3111,24 @@ async function loadPlatformBalance() {
             </div>
           `;
         }).join('');
+
+    const reconciliationReason = {
+      ACTUAL_PROCESSING_FEE_EVIDENCE_MISSING: 'actual processing-fee evidence is missing',
+      IMMUTABLE_GROSS_EVIDENCE_MISSING: 'immutable gross evidence is missing',
+    };
+    const reconciliationHtml = hasReconciliationBlockers ? `
+      <div style="margin-top:14px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;">
+        <div style="font-size:0.74rem;color:#991b1b;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Reconciliation required</div>
+        ${reconciliationBlockers.map(entry => `
+          <div style="font-size:0.85rem;color:#7f1d1d;padding:2px 0;">
+            <strong>${escapeHtml(entry.instructor_name)}</strong> — ${entry.blockers.map(blocker =>
+              `booking #${Number(blocker.booking_id)}: ${escapeHtml(reconciliationReason[blocker.reason] || blocker.reason)}`
+            ).join('; ')}
+          </div>
+        `).join('')}
+        <div style="font-size:0.76rem;color:#991b1b;margin-top:6px;">No amount is assumed for blocked lessons. Payout execution remains fail-closed.</div>
+      </div>
+    ` : '';
 
     // Advisory - instructors stuck with chargeable lessons but no payout.
     const excluded = data.excluded_instructors || [];
@@ -3148,14 +3170,16 @@ async function loadPlatformBalance() {
         <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">If the cron ran right now, Stripe would transfer:</div>
         ${rowsHtml}
         <div style="display:flex;justify-content:space-between;padding:8px 0 0;margin-top:6px;border-top:2px solid #ddd;font-weight:700;">
-          <span>Total transferred</span>
+          <span>${hasReconciliationBlockers ? 'Known transferable total' : 'Total transferred'}</span>
           <span>${fmtPence(data.total_payout_pence)}</span>
         </div>
       </div>
 
+      ${reconciliationHtml}
+
       <div style="margin-top:14px;padding:14px;background:${afterBg};border-radius:6px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">Stripe balance after payout</div>
+          <div style="font-size:0.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">${hasReconciliationBlockers ? 'Stripe balance after known payouts' : 'Stripe balance after payout'}</div>
           <div style="font-size:1.5rem;font-weight:800;color:${afterFg};">${fmtPence(data.balance_after_payout_pence)}</div>
         </div>
       </div>
