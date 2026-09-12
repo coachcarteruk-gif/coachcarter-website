@@ -2,7 +2,7 @@
   "version": 1,
   "packetId": "coachcarter-production-history-v1",
   "manifestPath": "db/migrations/manifest.json",
-  "manifestChecksum": "92fd66890868f7a00a653853c917bafc7c4dd1a29975b7469135a3e581596650",
+  "manifestChecksum": "efe6f6144d1f1ef7237ae41d492f0c73069d4fce964e63341e8cabeb6359cab8",
   "ledgerDdlPath": "db/migration-governance/schema-migration-history.sql",
   "timestampPolicy": "Never infer historical timestamps. Core ledger timestamps for baseline rows are database-generated baseline-recording times; proved historical times remain inside evidence.",
   "successSemantics": "For record_kind=baseline, succeeded means the reviewed historical disposition was recorded successfully; evidenceClass states what is actually proved.",
@@ -703,6 +703,17 @@
       "evidence": {
         "source": "docs/simon-payout-2026-09-11-reconciliation-plan.md",
         "claim": "New additive migration awaiting a separately approved numbered execution; no Production execution or structural-equivalence receipt is claimed."
+      }
+    },
+    {
+      "id": "062",
+      "filename": "062_interim_v1_manual_payout_settlements.sql",
+      "checksum": "8af79a5aba226a3b87c49b9071ca4357b193060e7c17f4a470a7a6d8b7884f84",
+      "disposition": "pending_numbered",
+      "evidenceClass": "pending_numbered",
+      "evidence": {
+        "source": "docs/simon-payout-2026-09-11-reconciliation-plan.md",
+        "claim": "Numbered additive migration excluded from the historical baseline; any successful Production execution must be proved by its separate append-only ledger receipt."
       }
     }
   ],

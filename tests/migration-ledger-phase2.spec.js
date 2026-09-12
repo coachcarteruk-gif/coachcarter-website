@@ -18,9 +18,9 @@ function expectCode(fn, code) {
 }
 
 test.describe('migration ledger Phase 2 packet and gates', () => {
-  test('covers the 61 historical entries and pending numbered 061 honestly', () => {
+  test('covers the 61 historical entries and numbered 061 and 062 honestly', () => {
     const bundle = loadPacket();
-    expect(bundle.packet.entries).toHaveLength(62);
+    expect(bundle.packet.entries).toHaveLength(63);
     expect(bundle.packet.legacyMarkerEvidence).toHaveLength(10);
     expect(bundle.packet.entries.filter(entry => entry.evidenceClass === 'exact_execution').map(entry => entry.id))
       .toEqual(['035', '039', '060']);
@@ -31,6 +31,10 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
       evidenceClass: 'deferred',
     });
     expect(bundle.packet.entries.find(entry => entry.id === '061')).toMatchObject({
+      disposition: 'pending_numbered',
+      evidenceClass: 'pending_numbered',
+    });
+    expect(bundle.packet.entries.find(entry => entry.id === '062')).toMatchObject({
       disposition: 'pending_numbered',
       evidenceClass: 'pending_numbered',
     });
