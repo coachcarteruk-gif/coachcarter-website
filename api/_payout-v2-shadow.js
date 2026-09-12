@@ -199,6 +199,12 @@ async function loadPayoutV2ShadowInput({
       ,
       EXISTS (
         SELECT 1
+        FROM interim_v1_manual_payout_settlement_bookings manual_claim
+        WHERE manual_claim.booking_id = lb.id
+          AND manual_claim.school_id = lb.school_id
+      ) AS has_manual_payout_settlement_claim,
+      EXISTS (
+        SELECT 1
         FROM booking_earnings be
         WHERE be.booking_id = lb.id
           AND be.school_id = lb.school_id
@@ -377,6 +383,7 @@ async function loadPayoutV2ShadowInput({
         ...(booking.has_v1_direct_claim ? ['instructor_direct'] : []),
         ...(booking.has_v1_school_claim ? ['school'] : []),
       ],
+      existingManualPayoutSettlement: booking.has_manual_payout_settlement_claim === true,
       existingV2Earning: booking.has_v2_earning === true,
       zeroFundingClass: statusZeroFundingClass(booking),
       fundingSources: sourcesByBooking.get(Number(booking.booking_id)) || [],
@@ -454,7 +461,12 @@ async function loadCurrentV1Comparison({
         JOIN school_payouts sp
           ON sp.id = spli.school_payout_id
          AND sp.school_id = lb.school_id
-        WHERE spli.booking_id = lb.id
+         WHERE spli.booking_id = lb.id
+       )
+      AND NOT EXISTS (
+        SELECT 1 FROM interim_v1_manual_payout_settlement_bookings manual_claim
+         WHERE manual_claim.booking_id = lb.id
+           AND manual_claim.school_id = lb.school_id
       )
     ORDER BY lb.scheduled_date, lb.id
   `;

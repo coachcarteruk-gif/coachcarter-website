@@ -525,6 +525,10 @@ async function handleSchedule(req, res) {
               SELECT 1 FROM payout_line_items pli
               WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
             )
+            AND NOT EXISTS (
+              SELECT 1 FROM interim_v1_manual_payout_settlement_bookings manual_claim
+              WHERE manual_claim.booking_id = lb.id AND manual_claim.school_id = ${schoolId}
+            )
           ) AS can_report_not_delivered,
           lu.id   AS learner_id,
           lu.name AS learner_name,
@@ -582,6 +586,10 @@ async function handleSchedule(req, res) {
             AND NOT EXISTS (
               SELECT 1 FROM payout_line_items pli
               WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM interim_v1_manual_payout_settlement_bookings manual_claim
+              WHERE manual_claim.booking_id = lb.id AND manual_claim.school_id = ${schoolId}
             )
           ) AS can_report_not_delivered,
           lu.id   AS learner_id,
@@ -705,6 +713,10 @@ async function handleScheduleRange(req, res) {
               SELECT 1 FROM payout_line_items pli
               WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
             )
+            AND NOT EXISTS (
+              SELECT 1 FROM interim_v1_manual_payout_settlement_bookings manual_claim
+              WHERE manual_claim.booking_id = lb.id AND manual_claim.school_id = ${schoolId}
+            )
           ) AS can_report_not_delivered,
           COALESCE(lb.social_video_consent, false) AS social_video_consent,
           COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
@@ -762,6 +774,10 @@ async function handleScheduleRange(req, res) {
             AND NOT EXISTS (
               SELECT 1 FROM payout_line_items pli
               WHERE pli.booking_id = lb.id AND pli.school_id = ${schoolId}
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM interim_v1_manual_payout_settlement_bookings manual_claim
+              WHERE manual_claim.booking_id = lb.id AND manual_claim.school_id = ${schoolId}
             )
           ) AS can_report_not_delivered,
           COALESCE(lb.social_video_consent, false) AS social_video_consent,
@@ -2074,7 +2090,12 @@ async function handleMarkNotDelivered(req, res) {
                  SELECT 1 FROM payout_line_items pli
                   WHERE pli.booking_id = lb.id
                     AND pli.school_id = ${schoolId}
-               ) AS already_paid_out,
+                ) AS already_paid_out,
+               EXISTS (
+                 SELECT 1 FROM interim_v1_manual_payout_settlement_bookings manual_claim
+                  WHERE manual_claim.booking_id = lb.id
+                    AND manual_claim.school_id = ${schoolId}
+               ) AS manually_settled,
                lu.name AS learner_name, lu.email AS learner_email,
                i.name AS instructor_name
           FROM lesson_bookings lb
@@ -2096,7 +2117,7 @@ async function handleMarkNotDelivered(req, res) {
       if (!booking.lesson_is_past) {
         return { ok: false, status: 409, error: 'This lesson is still upcoming. Use Cancel lesson instead.' };
       }
-      if (booking.already_paid_out) {
+      if (booking.already_paid_out || booking.manually_settled) {
         return { ok: false, status: 409, error: 'This lesson has already been included in a payout. Ask an admin to correct it manually.' };
       }
 

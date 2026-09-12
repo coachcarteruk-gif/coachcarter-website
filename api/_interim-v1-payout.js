@@ -17,17 +17,20 @@ const ACTIONS = new Set([
   'interim-v1-reconcile-funding-evidence',
   'interim-v1-record-funding-basis',
   'interim-v1-record-manual-settlement-boundary',
+  'interim-v1-record-manual-payout-settlement',
   'interim-v1-approve-first-run',
   'interim-v1-process-approved-payout',
   'interim-v1-reconcile-transfer',
 ]);
 const MANUAL_BOUNDARY_CONFIRMATION = 'RECORD_INTERIM_V1_MANUAL_SETTLEMENT_BOUNDARY_CONFIRMED';
+const MANUAL_PAYOUT_SETTLEMENT_CONFIRMATION = 'RECORD_INTERIM_V1_MANUAL_PAYOUT_SETTLEMENT_CONFIRMED';
 const APPROVE_CONFIRMATION = 'APPROVE_INTERIM_V1_FIRST_RUN_CONFIRMED';
 const PROCESS_CONFIRMATION = 'PROCESS_INTERIM_V1_APPROVED_PAYOUT_CONFIRMED';
 const RECONCILE_CONFIRMATION = 'RECONCILE_INTERIM_V1_TRANSFER_CONFIRMED';
 const RECONCILE_FUNDING_CONFIRMATION = 'RECONCILE_INTERIM_V1_FUNDING_EVIDENCE_CONFIRMED';
 const RECORD_FUNDING_BASIS_CONFIRMATION = 'RECORD_INTERIM_V1_FUNDING_BASIS_CONFIRMED';
 const PLANNER_VERSION = 'interim-v1-payout/3';
+const MANUAL_PAYOUT_SETTLEMENT_SCHEMA = 'interim-v1-manual-payout-settlement/1';
 const FLEXIBLE_PAYMENT_OBJECT_PENDING_SCHEMA = 'payout-flexible-source-evidence/2';
 const FLEXIBLE_PAYMENT_OBJECT_EVIDENCE_SCHEMA = 'payout-flexible-source-evidence/3';
 const AUTHORIZED_FLEXIBLE_PAYMENT_OBJECT_SCOPE = Object.freeze({
@@ -35,6 +38,11 @@ const AUTHORIZED_FLEXIBLE_PAYMENT_OBJECT_SCOPE = Object.freeze({
   instructorId: 6,
   bookingId: 568,
   sourceId: 3,
+});
+const AUTHORIZED_MANUAL_PAYOUT_SETTLEMENT_SCOPE = Object.freeze({
+  schoolId: 1,
+  instructorId: 6,
+  boundaryId: '8716617e-0549-4d14-b9be-c2d37a1e0266',
 });
 
 class InterimV1PayoutError extends Error {
@@ -74,6 +82,96 @@ function stableJson(value) {
 
 function fingerprint(value) {
   return `sha256:${crypto.createHash('sha256').update(stableJson(value)).digest('hex')}`;
+}
+
+function manualPayoutSettlementCanonical({
+  schoolId,
+  instructorId,
+  boundaryId,
+  periodStartAt,
+  periodEndAt,
+  timeZone,
+  authoritativeEarningPence,
+  franchiseFeeDeductedPence,
+  bankPaymentPence,
+  paidLocalDate,
+  bankReference,
+  coveredBookingIds,
+  evidenceReference,
+  reason,
+}) {
+  return {
+    schema: MANUAL_PAYOUT_SETTLEMENT_SCHEMA,
+    school_id: Number(schoolId),
+    instructor_id: Number(instructorId),
+    manual_settlement_boundary_id: String(boundaryId),
+    period_start_at: instantIso(periodStartAt),
+    period_end_at: instantIso(periodEndAt),
+    time_zone: String(timeZone),
+    authoritative_earning_pence: Number(authoritativeEarningPence),
+    franchise_fee_deducted_pence: Number(franchiseFeeDeductedPence),
+    bank_payment_pence: Number(bankPaymentPence),
+    paid_local_date: dateOnly(paidLocalDate),
+    bank_reference: String(bankReference),
+    covered_booking_ids: [...coveredBookingIds].map(Number).sort((a, b) => a - b),
+    evidence_reference: String(evidenceReference),
+    reason: String(reason),
+  };
+}
+
+function validateManualPayoutSettlementInput(body) {
+  const settlementId = String(body?.settlement_id || '').trim().toLowerCase();
+  const boundaryId = String(body?.manual_settlement_boundary_id || '').trim().toLowerCase();
+  const idempotencyKey = String(body?.idempotency_key || '').trim();
+  const authoritativeEarningPence = Number(body?.authoritative_earning_pence);
+  const franchiseFeeDeductedPence = Number(body?.franchise_fee_deducted_pence);
+  const bankPaymentPence = Number(body?.bank_payment_pence);
+  const bankReference = String(body?.bank_reference || '').trim();
+  const evidenceReference = String(body?.evidence_reference || '').trim();
+  const reason = String(body?.reason || '').trim();
+  const paidLocalDate = dateOnly(body?.paid_local_date);
+  const suppliedBookingIds = Array.isArray(body?.covered_booking_ids)
+    ? body.covered_booking_ids.map(Number)
+    : [];
+  const coveredBookingIds = [...new Set(suppliedBookingIds)].sort((a, b) => a - b);
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (!uuidPattern.test(settlementId) || !uuidPattern.test(boundaryId)) {
+    throw new InterimV1PayoutError(400, 'INVALID_MANUAL_PAYOUT_SETTLEMENT_IDENTITY', 'Valid settlement and boundary UUIDs are required');
+  }
+  if (idempotencyKey !== `cc-interim-v1-manual-settlement-${settlementId}`) {
+    throw new InterimV1PayoutError(400, 'INVALID_MANUAL_PAYOUT_SETTLEMENT_IDEMPOTENCY', 'The idempotency key must be derived from settlement_id');
+  }
+  if (![authoritativeEarningPence, franchiseFeeDeductedPence, bankPaymentPence]
+    .every(Number.isSafeInteger)
+      || authoritativeEarningPence <= 0
+      || franchiseFeeDeductedPence < 0
+      || bankPaymentPence <= 0
+      || authoritativeEarningPence - franchiseFeeDeductedPence !== bankPaymentPence) {
+    throw new InterimV1PayoutError(400, 'INVALID_MANUAL_PAYOUT_SETTLEMENT_ARITHMETIC', 'Settlement arithmetic must reconcile exactly in integer pence');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidLocalDate) || !bankReference || !evidenceReference || !reason) {
+    throw new InterimV1PayoutError(400, 'MANUAL_PAYOUT_SETTLEMENT_EVIDENCE_REQUIRED', 'Paid date, bank reference, evidence reference and reason are required');
+  }
+  if (!suppliedBookingIds.length || suppliedBookingIds.length !== coveredBookingIds.length
+      || !coveredBookingIds.every((id) => Number.isSafeInteger(id) && id > 0)) {
+    throw new InterimV1PayoutError(400, 'INVALID_MANUAL_PAYOUT_SETTLEMENT_BOOKINGS', 'Covered booking IDs must be a non-empty unique positive-integer list');
+  }
+  return {
+    settlementId, boundaryId, idempotencyKey, authoritativeEarningPence,
+    franchiseFeeDeductedPence, bankPaymentPence, paidLocalDate, bankReference,
+    evidenceReference, reason, coveredBookingIds,
+    settlementFingerprint: String(body?.settlement_fingerprint || '').trim(),
+  };
+}
+
+function assertAuthorizedManualPayoutSettlementScope({ schoolId, instructorId, boundaryId }) {
+  const expected = AUTHORIZED_MANUAL_PAYOUT_SETTLEMENT_SCOPE;
+  if (Number(schoolId) !== expected.schoolId
+      || Number(instructorId) !== expected.instructorId
+      || String(boundaryId).toLowerCase() !== expected.boundaryId) {
+    throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_SCOPE_FORBIDDEN', 'Manual payout settlement recording is not authorized for this scope');
+  }
+  return true;
 }
 
 function dateOnly(value) {
@@ -273,6 +371,7 @@ function allocateInstructorAmounts(included, instructor) {
 function buildPreviewFromRows(instructor, rows, now = new Date()) {
   const included = [];
   const excluded = [];
+  const manuallySettled = [];
   for (const row of rows) {
     const directObservation = row.direct_observation_status
       && row.direct_observation_json && typeof row.direct_observation_json === 'object'
@@ -302,12 +401,33 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
       direct_evidence_observation_id: directObservation.evidence_id || null,
       audited_funding_basis_id: row.audited_basis_id || null,
     };
-    if (classification.eligible) included.push({ ...identity, ...classification });
+    if (row.manual_payout_settlement_id) {
+      manuallySettled.push({
+        ...identity,
+        settlement_id: row.manual_payout_settlement_id,
+        source_diagnostic_reason: classification.reason || null,
+        source_diagnostic_eligible: classification.eligible === true,
+      });
+    } else if (classification.eligible) included.push({ ...identity, ...classification });
     else excluded.push({ ...identity, reason: classification.reason });
   }
   included.sort((a, b) => a.booking_id - b.booking_id);
   excluded.sort((a, b) => a.booking_id - b.booking_id);
+  manuallySettled.sort((a, b) => a.booking_id - b.booking_id);
   const totals = allocateInstructorAmounts(included, instructor);
+  const settlementIntervalRows = instructor.manual_payout_settlement_id
+    ? rows.filter((row) => {
+      const endsAt = instantIso(row.booking_ends_at);
+      return endsAt >= instantIso(instructor.manual_payout_period_start_at)
+        && endsAt < instantIso(instructor.manual_payout_period_end_at);
+    })
+    : [];
+  const manualSettlementComplete = Boolean(instructor.manual_payout_settlement_id)
+    && manuallySettled.length === Number(instructor.manual_payout_covered_booking_count)
+    && settlementIntervalRows.length === manuallySettled.length
+    && settlementIntervalRows.every((row) => (
+      row.manual_payout_settlement_id === instructor.manual_payout_settlement_id
+    ));
   const blockers = [];
   if (!instructor.control_id) blockers.push('INTERIM_V1_CONTROL_MISSING');
   if (!instructor.stripe_account_id) blockers.push('CONNECT_ACCOUNT_MISSING');
@@ -320,9 +440,34 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
     'TEST_ACCOUNT', 'ALREADY_CLAIMED',
   ].includes(line.reason));
   if (unresolved.length) blockers.push('UNRECONCILED_PAYABLE_LESSONS');
-  if (totals.unresolved_total_basis) blockers.push('FRANCHISE_TOTAL_BASIS_UNAVAILABLE');
-  if (!included.length) blockers.push('NO_ELIGIBLE_LESSONS');
-  if (totals.insufficient_week) blockers.push('INSUFFICIENT_WEEK_MANUAL_HANDLING');
+  if (instructor.manual_payout_settlement_id && !manualSettlementComplete) {
+    blockers.push('MANUAL_PAYOUT_SETTLEMENT_INCOMPLETE');
+  }
+  if (!manualSettlementComplete) {
+    if (totals.unresolved_total_basis) blockers.push('FRANCHISE_TOTAL_BASIS_UNAVAILABLE');
+    if (!included.length) blockers.push('NO_ELIGIBLE_LESSONS');
+    if (totals.insufficient_week) blockers.push('INSUFFICIENT_WEEK_MANUAL_HANDLING');
+  }
+  const manualPayoutSettlement = instructor.manual_payout_settlement_id ? {
+    id: instructor.manual_payout_settlement_id,
+    status: manualSettlementComplete ? 'complete' : 'incomplete',
+    period_start_at: instantIso(instructor.manual_payout_period_start_at),
+    period_end_at: instantIso(instructor.manual_payout_period_end_at),
+    time_zone: instructor.manual_payout_time_zone,
+    authoritative_earning_pence: Number(instructor.manual_payout_authoritative_earning_pence),
+    franchise_fee_deducted_pence: Number(instructor.manual_payout_franchise_fee_pence),
+    bank_payment_pence: Number(instructor.manual_payout_bank_payment_pence),
+    currency: instructor.manual_payout_currency,
+    paid_local_date: dateOnly(instructor.manual_payout_paid_local_date),
+    bank_reference: instructor.manual_payout_bank_reference,
+    covered_booking_count: Number(instructor.manual_payout_covered_booking_count),
+    evidence_reference: instructor.manual_payout_evidence_reference,
+    reason: instructor.manual_payout_reason,
+    idempotency_key: instructor.manual_payout_idempotency_key,
+    settlement_fingerprint: instructor.manual_payout_settlement_fingerprint,
+    created_at: instantIso(instructor.manual_payout_created_at),
+    remaining_payable_pence: manualSettlementComplete ? 0 : null,
+  } : null;
   const canonical = {
     planner_version: PLANNER_VERSION,
     school_id: Number(instructor.school_id),
@@ -334,7 +479,7 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
       time_zone: instructor.manual_settlement_time_zone,
     } : null,
     stripe_account_id: instructor.stripe_account_id || null,
-    weekly_franchise_fee_pence: totals.weekly_franchise_fee_pence,
+    weekly_franchise_fee_pence: manualSettlementComplete ? 0 : totals.weekly_franchise_fee_pence,
     commission_rate: totals.commission_rate,
     included: totals.lines.map((line) => ({
       booking_id: line.booking_id,
@@ -353,6 +498,13 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
       funding_lines: line.funding_lines,
     })),
     excluded: excluded.map((line) => ({ booking_id: line.booking_id, reason: line.reason })),
+    manually_settled: manuallySettled.map((line) => ({
+      booking_id: line.booking_id,
+      settlement_id: line.settlement_id,
+      source_diagnostic_reason: line.source_diagnostic_reason,
+      source_diagnostic_eligible: line.source_diagnostic_eligible,
+    })),
+    manual_payout_settlement: manualPayoutSettlement,
     proposed_transfer_pence: totals.proposed_transfer_pence,
     blockers,
   };
@@ -376,15 +528,21 @@ function buildPreviewFromRows(instructor, rows, now = new Date()) {
     } : null,
     included: totals.lines,
     excluded,
+    manually_settled: manuallySettled,
+    manual_payout_settlement: manualPayoutSettlement,
     totals: {
       gross_pence: totals.gross_pence,
       stripe_fees_pence: totals.stripe_fees_pence,
-      weekly_franchise_fee_pence: totals.weekly_franchise_fee_pence,
+      weekly_franchise_fee_pence: manualSettlementComplete ? 0 : totals.weekly_franchise_fee_pence,
       commission_rate: totals.commission_rate,
       proposed_transfer_pence: totals.proposed_transfer_pence,
+      ...(manualPayoutSettlement ? {
+        manually_settled_bank_payment_pence: manualPayoutSettlement.bank_payment_pence,
+        remaining_payable_pence: manualPayoutSettlement.remaining_payable_pence,
+      } : {}),
     },
     blockers,
-    ready_for_approval: blockers.length === 0,
+    ready_for_approval: !manualSettlementComplete && blockers.length === 0,
     preview_fingerprint: fingerprint(canonical),
   };
 }
@@ -398,12 +556,32 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
            mb.first_system_period_end_at, mb.time_zone AS manual_settlement_time_zone,
            mb.reason AS manual_settlement_reason,
            mb.evidence_reference AS manual_settlement_evidence_reference,
-           mb.created_at AS manual_settlement_created_at
+           mb.created_at AS manual_settlement_created_at,
+           settlement.id AS manual_payout_settlement_id,
+           settlement.period_start_at AS manual_payout_period_start_at,
+           settlement.period_end_at AS manual_payout_period_end_at,
+           settlement.time_zone AS manual_payout_time_zone,
+           settlement.authoritative_earning_pence AS manual_payout_authoritative_earning_pence,
+           settlement.franchise_fee_deducted_pence AS manual_payout_franchise_fee_pence,
+           settlement.bank_payment_pence AS manual_payout_bank_payment_pence,
+           settlement.currency AS manual_payout_currency,
+           settlement.paid_local_date AS manual_payout_paid_local_date,
+           settlement.bank_reference AS manual_payout_bank_reference,
+           settlement.covered_booking_count AS manual_payout_covered_booking_count,
+           settlement.evidence_reference AS manual_payout_evidence_reference,
+           settlement.reason AS manual_payout_reason,
+           settlement.idempotency_key AS manual_payout_idempotency_key,
+           settlement.settlement_fingerprint AS manual_payout_settlement_fingerprint,
+           settlement.created_at AS manual_payout_created_at
       FROM instructors i
       LEFT JOIN interim_v1_instructor_controls c
         ON c.school_id = i.school_id AND c.instructor_id = i.id
       LEFT JOIN interim_v1_manual_settlement_boundaries mb
         ON mb.school_id = i.school_id AND mb.instructor_id = i.id
+      LEFT JOIN interim_v1_manual_payout_settlements settlement
+        ON settlement.school_id = i.school_id
+       AND settlement.instructor_id = i.id
+       AND settlement.manual_settlement_boundary_id = mb.id
      WHERE i.id = ${instructorId} AND i.school_id = ${schoolId}
      LIMIT 1
   `;
@@ -435,6 +613,7 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
            ct.stripe_session_id AS ct_session_id, ct.stripe_payment_intent_id AS ct_payment_intent_id,
            ct.instructor_id AS ct_instructor_id, ct.learner_id AS ct_learner_id,
            pli.payout_id AS claimed_payout_id,
+           manual_claim.settlement_id AS manual_payout_settlement_id,
            basis.id AS audited_basis_id, basis.funding_class, basis.value_semantics,
            basis.payment_processor, basis.gross_pence, basis.actual_processing_fee_pence,
            basis.net_pence, basis.final_instructor_payable_pence,
@@ -469,6 +648,10 @@ async function loadInterimV1Preview(sql, schoolId, instructorId, now = new Date(
       ) direct_observation ON TRUE
       LEFT JOIN payout_line_items pli
         ON pli.booking_id = lb.id AND pli.school_id = lb.school_id
+      LEFT JOIN interim_v1_manual_payout_settlement_bookings manual_claim
+        ON manual_claim.booking_id = lb.id
+       AND manual_claim.school_id = lb.school_id
+       AND manual_claim.instructor_id = lb.instructor_id
       LEFT JOIN LATERAL (
         SELECT event.*
           FROM payout_funding_basis_events event
@@ -1464,6 +1647,231 @@ function createInterimV1PayoutHandler({
         return true;
       }
 
+      if (action === 'interim-v1-record-manual-payout-settlement') {
+        if (req.body?.operator_go !== MANUAL_PAYOUT_SETTLEMENT_CONFIRMATION) {
+          throw new InterimV1PayoutError(400, 'OPERATOR_CONFIRMATION_REQUIRED', `operator_go must equal ${MANUAL_PAYOUT_SETTLEMENT_CONFIRMATION}`);
+        }
+        const input = validateManualPayoutSettlementInput(req.body || {});
+        assertAuthorizedManualPayoutSettlementScope({
+          schoolId, instructorId, boundaryId: input.boundaryId,
+        });
+        const result = await runTransaction(async (txSql) => {
+          await txSql`SELECT pg_advisory_xact_lock(${schoolId}, ${instructorId})`;
+          const [scope] = await txSql`
+            SELECT i.id, i.school_id, i.payouts_paused, c.id AS control_id,
+                   mb.id AS boundary_id, mb.settled_before_at,
+                   mb.first_system_period_end_at, mb.time_zone
+              FROM instructors i
+              JOIN interim_v1_instructor_controls c
+                ON c.school_id = i.school_id AND c.instructor_id = i.id
+              JOIN interim_v1_manual_settlement_boundaries mb
+                ON mb.school_id = i.school_id AND mb.instructor_id = i.id
+             WHERE i.id = ${instructorId} AND i.school_id = ${schoolId}
+             FOR UPDATE OF i
+          `;
+          if (!scope) throw new InterimV1PayoutError(404, 'CONTROLLED_SETTLEMENT_SCOPE_NOT_FOUND', 'The controlled instructor and boundary were not found');
+          if (scope.payouts_paused !== true) throw new InterimV1PayoutError(409, 'INTERIM_V1_PAUSE_GUARD_REQUIRED', 'Instructor must remain paused');
+          if (scope.boundary_id !== input.boundaryId) {
+            throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_BOUNDARY_MISMATCH', 'The supplied boundary is not the immutable controlled boundary');
+          }
+
+          const canonical = manualPayoutSettlementCanonical({
+            schoolId, instructorId, boundaryId: scope.boundary_id,
+            periodStartAt: scope.settled_before_at,
+            periodEndAt: scope.first_system_period_end_at,
+            timeZone: scope.time_zone,
+            authoritativeEarningPence: input.authoritativeEarningPence,
+            franchiseFeeDeductedPence: input.franchiseFeeDeductedPence,
+            bankPaymentPence: input.bankPaymentPence,
+            paidLocalDate: input.paidLocalDate,
+            bankReference: input.bankReference,
+            coveredBookingIds: input.coveredBookingIds,
+            evidenceReference: input.evidenceReference,
+            reason: input.reason,
+          });
+          const settlementFingerprint = fingerprint(canonical);
+          if (input.settlementFingerprint !== settlementFingerprint) {
+            throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_FINGERPRINT_MISMATCH', 'The settlement fingerprint does not match the locked interval and evidence');
+          }
+
+          // The instructor-scoped advisory lock above serializes this identity.
+          // Keep this a plain read: the append-only runtime has SELECT/INSERT but
+          // deliberately no UPDATE privilege, which PostgreSQL row locks require.
+          const [replay] = await txSql`
+            SELECT * FROM interim_v1_manual_payout_settlements
+             WHERE school_id = ${schoolId}
+               AND (id = ${input.settlementId} OR idempotency_key = ${input.idempotencyKey})
+             LIMIT 1
+          `;
+          if (replay) {
+            const claims = await txSql`
+              SELECT booking_id FROM interim_v1_manual_payout_settlement_bookings
+               WHERE settlement_id = ${replay.id} AND school_id = ${schoolId}
+               ORDER BY booking_id
+            `;
+            const replayBookingIds = claims.map((claim) => Number(claim.booking_id));
+            if (replay.id !== input.settlementId
+                || replay.idempotency_key !== input.idempotencyKey
+                || replay.settlement_fingerprint !== settlementFingerprint
+                || stableJson(replayBookingIds) !== stableJson(input.coveredBookingIds)) {
+              throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_IDEMPOTENCY_MISMATCH', 'The settlement identity is already bound to different evidence');
+            }
+            const replayPreview = await loadInterimV1Preview(txSql, schoolId, instructorId);
+            if (replayPreview.instructor.payouts_paused !== true
+                || replayPreview.manual_payout_settlement?.status !== 'complete'
+                || replayPreview.totals.remaining_payable_pence !== 0
+                || replayPreview.ready_for_approval !== false) {
+              throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_POSTFLIGHT_FAILED', 'The existing settlement does not produce the required closed preview');
+            }
+            return { created: false, settlement: replay, preview: replayPreview };
+          }
+
+          const [priorSettlement] = await txSql`
+            SELECT id FROM interim_v1_manual_payout_settlements
+             WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+               AND period_start_at = ${instantIso(scope.settled_before_at)}::timestamptz
+               AND period_end_at = ${instantIso(scope.first_system_period_end_at)}::timestamptz
+             LIMIT 1
+          `;
+          if (priorSettlement) throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_ALREADY_RECORDED', 'This exact interval already has a different settlement record');
+
+          const [movement] = await txSql`
+            SELECT
+              EXISTS (SELECT 1 FROM interim_v1_payout_approvals
+                       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}) AS has_approval,
+              EXISTS (SELECT 1 FROM interim_v1_transfer_intents
+                       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}) AS has_transfer
+          `;
+          if (movement?.has_approval || movement?.has_transfer) {
+            throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_MOVEMENT_ALREADY_EXISTS', 'An approval or transfer identity already exists for the controlled instructor');
+          }
+
+          const bookings = await txSql`
+            SELECT lb.id AS booking_id,
+                   ((lb.scheduled_date + lb.end_time) AT TIME ZONE ${scope.time_zone}) AS booking_ends_at,
+                   pli.id AS direct_claim_id,
+                   school_claim.id AS school_claim_id,
+                   earning.id AS v2_earning_id,
+                   existing_manual.settlement_id AS manual_settlement_id
+              FROM lesson_bookings lb
+              JOIN learner_users lu
+                ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
+              LEFT JOIN payout_line_items pli
+                ON pli.school_id = lb.school_id AND pli.booking_id = lb.id
+              LEFT JOIN LATERAL (
+                SELECT spli.id
+                  FROM school_payout_line_items spli
+                  JOIN school_payouts sp
+                    ON sp.id = spli.school_payout_id AND sp.school_id = lb.school_id
+                 WHERE spli.booking_id = lb.id
+                 LIMIT 1
+              ) school_claim ON TRUE
+              LEFT JOIN booking_earnings earning
+                ON earning.school_id = lb.school_id AND earning.booking_id = lb.id
+              LEFT JOIN interim_v1_manual_payout_settlement_bookings existing_manual
+                ON existing_manual.school_id = lb.school_id AND existing_manual.booking_id = lb.id
+             WHERE lb.school_id = ${schoolId}
+               AND lb.instructor_id = ${instructorId}
+               AND lb.status = 'chargeable'
+               AND COALESCE(lu.is_test_account, FALSE) = FALSE
+               AND ((lb.scheduled_date + lb.end_time) AT TIME ZONE ${scope.time_zone})
+                     >= ${instantIso(scope.settled_before_at)}::timestamptz
+               AND ((lb.scheduled_date + lb.end_time) AT TIME ZONE ${scope.time_zone})
+                     < ${instantIso(scope.first_system_period_end_at)}::timestamptz
+             ORDER BY lb.id
+             FOR UPDATE OF lb
+          `;
+          const actualBookingIds = bookings.map((booking) => Number(booking.booking_id));
+          if (stableJson(actualBookingIds) !== stableJson(input.coveredBookingIds)) {
+            throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_BOOKING_SET_CHANGED', 'The complete chargeable booking set no longer matches the reviewed claim set');
+          }
+          // Migration 062's SECURITY DEFINER claim trigger is the authoritative
+          // guard for the restricted runtime's unreadable Stripe-launch ledger.
+          if (bookings.some((booking) => (
+            booking.direct_claim_id || booking.school_claim_id
+              || booking.v2_earning_id
+              || booking.manual_settlement_id
+          ))) {
+            throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_BOOKING_ALREADY_CLAIMED', 'A covered booking already has an accounting claim');
+          }
+
+          const [created] = await txSql`
+            INSERT INTO interim_v1_manual_payout_settlements (
+              id, school_id, instructor_id, manual_settlement_boundary_id,
+              period_start_at, period_end_at, time_zone,
+              authoritative_earning_pence, franchise_fee_deducted_pence,
+              bank_payment_pence, currency, paid_local_date, bank_reference,
+              covered_booking_count, evidence_reference, reason,
+              idempotency_key, settlement_fingerprint, created_by_admin_id
+            ) VALUES (
+              ${input.settlementId}, ${schoolId}, ${instructorId}, ${scope.boundary_id},
+              ${instantIso(scope.settled_before_at)}::timestamptz,
+              ${instantIso(scope.first_system_period_end_at)}::timestamptz,
+              ${scope.time_zone}, ${input.authoritativeEarningPence},
+              ${input.franchiseFeeDeductedPence}, ${input.bankPaymentPence}, 'gbp',
+              ${input.paidLocalDate}::date, ${input.bankReference},
+              ${bookings.length}, ${input.evidenceReference}, ${input.reason},
+              ${input.idempotencyKey}, ${settlementFingerprint}, ${admin.id}
+            ) RETURNING *
+          `;
+          for (const booking of bookings) {
+            await txSql`
+              INSERT INTO interim_v1_manual_payout_settlement_bookings (
+                settlement_id, school_id, instructor_id, booking_id, booking_ends_at
+              ) VALUES (${created.id}, ${schoolId}, ${instructorId}, ${booking.booking_id},
+                ${instantIso(booking.booking_ends_at)}::timestamptz)
+            `;
+          }
+          await logAuditRequired(txSql, {
+            adminId: admin.id, adminEmail: admin.email,
+            action: 'payout.interim_v1_manual_payout_settlement_recorded',
+            targetType: 'instructor', targetId: instructorId, schoolId, req,
+            details: {
+              settlement_id: created.id,
+              manual_settlement_boundary_id: scope.boundary_id,
+              period_start_at: instantIso(scope.settled_before_at),
+              period_end_at: instantIso(scope.first_system_period_end_at),
+              authoritative_earning_pence: input.authoritativeEarningPence,
+              franchise_fee_deducted_pence: input.franchiseFeeDeductedPence,
+              bank_payment_pence: input.bankPaymentPence,
+              currency: 'gbp', paid_local_date: input.paidLocalDate,
+              bank_reference: input.bankReference,
+              covered_booking_ids: input.coveredBookingIds,
+              evidence_reference: input.evidenceReference, reason: input.reason,
+              idempotency_key: input.idempotencyKey,
+              settlement_fingerprint: settlementFingerprint,
+              payouts_paused: true, approval_created: false, payout_created: false,
+              payout_line_created: false, transfer_created: false, refund_created: false,
+              funding_evidence_changed: false, funding_basis_changed: false,
+            },
+          });
+          const postflight = await loadInterimV1Preview(txSql, schoolId, instructorId);
+          if (postflight.instructor.payouts_paused !== true
+              || postflight.manual_payout_settlement?.status !== 'complete'
+              || postflight.manually_settled.length !== bookings.length
+              || postflight.totals.proposed_transfer_pence !== 0
+              || postflight.totals.remaining_payable_pence !== 0
+              || postflight.ready_for_approval !== false) {
+            throw new InterimV1PayoutError(409, 'MANUAL_PAYOUT_SETTLEMENT_POSTFLIGHT_FAILED', 'The append-only write did not produce the required closed preview');
+          }
+          return { created: true, settlement: created, preview: postflight };
+        });
+        res.status(result.created ? 201 : 200).json({
+          ok: true, created: result.created,
+          settlement: {
+            id: result.settlement.id,
+            idempotency_key: result.settlement.idempotency_key,
+            settlement_fingerprint: result.settlement.settlement_fingerprint,
+            covered_booking_count: Number(result.settlement.covered_booking_count),
+          },
+          preview: result.preview,
+          payouts_paused: true, approval_created: false, payout_created: false,
+          payout_line_created: false, transfer_created: false, refund_created: false,
+          stripe_called: false,
+        });
+        return true;
+      }
+
       if (action === 'interim-v1-approve-first-run') {
         if (req.body?.operator_go !== APPROVE_CONFIRMATION) throw new InterimV1PayoutError(400, 'OPERATOR_CONFIRMATION_REQUIRED', `operator_go must equal ${APPROVE_CONFIRMATION}`);
         const reason = String(req.body?.reason || '').trim();
@@ -1656,16 +2064,18 @@ function createInterimV1PayoutHandler({
 }
 
 module.exports = {
-  ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION,
+  ACTIONS, MANUAL_BOUNDARY_CONFIRMATION, MANUAL_PAYOUT_SETTLEMENT_CONFIRMATION,
+  MANUAL_PAYOUT_SETTLEMENT_SCHEMA, APPROVE_CONFIRMATION, PROCESS_CONFIRMATION,
   RECONCILE_CONFIRMATION, RECONCILE_FUNDING_CONFIRMATION, RECORD_FUNDING_BASIS_CONFIRMATION,
   InterimV1PayoutError, allocateInstructorAmounts, buildPreviewFromRows,
+  assertAuthorizedManualPayoutSettlementScope,
   assertAuthorizedFlexiblePaymentObjectScope, assertExpectedFlexibleSourceScope,
   classifyFundingRow, createInterimV1PayoutHandler,
-  evidenceRecord, fingerprint,
+  evidenceRecord, fingerprint, manualPayoutSettlementCanonical,
   payoutLinePersistenceProjection,
   directEvidenceObservation, flexibleEvidenceObservation, recordDirectEvidenceObservation,
   recordFlexibleSourceEvidence, validateAuditedFundingBasis,
   interimV1PayoutFailureResponse,
   loadInterimV1Preview, recordInterimV1FundingEvidence, stableJson,
-  validateManualBoundaryDates, validateTransfer,
+  validateManualBoundaryDates, validateManualPayoutSettlementInput, validateTransfer,
 };

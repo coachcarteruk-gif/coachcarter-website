@@ -137,6 +137,12 @@ async function getEligibleBookings(
      WHERE lb.instructor_id = ${instructorId}
        AND (${schoolId}::int IS NULL OR lb.school_id = ${schoolId}::int)
        AND pli.id IS NULL
+       AND NOT EXISTS (
+         SELECT 1
+           FROM interim_v1_manual_payout_settlement_bookings manual_claim
+          WHERE manual_claim.school_id = lb.school_id
+            AND manual_claim.booking_id = lb.id
+       )
        AND (${payoutsStartDate}::date IS NULL OR lb.scheduled_date >= ${payoutsStartDate}::date)
        AND (${periodStartAt}::timestamptz IS NULL
          OR ((lb.scheduled_date + lb.end_time) AT TIME ZONE 'Europe/London') >= ${periodStartAt}::timestamptz)
@@ -549,6 +555,12 @@ async function getEligibleSchoolBookings(sql, schoolId) {
        AND lb.status = ${CHARGEABLE}
        AND NOT EXISTS (
          SELECT 1 FROM school_payout_line_items spli WHERE spli.booking_id = lb.id
+       )
+       AND NOT EXISTS (
+         SELECT 1
+           FROM interim_v1_manual_payout_settlement_bookings manual_claim
+          WHERE manual_claim.school_id = lb.school_id
+            AND manual_claim.booking_id = lb.id
        )
      ORDER BY lb.scheduled_date ASC
   `;
