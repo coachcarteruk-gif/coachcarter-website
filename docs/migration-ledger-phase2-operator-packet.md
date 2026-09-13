@@ -1,14 +1,17 @@
-# Migration ledger Phase 2 operator approval packet
+# Migration ledger Phase 2 installation and handover record
 
-Status: **repository rehearsal complete; production operation not approved**
+Status: **production baseline installed; numbered receipts current through 062**
 
-Date prepared: 2026-09-09
+Date prepared: 2026-09-09; status reconciled read-only on 2026-09-13
 
-This packet covers only installation of `schema_migration_history` and the
-reviewed 61-entry historical disposition and records migration 061 honestly as
-pending numbered work. It does not approve migration 041 or 061, any numbered
-or aggregate migration, any endpoint change, any production
-configuration change, or any financial/data mutation.
+This packet retains the installation contract for `schema_migration_history`
+and the exact immutable 62-entry artifact reviewed for installation: the 61
+historical identities through 060 plus 061 recorded only as pending numbered
+work. The production ledger is installed with 60 baseline receipts; migrations
+061 and 062 have separate successful numbered execution receipts. This record
+does not approve migration 041, any future numbered or aggregate migration, any
+endpoint change, any production configuration change, or any financial/data
+mutation.
 
 ## Reviewed artifacts
 
@@ -22,16 +25,20 @@ configuration change, or any financial/data mutation.
   `tests/migration-ledger-phase2.integration.spec.js`
 
 Before any future operation, record the reviewed Git commit, the DDL checksum,
-the baseline-packet checksum, the manifest checksum, the operator, reviewer,
-maintenance window, and exact target fingerprint. Any later repository change
-to one of these artifacts voids the review until the focused tests and
-rehearsal are repeated.
+the immutable baseline-packet checksum, the current manifest checksum, the
+operator, reviewer, maintenance window, and exact target fingerprint. A future
+numbered migration extends the manifest and ledger without changing the
+historical packet. A change to any historical entry, the DDL, or the packet
+voids the review until the focused tests and rehearsal are repeated.
 
 ## Baseline meaning
 
-The packet contains all 62 manifest identities, including `026a`, `026b`, and
-pending numbered 061. It creates 60 successful `record_kind=baseline` receipts
-and creates no row for 041 or 061.
+The immutable packet contains 62 manifest identities: the 61 historical
+identities through 060, including `026a`, `026b`, and deferred 041, plus 061 as
+pending numbered work. It creates 60 successful `record_kind=baseline`
+receipts and creates no row for 041 or 061. Migration 061's later execution and
+migration 062 are represented by append-only numbered execution receipts; 062
+and future numbered migrations are intentionally absent from this packet.
 
 The ledger is global migration infrastructure, not tenant-owned application
 data, so it intentionally has no `school_id`. The DDL grants no access to the
@@ -48,8 +55,10 @@ owner performs ledger operations.
   file execution.
 - 041 is `deferred`; it is omitted from the ledger rather than recorded as a
   false success.
-- 061 is `pending_numbered`; it is omitted from the historical baseline and
-  can run only through the separately approved numbered-migration gate.
+- 061 and 062 were applied through separately approved numbered-migration
+  operations and now have successful checksum-matched execution receipts.
+- every future `execution=numbered` entry remains outside this packet and can
+  run only through its own separately approved numbered-migration gate.
 - the ten legacy marker keys are exact evidence. Their real non-null
   `migration_markers.completed_at` values are read from the target during
   preflight and stored in the baseline context. The checked-in packet contains
@@ -90,7 +99,7 @@ npm.cmd test -- tests/migration-governance.spec.js tests/migration-ledger-phase2
 Expected results:
 
 ```text
-Migration check: ok=true, migrations=62, collisions.026=[026a,026b]
+Migration check: ok=true, migrations=63, collisions.026=[026a,026b]
 Focused unit tests: all passed
 ```
 
@@ -117,13 +126,12 @@ Expected result:
 The test must prove rollback, 60-row installation, idempotency, append-only
 guards, sanitized failed-attempt handling, duplicate-success enforcement,
 checksum mismatch rejection, ordering-gap rejection, Phase 1 planner
-compatibility, and final disposable cleanup.
+compatibility with pending numbered 061/062, and final disposable cleanup.
 
 ## Production preflight — read-only
 
-These commands are documentation only. Running them against production still
-requires separate approval to access the production target, even though this
-mode opens a read-only transaction.
+The command below opens a read-only transaction. Production access still needs
+an explicit operational reason and approved direct target.
 
 After securely injecting the approved direct URL into the process environment:
 
@@ -131,24 +139,24 @@ After securely injecting the approved direct URL into the process environment:
 npm.cmd run migrations:ledger:preflight
 ```
 
-No argument is also read-only preflight; `--dry-run` is an alias. Expected
-sanitized JSON shape before installation:
+No argument is also read-only preflight; `--dry-run` is an alias. Current
+sanitized production shape after migrations 061 and 062:
 
 ```json
 {
   "ok": true,
   "mode": "preflight",
   "targetFingerprint": "<64 lowercase hex characters>",
-  "ledger": "absent",
-  "manifestEntries": 62,
-  "baselineRows": 0,
-  "pendingNumbered": ["061"],
+  "ledger": "installed",
+  "manifestEntries": 63,
+  "baselineRows": 60,
+  "pendingNumbered": [],
   "deferred": ["041"],
   "exactExecutionEvidence": ["035", "039", "060"],
   "legacyMarkers": ["<ten key/timestamp objects from production>"],
   "packetChecksum": "<64 lowercase hex characters>",
   "ledgerDdlChecksum": "<64 lowercase hex characters>",
-  "next": "READY_FOR_SEPARATE_INSTALL_APPROVAL"
+  "next": "ALREADY_INSTALLED_AND_VALID"
 }
 ```
 
@@ -168,9 +176,9 @@ Stop unless:
 Retain the sanitized preflight output. Do not retain private database logs in
 the repository.
 
-## Mandatory Neon snapshot and approval gate
+## Retained installation approval and snapshot contract
 
-Immediately before the future production transaction, create a named snapshot
+Immediately before any future baseline installation on a new target, create a named snapshot
 from the root `main` branch and retain its returned `snap-...` identifier. Neon
 documents snapshot creation and restore at
 <https://neon.com/docs/ai/ai-database-versioning>. Confirm the snapshot is
@@ -191,9 +199,9 @@ $env:MIGRATION_LEDGER_NEON_SNAPSHOT='<verified-snap-id>'
 These variables are necessary gates, not approval by themselves. The human
 approval record must separately identify the exact values and scope.
 
-## Production install command and expected output
+## Retained baseline install command and expected output
 
-The separately approved command is:
+The separately approved command used for a new target is:
 
 ```powershell
 npm.cmd run migrations:ledger:install
@@ -232,7 +240,7 @@ must return:
 
 Any other output is an incident boundary. Do not retry with changed inputs.
 
-## Production postflight
+## Current production postflight
 
 Run immediately after a successful commit:
 
@@ -247,12 +255,12 @@ Expected output:
   "ok": true,
   "mode": "postflight",
   "targetFingerprint": "<the approved fingerprint>",
-  "rows": 60,
+  "rows": 62,
   "exactExecutionEvidence": ["035", "039", "060"],
   "structuralEquivalence": 55,
   "intentionallyRemoved": ["014", "021"],
   "deferred": ["041"],
-  "pendingNumbered": ["061"],
+  "pendingNumbered": [],
   "status": "BASELINE_INSTALLED_AND_VALID"
 }
 ```
@@ -264,8 +272,8 @@ $env:POSTGRES_URL_NON_POOLING=$env:MIGRATION_LEDGER_DIRECT_URL
 node scripts/migration-runner.js --status
 ```
 
-Expected values are `applied: 60` and `pending: ["061"]`. This does not run
-the pending migration. Applying 061 remains a separate authorization boundary.
+Current expected values are `applied: 62` and `pending: []`. Status mode is
+read-only and does not run a migration.
 
 Retain the install and postflight outputs with the approval record, snapshot
 ID, commit, reviewer, operator, and maintenance-window timestamps.
