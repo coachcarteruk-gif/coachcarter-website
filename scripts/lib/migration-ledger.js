@@ -129,7 +129,7 @@ function loadPacket() {
   );
   const baselineText = fs.readFileSync(BASELINE_PATH, 'utf8');
   const packet = JSON.parse(baselineText);
-  validateBaselinePacket(packet, manifest, sha256Bytes(canonicalSql(manifestText)));
+  validateBaselinePacket(packet, manifest, baselineManifestChecksum(manifest, packet.entries?.length));
   return {
     manifest,
     packet,
@@ -139,16 +139,29 @@ function loadPacket() {
   };
 }
 
-function validateBaselinePacket(packet, manifest, actualManifestChecksum) {
+function baselineManifestChecksum(manifest, entryCount) {
+  if (!Number.isInteger(entryCount) || entryCount < 1 || entryCount > manifest.migrations.length) {
+    fail('INVALID_BASELINE_ENTRY_COUNT', 'Baseline packet entry count is invalid');
+  }
+  const baselineManifest = {
+    ...manifest,
+    migrations: manifest.migrations.slice(0, entryCount),
+  };
+  return sha256Bytes(canonicalSql(`${JSON.stringify(baselineManifest, null, 2)}\n`));
+}
+
+function validateBaselinePacket(packet, manifest, actualBaselineManifestChecksum) {
   if (!packet || packet.version !== 1) fail('INVALID_BASELINE_PACKET', 'Baseline packet version must be 1');
   if (packet.packetId !== 'coachcarter-production-history-v1') {
     fail('INVALID_BASELINE_PACKET_ID', 'Unexpected baseline packet identity');
   }
-  if (packet.manifestChecksum !== actualManifestChecksum) {
-    fail('BASELINE_MANIFEST_CHECKSUM_MISMATCH', 'Baseline packet does not match the migration manifest');
+  if (packet.manifestChecksum !== actualBaselineManifestChecksum) {
+    fail('BASELINE_MANIFEST_CHECKSUM_MISMATCH', 'Baseline packet does not match the historical migration manifest');
   }
-  if (!Array.isArray(packet.entries) || packet.entries.length !== manifest.migrations.length) {
-    fail('BASELINE_ENTRY_COUNT_MISMATCH', 'Baseline packet must cover every manifest entry');
+  if (!Array.isArray(packet.entries)
+      || packet.entries.length < 1
+      || packet.entries.length > manifest.migrations.length) {
+    fail('BASELINE_ENTRY_COUNT_MISMATCH', 'Baseline packet must be a non-empty prefix of the migration manifest');
   }
 
   const allowedEvidence = new Set([
@@ -158,7 +171,7 @@ function validateBaselinePacket(packet, manifest, actualManifestChecksum) {
     'deferred',
     'pending_numbered',
   ]);
-  for (let index = 0; index < manifest.migrations.length; index += 1) {
+  for (let index = 0; index < packet.entries.length; index += 1) {
     const entry = manifest.migrations[index];
     const baseline = packet.entries[index];
     if (!baseline || baseline.id !== entry.id || baseline.filename !== entry.filename) {
@@ -176,7 +189,7 @@ function validateBaselinePacket(packet, manifest, actualManifestChecksum) {
       }
     } else if (entry.execution === 'numbered') {
       if (baseline.disposition !== 'pending_numbered' || baseline.evidenceClass !== 'pending_numbered') {
-        fail('NUMBERED_BASELINE_MISMATCH', `Pending numbered migration ${entry.id} cannot be recorded as historical success`);
+        fail('NUMBERED_BASELINE_MISMATCH', `Numbered migration ${entry.id} cannot be recorded as historical success`);
       }
     } else if (baseline.disposition !== 'baseline'
         || ['deferred', 'pending_numbered'].includes(baseline.evidenceClass)) {
@@ -322,38 +335,38 @@ async function readLedgerRows(client) {
 }
 
 async function inspectLedgerSchema(client) {
-  const [columns, constraints, indexes, triggers, guardFunction] = await Promise.all([
-    client.query(`
-      SELECT column_name, data_type, is_nullable, is_identity,
-             identity_generation, character_maximum_length, column_default
-        FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = 'schema_migration_history'
-       ORDER BY ordinal_position
-    `),
-    client.query(`
-      SELECT conname
-        FROM pg_constraint
-       WHERE conrelid = 'public.schema_migration_history'::regclass
-         AND contype <> 'n'
-       ORDER BY conname
-    `),
-    client.query(`
-      SELECT indexname
-        FROM pg_indexes
-       WHERE schemaname = 'public' AND tablename = 'schema_migration_history'
-       ORDER BY indexname
-    `),
-    client.query(`
-      SELECT tgname AS trigger_name
-        FROM pg_trigger
-       WHERE tgrelid = 'public.schema_migration_history'::regclass
-         AND NOT tgisinternal
-       ORDER BY tgname
-    `),
-    client.query(`
-      SELECT to_regprocedure('public.guard_schema_migration_history_append_only()') IS NOT NULL AS present
-    `),
-  ]);
+  // node-postgres serializes queries on one client. Keep these awaits explicit:
+  // concurrent client.query() calls are deprecated and will fail under pg 9.
+  const columns = await client.query(`
+    SELECT column_name, data_type, is_nullable, is_identity,
+           identity_generation, character_maximum_length, column_default
+      FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'schema_migration_history'
+     ORDER BY ordinal_position
+  `);
+  const constraints = await client.query(`
+    SELECT conname
+      FROM pg_constraint
+     WHERE conrelid = 'public.schema_migration_history'::regclass
+       AND contype <> 'n'
+     ORDER BY conname
+  `);
+  const indexes = await client.query(`
+    SELECT indexname
+      FROM pg_indexes
+     WHERE schemaname = 'public' AND tablename = 'schema_migration_history'
+     ORDER BY indexname
+  `);
+  const triggers = await client.query(`
+    SELECT tgname AS trigger_name
+      FROM pg_trigger
+     WHERE tgrelid = 'public.schema_migration_history'::regclass
+       AND NOT tgisinternal
+     ORDER BY tgname
+  `);
+  const guardFunction = await client.query(`
+    SELECT to_regprocedure('public.guard_schema_migration_history_append_only()') IS NOT NULL AS present
+  `);
   return {
     columns: columns.rows.map(row => row.column_name),
     columnSignatures: columns.rows.map(row => [
@@ -641,6 +654,8 @@ module.exports = {
   EXPECTED_MARKERS,
   LEDGER_DDL_PATH,
   assertNonSecretContext,
+  baselineContext,
+  baselineManifestChecksum,
   cleanupRehearsal,
   directDatabaseUrl,
   fingerprint,

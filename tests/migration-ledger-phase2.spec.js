@@ -5,10 +5,14 @@ const { MigrationGovernanceError } = require('../scripts/lib/migration-governanc
 const { validateLedger } = require('../scripts/lib/migration-governance');
 const {
   assertNonSecretContext,
+  baselineContext,
+  baselineManifestChecksum,
   directDatabaseUrl,
   fingerprint,
   loadPacket,
   requireMutationApproval,
+  validateBaselinePacket,
+  verifyBaselineRows,
 } = require('../scripts/lib/migration-ledger');
 const { selectedMode } = require('../scripts/migration-ledger-rehearsal');
 
@@ -18,9 +22,10 @@ function expectCode(fn, code) {
 }
 
 test.describe('migration ledger Phase 2 packet and gates', () => {
-  test('covers the 61 historical entries and numbered 061 and 062 honestly', () => {
+  test('keeps the installed packet immutable when later numbered migrations are appended', () => {
     const bundle = loadPacket();
-    expect(bundle.packet.entries).toHaveLength(63);
+    expect(bundle.packet.entries).toHaveLength(62);
+    expect(bundle.packetChecksum).toBe('f0ae30b797c663ac85ae6e6409913f8bf73f7443ad3cff1e97a9d38852ad66a2');
     expect(bundle.packet.legacyMarkerEvidence).toHaveLength(10);
     expect(bundle.packet.entries.filter(entry => entry.evidenceClass === 'exact_execution').map(entry => entry.id))
       .toEqual(['035', '039', '060']);
@@ -34,16 +39,81 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
       disposition: 'pending_numbered',
       evidenceClass: 'pending_numbered',
     });
-    expect(bundle.packet.entries.find(entry => entry.id === '062')).toMatchObject({
-      disposition: 'pending_numbered',
-      evidenceClass: 'pending_numbered',
-    });
+    expect(bundle.packet.entries.find(entry => entry.id === '062')).toBeUndefined();
+    expect(bundle.manifest.migrations.filter(entry => entry.execution === 'numbered').map(entry => entry.id))
+      .toEqual(['061', '062']);
     expect(bundle.packet.entries.find(entry => entry.id === '026a').filename)
       .toBe('026_public_tenant_resolution.sql');
     expect(bundle.packet.entries.find(entry => entry.id === '026b').filename)
       .toBe('026_weekly_availability_transmission.sql');
     expect(bundle.packet.entries.find(entry => entry.id === '060').evidence.historicalExecutionTimestamp)
       .toBeNull();
+  });
+
+  test('accepts the installed baseline after later numbered migrations succeed', () => {
+    const bundle = loadPacket();
+    const futureNumbered = {
+      id: '063',
+      order: 64,
+      prefix: '063',
+      filename: '063_future_numbered.sql',
+      checksum: 'f'.repeat(64),
+      execution: 'numbered',
+    };
+    const extendedManifest = {
+      ...bundle.manifest,
+      migrations: [...bundle.manifest.migrations, futureNumbered],
+    };
+    expect(baselineManifestChecksum(extendedManifest, bundle.packet.entries.length))
+      .toBe(bundle.packet.manifestChecksum);
+    expect(() => validateBaselinePacket(
+      bundle.packet,
+      extendedManifest,
+      baselineManifestChecksum(extendedManifest, bundle.packet.entries.length)
+    )).not.toThrow();
+
+    const targetFingerprint = 'a'.repeat(64);
+    const markerEvidence = bundle.packet.legacyMarkerEvidence.map((marker, index) => ({
+      key: marker.key,
+      completedAt: new Date(Date.UTC(2026, 4, 20, 0, index)).toISOString(),
+    }));
+    const rows = bundle.packet.entries
+      .filter(entry => entry.disposition === 'baseline')
+      .map(entry => ({
+        migration_id: entry.id,
+        filename: entry.filename,
+        checksum: entry.checksum,
+        status: 'succeeded',
+        executed_at: new Date(),
+        duration_ms: 0,
+        record_kind: 'baseline',
+        evidence_kind: entry.evidenceClass,
+        execution_context: baselineContext(
+          entry,
+          bundle.packet,
+          bundle.packetChecksum,
+          bundle.ddlChecksum,
+          markerEvidence,
+          targetFingerprint
+        ),
+      }));
+    for (const id of ['061', '062']) {
+      const entry = bundle.manifest.migrations.find(migration => migration.id === id);
+      rows.push({
+        migration_id: entry.id,
+        filename: entry.filename,
+        checksum: entry.checksum,
+        status: 'succeeded',
+        executed_at: new Date(),
+        duration_ms: 0,
+        record_kind: 'execution',
+        evidence_kind: 'numbered_execution',
+        execution_context: {},
+      });
+    }
+
+    expect(validateLedger(bundle.manifest, rows)).toMatchObject({ applied: 62, pending: [] });
+    expect(() => verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint)).not.toThrow();
   });
 
   test('defaults to read-only preflight and refuses pooled URLs', () => {

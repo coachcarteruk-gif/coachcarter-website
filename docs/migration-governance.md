@@ -1,24 +1,25 @@
 # Migration governance audit and phased cleanup
 
-Status: **Phase 2 repository rehearsal package prepared; production ledger absent**
+Status: **production ledger installed; numbered history current through 062**
 
-Audit date: 2026-09-08
+Audit date: 2026-09-13
 
 Production target inspected read-only: Neon project `neon-green-elephant`
 (`falling-firefly-48751671`), protected/default branch `main`
 (`br-summer-silence-abcpp6vw`), database `neondb`.
 
-This document is the migration-system source of truth. It does not authorise a
-production migration, a ledger bootstrap/backfill, a legacy endpoint change,
-or any financial/data mutation.
+This document is the migration-system source of truth. It records the completed
+ledger bootstrap and numbered receipts through 062, but does not authorise a
+future production migration, legacy endpoint change, or financial/data
+mutation.
 
 ## Confirmed file sequence
 
-`db/migrations/` contains 62 SQL files:
+`db/migrations/` contains 63 SQL files:
 
 - one file for every prefix from 001 through 025;
 - two independent files with prefix 026;
-- one file for every prefix from 027 through 061.
+- one file for every prefix from 027 through 062.
 
 The duplicate prefix is historical, not duplicate content:
 
@@ -34,10 +35,13 @@ both filenames and assigns the stable unique IDs `026a` and `026b`, ordered by
 their actual introduction. New duplicate prefixes are forbidden.
 
 The complete authoritative repository inventory and canonical LF-normalised
-SHA-256 values are in `db/migrations/manifest.json`. All current entries are
-`baseline` except 041, which is `deferred`, and new migration 061, which is
-`numbered` and deliberately pending separate execution approval. None of the
-historical files is automatically replayed by Phase 1.
+SHA-256 values are in `db/migrations/manifest.json`. The immutable installation
+packet is the exact 62-entry artifact reviewed when the ledger was installed:
+the 61 identities through 060 plus 061 recorded only as pending numbered work.
+It created 60 baseline receipts, omitted deferred 041, and did not create a row
+for 061. Migrations 061 and 062 now have separate successful production
+execution receipts. Future numbered migrations belong only in the manifest and
+ledger; they must not rewrite the installed packet or its checksum.
 
 ## Production receipt: what can and cannot be proved
 
@@ -62,6 +66,9 @@ The following evidence is authoritative enough to state exact execution:
   confirmed all three extension columns, both validated constraints, and both
   indexes. Its canonical LF checksum is
   `fdcc1684800e6c88a69efd75fa9008470f09c3949da586a2765782f1a350a4f5`.
+- Migrations 061 and 062: the append-only production ledger contains separate
+  successful `record_kind=execution` receipts whose filenames and canonical
+  checksums match the current numbered manifest.
 - Ten data-migration marker rows prove the successful one-off operations listed
   below, with timestamps from 2026-05-20 through 2026-05-21.
 
@@ -210,10 +217,12 @@ one transaction. On error it rolls back the migration, records only a sanitized
 failure code in a separate statement, and stops. A lost connection leaves
 `running`, which blocks every later run until reviewed.
 
-Phase 2 adds reviewed repository artifacts for this design without installing
-them in production. Baseline rows add `record_kind=baseline` and an explicit
-`evidence_kind`, so a successful baseline receipt means the disposition was
-recorded successfully rather than falsely claiming exact file execution. The
+Phase 2 installed the reviewed ledger and 60 historical baseline receipts.
+Baseline rows use `record_kind=baseline` and an explicit `evidence_kind`, so a
+successful baseline receipt means the disposition was recorded successfully
+rather than falsely claiming exact file execution. The baseline packet is now
+immutable: later `record_kind=execution` receipts extend the manifest and
+ledger without changing the evidence context stored on historical rows. The
 core timestamp columns record the baseline statement; proved historical times
 remain in non-secret evidence context. See
 `docs/migration-ledger-phase2-operator-packet.md`.
@@ -249,15 +258,16 @@ errors.
 
 Rollback: revert the repository commit. No database rollback is needed.
 
-### Phase 2 — repository rehearsal complete; production operation requires approval
+### Phase 2 — completed in production
 
 Completed in the repository:
 
 1. reviewed ledger DDL, terminal-state constraints, success uniqueness,
    running-to-terminal guard, and update/delete/truncate protection;
-2. a baseline packet covering the 61 historical identities plus any later
-   pending numbered identities, distinguishing exact execution, structural
-   equivalence, intentional removal, deferred 041, and unapplied numbered work;
+2. an immutable 62-entry installation packet covering the 61 historical
+   identities through 060 plus 061 as pending numbered work, distinguishing
+   exact execution, structural equivalence, intentional removal, deferred 041,
+   and the absence of a baseline claim for 061;
 3. ten marker receipts sourced from their real database timestamps at
    preflight rather than copied or inferred;
 4. direct-only, fingerprint-bound preflight/rehearsal/install/postflight and
@@ -267,17 +277,10 @@ Completed in the repository:
    append-only enforcement, failure states, ordering/checksum rejection, and
    Phase 1 runner compatibility.
 
-Still requiring separate production approval:
-
-1. resolve or explicitly accept the migration-005 workstation ACL condition;
-2. repeat rehearsal on the exact approved production clone if required by the
-   reviewer;
-3. create and verify a new Neon snapshot from production `main`;
-4. run production preflight, install the ledger and 60 baseline receipts in one
-   controlled transaction, and run postflight;
-5. decide the permanent 041 disposition; no success row exists;
-6. mark only future reviewed migrations `execution=numbered`, then separately
-   approve Phase 3 runner/CI authority.
+The production ledger now contains 62 successful rows: 60 baseline receipts and
+numbered execution receipts for 061 and 062. There are no running, failed,
+duplicate, unknown, checksum-mismatched, or pending applicable rows. Migration
+041 remains deliberately deferred and has no false success row.
 
 Rollback before commit is transaction rollback. After commit, leave the inert
 ledger in place unless it causes a demonstrated incident; restore from the
@@ -308,9 +311,8 @@ is deleted.
 
 ## Production actions still requiring approval
 
-- install or baseline `schema_migration_history`;
 - apply, skip, or otherwise resolve migration 041;
-- run any numbered or aggregate migration;
+- run any future numbered or aggregate migration;
 - change, disable, or delete `api/migrate.js` or any one-off migration endpoint;
 - rewrite/repair a historical SQL file;
 - change production Vercel/Neon configuration or restore from a snapshot.
