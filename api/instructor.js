@@ -79,6 +79,8 @@ const {
 } = require('./_instructor-reschedule-slot');
 const {
   bookFlexiblePackageSlotTransaction,
+  cancelFlexiblePackageBookingTransaction,
+  cancelFlexiblePackageBookingWithClient,
   moveFlexiblePackageBookingAllocations,
 } = require('./_flexible-package-ledger');
 const {
@@ -1966,6 +1968,12 @@ async function handleCancelBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date, lb.start_time,
              lb.created_by, lb.payment_method, lb.minutes_deducted,
+             EXISTS (
+               SELECT 1 FROM flexible_package_booking_allocations allocation
+                WHERE allocation.booking_id = lb.id
+                  AND allocation.school_id = lb.school_id
+                  AND allocation.learner_id = lb.learner_id
+             ) AS has_flexible_package_allocation,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name
       FROM lesson_bookings lb
@@ -1976,42 +1984,63 @@ async function handleCancelBooking(req, res) {
     `;
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== SCHEDULED)
-      return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
-
     const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);
     const minsToReturn = isSelfServeFreeTrial
       ? 0
       : Number(booking.minutes_deducted ?? 90);
+    let flexibleCancellation = null;
 
-    // Cancel the booking
-    await sql`
-      UPDATE lesson_bookings SET status = ${REFUNDED},
-        credit_returned = ${!isSelfServeFreeTrial}, credit_forfeited = FALSE,
-        cancelled_at = NOW(),
-        instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
-      WHERE id = ${booking_id}
-    `;
-    if (!isSelfServeFreeTrial) {
-      await markBookingCreditSourcesRefunded(sql, {
-        bookingId: booking_id,
-        schoolId: booking.school_id || 1,
-      });
-
-      // Refund the learner's balance to the same LCB row that was debited.
-      // No ledger row (matches the slots.js cancel refund convention — the
-      // lesson_bookings row's REFUNDED status is the audit trail).
-      await lockBalanceAdjustLCB(sql, {
+    if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
+      flexibleCancellation = await cancelFlexiblePackageBookingTransaction({
+        connectionString: process.env.POSTGRES_URL,
         learnerId: booking.learner_id,
         instructorId: booking.instructor_id,
-        schoolId: booking.school_id || 1,
-        delta: minsToReturn,
-        creditsDelta: Math.ceil(minsToReturn / 60),
+        schoolId,
+        bookingId: Number(booking_id),
+        eligibleReturn: true,
+        returnReason: 'admin_eligible_cancellation',
+        eventType: 'operator_eligible_cancellation_returned',
+        cancellationNote: reason ? `Cancelled: ${reason.trim()}` : 'Cancelled by instructor',
       });
+      if (!flexibleCancellation.ok) {
+        return res.status(flexibleCancellation.code === 'BOOKING_NOT_FOUND' ? 404 : 409).json({
+          error: 'This Flexible Hours booking could not be cancelled safely.',
+          code: flexibleCancellation.code,
+        });
+      }
+    } else {
+      if (booking.status !== SCHEDULED) {
+        return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
+      }
+
+      // Ordinary Lesson Credit and free-trial cancellation retain their
+      // existing behaviour. Flexible Hours return through the append-only
+      // package transaction above and never touch LCB.
+      await sql`
+        UPDATE lesson_bookings SET status = ${REFUNDED},
+          credit_returned = ${!isSelfServeFreeTrial}, credit_forfeited = FALSE,
+          cancelled_at = NOW(),
+          instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
+        WHERE id = ${booking_id}
+      `;
+      if (!isSelfServeFreeTrial) {
+        await markBookingCreditSourcesRefunded(sql, {
+          bookingId: booking_id,
+          schoolId: booking.school_id || 1,
+        });
+
+        await lockBalanceAdjustLCB(sql, {
+          learnerId: booking.learner_id,
+          instructorId: booking.instructor_id,
+          schoolId: booking.school_id || 1,
+          delta: minsToReturn,
+          creditsDelta: Math.ceil(minsToReturn / 60),
+        });
+      }
     }
 
     // Email the learner (unless notify is explicitly false)
-    if (notify !== false) try {
+    if (notify !== false && !flexibleCancellation?.idempotent) try {
       const mailer = createTransporter();
       const firstName = (booking.learner_name || '').split(' ')[0] || 'there';
       const isoDate = booking.scheduled_date instanceof Date ? booking.scheduled_date.toISOString().slice(0, 10) : String(booking.scheduled_date).slice(0, 10);
@@ -2029,6 +2058,8 @@ async function handleCancelBooking(req, res) {
           ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
           ${isSelfServeFreeTrial
             ? '<p>No lesson credit was used for this free trial.</p>'
+            : flexibleCancellation
+              ? '<p>Your Flexible Hours have been returned to your package balance automatically.</p>'
             : '<p>Your lesson credit has been refunded automatically. You can rebook at any time from your dashboard.</p>'}
           <p style="margin:28px 0">
             <a href="https://coachcarter.uk/learner/book.html"
@@ -2043,7 +2074,14 @@ async function handleCancelBooking(req, res) {
       console.error('Failed to send cancellation email:', emailErr);
     }
 
-    return res.json({ success: true });
+    return res.json({
+      success: true,
+      funding_method: flexibleCancellation ? 'flexible_package' : booking.payment_method,
+      minutes_returned: flexibleCancellation ? flexibleCancellation.minutesReturned : minsToReturn,
+      credit_returned: flexibleCancellation ? false : !isSelfServeFreeTrial,
+      package_units_returned: flexibleCancellation ? flexibleCancellation.units : 0,
+      idempotent: flexibleCancellation?.idempotent === true,
+    });
   } catch (err) {
     console.error('instructor cancel-booking error:', err);
     reportError('/api/instructor', err);
@@ -2083,8 +2121,14 @@ async function handleMarkNotDelivered(req, res) {
                lb.scheduled_date::text AS scheduled_date,
                lb.start_time::text AS start_time,
                lb.end_time::text AS end_time,
-               lb.instructor_notes,
+               lb.instructor_notes, lb.payment_method,
                COALESCE(lb.minutes_deducted, 0)::int AS minutes_deducted,
+               EXISTS (
+                 SELECT 1 FROM flexible_package_booking_allocations allocation
+                  WHERE allocation.booking_id = lb.id
+                    AND allocation.school_id = lb.school_id
+                    AND allocation.learner_id = lb.learner_id
+               ) AS has_flexible_package_allocation,
                (lb.scheduled_date + lb.end_time) <= NOW() AS lesson_is_past,
                EXISTS (
                  SELECT 1 FROM payout_line_items pli
@@ -2126,32 +2170,49 @@ async function handleMarkNotDelivered(req, res) {
       const exceptionNote = `Not delivered: ${reasonLabel}${note ? ` - ${note}` : ''}`;
       const nextNotes = existingNotes ? `${existingNotes}\n${exceptionNote}` : exceptionNote;
 
-      await txSql`
-        UPDATE lesson_bookings
-           SET status = ${REFUNDED},
-               credit_returned = ${minsToReturn > 0},
-               credit_forfeited = FALSE,
-               cancelled_at = NOW(),
-               instructor_notes = ${nextNotes}
-         WHERE id = ${bookingId}
-           AND instructor_id = ${instructor.id}
-           AND COALESCE(school_id, 1) = ${schoolId}
-      `;
-
-      await markBookingCreditSourcesRefunded(txSql, {
-        bookingId,
-        schoolId,
-      });
-
-      if (minsToReturn > 0) {
-        await lockBalanceAdjustLCB(txSql, {
+      let flexibleCancellation = null;
+      if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
+        flexibleCancellation = await cancelFlexiblePackageBookingWithClient(client, {
           learnerId: booking.learner_id,
           instructorId: booking.instructor_id,
           schoolId,
-          delta: minsToReturn,
-          creditsDelta: Math.ceil(minsToReturn / 60),
+          bookingId,
+          eligibleReturn: true,
+          allowedStatuses: [SCHEDULED, CHARGEABLE],
+          returnReason: 'admin_eligible_cancellation',
+          eventType: 'operator_not_delivered_returned',
+          cancellationNote: exceptionNote,
         });
+      } else {
+        await txSql`
+          UPDATE lesson_bookings
+             SET status = ${REFUNDED},
+                 credit_returned = ${minsToReturn > 0},
+                 credit_forfeited = FALSE,
+                 cancelled_at = NOW(),
+                 instructor_notes = ${nextNotes}
+           WHERE id = ${bookingId}
+             AND instructor_id = ${instructor.id}
+             AND COALESCE(school_id, 1) = ${schoolId}
+        `;
+
+        await markBookingCreditSourcesRefunded(txSql, {
+          bookingId,
+          schoolId,
+        });
+
+        if (minsToReturn > 0) {
+          await lockBalanceAdjustLCB(txSql, {
+            learnerId: booking.learner_id,
+            instructorId: booking.instructor_id,
+            schoolId,
+            delta: minsToReturn,
+            creditsDelta: Math.ceil(minsToReturn / 60),
+          });
+        }
       }
+
+      const returnedMinutes = flexibleCancellation?.minutesReturned ?? minsToReturn;
 
       await logAudit(txSql, {
         adminId: null,
@@ -2166,14 +2227,22 @@ async function handleMarkNotDelivered(req, res) {
           learner_id: booking.learner_id,
           previous_status: booking.status,
           new_status: REFUNDED,
-          minutes_returned: minsToReturn,
+          minutes_returned: returnedMinutes,
+          funding_method: flexibleCancellation ? 'flexible_package' : 'lesson_credit',
+          package_units_returned: flexibleCancellation?.units || 0,
           reason_code: reasonCode || 'other',
           reason_label: reasonLabel,
           note: note || null,
         },
       });
 
-      return { ok: true, booking, minutes_returned: minsToReturn, reason_label: reasonLabel };
+      return {
+        ok: true,
+        booking,
+        minutes_returned: returnedMinutes,
+        reason_label: reasonLabel,
+        funding_method: flexibleCancellation ? 'flexible_package' : 'lesson_credit',
+      };
     });
 
     if (!result.ok) {
@@ -2189,8 +2258,10 @@ async function handleMarkNotDelivered(req, res) {
           weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'
         });
         const timeStr = String(result.booking.start_time || '').slice(0, 5);
-        const creditCopy = result.minutes_returned > 0
-          ? '<p>Your lesson credit has been returned to your balance automatically.</p>'
+        const creditCopy = result.funding_method === 'flexible_package'
+          ? '<p>Your Flexible Hours have been returned to your package balance automatically.</p>'
+          : result.minutes_returned > 0
+            ? '<p>Your lesson credit has been returned to your balance automatically.</p>'
           : '<p>No lesson credit was deducted for this booking.</p>';
 
         await mailer.sendMail({
@@ -2222,8 +2293,13 @@ async function handleMarkNotDelivered(req, res) {
       success: true,
       booking_id: bookingId,
       minutes_returned: result.minutes_returned,
+      funding_method: result.funding_method,
+      credit_returned: result.funding_method === 'flexible_package' ? false : result.minutes_returned > 0,
     });
   } catch (err) {
+    if (err?.result?.code) {
+      return res.status(409).json({ error: err.result.message || 'This Flexible Hours booking could not be updated safely.', code: err.result.code });
+    }
     console.error('instructor mark-not-delivered error:', err);
     reportError('/api/instructor', err);
     return res.status(500).json({ error: 'Failed to report lesson issue' });
@@ -2337,7 +2413,7 @@ async function handleRescheduleBooking(req, res) {
       );
       const newBooking = inserted.rows[0];
 
-      if (booking.has_flexible_package_allocation === true) {
+      if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
         const moved = await moveFlexiblePackageBookingAllocations(client, {
           learnerId: booking.learner_id,
           schoolId,
@@ -2690,7 +2766,7 @@ async function handleEditBooking(req, res) {
     let [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
-             lb.lesson_type_id, lb.minutes_deducted, lb.setmore_key,
+             lb.lesson_type_id, lb.minutes_deducted, lb.payment_method, lb.setmore_key,
              CASE
                WHEN COALESCE(i.transmission_type, 'manual') = 'both' THEN COALESCE(lb.transmission_type, 'manual')
                WHEN COALESCE(i.transmission_type, 'manual') = 'automatic' THEN 'automatic'
@@ -2766,7 +2842,8 @@ async function handleEditBooking(req, res) {
     }
 
     const requestedDurationDelta = Number(newDuration) - Number(booking.minutes_deducted || 0);
-    if (booking.has_flexible_package_allocation === true && requestedDurationDelta !== 0) {
+    if ((booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true)
+        && requestedDurationDelta !== 0) {
       return res.status(409).json({
         error: 'Flexible Hours lesson duration cannot be edited in place. Cancel and rebook so its immutable package units remain exact.',
         code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
@@ -5278,6 +5355,17 @@ async function handleCreateExtensionOffer(req, res) {
              lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
              lb.status, lb.lesson_type_id, lb.list_price_pence, lb.payment_method,
+             EXISTS (
+               SELECT 1 FROM flexible_package_booking_allocations allocation
+                WHERE allocation.booking_id = lb.id
+                  AND allocation.school_id = lb.school_id
+                  AND allocation.learner_id = lb.learner_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM flexible_package_allocation_returns returned
+                     WHERE returned.allocation_id = allocation.id
+                       AND returned.school_id = allocation.school_id
+                  )
+             ) AS has_flexible_package_allocation,
              lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
              i.name AS instructor_name
       FROM lesson_bookings lb
@@ -5293,6 +5381,12 @@ async function handleCreateExtensionOffer(req, res) {
     }
     if (booking.lesson_has_ended) {
       return res.status(409).json({ error: 'A lesson that has already ended cannot be extended.' });
+    }
+    if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
+      return res.status(409).json({
+        error: 'Flexible Hours lesson duration cannot be extended in place. Cancel and rebook so its package units remain exact.',
+        code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
+      });
     }
     if (!booking.learner_email) {
       return res.status(409).json({ error: 'This learner needs an email address before you can send an extension request.' });

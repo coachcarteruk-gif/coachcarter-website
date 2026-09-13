@@ -543,6 +543,18 @@ async function acceptFreeBookingExtension({
               lb.scheduled_date::text AS scheduled_date,
               lb.start_time::text AS start_time, lb.end_time::text AS end_time,
               (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
+              lb.payment_method,
+              EXISTS (
+                SELECT 1 FROM flexible_package_booking_allocations allocation
+                 WHERE allocation.booking_id = lb.id
+                   AND allocation.school_id = lb.school_id
+                   AND allocation.learner_id = lb.learner_id
+                   AND NOT EXISTS (
+                     SELECT 1 FROM flexible_package_allocation_returns returned
+                      WHERE returned.allocation_id = allocation.id
+                        AND returned.school_id = allocation.school_id
+                   )
+              ) AS has_flexible_package_allocation,
               lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
               i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone
          FROM lesson_bookings lb
@@ -575,6 +587,18 @@ async function acceptFreeBookingExtension({
         applied: false,
         code: 'SOURCE_BOOKING_CHANGED',
         message: 'The lesson has changed, so this extension request is no longer valid. Ask your instructor to send a new one.',
+      };
+    }
+    if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
+      await client.query(
+        `UPDATE lesson_offers SET status = 'cancelled'
+          WHERE id = $1 AND school_id = $2 AND status = 'pending'`,
+        [offerId, schoolId]
+      );
+      return {
+        applied: false,
+        code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
+        message: 'Flexible Hours lessons cannot be extended in place. Cancel and rebook so the package units remain exact.',
       };
     }
 

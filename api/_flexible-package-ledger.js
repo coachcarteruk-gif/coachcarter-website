@@ -245,46 +245,69 @@ async function bookFlexiblePackageSlotTransaction({
   }
 }
 
-async function cancelFlexiblePackageBookingTransaction({ connectionString, learnerId, schoolId, bookingId, eligibleReturn }) {
-  return withNeonTransaction(connectionString, async client => {
+const FLEXIBLE_RETURN_REASONS = new Set([
+  'learner_cancelled_48h_plus',
+  'admin_eligible_cancellation',
+]);
+
+async function cancelFlexiblePackageBookingWithClient(client, {
+  learnerId,
+  instructorId = null,
+  schoolId,
+  bookingId,
+  eligibleReturn,
+  allowedStatuses = [SCHEDULED],
+  returnReason = 'learner_cancelled_48h_plus',
+  eventType = null,
+  cancellationNote = null,
+}) {
+    if (eligibleReturn && !FLEXIBLE_RETURN_REASONS.has(returnReason)) {
+      abort({ code: 'FLEXIBLE_RETURN_REASON_INVALID' });
+    }
+    const permittedStatuses = [...new Set((allowedStatuses || []).map(String))];
+    if (!permittedStatuses.length) abort({ code: 'BOOKING_NOT_CANCELLABLE' });
     const bookingResult = await client.query(
-      `SELECT id, status, minutes_deducted, cancelled_at, credit_forfeited
+      `SELECT id, status, instructor_id, minutes_deducted, cancelled_at, credit_forfeited
          FROM lesson_bookings
         WHERE id = $1 AND learner_id = $2 AND school_id = $3
+          AND ($4::integer IS NULL OR instructor_id = $4)
         FOR UPDATE`,
-      [bookingId, learnerId, schoolId]
+      [bookingId, learnerId, schoolId, instructorId]
     );
     const booking = bookingResult.rows[0];
     if (!booking) abort({ code: 'BOOKING_NOT_FOUND' });
     const allocations = await client.query(
-      `SELECT a.id, a.units_allocated
+      `SELECT a.id, a.units_allocated, a.unit_minutes,
+              EXISTS (
+                SELECT 1 FROM flexible_package_allocation_returns returned
+                 WHERE returned.allocation_id = a.id
+                   AND returned.school_id = a.school_id
+              ) AS returned
          FROM flexible_package_booking_allocations a
-        WHERE a.booking_id = $1 AND a.school_id = $2
+        WHERE a.booking_id = $1 AND a.school_id = $2 AND a.learner_id = $3
         ORDER BY a.id
         FOR SHARE OF a`,
-      [bookingId, schoolId]
+      [bookingId, schoolId, learnerId]
     );
     if (!allocations.rowCount) abort({ code: 'NOT_FLEXIBLE_PACKAGE_BOOKING' });
 
-    const units = allocations.rows.reduce((sum, row) => sum + Number(row.units_allocated), 0);
+    const activeAllocations = allocations.rows.filter(row => row.returned !== true);
+    const activeUnits = activeAllocations.reduce((sum, row) => sum + Number(row.units_allocated), 0);
+    const activeMinutes = Math.round(activeAllocations.reduce(
+      (sum, row) => sum + Number(row.units_allocated) * Number(row.unit_minutes),
+      0
+    ));
     if (booking.status === REFUNDED) {
-      const returned = await client.query(
-        `SELECT COALESCE(SUM(ar.units_returned),0)::numeric AS units
-           FROM flexible_package_allocation_returns ar
-           JOIN flexible_package_booking_allocations a
-             ON a.id = ar.allocation_id AND a.school_id = ar.school_id
-          WHERE a.booking_id = $1 AND a.school_id = $2`,
-        [bookingId, schoolId]
-      );
-      if (Math.round(Number(returned.rows[0]?.units || 0) * FLEXIBLE_UNIT_MINUTES) !== Math.round(units * FLEXIBLE_UNIT_MINUTES)) abort({ code: 'BOOKING_RETURN_CONTRADICTION' });
+      if (activeAllocations.length) abort({ code: 'BOOKING_RETURN_CONTRADICTION' });
+      const returnedUnits = allocations.rows.reduce((sum, row) => sum + Number(row.units_allocated), 0);
       const balance = await client.query(
         `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
            FROM flexible_package_source_remaining
           WHERE school_id = $1 AND learner_id = $2`,
         [schoolId, learnerId]
       );
-      return { ok: true, eligibleReturn: true, idempotent: true, units,
-        minutesReturned: Math.round(units * FLEXIBLE_UNIT_MINUTES),
+      return { ok: true, eligibleReturn: true, idempotent: true, units: returnedUnits,
+        minutesReturned: Math.round(returnedUnits * FLEXIBLE_UNIT_MINUTES),
         remainingUnits: Number(balance.rows[0]?.remaining_units || 0) };
     }
     if (booking.status === SCHEDULED && booking.cancelled_at && booking.credit_forfeited === true) {
@@ -294,25 +317,43 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
           WHERE school_id = $1 AND learner_id = $2`,
         [schoolId, learnerId]
       );
-      return { ok: true, eligibleReturn: false, idempotent: true, units,
+      return { ok: true, eligibleReturn: false, idempotent: true, units: activeUnits,
         minutesReturned: 0, remainingUnits: Number(balance.rows[0]?.remaining_units || 0) };
     }
-    if (booking.status !== SCHEDULED) abort({ code: 'BOOKING_NOT_CANCELLABLE' });
+    if (!permittedStatuses.includes(booking.status)) abort({ code: 'BOOKING_NOT_CANCELLABLE' });
+
+    const mixedFunding = await client.query(
+      `SELECT 1
+         FROM booking_credit_sources
+        WHERE booking_id = $1 AND school_id = $2 AND refunded_at IS NULL
+        LIMIT 1`,
+      [bookingId, schoolId]
+    );
+    if (mixedFunding.rowCount) abort({ code: 'FLEXIBLE_MIXED_FUNDING_CONTRADICTION' });
+    if (!activeAllocations.length || activeMinutes !== Number(booking.minutes_deducted || 0)) {
+      abort({ code: 'FLEXIBLE_ALLOCATION_DURATION_CONTRADICTION' });
+    }
 
     if (eligibleReturn) {
       await client.query(
         `UPDATE lesson_bookings
-            SET status = $1, cancelled_at = NOW(), credit_returned = FALSE, credit_forfeited = FALSE
-          WHERE id = $2 AND school_id = $3 AND status = $4`,
-        [REFUNDED, bookingId, schoolId, SCHEDULED]
+            SET status = $1, cancelled_at = NOW(), credit_returned = FALSE,
+                credit_forfeited = FALSE,
+                instructor_notes = CASE
+                  WHEN $5::text IS NULL THEN instructor_notes
+                  WHEN NULLIF(BTRIM(instructor_notes), '') IS NULL THEN $5::text
+                  ELSE instructor_notes || E'\\n' || $5::text
+                END
+          WHERE id = $2 AND school_id = $3 AND status = ANY($4::text[])`,
+        [REFUNDED, bookingId, schoolId, permittedStatuses, cancellationNote]
       );
-      for (const allocation of allocations.rows) {
+      for (const allocation of activeAllocations) {
         await client.query(
           `INSERT INTO flexible_package_allocation_returns (
              school_id, allocation_id, booking_id, units_returned, reason
-           ) VALUES ($1,$2,$3,$4,'learner_cancelled_48h_plus')
-           ON CONFLICT (allocation_id) DO NOTHING`,
-          [schoolId, allocation.id, bookingId, allocation.units_allocated]
+           ) VALUES ($1,$2,$3,$4,$5)
+            ON CONFLICT (allocation_id) DO NOTHING`,
+          [schoolId, allocation.id, bookingId, allocation.units_allocated, returnReason]
         );
       }
     } else {
@@ -329,9 +370,14 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
        ) VALUES ($1,$2,$3,$4,$5::jsonb)`,
       [
         schoolId, learnerId,
-        eligibleReturn ? 'eligible_cancellation_returned' : 'late_cancellation_consumed',
+        eventType || (eligibleReturn ? 'eligible_cancellation_returned' : 'late_cancellation_consumed'),
         bookingId,
-        JSON.stringify({ units, unit_minutes: FLEXIBLE_UNIT_MINUTES }),
+        JSON.stringify({
+          units: activeUnits,
+          unit_minutes: FLEXIBLE_UNIT_MINUTES,
+          return_reason: eligibleReturn ? returnReason : null,
+          instructor_id: Number(booking.instructor_id),
+        }),
       ]
     );
     const balance = await client.query(
@@ -344,10 +390,15 @@ async function cancelFlexiblePackageBookingTransaction({ connectionString, learn
       ok: true,
       eligibleReturn,
       idempotent: false,
-      units,
-      minutesReturned: eligibleReturn ? Math.round(units * FLEXIBLE_UNIT_MINUTES) : 0,
+      units: activeUnits,
+      minutesReturned: eligibleReturn ? activeMinutes : 0,
       remainingUnits: Number(balance.rows[0]?.remaining_units || 0),
     };
+}
+
+async function cancelFlexiblePackageBookingTransaction(args) {
+  return withNeonTransaction(args.connectionString, async client => {
+    return cancelFlexiblePackageBookingWithClient(client, args);
   }).catch(error => {
     if (error instanceof FlexiblePackageAbort) return error.result;
     throw error;
@@ -463,6 +514,7 @@ async function moveFlexiblePackageBookingAllocations(client, {
 module.exports = {
   FLEXIBLE_UNIT_MINUTES,
   bookFlexiblePackageSlotTransaction,
+  cancelFlexiblePackageBookingWithClient,
   cancelFlexiblePackageBookingTransaction,
   hoursUntilFlexibleLesson,
   moveFlexiblePackageBookingAllocations,

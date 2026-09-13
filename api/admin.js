@@ -1233,7 +1233,19 @@ async function handleEditBooking(req, res) {
     const [booking] = await sql`
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id,
              lb.scheduled_date::text AS scheduled_date, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
-             lb.lesson_type_id, lb.minutes_deducted, lb.list_price_pence, lb.setmore_key, lb.pickup_address, lb.dropoff_address,
+             lb.lesson_type_id, lb.minutes_deducted, lb.list_price_pence, lb.payment_method,
+             lb.setmore_key, lb.pickup_address, lb.dropoff_address,
+             EXISTS (
+               SELECT 1 FROM flexible_package_booking_allocations allocation
+                WHERE allocation.booking_id = lb.id
+                  AND allocation.school_id = lb.school_id
+                  AND allocation.learner_id = lb.learner_id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM flexible_package_allocation_returns returned
+                     WHERE returned.allocation_id = allocation.id
+                       AND returned.school_id = allocation.school_id
+                  )
+             ) AS has_flexible_package_allocation,
              COALESCE(lb.instructor_notes, lb.notes) AS notes,
              lu.name AS learner_name, lu.email AS learner_email,
              i.name AS instructor_name,
@@ -1272,6 +1284,15 @@ async function handleEditBooking(req, res) {
       const [newType] = await sql`SELECT duration_minutes FROM lesson_types WHERE id = ${newLessonTypeId} AND school_id = ${schoolId}`;
       if (!newType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
       newDuration = newType.duration_minutes;
+    }
+
+    const requestedDurationDelta = Number(newDuration) - Number(booking.minutes_deducted || 0);
+    if ((booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true)
+        && requestedDurationDelta !== 0) {
+      return res.status(409).json({
+        error: 'Flexible Hours lesson duration cannot be edited in place. Cancel and rebook so its immutable package units remain exact.',
+        code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
+      });
     }
 
     const endMins = adminTimeToMinutes(newStartTime) + newDuration;
@@ -1551,7 +1572,7 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
               lt.duration_minutes,
               90
             )::int AS duration_minutes,
-           EXISTS (
+           (lb.payment_method = 'flexible_package' OR EXISTS (
              SELECT 1
                FROM recurring_slot_block_items rsbi
                JOIN recurring_slot_blocks rsb
@@ -1576,7 +1597,7 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
                     FROM flexible_package_allocation_returns fpar
                    WHERE fpar.allocation_id = fpba.id
                 )
-           ) AS is_flexible_package_booking
+           )) AS is_flexible_package_booking
       FROM lesson_bookings lb
       JOIN schools s
         ON s.id = lb.school_id
@@ -2035,6 +2056,12 @@ async function handleReservedGoodwillMove(req, res) {
            lb.pickup_address,
            lb.dropoff_address,
            lb.payment_method,
+           EXISTS (
+             SELECT 1 FROM flexible_package_booking_allocations allocation
+              WHERE allocation.booking_id = lb.id
+                AND allocation.school_id = lb.school_id
+                AND allocation.learner_id = lb.learner_id
+           ) AS has_flexible_package_allocation,
            lb.stripe_fee_pence,
            lb.stripe_fee_source,
            lb.list_price_pence,
@@ -2069,6 +2096,8 @@ async function handleReservedGoodwillMove(req, res) {
           message: 'Confirmed reserved weekly booking not found',
         });
       }
+      const isFlexiblePackageBooking = booking.payment_method === 'flexible_package'
+        || booking.has_flexible_package_allocation === true;
 
       const oldDate = String(booking.scheduled_date).slice(0, 10);
       const oldStart = String(booking.start_time).slice(0, 5);
@@ -2228,27 +2257,19 @@ async function handleReservedGoodwillMove(req, res) {
         });
       }
 
-      const refundedBcs = await client.query(
-        `UPDATE booking_credit_sources
-            SET refunded_at = NOW()
-          WHERE booking_id = $1
-            AND school_id = $2
-            AND refunded_at IS NULL
-          RETURNING id`,
-        [booking.id, schoolId]
-      );
-      const refundedBcsIds = refundedBcs.rows.map(row => row.id);
-
-      await client.query(
-        `UPDATE lesson_bookings
-            SET status = $1,
-                credit_returned = TRUE,
-                cancelled_at = NOW()
-          WHERE id = $2
-            AND school_id = $3
-            AND status = $4`,
-        [REFUNDED, booking.id, schoolId, SCHEDULED]
-      );
+      let refundedBcsIds = [];
+      if (!isFlexiblePackageBooking) {
+        const refundedBcs = await client.query(
+          `UPDATE booking_credit_sources
+              SET refunded_at = NOW()
+            WHERE booking_id = $1
+              AND school_id = $2
+              AND refunded_at IS NULL
+            RETURNING id`,
+          [booking.id, schoolId]
+        );
+        refundedBcsIds = refundedBcs.rows.map(row => row.id);
+      }
 
       const insertedBooking = await client.query(
         `INSERT INTO lesson_bookings
@@ -2288,7 +2309,24 @@ async function handleReservedGoodwillMove(req, res) {
       );
       const newBooking = insertedBooking.rows[0];
 
-      if (refundedBcsIds.length > 0) {
+      let flexibleMove = null;
+      if (isFlexiblePackageBooking) {
+        flexibleMove = await moveFlexiblePackageBookingAllocations(client, {
+          learnerId: booking.learner_id,
+          schoolId,
+          oldBookingId: booking.id,
+          newBookingId: newBooking.id,
+          newInstructorId: booking.instructor_id,
+        });
+        if (flexibleMove.minutes !== Number(booking.minutes_deducted || 0)
+            || flexibleMove.minutes !== durationMinutes) {
+          abortReservedGoodwillMove(409, {
+            error: true,
+            code: 'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION',
+            message: 'The Flexible Hours allocation does not match this reserved lesson duration.',
+          });
+        }
+      } else if (refundedBcsIds.length > 0) {
         await client.query(
           `INSERT INTO booking_credit_sources
              (school_id, booking_id, credit_transaction_id, minutes_drawn,
@@ -2305,6 +2343,24 @@ async function handleReservedGoodwillMove(req, res) {
            ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING`,
           [newBooking.id, refundedBcsIds, schoolId]
         );
+      }
+
+      const oldUpdated = await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1,
+                credit_returned = TRUE,
+                cancelled_at = NOW()
+          WHERE id = $2
+            AND school_id = $3
+            AND status = $4`,
+        [REFUNDED, booking.id, schoolId, SCHEDULED]
+      );
+      if (oldUpdated.rowCount !== 1) {
+        abortReservedGoodwillMove(409, {
+          error: true,
+          code: 'BOOKING_CHANGED',
+          message: 'This reserved lesson changed while it was being moved.',
+        });
       }
 
       await client.query(
@@ -2347,6 +2403,8 @@ async function handleReservedGoodwillMove(req, res) {
         old_slot: { date: oldDate, start_time: oldStart, end_time: String(booking.end_time).slice(0, 5) },
         new_slot: { date: newDate, start_time: newStartTime, end_time: newEndTime },
         copied_booking_credit_source_count: refundedBcsIds.length,
+        funding_method: isFlexiblePackageBooking ? 'flexible_package' : (booking.payment_method || null),
+        flexible_package_units_moved: flexibleMove?.units || 0,
         invalidatedExtensionSessionIds: invalidatedExtensions.rows.map(row => row.stripe_session_id),
       };
     });
@@ -2369,6 +2427,13 @@ async function handleReservedGoodwillMove(req, res) {
   } catch (err) {
     if (err instanceof ReservedGoodwillMoveAbort) {
       return res.status(err.statusCode).json(err.payload);
+    }
+    if (err?.result?.code) {
+      return res.status(409).json({
+        error: true,
+        code: err.result.code,
+        message: err.result.message || 'This Flexible Hours booking could not be moved safely.',
+      });
     }
     console.error('admin reserved-goodwill-move error:', err);
     reportError('/api/admin?action=reserved-goodwill-move', err);

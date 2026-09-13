@@ -511,6 +511,14 @@
       "filename": "062_interim_v1_manual_payout_settlements.sql",
       "checksum": "8af79a5aba226a3b87c49b9071ca4357b193060e7c17f4a470a7a6d8b7884f84",
       "execution": "numbered"
+    },
+    {
+      "id": "063",
+      "order": 64,
+      "prefix": "063",
+      "filename": "063_flexible_allocation_replacement_history.sql",
+      "checksum": "6d4bb822feffb0367a35bb8bdd1e85a9a3ed1994fa7d51701bb126e024d72b62",
+      "execution": "numbered"
     }
   ]
 }
