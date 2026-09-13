@@ -123,6 +123,8 @@ test.describe('booking extension offer contract', () => {
     expect(source).toContain('durationMinutes: extensionMinutes');
     expect(source).toContain("'manual', ${bookingId}, ${extensionMinutes}");
     expect(source).toContain("booking.status !== SCHEDULED");
+    expect(source).toContain("code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING'");
+    expect(source).toContain("booking.payment_method === 'flexible_package'");
     expect(source).toContain('lb.start_time < ${newEndTime}::time');
     expect(source).not.toContain('extension availability_override');
   });
@@ -205,6 +207,50 @@ test.describe('booking extension offer contract', () => {
     expect(calls.some(call => /INSERT INTO (credit_transactions|booking_credit_sources)/.test(call.text))).toBe(false);
   });
 
+  test('a stale free Flexible Hours extension is cancelled without changing the booking', async () => {
+    const calls = [];
+    const transactionRunner = async (_connectionString, work) => work({
+      async query(text, values = []) {
+        calls.push({ text, values });
+        if (/pg_advisory_xact_lock/.test(text)) return { rows: [], rowCount: 1 };
+        if (/FROM lesson_offers[\s\S]*FOR UPDATE/.test(text)) {
+          return {
+            rows: [{
+              id: 901, status: 'pending', expired: false, learner_id: 31,
+              instructor_id: 12, school_id: 7, extension_booking_id: 501,
+              extension_minutes: 30, offer_price_pence: 0,
+              scheduled_date: '2026-09-12', start_time: '10:30:00', end_time: '11:00:00',
+            }],
+            rowCount: 1,
+          };
+        }
+        if (/FROM lesson_bookings lb[\s\S]*FOR UPDATE OF lb/.test(text)) {
+          return {
+            rows: [{
+              id: 501, status: 'scheduled', learner_id: 31, instructor_id: 12, school_id: 7,
+              scheduled_date: '2026-09-12', start_time: '09:00:00', end_time: '10:30:00',
+              lesson_has_ended: false, payment_method: 'flexible_package',
+              has_flexible_package_allocation: true,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (/UPDATE lesson_offers SET status = 'cancelled'/.test(text)) return { rows: [], rowCount: 1 };
+        throw new Error(`Unexpected stale free Flexible Hours extension query: ${text}`);
+      },
+    });
+
+    const result = await acceptFreeBookingExtension({
+      offer: { id: 901, school_id: 7, instructor_id: 12 },
+      connectionString: 'test',
+      transactionRunner,
+    });
+
+    expect(result).toMatchObject({ applied: false, code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING' });
+    expect(calls.some(call => /UPDATE lesson_bookings/.test(call.text))).toBe(false);
+    expect(calls.some(call => /INSERT INTO (credit_transactions|booking_credit_sources)/.test(call.text))).toBe(false);
+  });
+
   test('paid fulfilment updates booking and accounting evidence atomically', () => {
     const source = read('api/webhook.js');
     const start = source.indexOf('async function fulfilPaidBookingExtension');
@@ -242,6 +288,23 @@ test.describe('booking extension offer contract', () => {
       },
     });
     expect(result).toMatchObject({ refundRequired: true, resolutionReason: 'booking_changed_or_cancelled' });
+  });
+
+  test('a paid Flexible Hours extension is compensated before booking or credit ledgers change', async () => {
+    const { result, calls } = await runInvalidExtension({
+      booking: {
+        id: 501, status: 'scheduled', learner_id: 31, instructor_id: 12, school_id: 7,
+        scheduled_date: '2026-09-12', start_time: '09:00:00', end_time: '10:30:00',
+        lesson_has_ended: false, payment_method: 'flexible_package',
+        has_flexible_package_allocation: true,
+      },
+    });
+    expect(result).toMatchObject({
+      refundRequired: true,
+      resolutionReason: 'flexible_package_duration_change_requires_rebooking',
+    });
+    expect(calls.some(call => /INSERT INTO credit_transactions/.test(call.text))).toBe(false);
+    expect(calls.some(call => /UPDATE lesson_bookings/.test(call.text))).toBe(false);
   });
 
   test('cancelled extension offer after Checkout creates a durable refund intent', async () => {

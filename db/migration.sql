@@ -10507,7 +10507,6 @@ CREATE TABLE IF NOT EXISTS flexible_package_booking_allocations (
   contribution_pence INTEGER NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (id, school_id),
-  UNIQUE (school_id, source_id, booking_id),
   FOREIGN KEY (learner_id, school_id) REFERENCES learner_users(id, school_id) ON DELETE SET NULL (learner_id),
   FOREIGN KEY (source_id, school_id) REFERENCES flexible_package_sources(id, school_id),
   FOREIGN KEY (booking_id, school_id) REFERENCES lesson_bookings(id, school_id),
@@ -10518,6 +10517,8 @@ CREATE TABLE IF NOT EXISTS flexible_package_booking_allocations (
 
 CREATE INDEX IF NOT EXISTS idx_flexible_allocations_booking
   ON flexible_package_booking_allocations(school_id, booking_id);
+CREATE INDEX IF NOT EXISTS idx_flexible_allocations_source_booking
+  ON flexible_package_booking_allocations(school_id, source_id, booking_id);
 CREATE INDEX IF NOT EXISTS idx_flexible_allocations_instructor
   ON flexible_package_booking_allocations(school_id, instructor_id, created_at);
 

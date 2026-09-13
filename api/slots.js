@@ -6478,7 +6478,7 @@ async function handleCancel(req, res) {
       if (error?.code !== '42P01') throw error;
     }
     const flexibleUnits = Number(flexibleAllocations[0]?.units || 0);
-    if (flexibleUnits > 0) {
+    if (flexibleUnits > 0 || booking.payment_method === 'flexible_package') {
       if (cancel_series) {
         return res.status(400).json({
           error: true,
@@ -6507,6 +6507,7 @@ async function handleCancel(req, res) {
       const cancelled = await cancelFlexiblePackageBookingTransaction({
         connectionString: process.env.POSTGRES_URL,
         learnerId: user.id,
+        instructorId: booking.instructor_id,
         schoolId,
         bookingId: Number(booking_id),
         eligibleReturn,
@@ -6577,15 +6578,30 @@ async function handleCancel(req, res) {
         });
       }
       seriesBookings = await sql`
-        SELECT id, scheduled_date::text, start_time::text, end_time::text, minutes_deducted
-        FROM lesson_bookings
-        WHERE series_id = ${booking.series_id}
-          AND learner_id = ${user.id}
-          AND COALESCE(school_id, 1) = ${schoolId}
-          AND status = ${SCHEDULED}
-          AND scheduled_date >= CURRENT_DATE
+        SELECT lb.id, lb.scheduled_date::text, lb.start_time::text, lb.end_time::text,
+               lb.minutes_deducted, lb.payment_method,
+               EXISTS (
+                 SELECT 1 FROM flexible_package_booking_allocations allocation
+                  WHERE allocation.booking_id = lb.id
+                    AND allocation.school_id = lb.school_id
+                    AND allocation.learner_id = lb.learner_id
+               ) AS has_flexible_package_allocation
+        FROM lesson_bookings lb
+        WHERE lb.series_id = ${booking.series_id}
+          AND lb.learner_id = ${user.id}
+          AND COALESCE(lb.school_id, 1) = ${schoolId}
+          AND lb.status = ${SCHEDULED}
+          AND lb.scheduled_date >= CURRENT_DATE
         ORDER BY scheduled_date
       `;
+      if (seriesBookings.some(row => row.payment_method === 'flexible_package'
+          || row.has_flexible_package_allocation === true)) {
+        return res.status(409).json({
+          error: true,
+          code: 'FLEXIBLE_PACKAGE_SINGLE_BOOKING_ONLY',
+          message: 'Flexible Hours bookings are cancelled individually.',
+        });
+      }
 
       const cancelled = [];
       const refunded = [];
@@ -7095,6 +7111,12 @@ async function handleReservedPolicyMove(req, res) {
            lb.pickup_address,
            lb.dropoff_address,
            lb.payment_method,
+           EXISTS (
+             SELECT 1 FROM flexible_package_booking_allocations allocation
+              WHERE allocation.booking_id = lb.id
+                AND allocation.school_id = lb.school_id
+                AND allocation.learner_id = lb.learner_id
+           ) AS has_flexible_package_allocation,
            lb.stripe_fee_pence,
            lb.stripe_fee_source,
            lb.list_price_pence,
@@ -7133,6 +7155,8 @@ async function handleReservedPolicyMove(req, res) {
           message: 'Confirmed reserved weekly booking not found',
         });
       }
+      const isFlexiblePackageBooking = booking.payment_method === 'flexible_package'
+        || booking.has_flexible_package_allocation === true;
 
       const oldDate = String(booking.scheduled_date).slice(0, 10);
       const oldStart = String(booking.start_time).slice(0, 5);
@@ -7320,28 +7344,19 @@ async function handleReservedPolicyMove(req, res) {
         });
       }
 
-      const refundedBcs = await client.query(
-        `UPDATE booking_credit_sources
-            SET refunded_at = NOW()
-          WHERE booking_id = $1
-            AND school_id = $2
-            AND refunded_at IS NULL
-          RETURNING id`,
-        [booking.id, schoolId]
-      );
-      const refundedBcsIds = refundedBcs.rows.map(row => row.id);
-
-      await client.query(
-        `UPDATE lesson_bookings
-            SET status = $1,
-                credit_returned = TRUE,
-                cancelled_at = NOW()
-          WHERE id = $2
-            AND learner_id = $3
-            AND school_id = $4
-            AND status = $5`,
-        [REFUNDED, booking.id, user.id, schoolId, SCHEDULED]
-      );
+      let refundedBcsIds = [];
+      if (!isFlexiblePackageBooking) {
+        const refundedBcs = await client.query(
+          `UPDATE booking_credit_sources
+              SET refunded_at = NOW()
+            WHERE booking_id = $1
+              AND school_id = $2
+              AND refunded_at IS NULL
+            RETURNING id`,
+          [booking.id, schoolId]
+        );
+        refundedBcsIds = refundedBcs.rows.map(row => row.id);
+      }
 
       const insertedBooking = await client.query(
         `INSERT INTO lesson_bookings
@@ -7384,7 +7399,24 @@ async function handleReservedPolicyMove(req, res) {
       );
       const newBooking = insertedBooking.rows[0];
 
-      if (refundedBcsIds.length > 0) {
+      let flexibleMove = null;
+      if (isFlexiblePackageBooking) {
+        flexibleMove = await moveFlexiblePackageBookingAllocations(client, {
+          learnerId: booking.learner_id,
+          schoolId,
+          oldBookingId: booking.id,
+          newBookingId: newBooking.id,
+          newInstructorId: booking.instructor_id,
+        });
+        if (flexibleMove.minutes !== Number(booking.minutes_deducted || 0)
+            || flexibleMove.minutes !== durationMinutes) {
+          abortReservedPolicyMove(409, {
+            error: true,
+            code: 'FLEXIBLE_RESCHEDULE_VALUE_CONTRADICTION',
+            message: 'The Flexible Hours allocation does not match this reserved lesson duration.',
+          });
+        }
+      } else if (refundedBcsIds.length > 0) {
         await client.query(
           `INSERT INTO booking_credit_sources
              (school_id, booking_id, credit_transaction_id, minutes_drawn,
@@ -7401,6 +7433,25 @@ async function handleReservedPolicyMove(req, res) {
            ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING`,
           [newBooking.id, refundedBcsIds, schoolId]
         );
+      }
+
+      const oldUpdated = await client.query(
+        `UPDATE lesson_bookings
+            SET status = $1,
+                credit_returned = TRUE,
+                cancelled_at = NOW()
+          WHERE id = $2
+            AND learner_id = $3
+            AND school_id = $4
+            AND status = $5`,
+        [REFUNDED, booking.id, user.id, schoolId, SCHEDULED]
+      );
+      if (oldUpdated.rowCount !== 1) {
+        abortReservedPolicyMove(409, {
+          error: true,
+          code: 'BOOKING_CHANGED',
+          message: 'This reserved lesson changed while it was being moved.',
+        });
       }
 
       await client.query(
@@ -7443,6 +7494,8 @@ async function handleReservedPolicyMove(req, res) {
         old_slot: { date: oldDate, start_time: oldStart, end_time: String(booking.end_time).slice(0, 5) },
         new_slot: { date: newDate, start_time: newStartTime, end_time: newEndTime },
         copied_booking_credit_source_count: refundedBcsIds.length,
+        funding_method: isFlexiblePackageBooking ? 'flexible_package' : (booking.payment_method || null),
+        flexible_package_units_moved: flexibleMove?.units || 0,
       };
     });
 
@@ -7450,6 +7503,13 @@ async function handleReservedPolicyMove(req, res) {
   } catch (err) {
     if (err instanceof ReservedPolicyMoveAbort) {
       return res.status(err.statusCode).json(err.payload);
+    }
+    if (err?.result?.code) {
+      return res.status(409).json({
+        error: true,
+        code: err.result.code,
+        message: err.result.message || 'This Flexible Hours booking could not be moved safely.',
+      });
     }
     if (err?.code === '23505' || err?.message?.includes('uq_booking_slot')) {
       return res.status(409).json({ error: true, code: 'SLOT_UNAVAILABLE', message: 'That replacement slot is no longer available' });
@@ -7567,6 +7627,11 @@ async function handleReschedule(req, res) {
       `;
     } catch (error) {
       if (error?.code !== '42P01') throw error;
+    }
+    if (!flexiblePackageFunding && booking.payment_method === 'flexible_package') {
+      // Route a contradictory booking through the package transaction so the
+      // missing immutable allocation blocks instead of falling back to LCB.
+      flexiblePackageFunding = { funded: true, missing_allocation: true };
     }
     const targetInstructorId = requestedInstructorId || Number(booking.instructor_id);
     const instructorChanged = targetInstructorId !== Number(booking.instructor_id);

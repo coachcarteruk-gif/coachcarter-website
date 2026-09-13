@@ -81,6 +81,8 @@ For instructor-managed cross-instructor reschedules, the old-row transition, rep
 
 For learner-managed Flexible Hours reschedules at 48+ hours, the old-row transition, exact append-only allocation returns, identical replacement allocations, and replacement booking are one transaction. The frozen pence contribution is not repriced. Flexible Hours are school-wide, so the replacement may use another eligible same-school instructor; active Lesson Credit attribution on the same booking is rejected as mixed funding.
 
+Flexible Hours cancellations by a learner with 48+ hours' notice, an instructor, or admin support return the active immutable allocations through the dedicated package transaction. They set the booking to `refunded` with `credit_returned = FALSE` because no ordinary Lesson Credit was returned; the allocation-return rows are the return evidence. Instructor `mark-not-delivered` uses the same rule before payout. Repeats are idempotent, and a refunded Flexible Hours booking with any active allocation is a blocking contradiction rather than permission to credit LCB.
+
 **`credit_forfeited = TRUE` (writes):**
 - `api/slots.js` — learner cancel <48h (only writer)
 

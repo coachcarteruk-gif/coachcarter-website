@@ -3227,7 +3227,18 @@ async function fulfilPaidBookingExtension({
               lb.scheduled_date::text AS scheduled_date,
               lb.start_time::text AS start_time, lb.end_time::text AS end_time,
               (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
-              lb.minutes_deducted, lb.list_price_pence,
+              lb.minutes_deducted, lb.list_price_pence, lb.payment_method,
+              EXISTS (
+                SELECT 1 FROM flexible_package_booking_allocations allocation
+                 WHERE allocation.booking_id = lb.id
+                   AND allocation.school_id = lb.school_id
+                   AND allocation.learner_id = lb.learner_id
+                   AND NOT EXISTS (
+                     SELECT 1 FROM flexible_package_allocation_returns returned
+                      WHERE returned.allocation_id = allocation.id
+                        AND returned.school_id = allocation.school_id
+                   )
+              ) AS has_flexible_package_allocation,
               lu.name AS learner_name, lu.email AS learner_email, lu.phone AS learner_phone,
               i.name AS instructor_name, i.email AS instructor_email, i.phone AS instructor_phone
          FROM lesson_bookings lb
@@ -3244,6 +3255,9 @@ async function fulfilPaidBookingExtension({
         dateOnly(booking.scheduled_date) !== scheduledDate ||
         String(booking.end_time).slice(0, 5) !== oldEndTime) {
       return requireRefund('booking_changed_or_cancelled');
+    }
+    if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
+      return requireRefund('flexible_package_duration_change_requires_rebooking');
     }
 
     const overlap = await client.query(
