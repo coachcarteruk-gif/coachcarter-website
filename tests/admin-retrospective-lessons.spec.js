@@ -48,7 +48,7 @@ test.describe('admin retrospective lesson entry', () => {
     expect(tx).toContain('planFifoCreditDraw({');
     expect(tx).toContain('splitFifoPlanAcrossBookings({');
     expect(tx).toContain('INSERT INTO booking_credit_sources');
-    expect(tx).toContain('ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING');
+    expect(tx).toContain('ON CONFLICT DO NOTHING');
     expect(tx).toContain('SET list_price_pence = $1');
     expect(tx).toContain('SET balance_minutes = balance_minutes - $4');
     expect(tx).toContain('AND balance_minutes >= $4');

@@ -2546,13 +2546,15 @@ CREATE TABLE IF NOT EXISTS booking_credit_sources (
   stripe_fee_pence      INTEGER NOT NULL DEFAULT 0,
   absorbed_by           TEXT CHECK (absorbed_by IS NULL OR absorbed_by IN ('platform', 'instructor')),
   refunded_at           TIMESTAMPTZ,
-  created_at            TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (booking_id, credit_transaction_id)
+  created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_bcs_booking   ON booking_credit_sources(booking_id);
 CREATE INDEX IF NOT EXISTS idx_bcs_credit_tx ON booking_credit_sources(credit_transaction_id);
 CREATE INDEX IF NOT EXISTS idx_bcs_active
   ON booking_credit_sources(credit_transaction_id)
+  WHERE refunded_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bcs_active_booking_source
+  ON booking_credit_sources(booking_id, credit_transaction_id)
   WHERE refunded_at IS NULL;
 
 -- Step 5 groundwork (May 2026): BCS is a tenant-scoped financial attribution
@@ -11467,7 +11469,7 @@ BEGIN
 END
 $restore_authoritative_payout_access$;
 
-+-- Append-only record of a payout made outside CoachCarter.
+-- Append-only record of a payout made outside CoachCarter.
 --
 -- Additive and inert: this migration records no settlement, evidence, approval,
 -- payout, transfer, refund, or audit row. The dedicated superadmin operation is

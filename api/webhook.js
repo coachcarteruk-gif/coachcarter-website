@@ -1872,7 +1872,7 @@ async function ensureSlotBookingBcs(sql, {
     VALUES
       (${schoolId}, ${bookingId}, ${creditTransaction.id}, ${durationMins},
        ${creditTransaction.effective_rate_pence_per_minute}, ${creditTransaction.amount_pence}, ${bcsStripeFeePence}, NULL)
-    ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+    ON CONFLICT DO NOTHING
   `;
 }
 
@@ -1907,7 +1907,7 @@ async function ensureOfferSeriesBcs(sql, {
       VALUES
         (${row.school_id}, ${row.booking_id}, ${row.credit_transaction_id}, ${row.minutes_drawn},
          ${row.rate_pence_per_minute}, ${row.contribution_pence}, ${row.stripe_fee_pence}, ${row.absorbed_by})
-      ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+      ON CONFLICT DO NOTHING
     `;
   }
 }

@@ -946,7 +946,7 @@ async function createAdminRetrospectiveCreditBookingTransaction({
               rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
            VALUES
              ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+           ON CONFLICT DO NOTHING
            RETURNING id`,
           [
             row.school_id, row.booking_id, row.credit_transaction_id, row.minutes_drawn,
@@ -1292,6 +1292,12 @@ async function handleEditBooking(req, res) {
       return res.status(409).json({
         error: 'Flexible Hours lesson duration cannot be edited in place. Cancel and rebook so its immutable package units remain exact.',
         code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
+      });
+    }
+    if (booking.payment_method === 'credit' && requestedDurationDelta !== 0) {
+      return res.status(409).json({
+        error: 'Lesson Credit duration cannot be edited in place. Cancel and rebook so its source attribution and value remain exact.',
+        code: 'LESSON_CREDIT_DURATION_EDIT_REQUIRES_REBOOKING',
       });
     }
 
@@ -2340,7 +2346,7 @@ async function handleReservedGoodwillMove(req, res) {
             WHERE id = ANY($2::int[])
               AND school_id = $3
               AND refunded_at IS NOT NULL
-           ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING`,
+           ON CONFLICT DO NOTHING`,
           [newBooking.id, refundedBcsIds, schoolId]
         );
       }

@@ -101,8 +101,14 @@ const LEARNER_CATEGORIES = new Set(['regular', 'sporadic', 'inactive', 'passed']
 
 function isSelfServeFreeTrialBooking(booking) {
   return booking?.created_by === 'free_trial_self_serve'
-    && booking?.payment_method === 'free'
-    && Number(booking?.minutes_deducted || 0) === 0;
+    && isZeroCreditFreeBooking(booking);
+}
+
+function isZeroCreditFreeBooking(booking) {
+  const listPrice = booking?.list_price_pence;
+  return booking?.payment_method === 'free'
+    && Number(booking?.minutes_deducted || 0) === 0
+    && (listPrice == null || Number(listPrice) === 0);
 }
 
 class InstructorBookingTransactionAbort extends Error {
@@ -1968,6 +1974,7 @@ async function handleCancelBooking(req, res) {
       SELECT lb.id, lb.status, lb.learner_id, lb.instructor_id, lb.school_id,
              lb.scheduled_date, lb.start_time,
              lb.created_by, lb.payment_method, lb.minutes_deducted,
+             lb.list_price_pence,
              EXISTS (
                SELECT 1 FROM flexible_package_booking_allocations allocation
                 WHERE allocation.booking_id = lb.id
@@ -1985,9 +1992,14 @@ async function handleCancelBooking(req, res) {
 
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
     const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);
-    const minsToReturn = isSelfServeFreeTrial
-      ? 0
-      : Number(booking.minutes_deducted ?? 90);
+    const isZeroCreditFree = isZeroCreditFreeBooking(booking);
+    const minsToReturn = isZeroCreditFree ? 0 : Number(booking.minutes_deducted ?? 90);
+    if (!isZeroCreditFree && (!Number.isSafeInteger(minsToReturn) || minsToReturn <= 0)) {
+      return res.status(409).json({
+        error: 'This booking has contradictory Lesson Credit funding and cannot be cancelled automatically.',
+        code: 'BOOKING_FUNDING_RECONCILIATION_REQUIRED',
+      });
+    }
     let flexibleCancellation = null;
 
     if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
@@ -2013,17 +2025,18 @@ async function handleCancelBooking(req, res) {
         return res.status(400).json({ error: `Cannot cancel a booking with status "${booking.status}"` });
       }
 
-      // Ordinary Lesson Credit and free-trial cancellation retain their
-      // existing behaviour. Flexible Hours return through the append-only
-      // package transaction above and never touch LCB.
+      // A genuinely free zero-credit booking has no Lesson Credit to return,
+      // regardless of whether it was created by self-serve trial or by an
+      // instructor. Flexible Hours return through the append-only package
+      // transaction above and never touch LCB.
       await sql`
         UPDATE lesson_bookings SET status = ${REFUNDED},
-          credit_returned = ${!isSelfServeFreeTrial}, credit_forfeited = FALSE,
+          credit_returned = ${!isZeroCreditFree}, credit_forfeited = FALSE,
           cancelled_at = NOW(),
           instructor_notes = ${reason ? 'Cancelled: ' + reason.trim() : 'Cancelled by instructor'}
         WHERE id = ${booking_id}
       `;
-      if (!isSelfServeFreeTrial) {
+      if (!isZeroCreditFree) {
         await markBookingCreditSourcesRefunded(sql, {
           bookingId: booking_id,
           schoolId: booking.school_id || 1,
@@ -2056,8 +2069,10 @@ async function handleCancelBooking(req, res) {
           <h2>Hi ${firstName},</h2>
           <p>Your lesson on <strong>${dateStr} at ${timeStr}</strong> with ${booking.instructor_name} has been cancelled.</p>
           ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-          ${isSelfServeFreeTrial
-            ? '<p>No lesson credit was used for this free trial.</p>'
+          ${isZeroCreditFree
+            ? isSelfServeFreeTrial
+              ? '<p>No lesson credit was used for this free trial.</p>'
+              : '<p>No lesson credit was used for this free booking.</p>'
             : flexibleCancellation
               ? '<p>Your Flexible Hours have been returned to your package balance automatically.</p>'
             : '<p>Your lesson credit has been refunded automatically. You can rebook at any time from your dashboard.</p>'}
@@ -2078,7 +2093,7 @@ async function handleCancelBooking(req, res) {
       success: true,
       funding_method: flexibleCancellation ? 'flexible_package' : booking.payment_method,
       minutes_returned: flexibleCancellation ? flexibleCancellation.minutesReturned : minsToReturn,
-      credit_returned: flexibleCancellation ? false : !isSelfServeFreeTrial,
+      credit_returned: flexibleCancellation ? false : !isZeroCreditFree,
       package_units_returned: flexibleCancellation ? flexibleCancellation.units : 0,
       idempotent: flexibleCancellation?.idempotent === true,
     });
@@ -2849,6 +2864,12 @@ async function handleEditBooking(req, res) {
         code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
       });
     }
+    if (booking.payment_method === 'credit' && requestedDurationDelta !== 0) {
+      return res.status(409).json({
+        error: 'Lesson Credit duration cannot be edited in place. Cancel and rebook so its source attribution and value remain exact.',
+        code: 'LESSON_CREDIT_DURATION_EDIT_REQUIRES_REBOOKING',
+      });
+    }
 
     // Calculate new end time
     const startParts = newStartTime.split(':').map(Number);
@@ -3277,7 +3298,7 @@ async function createInstructorCreditBookingTransaction({
               rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by)
            VALUES
              ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+           ON CONFLICT DO NOTHING
            RETURNING id`,
           [
             row.school_id, row.booking_id, row.credit_transaction_id, row.minutes_drawn,

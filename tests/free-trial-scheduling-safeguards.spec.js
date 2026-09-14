@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_free_trial_safeguards';
 const {
   _hasBufferedSlotConflict,
   _findAdjacentTravelSpacingConflict,
@@ -109,19 +110,21 @@ test.describe('free trial scheduling safeguards', () => {
     expect(api).toContain('function isSelfServeFreeTrialBooking(booking)');
     expect(cancel).toContain('lb.created_by, lb.payment_method');
     expect(cancel).toContain('const isSelfServeFreeTrial = isSelfServeFreeTrialBooking(booking);');
-    expect(cancel).toContain('const minsToReturn = isSelfServeFreeTrial');
+    expect(cancel).toContain('const isZeroCreditFree = isZeroCreditFreeBooking(booking);');
+    expect(cancel).toContain('const minsToReturn = isZeroCreditFree ? 0');
     expect(cancel).toContain('Number(booking.minutes_deducted ?? 90)');
     expect(cancel).not.toContain('Number(booking.minutes_deducted || 90)');
-    expect(cancel).toContain('credit_returned = ${!isSelfServeFreeTrial}, credit_forfeited = FALSE');
-    expect(cancel).toContain('if (!isSelfServeFreeTrial) {');
+    expect(cancel).toContain('credit_returned = ${!isZeroCreditFree}, credit_forfeited = FALSE');
+    expect(cancel).toContain('if (!isZeroCreditFree) {');
 
     const refundBranch = cancel.slice(
-      cancel.indexOf('if (!isSelfServeFreeTrial) {'),
-      cancel.indexOf('// Email the learner', cancel.indexOf('if (!isSelfServeFreeTrial) {'))
+      cancel.indexOf('if (!isZeroCreditFree) {'),
+      cancel.indexOf('// Email the learner', cancel.indexOf('if (!isZeroCreditFree) {'))
     );
     expect(refundBranch).toContain('markBookingCreditSourcesRefunded');
     expect(refundBranch).toContain('lockBalanceAdjustLCB');
     expect(cancel).toContain('No lesson credit was used for this free trial.');
+    expect(cancel).toContain('No lesson credit was used for this free booking.');
     expect(cancel).not.toContain('UPDATE learner_users SET free_trial_allowed');
   });
 

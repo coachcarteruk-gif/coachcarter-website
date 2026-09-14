@@ -35,7 +35,7 @@ async function copyRefundedBookingCreditSources(sql, { bcsIds, newBookingId, sch
      WHERE id = ANY(${bcsIds})
        AND school_id = ${schoolId}
        AND refunded_at IS NOT NULL
-    ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id
   `;
   return rows.map(row => row.id);
