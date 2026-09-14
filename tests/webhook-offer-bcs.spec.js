@@ -150,7 +150,7 @@ test.describe('webhook paid offer BCS attribution', () => {
     expect(seriesBcsBody).toContain('(${row.school_id}, ${row.booking_id}, ${row.credit_transaction_id}, ${row.minutes_drawn}');
   });
 
-  test('repeat offer BCS writer is retry-safe on the booking/source natural key', async () => {
+  test('repeat offer BCS writer is retry-safe under active-row uniqueness', async () => {
     const ensureOfferSeriesBcs = getExecutableSeriesBcs();
     const calls = [];
     const sql = async (strings, ...values) => {
@@ -180,7 +180,7 @@ test.describe('webhook paid offer BCS attribution', () => {
     await ensureOfferSeriesBcs(sql, input);
     await ensureOfferSeriesBcs(sql, input);
 
-    const conflictPattern = /ON\s+CONFLICT\s*\(\s*booking_id\s*,\s*credit_transaction_id\s*\)\s+DO\s+NOTHING/i;
+    const conflictPattern = /ON\s+CONFLICT\s+DO\s+NOTHING/i;
     expect(getBcsBody()).toMatch(conflictPattern);
     expect(calls).toHaveLength(4);
     for (const call of calls) {
