@@ -1,25 +1,25 @@
 # Migration governance audit and phased cleanup
 
-Status: **production ledger installed; numbered history current through 064**
+Status: **production ledger installed; numbered history current through 065**
 
-Audit date: 2026-09-13
+Audit date: 2026-09-13; last production receipt: 2026-09-14
 
 Production target inspected read-only: Neon project `neon-green-elephant`
 (`falling-firefly-48751671`), protected/default branch `main`
 (`br-summer-silence-abcpp6vw`), database `neondb`.
 
 This document is the migration-system source of truth. It records the completed
-ledger bootstrap and numbered receipts through 064, but does not authorise a
+ledger bootstrap and numbered receipts through 065, but does not authorise a
 future production migration, legacy endpoint change, or financial/data
 mutation.
 
 ## Confirmed file sequence
 
-`db/migrations/` contains 65 SQL files:
+`db/migrations/` contains 66 SQL files:
 
 - one file for every prefix from 001 through 025;
 - two independent files with prefix 026;
-- one file for every prefix from 027 through 064.
+- one file for every prefix from 027 through 065.
 
 The duplicate prefix is historical, not duplicate content:
 
@@ -39,7 +39,7 @@ SHA-256 values are in `db/migrations/manifest.json`. The immutable installation
 packet is the exact 62-entry artifact reviewed when the ledger was installed:
 the 61 identities through 060 plus 061 recorded only as pending numbered work.
 It created 60 baseline receipts, omitted deferred 041, and did not create a row
-for 061. Migrations 061 through 064 now have separate successful production
+for 061. Migrations 061 through 065 now have separate successful production
 execution receipts. Future numbered migrations belong only in the manifest and
 ledger; they must not rewrite the installed packet or its checksum.
 
@@ -92,6 +92,15 @@ The following evidence is authoritative enough to state exact execution:
   receipt/attempt #64 in 273 ms. Postflight found 64 successful receipts,
   none pending, zero legacy pair constraints and exactly one active-row unique
   index.
+- Migration 065: checksum
+  `21c0dd7f20fbfdba866192080dcc76a99a1ad7da8e5c899837b40dcc5bc2ce6b`
+  adds the consent-audit column `cookie_consents.marketing BOOLEAN NOT NULL
+  DEFAULT FALSE`. It was rehearsed successfully on production-derived branch
+  `br-square-cherry-abf7b30s`, then applied transactionally to production
+  fingerprint `32c8e09a13fff240b0e1af6bb4c063bce1ca02ec09b801242e9232c824123008`
+  on 2026-09-14 through the governed runner. Postflight found 65 successful
+  receipts, none pending, the expected column contract, and all 727 existing
+  consent rows defaulted to `false`.
 - Ten data-migration marker rows prove the successful one-off operations listed
   below, with timestamps from 2026-05-20 through 2026-05-21.
 
@@ -300,8 +309,8 @@ Completed in the repository:
    append-only enforcement, failure states, ordering/checksum rejection, and
    Phase 1 runner compatibility.
 
-The production ledger now contains 64 successful rows: 60 baseline receipts and
-numbered execution receipts for 061 through 064. There are no running, failed,
+The production ledger now contains 65 successful rows: 60 baseline receipts and
+numbered execution receipts for 061 through 065. There are no running, failed,
 pending, duplicate, unknown, or checksum-mismatched rows. Migration 041 remains
 deliberately deferred and has no false success row.
 
