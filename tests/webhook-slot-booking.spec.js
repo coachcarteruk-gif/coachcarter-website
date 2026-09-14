@@ -99,7 +99,7 @@ test.describe('webhook slot booking regressions', () => {
   test('handleSlotBooking BCS insert is idempotent on booking/source natural key', () => {
     const body = getFunctionBody('ensureSlotBookingBcs');
 
-    expect(body).toContain('ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING');
+    expect(body).toContain('ON CONFLICT DO NOTHING');
   });
 
   test('handleSlotBooking only inserts BCS after booking insert succeeds', () => {

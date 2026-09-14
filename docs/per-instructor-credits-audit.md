@@ -1,6 +1,6 @@
 # Per-Instructor Credits Audit
 
-Last updated: 2026-09-08
+Last updated: 2026-09-14
 
 This is the living implementation audit for the move from pooled learner credit
 (`learner_users.balance_minutes`) to per-instructor credit balances via
@@ -376,9 +376,54 @@ Flexible Hours rescheduling uses the same 48+ hour learner rule. It atomically t
 
 Instructor-managed rescheduling now calls the same allocation-move transaction before terminalising the old booking. Instructor edit-in-place refuses any Flexible Hours duration change: changing a 90-minute booking to 60 minutes while leaving three 30-minute units attached was the source of the Viba discrepancy. Date/time edits with unchanged duration remain allowed. A historical mismatch is payout-blocking and requires a separately reviewed append-only ledger repair; it must not be fixed by rewriting the allocation or by falling back to the current lesson price.
 
-The 2026-09-13 Viba prevention follow-up extends that refusal to the admin editor and routes instructor/admin-support cancellation plus instructor `mark-not-delivered` through the same Flexible Hours transaction. Every mutation path now fails closed on `payment_method='flexible_package'` even when allocation evidence is missing, so it cannot fall through to ordinary LCB. Numbered migration 063 permits an append-only same-source/same-booking replacement allocation after the original allocation is returned; each return remains exactly-once. The Viba data repair remains a separately gated dry-run-first operator action and has not been executed.
+The 2026-09-13 Viba prevention follow-up extends that refusal to the admin editor and routes instructor/admin-support cancellation plus instructor `mark-not-delivered` through the same Flexible Hours transaction. Every mutation path now fails closed on `payment_method='flexible_package'` even when allocation evidence is missing, so it cannot fall through to ordinary LCB. Numbered migration 063 was rehearsed on a production-derived branch and applied to production after snapshot `snap-summer-haze-abng8a8r`; it permits append-only same-source/same-booking replacement allocations while each return remains exactly-once. After Fraser's explicit approval of fingerprint `sha256:df6ae0aab5c7c6e071beb2f0bf6508495114961b1d132886daa54312e2e6b19f`, Viba's repair returned allocations #7-#10, inserted corrected allocations #18/#19 for bookings #536/#568, reduced her Simon LCB from 210 to zero, and left 10 source units/300 minutes/£270 available. State event #25 and audit row #650 preserve the evidence. The immediate dry run returned `already_applied`; no refunded active allocation, mixed funding or duration mismatch remains, and total unused entitlement is unchanged at 300 minutes.
 
 The same historical cancellation defect affected Megan Cridland before those prevention guards. Her target-specific repair is implemented in `scripts/megan-flexible-ledger-repair.js`, backed by `api/_megan-flexible-ledger-repair.js`. The live 13 September dry run confirmed all three exact refunded bookings (#500/#501/#510), but only #500 and #501 ever received two-unit source allocations; replacement booking #510 has no allocation or return row. It also confirmed 120 ordinary minutes, 26 remaining package units and two active two-unit refunded allocations. The reviewed fingerprint is bound to those allocation IDs, while the preconditions separately require #510 to remain unallocated. After explicit approval, the production repair returned allocations #3/#4, reduced the current LCB row from 120 to zero, and finished source #1 at all 30 units/900 minutes available. State event #24 and audit row #646 preserve the evidence; an immediate dry run returned `already_applied`. It did not call Stripe or change booking status, payouts, refund ledgers or historical allocation rows.
+
+## Targeted Lesson Credit repair status (2026-09-14)
+
+Three target-specific, production-pinned runners now encode the Lloyd #27,
+Limkholwe #126 and Emilie Bishop #144 findings. Lloyd and Limkholwe each have a
+free zero-credit booking whose historical cancellation incorrectly added 90
+minutes to both the instructor LCB and its aggregate shadow. Their repairs set
+the exact LCB to zero, let the existing LCB trigger synchronize the aggregate
+shadow and its `balance_audit` evidence, and change the target booking's
+`credit_returned` flag from true to false. Limkholwe's packet additionally
+reactivates the original 60-minute/£0 free-trial BCS #91 so the consumed trial
+remains attributed. Neither packet changes a paid source, refund, payout or
+Stripe record.
+
+Emilie's repair preserves both original source purchases and reallocates their
+immutable £165 total across the lessons' actual durations: booking #533 becomes
+90 minutes/£82.50, while #585 becomes 90 minutes/£82.50 funded by £55 from
+source #354 plus £27.50 from source #318. Historical BCS #287 is retired and
+two replacement attribution rows are appended; no historical source is
+rewritten. Migration 064 is required first so a retired booking/source pair can
+coexist with one corrected active row. The ordinary-credit duration editors now
+fail closed and require cancel/rebook, preventing another edit-in-place source
+mismatch.
+
+Migration 064 and all three repair transactions first passed against
+production-derived branch `br-square-cherry-abf7b30s`; each rehearsal repair
+transaction was rolled back. After separate approval and creation of recovery
+snapshot `snap-quiet-queen-ab2pxnei`, migration 064 committed successfully as
+receipt #64. Lloyd's approved fingerprint
+`sha256:d9859cacefaedaa33e1b1f9e61786d197d0aaa858339b080ea3964acd5fad2fe`
+then reduced both balances from 90 to zero, corrected booking #249, and wrote
+balance audit #579 plus audit log #652. Limkholwe's approved fingerprint
+`sha256:b2a158b0d502a0d73f3676e1af3792be77928572826434497b1fd6f5a8cc1fba`
+reduced both balances from 90 to zero, corrected booking #331, restored BCS #91,
+and wrote balance audit #580 plus audit log #653. Both immediate dry runs
+returned `already_applied`.
+
+Emilie's post-migration production dry run returned `ready` with no failed
+checks. After her separate explicit approval, fingerprint
+`sha256:e982e5d8087d2e7f9fe0eadac59081797a90b66d0c7af78053aafad1817441e5`
+retired BCS #287, appended corrected BCS #362/#363, and set both booking #533
+and #585 values to £82.50 while preserving 180 total minutes and £165. Audit
+log #654 records the operation. Every in-transaction postcondition passed and
+the immediate dry run returned `already_applied`. None of the completed
+operations called Stripe or changed payouts, withdrawals, transfers or refunds.
 
 The normal Flexible Hours purchase path requires the school-wide spendable balance to be zero before another Checkout starts. This reduces cross-price overlap without weakening the immutable source/FIFO model needed for historical returns, webhook reordering and reconciliation.
 

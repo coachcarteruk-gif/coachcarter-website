@@ -36,9 +36,9 @@ function expectCode(fn, code) {
 }
 
 test.describe('migration governance', () => {
-  test('the checked-in manifest covers 61 historical files plus numbered 061 through 063', () => {
+  test('the checked-in manifest covers 61 historical files plus numbered 061 through 064', () => {
     const repository = loadRepository({ allowIndexFallback: true });
-    expect(repository.result.count).toBe(64);
+    expect(repository.result.count).toBe(65);
     expect(repository.manifest.legacyPrefixCollisions['026']).toEqual(['026a', '026b']);
     expect(repository.manifest.migrations.find(item => item.id === '026a').filename)
       .toBe('026_public_tenant_resolution.sql');

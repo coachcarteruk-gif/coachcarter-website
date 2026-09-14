@@ -1,6 +1,6 @@
 # Migration governance audit and phased cleanup
 
-Status: **production ledger installed; numbered history current through 062**
+Status: **production ledger installed; numbered history current through 064**
 
 Audit date: 2026-09-13
 
@@ -9,17 +9,17 @@ Production target inspected read-only: Neon project `neon-green-elephant`
 (`br-summer-silence-abcpp6vw`), database `neondb`.
 
 This document is the migration-system source of truth. It records the completed
-ledger bootstrap and numbered receipts through 062, but does not authorise a
+ledger bootstrap and numbered receipts through 064, but does not authorise a
 future production migration, legacy endpoint change, or financial/data
 mutation.
 
 ## Confirmed file sequence
 
-`db/migrations/` contains 63 SQL files:
+`db/migrations/` contains 65 SQL files:
 
 - one file for every prefix from 001 through 025;
 - two independent files with prefix 026;
-- one file for every prefix from 027 through 062.
+- one file for every prefix from 027 through 064.
 
 The duplicate prefix is historical, not duplicate content:
 
@@ -39,7 +39,7 @@ SHA-256 values are in `db/migrations/manifest.json`. The immutable installation
 packet is the exact 62-entry artifact reviewed when the ledger was installed:
 the 61 identities through 060 plus 061 recorded only as pending numbered work.
 It created 60 baseline receipts, omitted deferred 041, and did not create a row
-for 061. Migrations 061 and 062 now have separate successful production
+for 061. Migrations 061 through 064 now have separate successful production
 execution receipts. Future numbered migrations belong only in the manifest and
 ledger; they must not rewrite the installed packet or its checksum.
 
@@ -69,6 +69,29 @@ The following evidence is authoritative enough to state exact execution:
 - Migrations 061 and 062: the append-only production ledger contains separate
   successful `record_kind=execution` receipts whose filenames and canonical
   checksums match the current numbered manifest.
+- Migration 063: after a successful production-derived branch rehearsal, it
+  was applied transactionally to fingerprint
+  `32c8e09a13fff240b0e1af6bb4c063bce1ca02ec09b801242e9232c824123008`
+  on 2026-09-13. Snapshot `snap-summer-haze-abng8a8r` preserves the
+  pre-migration state. The successful receipt records checksum
+  `6d4bb822feffb0367a35bb8bdd1e85a9a3ed1994fa7d51701bb126e024d72b62`;
+  postflight confirmed the obsolete unique allocation constraint is absent,
+  the non-unique lookup index is present, and `UNIQUE (allocation_id)` still
+  protects allocation returns.
+- Migration 064: checksum
+  `e2f3e901de0c3fc60aae4d2933bf0ca0dc474041e99cbdb06d09832c1e0eb45f`
+  replaces the permanent booking/source uniqueness constraint with unique
+  active-row attribution. It was applied successfully on the expiring
+  production-derived branch `br-square-cherry-abf7b30s` on 2026-09-14; all
+  three targeted repair transactions then passed their in-transaction
+  postconditions and were rolled back. Production fingerprint
+  `32c8e09a13fff240b0e1af6bb4c063bce1ca02ec09b801242e9232c824123008`
+  received Fraser's separate explicit approval after recovery snapshot
+  `snap-quiet-queen-ab2pxnei` was created from the exact production branch.
+  The governed runner applied it successfully on 2026-09-14 as execution
+  receipt/attempt #64 in 273 ms. Postflight found 64 successful receipts,
+  none pending, zero legacy pair constraints and exactly one active-row unique
+  index.
 - Ten data-migration marker rows prove the successful one-off operations listed
   below, with timestamps from 2026-05-20 through 2026-05-21.
 
@@ -93,8 +116,8 @@ qualifications:
 This is the strongest honest conclusion: production has received the terminal
 effects of every current production-applicable area through 060, except the
 intentionally removed 014/021 objects and intentionally absent 041 objects;
-exact numbered-file receipt is recoverable only for 035, 039, 060 and the ten
-marked one-off operations.
+exact numbered-file receipt is recoverable only for 035, 039, 060-063 and the
+ten marked one-off operations.
 
 ## Migration execution inventory
 
@@ -108,7 +131,7 @@ marked one-off operations.
 | `scripts/stripe-launch-schema-foundation-review.js` | Static/evidence review for 039 | Checks canonical migration bytes and retained rollout evidence; it is not an apply runner. |
 | `scripts/stripe-launch-slice-2-rollout-review.js` | Static review for 040 | Reviews the forward fix; it is not a general runner. |
 | `scripts/payout-v2-schema-preflight.js` / `postflight.js` | 035 read-only diagnostics | Production-specific evidence checks. |
-| `scripts/migration-runner.js` | Phase 1 candidate authoritative numbered runner | Repository check is live. Status/apply fail if the ledger is absent. Apply additionally requires a direct URL, exact target fingerprint, explicit approval env, an advisory lock, a contiguous ledger plan, and `execution=numbered`. No current historical migration is runnable through it. |
+| `scripts/migration-runner.js` | Authoritative numbered runner for post-baseline migrations | Repository check is live. Status/apply fail if the ledger is absent. Apply additionally requires a direct URL, exact target fingerprint, explicit approval env, an advisory lock, a contiguous ledger plan, and `execution=numbered`. Migrations 063 and 064 were successfully rehearsed and applied through this path. |
 
 `db/rollouts/` contains retained manifests and sanitized rehearsal, preflight,
 apply, postflight, and recovery evidence for 035 and 039. `db/diagnostics/`
@@ -277,10 +300,10 @@ Completed in the repository:
    append-only enforcement, failure states, ordering/checksum rejection, and
    Phase 1 runner compatibility.
 
-The production ledger now contains 62 successful rows: 60 baseline receipts and
-numbered execution receipts for 061 and 062. There are no running, failed,
-duplicate, unknown, checksum-mismatched, or pending applicable rows. Migration
-041 remains deliberately deferred and has no false success row.
+The production ledger now contains 64 successful rows: 60 baseline receipts and
+numbered execution receipts for 061 through 064. There are no running, failed,
+pending, duplicate, unknown, or checksum-mismatched rows. Migration 041 remains
+deliberately deferred and has no false success row.
 
 Rollback before commit is transaction rollback. After commit, leave the inert
 ledger in place unless it causes a demonstrated incident; restore from the

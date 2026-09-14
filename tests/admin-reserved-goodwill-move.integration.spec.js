@@ -145,7 +145,7 @@ async function findFreeSlot(daysAhead, startHour = 14) {
 
 async function createReservedOccurrence() {
   const learnerId = await createLearner();
-  const original = await findFreeSlot(2, 9);
+  const original = await findFreeSlot(1, 9);
   const [booking] = await sql`
     INSERT INTO lesson_bookings
       (learner_id, instructor_id, scheduled_date, start_time, end_time, status,
@@ -270,7 +270,7 @@ test.describe('admin reserved goodwill move', () => {
       reason: 'Integration test goodwill move',
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode, JSON.stringify(res.body)).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.movement_type).toBe('reserved_goodwill_admin_move');
     expect(res.body.old_booking_id).toBe(fixture.bookingId);

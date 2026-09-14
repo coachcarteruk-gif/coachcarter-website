@@ -441,7 +441,7 @@ async function bookAcceptedCardRequest(sql, { request, lessonType }) {
     VALUES
       (${request.school_id}, ${booking.id}, ${creditTx.id}, ${chargeMins},
        ${creditTx.effective_rate_pence_per_minute}, ${creditTx.amount_pence}, ${creditTx.stripe_fee_pence ?? 0}, NULL)
-    ON CONFLICT (booking_id, credit_transaction_id) DO NOTHING
+    ON CONFLICT DO NOTHING
   `;
 
   return { ok: true, booking };

@@ -519,6 +519,14 @@
       "filename": "063_flexible_allocation_replacement_history.sql",
       "checksum": "6d4bb822feffb0367a35bb8bdd1e85a9a3ed1994fa7d51701bb126e024d72b62",
       "execution": "numbered"
+    },
+    {
+      "id": "064",
+      "order": 65,
+      "prefix": "064",
+      "filename": "064_booking_credit_source_replacement_history.sql",
+      "checksum": "e2f3e901de0c3fc60aae4d2933bf0ca0dc474041e99cbdb06d09832c1e0eb45f",
+      "execution": "numbered"
     }
   ]
 }
