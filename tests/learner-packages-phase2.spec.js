@@ -837,7 +837,7 @@ function phase2UiCatalogue() {
 test.describe('Learner Packages Phase 2 page states', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2 }));
       localStorage.setItem('cc_learner', JSON.stringify({ user: { id: 41, name: 'Learner', school_id: 1 } }));
     });
     await page.route('**/api/packages?action=feature-state**', route => route.fulfill({

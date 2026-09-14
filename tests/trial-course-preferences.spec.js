@@ -18,7 +18,7 @@ test('validates explicit opt-ins and upcoming month boundaries', () => {
 test('reveals multiple months, clears deselected interest and submits preferences', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.addInitScript(() => localStorage.setItem('cc_cookie_consent', JSON.stringify({
-    analytics: false, version: 1, timestamp: '2026-01-01T00:00:00.000Z'
+    analytics: false, marketing: false, version: 2, timestamp: '2026-01-01T00:00:00.000Z'
   })));
   await page.route('**/api/slots?action=available**', route => route.fulfill({ json: { slots: {
     '2030-07-20': [{ start_time: '10:00:00', end_time: '11:00:00', instructor_id: 7, instructor_name: 'Fraser Carter', transmission_type: 'manual' }]

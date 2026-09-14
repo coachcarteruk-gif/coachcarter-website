@@ -41,15 +41,15 @@ module.exports = async (req, res) => {
   // ── POST: record cookie consent (GDPR) ──────────────────────────────────
   if (req.method === 'POST' && req.query.action === 'record-consent') {
     try {
-      const { visitor_id, analytics, learner_id } = req.body;
+      const { visitor_id, analytics, marketing, learner_id } = req.body;
       if (!visitor_id) return res.status(400).json({ error: 'visitor_id required' });
       const crypto = require('crypto');
       const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
       const ipHash = ip ? crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16) : null;
       const sql = neon(process.env.POSTGRES_URL);
       const schoolId = parseInt(req.body.school_id) || 1;
-      await sql`INSERT INTO cookie_consents (visitor_id, learner_id, analytics, ip_hash, user_agent, school_id)
-        VALUES (${visitor_id}, ${learner_id || null}, ${!!analytics}, ${ipHash}, ${(req.headers['user-agent'] || '').slice(0, 255)}, ${schoolId})`;
+      await sql`INSERT INTO cookie_consents (visitor_id, learner_id, analytics, marketing, ip_hash, user_agent, school_id)
+        VALUES (${visitor_id}, ${learner_id || null}, ${!!analytics}, ${!!marketing}, ${ipHash}, ${(req.headers['user-agent'] || '').slice(0, 255)}, ${schoolId})`;
       return res.json({ ok: true });
     } catch (err) {
       console.error('record-consent error:', err);

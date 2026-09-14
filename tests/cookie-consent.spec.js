@@ -1,8 +1,8 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
-// GDPR cookie-consent guardrail (CLAUDE.md hard rule: "Never load analytics
-// without consent"). The risk this defends against is shipping a page that
+// GDPR cookie-consent guardrail (CLAUDE.md hard rule: never load analytics or
+// marketing trackers without consent). The risk this defends against is shipping a page that
 // either skips the banner entirely or loads PostHog before the user clicks
 // Accept — both are silent regressions in the browser and only surface as
 // ICO complaints months later.
@@ -10,8 +10,8 @@ const { test, expect } = require('@playwright/test');
 // What this exercises:
 //   1. Banner auto-shows on a fresh visit (no localStorage).
 //   2. PostHog is NOT loaded before the user makes a choice.
-//   3. "Accept All" persists analytics=true and triggers PostHog load.
-//   4. "Reject All" persists analytics=false and does NOT load PostHog.
+//   3. "Accept All" persists analytics=true + marketing=true and triggers PostHog load.
+//   4. "Reject All" persists both categories=false and does NOT load PostHog.
 //   5. Existing consent suppresses the banner on subsequent visits.
 //   6. Escape key counts as "Reject All" (the contract in cookie-consent.js).
 //   7. The consent record is POSTed to /api/config?action=record-consent.
@@ -66,6 +66,7 @@ test.describe('Cookie consent — GDPR gate', () => {
     await expect(page.locator('#cc-consent-banner h3')).toHaveText('Cookie Preferences');
     // Necessary checkbox is locked on; analytics toggle starts off.
     await expect(page.locator('#cc-analytics-toggle')).not.toBeChecked();
+    await expect(page.locator('#cc-marketing-toggle')).not.toBeChecked();
   });
 
   test('PostHog does NOT load before consent', async ({ page }) => {
@@ -87,13 +88,13 @@ test.describe('Cookie consent — GDPR gate', () => {
     await expect(page.locator('#cc-consent-overlay')).toHaveCount(0);
     // localStorage holds the consent blob.
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('cc_cookie_consent') || 'null'));
-    expect(stored).toMatchObject({ analytics: true, version: 1 });
+    expect(stored).toMatchObject({ analytics: true, marketing: true, version: 2 });
     expect(stored.timestamp).toBeTruthy();
     // PostHog stub was installed by the loader's IIFE on consent-updated.
     await expect.poll(async () => page.evaluate(() => typeof window.posthog)).toBe('object');
     // Server was told.
     expect(recorded).toHaveLength(1);
-    expect(recorded[0]).toMatchObject({ analytics: true });
+    expect(recorded[0]).toMatchObject({ analytics: true, marketing: true });
     expect(recorded[0].visitor_id).toMatch(/^v_/);
   });
 
@@ -104,12 +105,12 @@ test.describe('Cookie consent — GDPR gate', () => {
     await page.locator('#cc-reject-all').click();
     await expect(page.locator('#cc-consent-overlay')).toHaveCount(0);
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('cc_cookie_consent') || 'null'));
-    expect(stored).toMatchObject({ analytics: false, version: 1 });
+    expect(stored).toMatchObject({ analytics: false, marketing: false, version: 2 });
     // Loader saw the event but should not have injected the PostHog stub.
     const hasPosthog = await page.evaluate(() => typeof window.posthog !== 'undefined');
     expect(hasPosthog).toBe(false);
     expect(phCalls).toHaveLength(0);
-    expect(recorded[0]).toMatchObject({ analytics: false });
+    expect(recorded[0]).toMatchObject({ analytics: false, marketing: false });
   });
 
   test('existing consent suppresses banner on next visit', async ({ page }) => {
@@ -118,7 +119,7 @@ test.describe('Cookie consent — GDPR gate', () => {
     // Seed consent before the page's scripts run.
     await page.addInitScript(() => {
       localStorage.setItem('cc_cookie_consent', JSON.stringify({
-        analytics: true, version: 1, timestamp: new Date().toISOString(),
+        analytics: true, marketing: false, version: 2, timestamp: new Date().toISOString(),
       }));
     });
     await page.goto(PAGE);
@@ -140,8 +141,8 @@ test.describe('Cookie consent — GDPR gate', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#cc-consent-overlay')).toHaveCount(0);
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('cc_cookie_consent') || 'null'));
-    expect(stored).toMatchObject({ analytics: false, version: 1 });
-    expect(recorded[0]).toMatchObject({ analytics: false });
+    expect(stored).toMatchObject({ analytics: false, marketing: false, version: 2 });
+    expect(recorded[0]).toMatchObject({ analytics: false, marketing: false });
   });
 
   test('stale consent version triggers re-prompt', async ({ page }) => {
@@ -151,7 +152,7 @@ test.describe('Cookie consent — GDPR gate', () => {
     await stubConsentRecord(page);
     await page.addInitScript(() => {
       localStorage.setItem('cc_cookie_consent', JSON.stringify({
-        analytics: true, version: 0, timestamp: '2024-01-01T00:00:00Z',
+        analytics: true, marketing: false, version: 1, timestamp: '2024-01-01T00:00:00Z',
       }));
     });
     await page.goto(PAGE);

@@ -1282,6 +1282,7 @@ CREATE TABLE IF NOT EXISTS cookie_consents (
   visitor_id   TEXT NOT NULL,
   learner_id   INTEGER REFERENCES learner_users(id) ON DELETE SET NULL,
   analytics    BOOLEAN NOT NULL DEFAULT FALSE,
+  marketing    BOOLEAN NOT NULL DEFAULT FALSE,
   consented_at TIMESTAMPTZ DEFAULT NOW(),
   ip_hash      TEXT,
   user_agent   TEXT,

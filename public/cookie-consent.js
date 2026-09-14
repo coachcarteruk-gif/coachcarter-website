@@ -3,7 +3,7 @@
   'use strict';
 
   var STORAGE_KEY = 'cc_cookie_consent';
-  var CONSENT_VERSION = 1;
+  var CONSENT_VERSION = 2;
 
   /* ── State ── */
   function getConsent() {
@@ -16,9 +16,10 @@
     return null;
   }
 
-  function saveConsent(analytics) {
+  function saveConsent(analytics, marketing) {
     var consent = {
       analytics: !!analytics,
+      marketing: !!marketing,
       version: CONSENT_VERSION,
       timestamp: new Date().toISOString()
     };
@@ -51,6 +52,7 @@
         body: JSON.stringify({
           visitor_id: visitorId,
           analytics: consent.analytics,
+          marketing: consent.marketing,
           learner_id: learnerId
         })
       }).catch(function () { /* fire and forget */ });
@@ -84,6 +86,13 @@
               '<span>Help us understand how you use our site (PostHog, EU-hosted).</span>' +
             '</span>' +
             '<input type="checkbox" id="cc-analytics-toggle">' +
+          '</label>' +
+          '<label class="cc-consent-row">' +
+            '<span class="cc-consent-info">' +
+              '<strong>Marketing</strong>' +
+              '<span>Measure visits from Meta ads on our free-trial page.</span>' +
+            '</span>' +
+            '<input type="checkbox" id="cc-marketing-toggle">' +
           '</label>' +
         '</div>' +
         '<div class="cc-consent-actions">' +
@@ -123,21 +132,25 @@
 
     /* ── Event handlers ── */
     var analyticsToggle = overlay.querySelector('#cc-analytics-toggle');
+    var marketingToggle = overlay.querySelector('#cc-marketing-toggle');
     var existing = getConsent();
-    if (existing) analyticsToggle.checked = existing.analytics;
+    if (existing) {
+      analyticsToggle.checked = existing.analytics;
+      marketingToggle.checked = existing.marketing;
+    }
 
     overlay.querySelector('#cc-accept-all').addEventListener('click', function () {
-      saveConsent(true);
+      saveConsent(true, true);
       closeBanner(overlay);
     });
 
     overlay.querySelector('#cc-reject-all').addEventListener('click', function () {
-      saveConsent(false);
+      saveConsent(false, false);
       closeBanner(overlay);
     });
 
     overlay.querySelector('#cc-save-prefs').addEventListener('click', function () {
-      saveConsent(analyticsToggle.checked);
+      saveConsent(analyticsToggle.checked, marketingToggle.checked);
       closeBanner(overlay);
     });
 
@@ -148,7 +161,7 @@
     overlay.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         /* Escape = reject all (must make a choice) */
-        saveConsent(false);
+        saveConsent(false, false);
         closeBanner(overlay);
         return;
       }
@@ -170,6 +183,7 @@
   window.ccCookieConsent = {
     hasConsented: function () { return getConsent() !== null; },
     analyticsAllowed: function () { var c = getConsent(); return c ? c.analytics : false; },
+    marketingAllowed: function () { var c = getConsent(); return c ? c.marketing : false; },
     show: function () {
       var existing = document.getElementById('cc-consent-overlay');
       if (existing) existing.parentNode.removeChild(existing);

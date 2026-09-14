@@ -9,7 +9,7 @@ The platform is GDPR-compliant.
 - **Learner broadcasts in export** (`broadcasts_received`) - learner data export includes admin broadcasts received, including campaign label/body, category, phone used, send status, and timestamps.
 - **Learner broadcast deletion handling** - `deleteLearnerCascade` anonymises `learner_broadcast_recipients` by clearing learner ID, name, email, and phone while preserving campaign-level broadcast history and aggregate counts.
 
-- **Cookie consent banner** (`public/cookie-consent.js`) — appears on all pages before any analytics load. PostHog only initialises after explicit consent via `public/posthog-loader.js`.
+- **Cookie consent banner** (`public/cookie-consent.js`) — appears on all pages before any tracking loads. PostHog requires analytics consent; the page-specific Meta Pixel requires separate marketing consent.
 - **Data export** (`POST /api/learner?action=export-data`) — learners can download all personal data as JSON from their profile page (Article 20 — Right to Portability). Covers profile, global learner category/assigned instructor reference, onboarding, bookings, transactions, driving sessions, skill ratings, quiz results, mock tests + faults, focused practice, referrals (both directions), weekly availability, instructor notes/categories about the learner, cookie consents, deletion requests, lesson confirmations the learner submitted, and offers received. Secret material (magic_link_tokens, calendar_token) is deliberately excluded.
 - **Calendar-token rotation** (`POST /api/calendar?action=rotate-token` for learners, `POST /api/calendar?action=rotate-instructor-token` for instructors) — `calendar_token` on `learner_users` and `instructors` is a long-lived secret that grants read access to the iCal feed. Surfaced as a "Rotate calendar sync link" button on both profile pages, alongside a "last issued/rotated on" timestamp from the new `calendar_token_rotated_at` column. Rotating immediately invalidates the old token; the user must re-subscribe in their calendar app.
 - **User-initiated deletion** (`POST /api/learner?action=request-deletion`, `confirm-deletion`) — email-verified cascading delete with both `credit_transactions` and `lesson_bookings` anonymised for 7-year tax retention (Article 17 — Right to Erasure).
@@ -24,7 +24,7 @@ The platform is GDPR-compliant.
 - `learner_broadcasts` - admin broadcast campaign label/body/categories/counts/status, school_id
 - `learner_broadcast_recipients` - per-recipient broadcast outcome; learner PII is anonymised on deletion
 
-- `cookie_consents` — visitor_id, learner_id, analytics boolean, ip_hash, user_agent, school_id
+- `cookie_consents` — visitor_id, learner_id, analytics boolean, marketing boolean, ip_hash, user_agent, school_id
 - `audit_log` — admin_id, action, target_type, target_id, details JSONB, school_id
 - `deletion_requests` — learner_id, token, status (pending/confirmed/completed/cancelled), school_id
 
@@ -32,6 +32,7 @@ The platform is GDPR-compliant.
 
 - `public/cookie-consent.js` — consent banner UI + localStorage state + server recording
 - `public/posthog-loader.js` — consent-gated PostHog initialisation
+- `public/meta-pixel-loader.js` — marketing-consent-gated Meta Pixel initialisation on `/free`
 - `api/_audit.js` — shared `logAudit(sql, {...})` utility
 - `api/_gdpr.js` — shared `deleteLearnerCascade(sql, learnerId, opts)` — atomic learner-deletion cascade used by all three paths
 - `api/cron-retention.js` — weekly data retention enforcement (Vercel cron, Sunday 3am UTC)

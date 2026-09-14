@@ -108,7 +108,8 @@ test.describe('instructor notes board', () => {
       }));
       localStorage.setItem('cc_cookie_consent', JSON.stringify({
         analytics: false,
-        version: 1,
+        marketing: false,
+        version: 2,
         timestamp: '2026-07-29T09:00:00.000Z'
       }));
     });
@@ -182,7 +183,8 @@ test.describe('instructor notes board', () => {
       }));
       localStorage.setItem('cc_cookie_consent', JSON.stringify({
         analytics: false,
-        version: 1,
+        marketing: false,
+        version: 2,
         timestamp: '2026-07-29T09:00:00.000Z'
       }));
       localStorage.setItem('cc_dark_mode', 'dark');

@@ -25,7 +25,8 @@ async function enableCapturedAnalytics(page, variant) {
   await page.addInitScript((assignedVariant) => {
     localStorage.setItem('cc_cookie_consent', JSON.stringify({
       analytics: true,
-      version: 1,
+      marketing: false,
+      version: 2,
       timestamp: '2026-01-01T00:00:00.000Z',
     }));
     sessionStorage.setItem('cc_experiment_assignments', JSON.stringify({
@@ -50,7 +51,8 @@ test.describe('free consultation advertising landing page', () => {
     await page.addInitScript(() => {
       localStorage.setItem('cc_cookie_consent', JSON.stringify({
         analytics: false,
-        version: 1,
+        marketing: false,
+        version: 2,
         timestamp: '2026-01-01T00:00:00.000Z',
       }));
     });
@@ -270,7 +272,7 @@ test.describe('free consultation advertising landing page', () => {
     await page.locator('#cc-analytics-toggle').uncheck();
     await page.locator('#cc-save-prefs').click();
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('cc_cookie_consent')));
-    expect(stored).toMatchObject({ analytics: false, version: 1 });
+    expect(stored).toMatchObject({ analytics: false, marketing: true, version: 2 });
   });
 
   test('offers complete experience bands and submits a typed postcode without an address lookup', async ({ page }) => {

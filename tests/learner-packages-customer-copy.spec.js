@@ -122,7 +122,7 @@ function catalogue({ signedIn, flexibleBalanceMinutes = 0, emailVerified = true 
 async function preparePage(page, { signedIn, viewport, productTypes, productSlugs, flexibleBalanceMinutes = 0, emailVerified = true, theme = 'auto' }) {
   await page.setViewportSize(viewport);
   await page.addInitScript(({ signedIn: isSignedIn, selectedTheme }) => {
-    localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+    localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2 }));
     localStorage.setItem('cc_dark_mode', selectedTheme);
     if (isSignedIn) localStorage.setItem('cc_learner', JSON.stringify({ user: { id: 41, name: 'Alex Taylor', school_id: 1 } }));
   }, { signedIn, selectedTheme: theme });

@@ -114,12 +114,12 @@ function addSecurityHeaders(response) {
   // pages; a future pass can move those to external .css files and drop it.
   response.headers.set('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com https://eu-assets.i.posthog.com",
+    "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://esm.sh https://js.stripe.com https://eu.i.posthog.com https://eu-assets.i.posthog.com https://connect.facebook.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://unpkg.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https: blob:",
     "media-src 'self' https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com blob:",
-    "connect-src 'self' https://api.stripe.com https://eu.i.posthog.com https://*.posthog.com https://api.postcodes.io https://api.openrouteservice.org https://esm.sh",
+    "connect-src 'self' https://api.stripe.com https://eu.i.posthog.com https://*.posthog.com https://api.postcodes.io https://api.openrouteservice.org https://esm.sh https://www.facebook.com https://connect.facebook.net",
     "frame-src https://js.stripe.com https://hooks.stripe.com https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com",
     "object-src 'none'",
     "base-uri 'self'",

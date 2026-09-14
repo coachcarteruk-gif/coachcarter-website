@@ -374,7 +374,7 @@ test.describe('Learner Packages Phase 1 contracts', () => {
 test.describe('Learner Packages Phase 1 page', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1, timestamp: '2026-08-13T09:00:00.000Z' }));
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2, timestamp: '2026-08-13T09:00:00.000Z' }));
     });
     await page.route('**/api/packages?action=feature-state**', (route) => route.fulfill({
       status: 200,

@@ -19,7 +19,8 @@ test.describe('learner login recovery', () => {
     await page.addInitScript(() => {
       localStorage.setItem('cc_cookie_consent', JSON.stringify({
         analytics: false,
-        version: 1,
+        marketing: false,
+        version: 2,
         timestamp: '2026-01-01T00:00:00.000Z',
       }));
     });

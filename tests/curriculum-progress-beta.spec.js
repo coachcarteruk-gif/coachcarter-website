@@ -159,7 +159,7 @@ test.describe('curriculum progress browser flow', () => {
   test('instructor reviews a past booked lesson on mobile with server-derived context', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => {
-      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2 }));
       localStorage.setItem('cc_instructor', JSON.stringify({ instructor: { id: 7, school_id: 1, name: 'Alex' } }));
     });
     let submitted;
@@ -189,7 +189,7 @@ test.describe('curriculum progress browser flow', () => {
   test('learner sees only instructor-selected skills and submits separate confidence scores', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript(() => {
-      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2 }));
       localStorage.setItem('cc_learner', JSON.stringify({ user: { id: 41, school_id: 1, name: 'Jamie' } }));
     });
     let submitted;

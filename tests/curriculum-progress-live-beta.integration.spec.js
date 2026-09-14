@@ -415,7 +415,7 @@ test.describe('curriculum progress persistent non-production rehearsal', () => {
         { name: 'cc_csrf', value: 'live-browser-instructor-csrf', url: local.baseURL, sameSite: 'Lax' },
       ]);
       await instructorContext.addInitScript((value) => {
-        localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+        localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2 }));
         localStorage.setItem('cc_instructor', JSON.stringify({ instructor: value }));
       }, instructor);
       const instructorPage = await instructorContext.newPage();
@@ -447,7 +447,7 @@ test.describe('curriculum progress persistent non-production rehearsal', () => {
         { name: 'cc_csrf', value: 'live-browser-learner-csrf', url: local.baseURL, sameSite: 'Lax' },
       ]);
       await learnerContext.addInitScript((value) => {
-        localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, version: 1 }));
+        localStorage.setItem('cc_cookie_consent', JSON.stringify({ analytics: false, marketing: false, version: 2 }));
         localStorage.setItem('cc_learner', JSON.stringify({ user: value }));
       }, learner);
       const learnerPage = await learnerContext.newPage();

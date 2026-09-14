@@ -1559,7 +1559,7 @@ async function handleExportData(req, res) {
       ORDER BY iln.updated_at DESC`;
 
     const cookieConsents = await sql`
-      SELECT analytics, consented_at, user_agent
+      SELECT analytics, marketing, consented_at, user_agent
       FROM cookie_consents
       WHERE (learner_id = ${user.id} OR visitor_id = ${user.id}::text)
         AND school_id = ${schoolId}

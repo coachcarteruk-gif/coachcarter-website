@@ -527,6 +527,14 @@
       "filename": "064_booking_credit_source_replacement_history.sql",
       "checksum": "e2f3e901de0c3fc60aae4d2933bf0ca0dc474041e99cbdb06d09832c1e0eb45f",
       "execution": "numbered"
+    },
+    {
+      "id": "065",
+      "order": 66,
+      "prefix": "065",
+      "filename": "065_cookie_consent_marketing.sql",
+      "checksum": "21c0dd7f20fbfdba866192080dcc76a99a1ad7da8e5c899837b40dcc5bc2ce6b",
+      "execution": "numbered"
     }
   ]
 }

@@ -118,6 +118,7 @@ A driving instructor website for CoachCarter (Fraser). It has seven distinct are
 │   ├── sidebar.js                  # Context-aware sidebar navigation (public/learner/instructor) + floating pill bottom bar + card styling overrides
 │   ├── cookie-consent.js           # GDPR cookie consent banner (vanilla JS, self-contained)
 │   ├── posthog-loader.js           # Consent-gated PostHog loader (only loads after analytics consent)
+│   ├── meta-pixel-loader.js        # Consent-gated Meta Pixel loader (included on /free only)
 │   ├── posthog-tracking.js         # PostHog custom event tracking (button clicks, scroll, forms)
 │   ├── offline.html                # Branded offline fallback page
 │   ├── icons/                      # PWA icons (multiple sizes + maskable variants)
@@ -1207,7 +1208,7 @@ Full GDPR compliance implemented. See `CLAUDE.md` for rules that apply to all fu
 
 | Table | Purpose |
 |---|---|
-| `cookie_consents` | Stores consent decisions (visitor_id, analytics boolean, ip_hash, timestamp) |
+| `cookie_consents` | Stores consent decisions (visitor_id, analytics/marketing booleans, ip_hash, timestamp) |
 | `audit_log` | Admin action audit trail (who did what to whom, when) |
 | `deletion_requests` | Tracks self-service deletion flow (pending → confirmed → completed) |
 | `referrals` | Learner referral codes (learner_id, school_id, code, unique per school) |
@@ -1251,11 +1252,12 @@ When a learner is deleted, data is handled as follows:
 
 1. User visits any page → `cookie-consent.js` shows banner (if no prior consent)
 2. User chooses Accept All / Reject All / Save Preferences
-3. Choice saved to `localStorage` key `cc_cookie_consent`
+3. Analytics and Marketing choices saved to `localStorage` key `cc_cookie_consent`
 4. Choice recorded to `cookie_consents` table via `/api/config?action=record-consent`
 5. `posthog-loader.js` checks consent — loads PostHog only if analytics accepted
-6. User can re-open banner via "Cookie Settings" link (sidebar footer + landing page footer)
-7. Revoking analytics consent calls `posthog.opt_out_capturing()` and clears PostHog localStorage
+6. `/free` loads `meta-pixel-loader.js`, which loads Meta Pixel only if marketing is accepted
+7. User can re-open banner via "Cookie Settings" link (sidebar footer + landing page footer)
+8. Revoking consent disables the corresponding tracker for the page session
 
 ### Frontend GDPR features (learner profile page)
 
