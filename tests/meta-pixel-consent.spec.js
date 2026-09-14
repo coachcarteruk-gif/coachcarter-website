@@ -90,6 +90,41 @@ test.describe('Meta Pixel consent gate', () => {
     expect(queue).toContainEqual(['track', 'PageView']);
   });
 
+  test('the Lead helper does nothing without marketing consent', async ({ page }) => {
+    const calls = await blockTracking(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({
+        analytics: false,
+        marketing: false,
+        version: 2,
+        timestamp: '2026-09-14T00:00:00.000Z',
+      }));
+    });
+    await page.goto(PAGE);
+
+    expect(await page.evaluate(() => window.ccMetaPixel.trackLead())).toBe(false);
+    expect(await page.evaluate(() => typeof window.fbq)).toBe('undefined');
+    expect(calls.filter((url) => url.includes('facebook'))).toHaveLength(0);
+  });
+
+  test('the Lead helper queues the standard Lead event with marketing consent', async ({ page }) => {
+    const calls = await blockTracking(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({
+        analytics: false,
+        marketing: true,
+        version: 2,
+        timestamp: '2026-09-14T00:00:00.000Z',
+      }));
+    });
+    await page.goto(PAGE);
+
+    expect(await page.evaluate(() => window.ccMetaPixel.trackLead())).toBe(true);
+    await expect.poll(() => calls.includes('https://connect.facebook.net/en_US/fbevents.js')).toBe(true);
+    const queue = await page.evaluate(() => window.fbq && window.fbq.queue.map((args) => Array.from(args)));
+    expect(queue).toContainEqual(['track', 'Lead']);
+  });
+
   test('revoking marketing consent tells an already-loaded Pixel to stop', async ({ page }) => {
     await blockTracking(page);
     await page.addInitScript(() => {

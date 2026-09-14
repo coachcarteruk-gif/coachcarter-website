@@ -37,6 +37,20 @@
     }
   }
 
+  function trackLead() {
+    if (!window.ccCookieConsent || !window.ccCookieConsent.marketingAllowed()) {
+      return false;
+    }
+
+    loadMetaPixel();
+    window.fbq('track', 'Lead');
+    return true;
+  }
+
+  window.ccMetaPixel = {
+    trackLead: trackLead
+  };
+
   checkAndLoad();
 
   document.addEventListener('cookie-consent-updated', function (event) {

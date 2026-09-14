@@ -2,6 +2,7 @@
   'use strict';
 
   var DAYS_AHEAD = 14;
+  var META_LEAD_PENDING_KEY = 'cc_meta_lead_pending';
 
   // ── State ────────────────────────────────────────────────────────────────
   // Slot objects from the API include instructor_name, so no separate fetch needed.
@@ -70,6 +71,17 @@
         posthog.capture(event, props || {});
       }
     } catch (e) { /* swallow */ }
+  }
+
+  function queueMetaLeadForSuccessPage() {
+    if (!window.ccCookieConsent || !window.ccCookieConsent.marketingAllowed()) return;
+
+    try {
+      sessionStorage.setItem(META_LEAD_PENDING_KEY, '1');
+    } catch (e) {
+      // If sessionStorage is unavailable, fire before redirecting as a fallback.
+      if (window.ccMetaPixel) window.ccMetaPixel.trackLead();
+    }
   }
 
   // ── Slot loading ─────────────────────────────────────────────────────────
@@ -246,6 +258,7 @@
           booking_id: r.body.booking_id,
           instructor_id: payload.instructor_id
         });
+        queueMetaLeadForSuccessPage();
         window.location.href = r.body.redirect_url || '/free-trial-success.html';
         return;
       }

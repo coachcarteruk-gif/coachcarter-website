@@ -32,7 +32,7 @@ The platform is GDPR-compliant.
 
 - `public/cookie-consent.js` — consent banner UI + localStorage state + server recording
 - `public/posthog-loader.js` — consent-gated PostHog initialisation
-- `public/meta-pixel-loader.js` — marketing-consent-gated Meta Pixel initialisation on `/free`
+- `public/meta-pixel-loader.js` — marketing-consent-gated Meta Pixel initialisation on `/free` and its confirmation page; exposes the consent-aware standard `Lead` event helper
 - `api/_audit.js` — shared `logAudit(sql, {...})` utility
 - `api/_gdpr.js` — shared `deleteLearnerCascade(sql, learnerId, opts)` — atomic learner-deletion cascade used by all three paths
 - `api/cron-retention.js` — weekly data retention enforcement (Vercel cron, Sunday 3am UTC)
