@@ -90,7 +90,7 @@
           '<label class="cc-consent-row">' +
             '<span class="cc-consent-info">' +
               '<strong>Marketing</strong>' +
-              '<span>Measure visits from Meta ads on our free-trial page.</span>' +
+              '<span>Measure visits and successful free-trial bookings from Meta ads.</span>' +
             '</span>' +
             '<input type="checkbox" id="cc-marketing-toggle">' +
           '</label>' +

@@ -13,12 +13,14 @@ test.describe('free trial passwordless journey', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('cc_cookie_consent', JSON.stringify({
-        analytics: false,
-        marketing: false,
-        version: 2,
-        timestamp: '2026-01-01T00:00:00.000Z',
-      }));
+      if (!localStorage.getItem('cc_cookie_consent')) {
+        localStorage.setItem('cc_cookie_consent', JSON.stringify({
+          analytics: false,
+          marketing: false,
+          version: 2,
+          timestamp: '2026-01-01T00:00:00.000Z',
+        }));
+      }
     });
 
     await page.route('**/api/slots?action=available**', async (route) => {
@@ -97,6 +99,48 @@ test.describe('free trial passwordless journey', () => {
       guest_phone: '07123 456 789',
       guest_pickup_address: '24 Station Road, RG1 1AA',
     });
+  });
+
+  test('records one consented Meta Lead only after the booking is confirmed', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('cc_cookie_consent', JSON.stringify({
+        analytics: false,
+        marketing: true,
+        version: 2,
+        timestamp: '2026-09-14T00:00:00.000Z',
+      }));
+    });
+    await page.route('https://connect.facebook.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: '',
+    }));
+    await page.route('**/api/slots?action=book-free-trial', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, booking_id: 92, redirect_url: '/free-trial-success.html' }),
+    }));
+
+    await page.goto('/free-trial.html');
+
+    await page.getByRole('button', { name: /10:00/ }).click();
+    await page.locator('#guest_name').fill('Alex Driver');
+    await page.locator('#guest_email').fill('alex@example.test');
+    await page.locator('#guest_phone').fill('07123 456 789');
+    await page.locator('#guest_pickup_address').fill('24 Station Road, RG1 1AA');
+    await page.getByRole('button', { name: 'Book my free trial' }).click();
+
+    await expect(page).toHaveURL(/\/free-trial-success(?:\.html)?$/);
+    await expect.poll(() => page.evaluate(() => Boolean(
+      window.fbq && window.fbq.queue.some((args) => Array.from(args).join('|') === 'track|Lead')
+    ))).toBe(true);
+    const firstQueue = await page.evaluate(() => window.fbq && window.fbq.queue.map((args) => Array.from(args)));
+    expect(firstQueue).toContainEqual(['track', 'Lead']);
+    expect(await page.evaluate(() => sessionStorage.getItem('cc_meta_lead_pending'))).toBeNull();
+
+    await page.reload();
+    const reloadQueue = await page.evaluate(() => window.fbq && window.fbq.queue.map((args) => Array.from(args)));
+    expect(reloadQueue).not.toContainEqual(['track', 'Lead']);
   });
 
   test('keeps every confirmation surface consistent with six-digit code sign-in', () => {
