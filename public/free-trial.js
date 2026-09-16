@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var DAYS_AHEAD = 14;
+  var DAYS_AHEAD = 28;
   var META_LEAD_PENDING_KEY = 'cc_meta_lead_pending';
 
   // ── State ────────────────────────────────────────────────────────────────

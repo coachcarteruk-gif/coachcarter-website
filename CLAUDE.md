@@ -140,6 +140,11 @@ The historical `bookOfferSeries()` path in `api/offers.js` can create bookings p
 
 Don't add paths that bypass the 84-day platform ceiling for ordinary learner self-serve booking.
 
+Free-trial self-service is capped at **28 days**, or the instructor's shorter
+`max_booking_days_ahead` setting. The free-trial picker, trial availability,
+`book-free-trial`, and learner trial rescheduling use this same inclusive cap.
+Ordinary paid booking windows remain unchanged.
+
 ## Simon Slice 3 retired products
 
 `schools.config.features.retire_incompatible_products === true` is the only active retirement value; missing, malformed, string, numeric, or false values are inactive. The state is always loaded by exact authenticated/offer `school_id`. When active, server routes must return `410 PRODUCT_CREATION_RETIRED` before any insert, credit mutation, hold, notification, or Stripe call for learner repeats, Reserved Weekly Slot creation, flexible offers, or repeating offers. UI hiding is defence-in-depth, not authority.

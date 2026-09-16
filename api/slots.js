@@ -93,6 +93,7 @@ const { invalidatePendingBookingExtensions } = require('./_booking-extension-inv
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
 const MAX_DAYS_AHEAD      = 84;   // platform ceiling — instructors.max_booking_days_ahead (1–84) is the learner-facing window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
+const FREE_TRIAL_MAX_DAYS_AHEAD = 28;
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
@@ -404,13 +405,17 @@ function normaliseMaxBookingDaysAhead(value) {
   return Math.min(days, MAX_DAYS_AHEAD);
 }
 
-function bookingWindowLimitDate(maxBookingDaysAhead) {
-  return addDays(startOfDay(new Date()), normaliseMaxBookingDaysAhead(maxBookingDaysAhead));
+function effectiveBookingWindowDays(maxBookingDaysAhead, absoluteMaxDaysAhead = MAX_DAYS_AHEAD) {
+  return Math.min(normaliseMaxBookingDaysAhead(maxBookingDaysAhead), absoluteMaxDaysAhead);
 }
 
-function isDateWithinBookingWindow(dateValue, maxBookingDaysAhead) {
+function bookingWindowLimitDate(maxBookingDaysAhead, absoluteMaxDaysAhead = MAX_DAYS_AHEAD) {
+  return addDays(startOfDay(new Date()), effectiveBookingWindowDays(maxBookingDaysAhead, absoluteMaxDaysAhead));
+}
+
+function isDateWithinBookingWindow(dateValue, maxBookingDaysAhead, absoluteMaxDaysAhead = MAX_DAYS_AHEAD) {
   const dateObj = dateValue instanceof Date ? dateValue : parseDate(String(dateValue).slice(0, 10));
-  return !!dateObj && dateObj <= bookingWindowLimitDate(maxBookingDaysAhead);
+  return !!dateObj && dateObj <= bookingWindowLimitDate(maxBookingDaysAhead, absoluteMaxDaysAhead);
 }
 
 function advanceWindowError(maxBookingDaysAhead, verb = 'book') {
@@ -1016,6 +1021,13 @@ async function handleAvailable(req, res) {
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId, lesson_type_slug);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
+    const isFreeTrial = lessonType.slug === 'trial';
+
+    if (isFreeTrial && toDate > addDays(today, FREE_TRIAL_MAX_DAYS_AHEAD)) {
+      return res.status(400).json({
+        error: `Free trial availability cannot be requested more than ${FREE_TRIAL_MAX_DAYS_AHEAD} days from today`
+      });
+    }
 
     // 1. Load availability windows (optionally filtered to one instructor).
     // When minDurationOnly is set, we don't filter by offered_lesson_types —
@@ -1645,7 +1657,9 @@ async function handleAvailable(req, res) {
       const daySlotKeys = new Set();
 
       for (const instructor of Object.values(byInstructor)) {
-        if (!isDateWithinBookingWindow(cursor, instructor.max_booking_days_ahead)) continue;
+        if (isFreeTrial) {
+          if (!isDateWithinBookingWindow(cursor, instructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD)) continue;
+        } else if (!isDateWithinBookingWindow(cursor, instructor.max_booking_days_ahead)) continue;
         if (externalAllDayIndex.has(`${instructor.id}|${dateStr}`)) continue;
         const dateWindows = instructor.windows.filter(w => w.override_date === dateStr);
         const isBlackout = blackoutIndex.has(`${instructor.id}|${dateStr}`);
@@ -6089,8 +6103,11 @@ async function handleBookFreeTrial(req, res) {
     if (!isLessonTypeOffered(instructor.offered_lesson_types, trialType.slug)) {
       return res.status(400).json({ error: 'This instructor does not offer free trials.' });
     }
-    if (!isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)) {
-      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
+    if (!isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD)) {
+      const trialWindowDays = effectiveBookingWindowDays(instructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD);
+      return res.status(400).json({
+        error: `Free trials can only be booked up to ${trialWindowDays} day${trialWindowDays !== 1 ? 's' : ''} in advance. Please choose an earlier date.`
+      });
     }
 
     const stillAvailable = await slotFitsActiveAvailability(sql, {
@@ -7662,7 +7679,16 @@ async function handleReschedule(req, res) {
       targetInstructor = replacementInstructor;
     }
 
-    if (!isDateWithinBookingWindow(newBookingDate, targetInstructor.max_booking_days_ahead)) {
+    const rescheduleMaxDays = booking.lesson_type_slug === 'trial'
+      ? FREE_TRIAL_MAX_DAYS_AHEAD
+      : MAX_DAYS_AHEAD;
+    if (!isDateWithinBookingWindow(newBookingDate, targetInstructor.max_booking_days_ahead, rescheduleMaxDays)) {
+      if (booking.lesson_type_slug === 'trial') {
+        const trialWindowDays = effectiveBookingWindowDays(targetInstructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD);
+        return res.status(400).json({
+          error: `Free trials can only be rescheduled up to ${trialWindowDays} day${trialWindowDays !== 1 ? 's' : ''} in advance. Please choose an earlier date.`
+        });
+      }
       return res.status(400).json({ error: advanceWindowError(targetInstructor.max_booking_days_ahead, 'reschedule') });
     }
 
@@ -8652,3 +8678,6 @@ module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
 module.exports._hasBufferedSlotConflict = hasBufferedSlotConflict;
 module.exports._findAdjacentTravelSpacingConflict = findAdjacentTravelSpacingConflict;
 module.exports._testDateSlotOverlapConflictsPg = testDateSlotOverlapConflictsPg;
+module.exports._effectiveBookingWindowDays = effectiveBookingWindowDays;
+module.exports._isDateWithinBookingWindow = isDateWithinBookingWindow;
+module.exports._FREE_TRIAL_MAX_DAYS_AHEAD = FREE_TRIAL_MAX_DAYS_AHEAD;
