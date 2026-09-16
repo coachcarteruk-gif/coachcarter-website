@@ -2,6 +2,7 @@
   'use strict';
 
   var upcomingBookings = [];
+  var pencilledOffers = [];
   var pastBookings = [];
   var hasMorePast = false;
   var pastOffset = 0;
@@ -50,6 +51,10 @@
         );
       } else if (action === 'rebook') {
         window.location.href = target.dataset.url;
+      } else if (action === 'pay-pencilled') {
+        window.location.href = target.dataset.url;
+      } else if (action === 'cancel-pencilled') {
+        cancelPencilledOffer(parseInt(target.dataset.offerId, 10), target);
       }
     });
 
@@ -81,12 +86,21 @@
       var res = await ccAuth.fetchAuthed('/api/slots?action=my-bookings&past_limit=' + PAST_PAGE_SIZE + '&past_offset=0');
       var data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
       upcomingBookings = data.upcoming || [];
+      pencilledOffers = [];
+      try {
+        var pencilledRes = await ccAuth.fetchAuthed('/api/offers?action=my-pencilled-offers');
+        var pencilledData = await pencilledRes.json();
+        if (!pencilledRes.ok) throw new Error(pencilledData.error);
+        pencilledOffers = pencilledData.offers || [];
+      } catch (pencilErr) {
+        showToast(pencilErr.message || 'Failed to load pencilled lessons', 'error');
+      }
       pastBookings = data.past || [];
       hasMorePast = data.hasMorePast || false;
 
-      document.getElementById('tabUpcoming').textContent = 'Upcoming' + (upcomingBookings.length ? ' (' + upcomingBookings.length + ')' : '');
+      var upcomingCount = upcomingBookings.length + pencilledOffers.length;
+      document.getElementById('tabUpcoming').textContent = 'Upcoming' + (upcomingCount ? ' (' + upcomingCount + ')' : '');
       document.getElementById('tabPast').textContent = 'Past' + (pastBookings.length ? '+' : '');
 
       renderTab();
@@ -129,7 +143,7 @@
 
   function renderUpcoming() {
     var container = document.getElementById('lessonContent');
-    if (upcomingBookings.length === 0) {
+    if (upcomingBookings.length === 0 && pencilledOffers.length === 0) {
       container.innerHTML =
         '<div class="empty-state">' +
         '<div class="empty-icon">&#x1F4C5;</div>' +
@@ -153,7 +167,18 @@
       }
     }
 
-    var html = '';
+    var html = pencilledOffers.map(function (offer) {
+      return '<div class="lesson-card" style="border-style:dashed">' +
+        '<div class="lesson-body"><div class="lesson-info">' +
+        '<div class="lesson-title">Pencilled in · unpaid</div>' +
+        '<div class="lesson-meta">' + esc(offer.scheduled_date) + ' · ' + esc(offer.start_time.slice(0,5)) + '–' + esc(offer.end_time.slice(0,5)) + ' · ' + esc(offer.instructor_name) + '</div>' +
+        (Number.isInteger(offer.offer_price_pence) ? '<div class="lesson-meta">Agreed price: £' + (offer.offer_price_pence / 100).toFixed(2) + '</div>' : '') +
+        '<div class="reserved-policy-note">Pay by ' + esc(new Date(offer.pay_by).toLocaleString('en-GB')) + ' or this slot is released.</div>' +
+        '</div><div class="lesson-actions">' +
+        '<button class="btn-lesson" data-action="pay-pencilled" data-url="' + esc(offer.payment_url) + '">Pay now</button>' +
+        '<button class="btn-lesson cancel" data-action="cancel-pencilled" data-offer-id="' + offer.id + '">Cancel</button>' +
+        '</div></div></div>';
+    }).join('');
     var seriesIds = Object.keys(seriesMap);
     for (var s = 0; s < seriesIds.length; s++) {
       var sid = seriesIds[s];
@@ -177,6 +202,23 @@
 
     html += groupByDate(standalone, false);
     container.innerHTML = html;
+  }
+
+  async function cancelPencilledOffer(offerId, button) {
+    if (!confirm('Cancel this unpaid pencilled lesson and release the slot?')) return;
+    button.disabled = true;
+    try {
+      var res = await ccAuth.fetchAuthed('/api/offers?action=cancel-pencilled-offer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ offer_id: offerId })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      pencilledOffers = pencilledOffers.filter(function (offer) { return offer.id !== offerId; });
+      renderUpcoming();
+    } catch (err) {
+      button.disabled = false;
+      showToast(err.message || 'Failed to cancel pencilled lesson', 'error');
+    }
   }
 
   function renderPast() {

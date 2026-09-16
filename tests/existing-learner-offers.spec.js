@@ -117,8 +117,8 @@ test.describe('existing learner lesson offers', () => {
     expect(body).toContain('const offerDateText = dateOnly(offer.scheduled_date_text || offer.scheduled_date)');
     expect(body).toContain('scheduled_date:    offerDateText || \'\'');
     expect(body).toContain('learner_id:        boundLearner?.id ? String(boundLearner.id) : \'\'');
-    expect(body).toContain('amount_pence:      String(pricePence)');
-    expect(body).toContain('effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0)');
+    expect(body).toContain('amount_pence:      String(checkoutTotalPence)');
+    expect(body).toContain('effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(checkoutTotalPence / (durationMins * repeatWeeksClean)) : 0)');
   });
 
   test('webhook prefers the bound learner and rejects cross-school learner ids', () => {

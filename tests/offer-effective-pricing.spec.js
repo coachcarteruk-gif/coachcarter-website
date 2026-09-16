@@ -179,9 +179,9 @@ test.describe('offer pricing integration wiring', () => {
   test('repeat checkout charges stored per-lesson price times requested repeat count', () => {
     const offers = source('api/offers.js');
 
-    expect(offers).toContain('unit_amount: pricePence');
-    expect(offers).toContain('quantity: repeatWeeksClean');
-    expect(offers).toContain("amount_pence:      String(pricePence)");
+    expect(offers).toContain('unit_amount: checkoutTotalPence');
+    expect(offers).toContain('quantity: 1');
+    expect(offers).toContain("amount_pence:      String(checkoutTotalPence)");
     expect(offers).toContain("repeat_weeks:      String(repeatWeeksClean)");
   });
 
@@ -189,9 +189,9 @@ test.describe('offer pricing integration wiring', () => {
     const webhook = source('api/webhook.js');
 
     expect(webhook).toContain('const amountPence   = parseInt(metadata.amount_pence, 10)');
-    expect(webhook).toContain('const totalAmountPence = amountPence * repeatWeeks');
+    expect(webhook).toContain('const totalAmountPence = amountPence');
     expect(webhook).toContain('effectiveRatePencePerMinute = totalMinutes > 0');
-    expect(webhook).toContain('listPricePerBookingPence: amountPence');
+    expect(webhook).toContain('listPricePerBookingPence: Math.floor(totalAmountPence / repeatWeeks)');
     expect(webhook).toContain("listPriceSource: 'stripe_metadata'");
   });
 });

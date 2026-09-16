@@ -535,6 +535,30 @@
       "filename": "065_cookie_consent_marketing.sql",
       "checksum": "21c0dd7f20fbfdba866192080dcc76a99a1ad7da8e5c899837b40dcc5bc2ce6b",
       "execution": "numbered"
+    },
+    {
+      "id": "066",
+      "order": 67,
+      "prefix": "066",
+      "filename": "066_pencilled_offers.sql",
+      "checksum": "1c414602efb9117633d12a2d373cbbfc3872e352c96a5b3be450b91dc254cf99",
+      "execution": "numbered"
+    },
+    {
+      "id": "067",
+      "order": 68,
+      "prefix": "067",
+      "filename": "067_post_trial_discount.sql",
+      "checksum": "3c3b6a1ea6463fabe1092990b390dfbad0839ce8f9c4670096f0a8264285b270",
+      "execution": "numbered"
+    },
+    {
+      "id": "068",
+      "order": 69,
+      "prefix": "068",
+      "filename": "068_post_trial_package_snapshots.sql",
+      "checksum": "ac40af08a1ee63b38393dae8670d4dcda19498131e03fe96be27812c0922f87b",
+      "execution": "numbered"
     }
   ]
 }

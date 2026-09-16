@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const {
   isPencilledOffer,
   pencilledOfferTimes,
@@ -30,6 +32,17 @@ const options = {
 };
 
 test.describe('pencilled offer policy', () => {
+  test('surfaces the unpaid hold in instructor, learner and payment UI', () => {
+    const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    expect(read('public/instructor/index.html')).toContain('id="offerPencilled"');
+    expect(read('public/instructor/index.js')).toContain("pencilled: pencilled");
+    expect(read('public/instructor/index.js')).toContain("'Pencilled · unpaid'");
+    expect(read('public/learner/lessons.js')).toContain('Pencilled in · unpaid');
+    expect(read('public/learner/lessons.js')).toContain('cancel-pencilled-offer');
+    expect(read('public/accept-offer.js')).toContain('Your pencilled-in lesson');
+    expect(read('public/accept-offer.js')).toContain("exactPayBy.textContent = 'Pay by '");
+    expect(read('public/accept-offer.js')).toContain("text = 'Time remaining: '");
+  });
   test('recognises only an explicit true flag', () => {
     expect(isPencilledOffer({ pencilled: true })).toBe(true);
     for (const value of [false, 'true', 1, null, undefined]) {

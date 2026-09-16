@@ -1,5 +1,18 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+## Shared API additions — September 2026 (pending rollout)
+
+Native clients should consume the authenticated `credits?action=post-trial-discount`
+read model and the offer `my-pencilled-offers` / `cancel-pencilled-offer` actions.
+Display both discount eligibility expiry and a pencilled offer's separate payment
+deadline; server quotes and provider event validation remain authoritative.
+Shared modules `_post-trial-discount.js`, `_post-trial-webhook.js`,
+`_pencilled-offers.js`, `_pencilled-offer-store.js` and `_package-checkout-expiry.js`
+contain the rules rather than
+duplicating them in clients. Migration 067 adds retained discount evidence;
+066/068 extend offers and package snapshots. See the
+[feature contract](docs/trial-discount-pencilled-offers-plan.md).
+
 ## For use with Claude Code sessions — work through phases sequentially
 
 ---

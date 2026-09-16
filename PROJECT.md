@@ -1,5 +1,33 @@
 # CoachCarter Website — Project Reference
 
+## Trial discount and pencilled offers (16 September 2026, pending rollout)
+
+Free-trial availability, booking and rescheduling use the smaller of 28 days and
+the instructor's booking window. Ordinary paid windows are unchanged. Pencilled
+manual offers use the separate 84-day platform ceiling, reserve a specific slot,
+and must be paid strictly before lesson start minus 48 elapsed hours.
+
+`api/_post-trial-discount.js` resolves account eligibility from the scheduled end
+of a free trial and cancellation/not-delivered exceptions. Admin pricing settings
+`post_trial_discount_pct` (default 10) and `post_trial_discount_hours` (default 48)
+control new quotes. A quote preserves its price for up to 30 minutes or a shorter
+existing hold. Signed payment initiation, rather than Checkout creation, determines
+whether a later settlement qualifies. `_post-trial-webhook.js` validates immutable
+amounts, tenant/account/provider binding and initiation evidence.
+
+`GET /api/credits?action=post-trial-discount` supplies the authenticated learner
+banner. Instructor `create-offer` accepts `pencilled: true` for a positive-price,
+single fixed slot and existing learner. Learners use `GET /api/offers?action=my-pencilled-offers`
+and `POST /api/offers?action=cancel-pencilled-offer` with `offer_id`; the usual offer
+acceptance/payment URL confirms payment. Unpaid offers never create bookings or
+earnings. Both parties can cancel while pending.
+
+Numbered migrations 066–068 add pencil overlap guards, retained
+`post_trial_discount_quotes`, and package price/cash snapshots. Package availability,
+pilot restrictions and Stripe test/live gates remain in force. See
+[the feature contract and rollout packet](docs/trial-discount-pencilled-offers-plan.md)
+for discount ordering, accounting, completion limitations and verification.
+
 > **Last updated:** 13 August 2026
 
 A complete reference for the CoachCarter driving instructor website. Use this when continuing development with an AI assistant — paste it in at the start of a new session so the AI is fully up to speed.

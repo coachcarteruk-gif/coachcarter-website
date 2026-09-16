@@ -582,7 +582,7 @@ function renderPlannerCard(item) {
     return `<article class="day-card offer">
       <div>
         <div class="day-card-time">${esc(time)}</div>
-        <div class="day-card-type">${isExtension ? 'Extension' : 'Offer'}</div>
+        <div class="day-card-type">${isExtension ? 'Extension' : (item.pencilled ? 'Pencilled · unpaid' : 'Offer')}</div>
       </div>
       <div class="day-card-main">
         <div class="day-card-title">${esc(item.learner_name || item.recipient_name || 'Pending learner')}</div>
@@ -2920,6 +2920,7 @@ async function sendOffer() {
   const sendEmail = document.getElementById('offerSendEmail').checked;
   const email = document.getElementById('offerEmail').value.trim();
   const flexible = !incompatibleProductsRetired && document.getElementById('offerFlexible').checked;
+  const pencilled = document.getElementById('offerPencilled')?.checked === true;
   const date = document.getElementById('offerDate').value;
   const time = document.getElementById('offerTime').value;
   const lessonTypeId = document.getElementById('offerLessonType').value;
@@ -2932,6 +2933,7 @@ async function sendOffer() {
   successEl.style.display = 'none';
 
   if (existingMode && !selectedOfferLearnerId) { errorEl.textContent = 'Please select an existing learner.'; errorEl.style.display = 'block'; return; }
+  if (pencilled && !existingMode) { errorEl.textContent = 'Choose an existing learner to pencil in a lesson.'; errorEl.style.display = 'block'; return; }
   if (!existingMode && !offerName) { errorEl.textContent = 'Please enter the learner\'s name.'; errorEl.style.display = 'block'; return; }
   if (!existingMode && sendEmail && !email) { errorEl.textContent = 'Please enter the learner\'s email address.'; errorEl.style.display = 'block'; return; }
   if (!flexible && !date) { errorEl.textContent = 'Please select a date, or tick "Flexible".'; errorEl.style.display = 'block'; return; }
@@ -2955,7 +2957,8 @@ async function sendOffer() {
 
   try {
     const payload = {
-      lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined
+      lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined,
+      pencilled: pencilled
     };
     if (existingMode) {
       payload.learner_id = selectedOfferLearnerId;
@@ -3016,7 +3019,7 @@ async function sendOffer() {
         ? ` ${failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0]} delivery did not complete.`
         : '';
       const acceptWindowText = flexible ? 'They have 7 days to choose a time and accept.' : 'They have 24 hours to accept.';
-      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! ${acceptWindowText}${missingText}${failedText} Copy link is still available below.`;
+      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! ${pencilled ? 'The slot is pencilled in unpaid until 48 hours before it starts.' : acceptWindowText}${missingText}${failedText} Copy link is still available below.`;
     } else if (failedParts.length > 0) {
       const failedText = failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0];
       statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg}, but ${failedText} delivery did not complete. Use Copy link below.`;
@@ -3175,6 +3178,13 @@ async function sendPackageLink() {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 init();
+
+// Small public surface for browser-driven accessibility and interaction tests.
+window.__ccOfferUi = Object.freeze({
+  open: openOfferModal,
+  selectLearner: selectOfferLearner,
+  submit: sendOffer
+});
 
 // Auto-open offer modal if ?offer=email param is present (from learners page)
 (function() {

@@ -244,7 +244,8 @@ test.describe('Full Curriculum consumer-rights and manual-refund policy', () => 
 
   test('learner copy uses an unambiguous payment button and optional early start', () => {
     const learner = read('public/learner/packages.js');
-    expect(learner).toContain("Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' and enrol");
+    expect(learner).toContain('product.checkout_price_pence == null ? product.price_pence : product.checkout_price_pence');
+    expect(learner).toContain("+ ' and enrol");
     expect(learner).toContain('Begin matching after my 14-day cancellation period');
     expect(learner).toContain('Begin matching now');
     expect(learner).toContain('consumer_terms_accepted');

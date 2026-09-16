@@ -11767,3 +11767,446 @@ BEGIN
   END LOOP;
 END
 $restore_manual_payout_settlement_access$;
+
+-- Trial discounts and pencilled offers (066-068): compatibility mirror only.
+-- Use the numbered migration runner for rollout; do not invoke the legacy endpoint.
+
+-- 066_pencilled_offers.sql
+-- Optional instructor-created unpaid hold for one existing learner and one slot.
+-- The ordinary lesson-offer contract remains unchanged when pencilled = FALSE.
+ALTER TABLE lesson_offers
+  ADD COLUMN IF NOT EXISTS pencilled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE lesson_offers
+  ADD COLUMN IF NOT EXISTS checkout_attempt_id UUID;
+ALTER TABLE lesson_offers
+  ADD COLUMN IF NOT EXISTS checkout_attempt_started_at TIMESTAMPTZ;
+ALTER TABLE lesson_offers
+  ADD COLUMN IF NOT EXISTS checkout_attempt_payload JSONB;
+
+ALTER TABLE lesson_offers
+  DROP CONSTRAINT IF EXISTS lesson_offers_pencilled_shape_check;
+ALTER TABLE lesson_offers
+  ADD CONSTRAINT lesson_offers_pencilled_shape_check CHECK (
+    pencilled = FALSE OR (
+      kind = 'manual'
+      AND (status <> 'pending' OR learner_id IS NOT NULL)
+      AND scheduled_date IS NOT NULL
+      AND start_time IS NOT NULL
+      AND end_time IS NOT NULL
+      AND start_time < end_time
+      AND extension_booking_id IS NULL
+      AND COALESCE(max_repeat_weeks, 1) = 1
+      AND offer_price_pence > 0
+    )
+  );
+
+CREATE INDEX IF NOT EXISTS idx_lesson_offers_pencilled_learner_pending
+  ON lesson_offers(school_id, learner_id, expires_at)
+  WHERE pencilled = TRUE AND status = 'pending';
+
+ALTER TABLE refund_events DROP CONSTRAINT IF EXISTS refund_events_refund_type_check;
+ALTER TABLE refund_events
+  ADD CONSTRAINT refund_events_refund_type_check CHECK (
+    refund_type IN ('credit_purchase', 'repeat_offer_partial', 'direct_slot', 'direct_offer',
+                    'manual_record', 'booking_extension_unfulfilled',
+                    'pencilled_offer_unfulfilled')
+  );
+
+-- All writers of calendar-shaped rows share this key before an active pencil
+-- is checked or mutated. The application takes the same lock during pencil
+-- creation and fulfilment. Ordinary rows are otherwise left unchanged.
+CREATE OR REPLACE FUNCTION lock_pencilled_slot_day(
+  p_school_id INTEGER,
+  p_instructor_id INTEGER,
+  p_date DATE
+) RETURNS VOID AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(
+    p_school_id,
+    hashtext(p_instructor_id::text || ':' || p_date::text)
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION guard_calendar_row_against_pencilled_offer()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_school_id INTEGER;
+  v_instructor_id INTEGER;
+  v_date DATE;
+  v_start TIME;
+  v_end TIME;
+  v_active BOOLEAN;
+BEGIN
+  v_school_id := NEW.school_id;
+  v_instructor_id := NEW.instructor_id;
+  v_date := NEW.scheduled_date;
+  v_start := NEW.start_time;
+  v_end := NEW.end_time;
+  IF TG_TABLE_NAME = 'lesson_bookings' THEN
+    v_active := NEW.status IN ('scheduled', 'chargeable');
+  ELSIF TG_TABLE_NAME = 'lesson_requests' THEN
+    v_active := NEW.status = 'pending' AND NEW.expires_at > clock_timestamp();
+  ELSIF TG_TABLE_NAME = 'slot_reservations' THEN
+    v_active := NEW.expires_at > clock_timestamp();
+  ELSIF TG_TABLE_NAME = 'recurring_slot_block_items' THEN
+    v_active := NEW.status IN ('held', 'booked');
+  ELSIF TG_TABLE_NAME = 'lesson_offers' THEN
+    v_active := NEW.status = 'pending' AND NEW.expires_at > clock_timestamp();
+  ELSE
+    v_active := FALSE;
+  END IF;
+  IF NOT v_active THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE'
+     AND (OLD.school_id, OLD.instructor_id, OLD.scheduled_date)
+         IS DISTINCT FROM (NEW.school_id, NEW.instructor_id, NEW.scheduled_date) THEN
+    IF (OLD.school_id, OLD.instructor_id, OLD.scheduled_date)
+       < (NEW.school_id, NEW.instructor_id, NEW.scheduled_date) THEN
+      PERFORM lock_pencilled_slot_day(OLD.school_id, OLD.instructor_id, OLD.scheduled_date);
+      PERFORM lock_pencilled_slot_day(v_school_id, v_instructor_id, v_date);
+    ELSE
+      PERFORM lock_pencilled_slot_day(v_school_id, v_instructor_id, v_date);
+      PERFORM lock_pencilled_slot_day(OLD.school_id, OLD.instructor_id, OLD.scheduled_date);
+    END IF;
+  ELSE
+    PERFORM lock_pencilled_slot_day(v_school_id, v_instructor_id, v_date);
+  END IF;
+  IF TG_TABLE_NAME = 'lesson_offers'
+     AND COALESCE((to_jsonb(NEW)->>'pencilled')::boolean, FALSE) = TRUE
+     AND EXISTS (
+    SELECT 1 FROM lesson_bookings booking
+     WHERE booking.school_id=v_school_id AND booking.instructor_id=v_instructor_id
+       AND booking.scheduled_date=v_date AND booking.status IN ('scheduled','chargeable')
+       AND booking.start_time<v_end AND booking.end_time>v_start
+    UNION ALL
+    SELECT 1 FROM lesson_requests request
+     WHERE request.school_id=v_school_id AND request.instructor_id=v_instructor_id
+       AND request.scheduled_date=v_date AND request.status='pending'
+       AND request.expires_at>clock_timestamp()
+       AND request.start_time<v_end AND request.end_time>v_start
+    UNION ALL
+    SELECT 1 FROM slot_reservations reservation
+     WHERE reservation.school_id=v_school_id AND reservation.instructor_id=v_instructor_id
+       AND reservation.scheduled_date=v_date AND reservation.expires_at>clock_timestamp()
+       AND reservation.start_time<v_end AND reservation.end_time>v_start
+    UNION ALL
+    SELECT 1 FROM recurring_slot_block_items item
+     WHERE item.school_id=v_school_id AND item.instructor_id=v_instructor_id
+       AND item.scheduled_date=v_date AND item.status IN ('held','booked')
+       AND item.start_time<v_end AND item.end_time>v_start
+  ) THEN
+    RAISE EXCEPTION 'pencilled offer conflicts with active calendar row'
+      USING ERRCODE = '23P01';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM lesson_offers offer
+     WHERE offer.school_id = v_school_id
+       AND offer.instructor_id = v_instructor_id
+       AND offer.scheduled_date = v_date
+       AND offer.pencilled = TRUE
+       AND offer.status = 'pending'
+       AND offer.expires_at > clock_timestamp()
+       AND (TG_TABLE_NAME <> 'lesson_offers' OR offer.id <> NEW.id)
+       AND offer.start_time < v_end
+       AND offer.end_time > v_start
+  ) THEN
+    RAISE EXCEPTION 'active pencilled offer conflicts with calendar row'
+      USING ERRCODE = '23P01';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_booking_pencilled_guard ON lesson_bookings;
+CREATE TRIGGER trg_booking_pencilled_guard
+  BEFORE INSERT OR UPDATE OF school_id, instructor_id, scheduled_date, start_time, end_time, status
+  ON lesson_bookings FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();
+
+DROP TRIGGER IF EXISTS trg_request_pencilled_guard ON lesson_requests;
+CREATE TRIGGER trg_request_pencilled_guard
+  BEFORE INSERT OR UPDATE OF school_id, instructor_id, scheduled_date, start_time, end_time, status, expires_at
+  ON lesson_requests FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();
+
+DROP TRIGGER IF EXISTS trg_reservation_pencilled_guard ON slot_reservations;
+CREATE TRIGGER trg_reservation_pencilled_guard
+  BEFORE INSERT OR UPDATE OF school_id, instructor_id, scheduled_date, start_time, end_time, expires_at
+  ON slot_reservations FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();
+
+DROP TRIGGER IF EXISTS trg_recurring_item_pencilled_guard ON recurring_slot_block_items;
+CREATE TRIGGER trg_recurring_item_pencilled_guard
+  BEFORE INSERT OR UPDATE OF school_id, instructor_id, scheduled_date, start_time, end_time, status
+  ON recurring_slot_block_items FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();
+
+DROP TRIGGER IF EXISTS trg_offer_pencilled_guard ON lesson_offers;
+CREATE TRIGGER trg_offer_pencilled_guard
+  BEFORE INSERT OR UPDATE OF school_id, instructor_id, scheduled_date, start_time, end_time, status, expires_at
+  ON lesson_offers FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();
+
+-- 067_post_trial_discount.sql
+CREATE TABLE IF NOT EXISTS post_trial_discount_quotes (
+  id                       UUID PRIMARY KEY,
+  school_id                INTEGER NOT NULL DEFAULT 1 REFERENCES schools(id),
+  learner_id               INTEGER REFERENCES learner_users(id) ON DELETE SET NULL,
+  trial_booking_id         INTEGER NOT NULL REFERENCES lesson_bookings(id) ON DELETE RESTRICT,
+  policy_version           TEXT NOT NULL,
+  base_amount_pence        INTEGER NOT NULL CHECK (base_amount_pence >= 0),
+  discount_pct             NUMERIC(5,2) NOT NULL CHECK (discount_pct >= 0 AND discount_pct < 100),
+  discount_pence           INTEGER NOT NULL CHECK (discount_pence >= 0),
+  final_amount_pence       INTEGER NOT NULL CHECK (final_amount_pence >= 0),
+  trial_ended_at           TIMESTAMPTZ NOT NULL,
+  eligible_until           TIMESTAMPTZ NOT NULL,
+  checkout_expires_at      TIMESTAMPTZ NOT NULL,
+  payment_type             TEXT,
+  payment_identity         TEXT,
+  bound_at                 TIMESTAMPTZ,
+  provider_initiated_at    TIMESTAMPTZ,
+  settlement_status        TEXT CHECK (settlement_status IN ('paid', 'authorized', 'invalid_requires_compensation')),
+  settlement_reason        TEXT,
+  settled_amount_pence     INTEGER CHECK (settled_amount_pence >= 0),
+  provider_discount_pence  INTEGER CHECK (provider_discount_pence >= 0),
+  settled_at               TIMESTAMPTZ,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT post_trial_discount_amounts_check
+    CHECK (base_amount_pence = discount_pence + final_amount_pence),
+  CONSTRAINT post_trial_discount_times_check
+    CHECK (trial_ended_at <= created_at AND created_at < eligible_until
+       AND created_at < checkout_expires_at),
+  CONSTRAINT post_trial_discount_binding_check
+    CHECK ((payment_type IS NULL) = (payment_identity IS NULL)),
+  CONSTRAINT post_trial_discount_settlement_check
+    CHECK ((settlement_status IS NULL) = (settled_amount_pence IS NULL)
+       AND (settlement_status IS NULL) = (provider_discount_pence IS NULL)
+       AND (settlement_status IS NULL) = (settled_at IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_trial_discount_quotes_learner
+  ON post_trial_discount_quotes(learner_id, school_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_post_trial_discount_quotes_trial_booking
+  ON post_trial_discount_quotes(trial_booking_id);
+
+CREATE INDEX IF NOT EXISTS idx_post_trial_discount_quotes_school
+  ON post_trial_discount_quotes(school_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_post_trial_discount_quote_payment
+  ON post_trial_discount_quotes(payment_type, payment_identity)
+  WHERE payment_identity IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION protect_post_trial_discount_quote()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'post-trial discount quotes are retained financial evidence';
+  END IF;
+  IF OLD.school_id IS DISTINCT FROM NEW.school_id
+     OR OLD.id IS DISTINCT FROM NEW.id
+     OR OLD.trial_booking_id IS DISTINCT FROM NEW.trial_booking_id
+     OR OLD.policy_version IS DISTINCT FROM NEW.policy_version
+     OR OLD.base_amount_pence IS DISTINCT FROM NEW.base_amount_pence
+     OR OLD.discount_pct IS DISTINCT FROM NEW.discount_pct
+     OR OLD.discount_pence IS DISTINCT FROM NEW.discount_pence
+     OR OLD.final_amount_pence IS DISTINCT FROM NEW.final_amount_pence
+     OR OLD.trial_ended_at IS DISTINCT FROM NEW.trial_ended_at
+     OR OLD.eligible_until IS DISTINCT FROM NEW.eligible_until
+     OR OLD.checkout_expires_at IS DISTINCT FROM NEW.checkout_expires_at
+     OR OLD.created_at IS DISTINCT FROM NEW.created_at THEN
+    RAISE EXCEPTION 'post-trial discount quote financial snapshot is immutable';
+  END IF;
+  IF OLD.learner_id IS NULL AND NEW.learner_id IS NOT NULL
+     OR OLD.learner_id IS NOT NULL AND NEW.learner_id IS NOT NULL AND OLD.learner_id <> NEW.learner_id THEN
+    RAISE EXCEPTION 'post-trial discount quote learner binding is immutable';
+  END IF;
+  IF OLD.payment_identity IS NOT NULL
+     AND (OLD.payment_identity IS DISTINCT FROM NEW.payment_identity OR OLD.payment_type IS DISTINCT FROM NEW.payment_type) THEN
+    RAISE EXCEPTION 'post-trial discount quote payment binding is immutable';
+  END IF;
+  IF OLD.bound_at IS NOT NULL AND OLD.bound_at IS DISTINCT FROM NEW.bound_at THEN
+    RAISE EXCEPTION 'post-trial discount quote binding timestamp is immutable';
+  END IF;
+  IF OLD.provider_initiated_at IS NOT NULL AND OLD.provider_initiated_at IS DISTINCT FROM NEW.provider_initiated_at THEN
+    RAISE EXCEPTION 'post-trial discount initiation evidence is immutable';
+  END IF;
+  IF OLD.settlement_status IS NOT NULL
+     AND NOT (OLD.settlement_status = 'authorized'
+       AND NEW.settlement_status IN ('paid', 'invalid_requires_compensation'))
+     AND (OLD.settlement_status IS DISTINCT FROM NEW.settlement_status
+       OR OLD.settlement_reason IS DISTINCT FROM NEW.settlement_reason
+       OR OLD.settled_amount_pence IS DISTINCT FROM NEW.settled_amount_pence
+       OR OLD.provider_discount_pence IS DISTINCT FROM NEW.provider_discount_pence
+       OR OLD.settled_at IS DISTINCT FROM NEW.settled_at) THEN
+    RAISE EXCEPTION 'post-trial discount settlement outcome is immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS protect_post_trial_discount_quote_trigger ON post_trial_discount_quotes;
+CREATE TRIGGER protect_post_trial_discount_quote_trigger
+BEFORE UPDATE OR DELETE ON post_trial_discount_quotes
+FOR EACH ROW EXECUTE FUNCTION protect_post_trial_discount_quote();
+
+-- 068_post_trial_package_snapshots.sql
+CREATE UNIQUE INDEX IF NOT EXISTS uq_post_trial_discount_quotes_id_school
+  ON post_trial_discount_quotes(id, school_id);
+
+ALTER TABLE package_purchase_attempts
+  ADD COLUMN IF NOT EXISTS base_product_snapshot JSONB,
+  ADD COLUMN IF NOT EXISTS post_trial_quote_id UUID,
+  ADD COLUMN IF NOT EXISTS post_trial_quote JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS post_trial_provider_initiated_at TIMESTAMPTZ;
+
+ALTER TABLE learner_package_purchases
+  ADD COLUMN IF NOT EXISTS base_product_snapshot JSONB,
+  ADD COLUMN IF NOT EXISTS post_trial_quote_id UUID,
+  ADD COLUMN IF NOT EXISTS post_trial_quote JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS post_trial_provider_initiated_at TIMESTAMPTZ;
+
+ALTER TABLE flexible_package_purchase_attempts
+  ADD COLUMN IF NOT EXISTS base_product_snapshot JSONB,
+  ADD COLUMN IF NOT EXISTS post_trial_quote_id UUID,
+  ADD COLUMN IF NOT EXISTS post_trial_quote JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS post_trial_provider_initiated_at TIMESTAMPTZ;
+
+ALTER TABLE flexible_package_purchases
+  ADD COLUMN IF NOT EXISTS base_product_snapshot JSONB,
+  ADD COLUMN IF NOT EXISTS post_trial_quote_id UUID,
+  ADD COLUMN IF NOT EXISTS post_trial_quote JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS post_trial_provider_initiated_at TIMESTAMPTZ;
+
+ALTER TABLE package_purchase_attempts
+  DROP CONSTRAINT IF EXISTS package_purchase_attempts_post_trial_quote_fkey;
+ALTER TABLE package_purchase_attempts
+  ADD CONSTRAINT package_purchase_attempts_post_trial_quote_fkey
+  FOREIGN KEY (post_trial_quote_id, school_id)
+  REFERENCES post_trial_discount_quotes(id, school_id);
+
+ALTER TABLE learner_package_purchases
+  DROP CONSTRAINT IF EXISTS learner_package_purchases_post_trial_quote_fkey;
+ALTER TABLE learner_package_purchases
+  ADD CONSTRAINT learner_package_purchases_post_trial_quote_fkey
+  FOREIGN KEY (post_trial_quote_id, school_id)
+  REFERENCES post_trial_discount_quotes(id, school_id);
+
+ALTER TABLE flexible_package_purchase_attempts
+  DROP CONSTRAINT IF EXISTS flexible_package_attempts_post_trial_quote_fkey;
+ALTER TABLE flexible_package_purchase_attempts
+  ADD CONSTRAINT flexible_package_attempts_post_trial_quote_fkey
+  FOREIGN KEY (post_trial_quote_id, school_id)
+  REFERENCES post_trial_discount_quotes(id, school_id);
+
+ALTER TABLE flexible_package_purchases
+  DROP CONSTRAINT IF EXISTS flexible_package_purchases_post_trial_quote_fkey;
+ALTER TABLE flexible_package_purchases
+  ADD CONSTRAINT flexible_package_purchases_post_trial_quote_fkey
+  FOREIGN KEY (post_trial_quote_id, school_id)
+  REFERENCES post_trial_discount_quotes(id, school_id);
+
+CREATE INDEX IF NOT EXISTS idx_package_attempts_post_trial_quote
+  ON package_purchase_attempts(post_trial_quote_id) WHERE post_trial_quote_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_package_purchases_post_trial_quote
+  ON learner_package_purchases(post_trial_quote_id) WHERE post_trial_quote_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_flexible_attempts_post_trial_quote
+  ON flexible_package_purchase_attempts(post_trial_quote_id) WHERE post_trial_quote_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_flexible_purchases_post_trial_quote
+  ON flexible_package_purchases(post_trial_quote_id) WHERE post_trial_quote_id IS NOT NULL;
+
+ALTER TABLE flexible_package_purchase_attempts
+  ALTER COLUMN rate_pence_per_unit TYPE NUMERIC(16,6);
+ALTER TABLE flexible_package_purchases
+  ALTER COLUMN rate_pence_per_unit TYPE NUMERIC(16,6);
+
+ALTER TABLE flexible_package_purchase_attempts
+  DROP CONSTRAINT IF EXISTS flexible_package_purchase_attempts_amount_pence_check,
+  DROP CONSTRAINT IF EXISTS flexible_package_purchase_attempts_terms_check;
+ALTER TABLE flexible_package_purchase_attempts
+  ADD CONSTRAINT flexible_package_purchase_attempts_amount_pence_check
+    CHECK (amount_pence BETWEEN 50 AND 1000000),
+  ADD CONSTRAINT flexible_package_purchase_attempts_terms_check
+    CHECK (total_units IN (20, 30, 60)
+       AND rate_pence_per_unit > 0
+       AND amount_pence = ROUND(total_units * rate_pence_per_unit));
+
+ALTER TABLE flexible_package_booking_allocations
+  DROP CONSTRAINT IF EXISTS flexible_package_booking_allocations_check1;
+ALTER TABLE flexible_package_booking_allocations
+  ADD CONSTRAINT flexible_package_booking_allocations_check1
+    CHECK (units_allocated > 0 AND unit_minutes = 30
+       AND rate_pence_per_unit > 0 AND contribution_pence >= 0);
+
+ALTER TABLE flexible_package_source_reductions
+  DROP CONSTRAINT IF EXISTS flexible_package_source_reductions_check1;
+ALTER TABLE flexible_package_source_reductions
+  ADD CONSTRAINT flexible_package_source_reductions_check1
+    CHECK (units_reduced > 0 AND rate_pence_per_unit > 0
+       AND gross_refund_pence >= 0
+       AND stripe_fee_deduction_pence >= 0
+       AND learner_refund_pence = gross_refund_pence - stripe_fee_deduction_pence);
+
+CREATE OR REPLACE VIEW flexible_package_source_remaining AS
+SELECT s.id AS source_id, s.school_id, s.learner_id, s.purchase_id,
+       s.initial_units, s.unit_minutes, s.rate_pence_per_unit,
+       remainder.units AS remaining_units,
+       GREATEST(0, s.original_value_pence
+         - COALESCE(spent.value_pence, 0)
+         - COALESCE(reduced.value_pence, 0))::integer AS refundable_value_pence,
+       s.available_at, s.created_at
+  FROM flexible_package_sources s
+  CROSS JOIN LATERAL (
+    SELECT GREATEST(0, ROUND((s.initial_units
+      - COALESCE((SELECT SUM(r.units_reduced) FROM flexible_package_source_reductions r
+                   WHERE r.source_id=s.id AND r.school_id=s.school_id),0)
+      - COALESCE((SELECT SUM(a.units_allocated) FROM flexible_package_booking_allocations a
+                   WHERE a.source_id=s.id AND a.school_id=s.school_id
+                     AND NOT EXISTS (SELECT 1 FROM flexible_package_allocation_returns ar
+                       WHERE ar.allocation_id=a.id AND ar.school_id=a.school_id)),0)
+    ) * 30)) / 30 AS units
+  ) remainder
+  LEFT JOIN LATERAL (
+    SELECT SUM(a.contribution_pence)::integer AS value_pence
+      FROM flexible_package_booking_allocations a
+     WHERE a.source_id=s.id AND a.school_id=s.school_id
+       AND NOT EXISTS (SELECT 1 FROM flexible_package_allocation_returns ar
+         WHERE ar.allocation_id=a.id AND ar.school_id=a.school_id)
+  ) spent ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT SUM(r.gross_refund_pence)::integer AS value_pence
+      FROM flexible_package_source_reductions r
+     WHERE r.source_id=s.id AND r.school_id=s.school_id
+  ) reduced ON TRUE;
+
+ALTER TABLE package_purchase_attempts
+  DROP CONSTRAINT IF EXISTS package_purchase_attempts_post_trial_snapshot_check;
+ALTER TABLE package_purchase_attempts
+  ADD CONSTRAINT package_purchase_attempts_post_trial_snapshot_check
+    CHECK (jsonb_typeof(post_trial_quote) = 'object'
+       AND (post_trial_quote_id IS NOT NULL OR post_trial_quote = '{}'::jsonb)
+       AND (post_trial_quote_id IS NULL OR (
+         base_product_snapshot IS NOT NULL
+         AND amount_pence = (post_trial_quote->>'pricePence')::integer)));
+ALTER TABLE learner_package_purchases
+  DROP CONSTRAINT IF EXISTS learner_package_purchases_post_trial_snapshot_check;
+ALTER TABLE learner_package_purchases
+  ADD CONSTRAINT learner_package_purchases_post_trial_snapshot_check
+    CHECK (jsonb_typeof(post_trial_quote) = 'object'
+       AND (post_trial_quote_id IS NOT NULL OR post_trial_quote = '{}'::jsonb)
+       AND (post_trial_quote_id IS NULL OR (
+         base_product_snapshot IS NOT NULL
+         AND amount_pence = (post_trial_quote->>'pricePence')::integer)));
+ALTER TABLE flexible_package_purchase_attempts
+  DROP CONSTRAINT IF EXISTS flexible_package_attempts_post_trial_snapshot_check;
+ALTER TABLE flexible_package_purchase_attempts
+  ADD CONSTRAINT flexible_package_attempts_post_trial_snapshot_check
+    CHECK (jsonb_typeof(post_trial_quote) = 'object'
+       AND (post_trial_quote_id IS NOT NULL OR post_trial_quote = '{}'::jsonb)
+       AND (post_trial_quote_id IS NULL OR (
+         base_product_snapshot IS NOT NULL
+         AND amount_pence = (post_trial_quote->>'pricePence')::integer)));
+ALTER TABLE flexible_package_purchases
+  DROP CONSTRAINT IF EXISTS flexible_package_purchases_post_trial_snapshot_check;
+ALTER TABLE flexible_package_purchases
+  ADD CONSTRAINT flexible_package_purchases_post_trial_snapshot_check
+    CHECK (jsonb_typeof(post_trial_quote) = 'object'
+       AND (post_trial_quote_id IS NOT NULL OR post_trial_quote = '{}'::jsonb)
+       AND (post_trial_quote_id IS NULL OR (
+         base_product_snapshot IS NOT NULL
+         AND amount_pence = (post_trial_quote->>'pricePence')::integer)));

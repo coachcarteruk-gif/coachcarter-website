@@ -1,5 +1,21 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.133 - Trial Discounts and Pencilled Lessons (16 September 2026, pending rollout)
+
+Extends free trials to 28 days within instructor windows; adds an automatic,
+account-bound 10%/48-hour post-trial discount with admin configuration and retained
+checkout evidence; and adds optional unpaid, slot-reserving instructor offers up
+to 84 days ahead with a 48-hour payment deadline. Discounted purchases retain actual
+cash values, including proportional package refund valuations and exact pennies.
+Existing product gates and ordinary paid booking/cancellation rules are preserved.
+
+**Files:** `api/_post-trial-discount.js`, `api/_post-trial-webhook.js`,
+`api/_pencilled-offers.js`, `api/_pencilled-offer-store.js`, affected booking,
+offer, package and webhook routes, learner/instructor/admin UI, migrations
+066–068 and focused trial/discount/pencil/package tests. See
+`docs/trial-discount-pencilled-offers-plan.md` for the approved pricing contract,
+verification and rollout packet. No deployment or production migration performed.
+
 ## 2.132 - Migration Governance Phase 2 Rehearsal Package (9 September 2026)
 
 Prepared—but did not operate—the reviewed append-only migration ledger and

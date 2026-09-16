@@ -265,6 +265,17 @@ When making structural changes (new tables, new API routes, new shared modules, 
 
 ## Working practices
 
+### Trial discounts and pencilled offers (pending rollout, September 2026)
+
+Use `_post-trial-discount.js` and `_post-trial-webhook.js` for account eligibility,
+server price snapshots and signed payment timing. Never infer payment initiation
+from a Stripe object's creation timestamp. The configured repeatable discount
+stacks after local pricing; existing Stripe promotion entry applies last. Earnings
+and new package cash/refund values follow the reduced actual payment. Preserve
+existing product gates. An unpaid pencilled offer is only a calendar hold; its
+84-day horizon and start-minus-48-hour payment deadline are separate from ordinary
+learner booking windows. See `docs/trial-discount-pencilled-offers-plan.md`.
+
 - Small fixes: commit directly to main
 - Bigger features: feature branch + PR
 - Never commit .env files or secrets

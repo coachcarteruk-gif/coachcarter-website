@@ -17,7 +17,7 @@ const jwt    = require('jsonwebtoken');
 const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { withCronLock } = require('./_cron-lock');
-const { safeEqual, verifyCronAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
+const { safeEqual, verifyCronAuth, requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { SCHEDULED, BLOCKING_STATUSES } = require('./_booking-status');
 const { allocate } = require('./_pence-allocator');
@@ -32,6 +32,7 @@ const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-prod
 const { expireExtensionCheckoutSessions } = require('./_booking-extension-invalidation');
 const { withNeonTransaction } = require('./_db-transaction');
 const { sendWhatsApp } = require('./_whatsapp');
+const { applyPostTrialDiscount, getPostTrialDiscount, quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
 
 function dateOnly(value) {
   if (!value) return null;
@@ -245,6 +246,8 @@ module.exports = async (req, res) => {
   const action = req.query.action;
   if (action === 'get-offer')      return handleGetOffer(req, res);
   if (action === 'accept-offer')   return handleAcceptOffer(req, res);
+  if (action === 'my-pencilled-offers') return handleMyPencilledOffers(req, res);
+  if (action === 'cancel-pencilled-offer') return handleCancelPencilledOffer(req, res);
   if (action === 'expire-offers')  return handleExpireOffers(req, res);
 
   return res.status(400).json({ error: 'Unknown action' });
@@ -253,6 +256,7 @@ module.exports = async (req, res) => {
 // Exposed for api/webhook.js handleOfferBooking — see top of file for behaviour.
 module.exports.bookOfferSeries = bookOfferSeries;
 module.exports._acceptFreeBookingExtension = acceptFreeBookingExtension;
+module.exports._handleAcceptOffer = handleAcceptOffer;
 
 // ── Shared: find or create a learner by email/phone ─────────────────────────
 // Handles phone format mismatches and unique constraint races gracefully.
@@ -360,10 +364,10 @@ async function handleGetOffer(req, res) {
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
         AND token = ${token}
-      RETURNING extension_booking_id, stripe_session_id
+      RETURNING extension_booking_id, pencilled, stripe_session_id
     `;
     await expireExtensionCheckoutSessions(
-      staleOffers.filter(row => row.extension_booking_id).map(row => row.stripe_session_id),
+      staleOffers.filter(row => row.extension_booking_id || row.pencilled).map(row => row.stripe_session_id),
       { stripeClient: stripe }
     );
 
@@ -373,7 +377,7 @@ async function handleGetOffer(req, res) {
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence, o.max_repeat_weeks,
              o.extension_booking_id, o.extension_minutes,
-             o.kind, o.trigger,
+             o.kind, o.trigger, COALESCE(o.pencilled, FALSE) AS pencilled,
              lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
              lu.name AS learner_name, lu.phone AS learner_phone,
@@ -419,6 +423,7 @@ async function handleGetOffer(req, res) {
           scheduled_date: offer.scheduled_date || null,
           start_time: offer.start_time || null,
           end_time: offer.end_time || null,
+          pencilled: offer.pencilled === true,
         }
       });
     }
@@ -462,6 +467,13 @@ async function handleGetOffer(req, res) {
       finalPricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
     }
 
+    const postTrialDiscount = offer.learner_id
+      ? await getPostTrialDiscount(sql, {
+          schoolId: Number(offer.school_id), learnerId: Number(offer.learner_id), now: new Date(),
+        })
+      : { eligible: false, discountPct: 0 };
+    const displayedPrice = applyPostTrialDiscount(finalPricePence, postTrialDiscount.discountPct || 0);
+
     return res.json({
       ok: true,
       offer: {
@@ -473,7 +485,10 @@ async function handleGetOffer(req, res) {
         instructor_name: offer.instructor_name,
         lesson_type_name: offer.lesson_type_name || 'Standard Lesson',
         duration_minutes: offer.extension_minutes || offer.duration_minutes || 90,
-        price_pence: finalPricePence,
+        price_pence: displayedPrice.pricePence,
+        negotiated_price_pence: finalPricePence,
+        post_trial_discount_pct: postTrialDiscount.discountPct || 0,
+        post_trial_eligible_until: postTrialDiscount.eligibleUntil || null,
         original_price_pence: displayOriginalPricePence,
         discount_pct: offer.discount_pct || 0,
         kind: offer.kind || 'manual',
@@ -488,7 +503,9 @@ async function handleGetOffer(req, res) {
         learner_name: resolvedName,
         learner_phone: offer.learner_phone || '',
         learner_pickup_address: offer.learner_pickup_address || '',
-        needs_details: needsDetails
+        needs_details: needsDetails,
+        pencilled: offer.pencilled === true,
+        pay_by: offer.pencilled === true ? offer.expires_at : null
       }
     });
   } catch (err) {
@@ -759,10 +776,10 @@ async function handleAcceptOffer(req, res) {
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
         AND token = ${token}
-      RETURNING extension_booking_id, stripe_session_id
+      RETURNING extension_booking_id, pencilled, stripe_session_id
     `;
     await expireExtensionCheckoutSessions(
-      staleOffers.filter(row => row.extension_booking_id).map(row => row.stripe_session_id),
+      staleOffers.filter(row => row.extension_booking_id || row.pencilled).map(row => row.stripe_session_id),
       { stripeClient: stripe }
     );
 
@@ -798,6 +815,38 @@ async function handleAcceptOffer(req, res) {
       throw new Error(`Offer ${offer.id} has no valid school scope`);
     }
 
+    // A pencil is a single payable hold. Reuse its still-open Checkout rather
+    // than letting repeated clicks create two independently payable sessions.
+    if ((offer.pencilled === true || offer.extension_booking_id) && offer.stripe_session_id) {
+      let existingSession;
+      try {
+        existingSession = await stripe.checkout.sessions.retrieve(offer.stripe_session_id);
+        if (existingSession.status === 'open' && existingSession.url) {
+          const quoteDeadline = new Date(existingSession.metadata?.post_trial_checkout_expires_at || 0);
+          if (!Number.isNaN(quoteDeadline.getTime()) && quoteDeadline > new Date()) {
+            return res.json({ ok: true, url: existingSession.url, reused: true });
+          }
+          if (!existingSession.metadata?.post_trial_quote_id) {
+            return res.json({ ok: true, url: existingSession.url, reused: true });
+          }
+          await stripe.checkout.sessions.expire(existingSession.id);
+          existingSession = await stripe.checkout.sessions.retrieve(existingSession.id);
+        }
+      } catch (_) {
+        return res.status(409).json({ error: 'Unable to confirm the existing payment link. Please try again.', code: 'CHECKOUT_STATE_UNKNOWN' });
+      }
+      if (existingSession.status !== 'expired') {
+        return res.status(409).json({ error: 'Payment is already processing.', code: 'CHECKOUT_PROCESSING' });
+      }
+      await sql`
+        UPDATE lesson_offers
+           SET stripe_session_id = NULL, checkout_attempt_id = NULL,
+               checkout_attempt_started_at = NULL, checkout_attempt_payload = NULL
+         WHERE id = ${offer.id} AND school_id = ${schoolId}
+           AND status = 'pending' AND stripe_session_id = ${offer.stripe_session_id}
+      `;
+    }
+
     let boundLearner = null;
     if (offer.learner_id) {
       const [learner] = await sql`
@@ -813,17 +862,17 @@ async function handleAcceptOffer(req, res) {
 
     // Resolve learner details. Existing-learner offers prefer the stored
     // learner record while still letting the accept form fill missing fields.
-    const resolvedName = (name && name.trim()) || boundLearner?.name || offer.learner_name || '';
+    let resolvedName = (name && name.trim()) || boundLearner?.name || offer.learner_name || '';
     if (!resolvedName)
       return res.status(400).json({ error: 'Name is required' });
 
-    const resolvedEmail = offer.learner_email || boundLearner?.email || (email ? email.trim().toLowerCase() : null);
+    let resolvedEmail = offer.learner_email || boundLearner?.email || (email ? email.trim().toLowerCase() : null);
     if (!resolvedEmail)
       return res.status(400).json({ error: 'Email address is required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedEmail))
       return res.status(400).json({ error: 'Invalid email address' });
 
-    const learnerDetails = {
+    let learnerDetails = {
       learner_id: boundLearner?.id || null,
       name: resolvedName,
       phone: (phone || boundLearner?.phone || '').trim(),
@@ -880,6 +929,28 @@ async function handleAcceptOffer(req, res) {
       if (repeatWeeksClean > 1) return sendRetiredProduct(res, 'repeated_offer');
     }
 
+    let checkoutAttemptId = null;
+    let recoveredCheckoutPayload = null;
+    if (offer.pencilled === true || isExtension) {
+      const proposedAttemptId = crypto.randomUUID();
+      const [claimed] = await sql`
+        UPDATE lesson_offers
+           SET checkout_attempt_id = COALESCE(checkout_attempt_id, ${proposedAttemptId}::uuid),
+               checkout_attempt_started_at = clock_timestamp()
+         WHERE id = ${offer.id} AND school_id = ${schoolId} AND status = 'pending'
+           AND expires_at > clock_timestamp() AND stripe_session_id IS NULL
+           AND (checkout_attempt_id IS NULL OR checkout_attempt_started_at < clock_timestamp() - interval '5 minutes')
+         RETURNING checkout_attempt_id, checkout_attempt_payload
+      `;
+      if (!claimed) {
+        return res.status(409).json({ error: 'Payment is already being prepared. Please try again.', code: 'CHECKOUT_IN_PROGRESS' });
+      }
+      checkoutAttemptId = String(claimed.checkout_attempt_id);
+      recoveredCheckoutPayload = claimed.checkout_attempt_payload || null;
+      if (recoveredCheckoutPayload?.resolvedEmail) resolvedEmail = recoveredCheckoutPayload.resolvedEmail;
+      if (recoveredCheckoutPayload?.learnerDetails) learnerDetails = recoveredCheckoutPayload.learnerDetails;
+    }
+
     // offer_price_pence (custom price) takes precedence over discount_pct
     let pricePence;
     if (isExtension) {
@@ -894,6 +965,21 @@ async function handleAcceptOffer(req, res) {
     } else {
       const discountPct = offer.discount_pct || 0;
       pricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
+    }
+
+    let checkoutTotalPence = recoveredCheckoutPayload?.checkoutTotalPence ?? (pricePence * repeatWeeksClean);
+    let postTrialQuote = null;
+    if (recoveredCheckoutPayload?.postTrialQuote) {
+      postTrialQuote = recoveredCheckoutPayload.postTrialQuote;
+    } else if (checkoutTotalPence > 0 && (boundLearner?.id || offer.learner_id)) {
+      postTrialQuote = await quotePostTrialPrice(sql, {
+        schoolId,
+        learnerId: Number(boundLearner?.id || offer.learner_id),
+        amountPence: checkoutTotalPence,
+        now: new Date(),
+        maxExpiresAt: offer.expires_at,
+      });
+      checkoutTotalPence = postTrialQuote.pricePence;
     }
 
     const durationMins = isExtension ? Number(offer.extension_minutes) : (offer.duration_minutes || 90);
@@ -1049,15 +1135,15 @@ async function handleAcceptOffer(req, res) {
       priceLabel = `${offer.lesson_type_name || 'Standard Lesson'} — ${lessonDate} ${offer.start_time}–${offer.end_time}`;
     }
 
-    const launchMetadata = !isExtension && !isFlexible && repeatWeeksClean === 1
+    const launchMetadata = recoveredCheckoutPayload?.launchMetadata || (!isExtension && !isFlexible && repeatWeeksClean === 1
       ? await prepareLaunchPaymentCandidate({
           sql,
           schoolId,
           instructorId: Number(offer.instructor_id),
           origin: STRIPE_LAUNCH_PAYMENT_ORIGINS.ONE_OFF_OFFER,
         })
-      : {};
-    const checkoutReturnUrls = await resolveStripeCheckoutReturnUrls({
+      : {});
+    const checkoutReturnUrls = recoveredCheckoutPayload?.checkoutReturnUrls || await resolveStripeCheckoutReturnUrls({
       sql,
       schoolId,
       launchMetadata,
@@ -1067,13 +1153,21 @@ async function handleAcceptOffer(req, res) {
         : `/offer-success.html?token=${token}`,
       cancelPath: `/accept-offer.html?token=${token}&cancelled=1`,
     });
+    if (checkoutAttemptId && !recoveredCheckoutPayload) {
+      const frozenPayload = { checkoutTotalPence, postTrialQuote, resolvedEmail, learnerDetails, launchMetadata, checkoutReturnUrls };
+      await sql`
+        UPDATE lesson_offers SET checkout_attempt_payload=${JSON.stringify(frozenPayload)}::jsonb
+         WHERE id=${offer.id} AND school_id=${schoolId} AND status='pending'
+           AND checkout_attempt_id=${checkoutAttemptId}::uuid AND stripe_session_id IS NULL
+      `;
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
         price_data: {
           currency: 'gbp',
-          unit_amount: pricePence,
+          unit_amount: checkoutTotalPence,
           product_data: {
             name: priceLabel,
             description: isExtension
@@ -1083,7 +1177,7 @@ async function handleAcceptOffer(req, res) {
                 : `${durationStr} driving lesson with ${offer.instructor_name}`
           }
         },
-        quantity: repeatWeeksClean
+        quantity: 1
       }],
       metadata: {
         payment_type:      'lesson_offer',
@@ -1101,16 +1195,16 @@ async function handleAcceptOffer(req, res) {
         end_time:          offer.end_time || '',
         lesson_type_id:    String(offer.lesson_type_id || ''),
         duration_minutes:  String(durationMins),
-        amount_pence:      String(pricePence),
+        amount_pence:      String(checkoutTotalPence),
         repeat_weeks:      String(repeatWeeksClean),
         school_id:         String(schoolId),
         is_flexible:       isFlexible ? '1' : '0',
         extension_booking_id: isExtension ? String(offer.extension_booking_id) : '',
         extension_minutes: isExtension ? String(offer.extension_minutes) : '',
-        // Step 4 / Phase 2A: per-minute rate is invariant across the weekly
-        // series (Stripe charges quantity = repeatWeeksClean), so the rate
-        // computed here is correct for each booked lesson.
-        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(pricePence / durationMins) : 0),
+        ...(postTrialQuote?.metadata || {}),
+        // The single Stripe line item contains the whole series total. Divide
+        // across all booked minutes for the per-lesson accounting snapshot.
+        effective_rate_pence_per_minute: String(durationMins > 0 ? Math.round(checkoutTotalPence / (durationMins * repeatWeeksClean)) : 0),
         ...launchMetadata,
       },
       customer_email: resolvedEmail,
@@ -1120,7 +1214,11 @@ async function handleAcceptOffer(req, res) {
       ...(isExtension ? { expires_at: extensionCheckoutExpiresAt } : {}),
       success_url: checkoutReturnUrls.successUrl,
       cancel_url:  checkoutReturnUrls.cancelUrl
-    }, isExtension ? { idempotencyKey: `lesson_extension_offer_${offer.id}` } : undefined);
+    }, isExtension && !postTrialQuote?.quoteId
+      ? { idempotencyKey: `lesson_extension_offer_${offer.id}` }
+      : checkoutAttemptId
+        ? { idempotencyKey: `${isExtension ? 'lesson_extension_quote' : 'pencilled_offer'}_${offer.id}_${checkoutAttemptId}` }
+        : undefined);
 
     // Store Stripe session ID on the offer
     const [storedSession] = await sql`
@@ -1128,6 +1226,7 @@ async function handleAcceptOffer(req, res) {
       WHERE id = ${offer.id}
         AND school_id = ${schoolId}
         AND status = 'pending'
+        AND (${checkoutAttemptId}::uuid IS NULL OR checkout_attempt_id = ${checkoutAttemptId}::uuid)
       RETURNING id
     `;
     if (!storedSession) {
@@ -1141,6 +1240,26 @@ async function handleAcceptOffer(req, res) {
         });
       }
       return res.status(409).json({ error: 'This extension request is no longer available.' });
+    }
+
+    if (postTrialQuote?.quoteId) {
+      const boundQuote = await bindPostTrialQuote(sql, {
+        quoteId: postTrialQuote.quoteId,
+        schoolId,
+        learnerId: Number(boundLearner?.id || offer.learner_id),
+        paymentType: 'checkout_session',
+        paymentIdentity: session.id,
+      });
+      if (!boundQuote?.ok) {
+        await expireExtensionCheckoutSessions([session.id], { stripeClient: stripe });
+        if (checkoutAttemptId) await sql`
+          UPDATE lesson_offers SET stripe_session_id=NULL, checkout_attempt_id=NULL,
+             checkout_attempt_started_at=NULL, checkout_attempt_payload=NULL
+           WHERE id=${offer.id} AND school_id=${schoolId} AND status='pending'
+             AND checkout_attempt_id=${checkoutAttemptId}::uuid AND stripe_session_id=${session.id}
+        `;
+        return res.status(409).json({ error: 'This price quote is no longer available. Please try again.', code: 'POST_TRIAL_QUOTE_NOT_BOUND' });
+      }
     }
 
     return res.json({ ok: true, url: session.url });
@@ -1294,6 +1413,68 @@ async function handleFreeOffer(sql, offer, learnerDetails, baseUrl, token, res, 
   });
 }
 
+async function handleMyPencilledOffers(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const learner = requireAuth(req, { roles: ['learner'] });
+  if (!learner) return res.status(401).json({ error: 'Unauthorised' });
+  const schoolId = learner.school_id || 1;
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const expired = await sql`
+      UPDATE lesson_offers SET status = 'expired'
+       WHERE school_id = ${schoolId} AND learner_id = ${learner.id}
+         AND pencilled = TRUE AND status = 'pending' AND expires_at <= NOW()
+       RETURNING stripe_session_id
+    `;
+    await expireExtensionCheckoutSessions(expired.map(row => row.stripe_session_id), { stripeClient: stripe });
+    const offers = await sql`
+      SELECT o.id, o.token, o.scheduled_date::text, o.start_time::text, o.end_time::text,
+             o.offer_price_pence, o.expires_at, o.expires_at AS pay_by,
+             i.id AS instructor_id, i.name AS instructor_name,
+             lt.id AS lesson_type_id, lt.name AS lesson_type_name, lt.duration_minutes
+        FROM lesson_offers o
+        JOIN instructors i ON i.id = o.instructor_id AND i.school_id = o.school_id
+        LEFT JOIN lesson_types lt ON lt.id = o.lesson_type_id AND lt.school_id = o.school_id
+       WHERE o.school_id = ${schoolId} AND o.learner_id = ${learner.id}
+         AND o.pencilled = TRUE AND o.status = 'pending' AND o.expires_at > NOW()
+       ORDER BY o.scheduled_date, o.start_time
+    `;
+    return res.json({ ok: true, offers: offers.map(offer => ({
+      ...offer,
+      status: 'pending',
+      pencilled: true,
+      payment_url: `/accept-offer.html?token=${encodeURIComponent(offer.token)}`,
+    })) });
+  } catch (err) {
+    reportError('/api/offers (my pencilled offers)', err);
+    return res.status(500).json({ error: 'Failed to load pencilled lessons' });
+  }
+}
+
+async function handleCancelPencilledOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const learner = requireAuth(req, { roles: ['learner'] });
+  if (!learner) return res.status(401).json({ error: 'Unauthorised' });
+  const offerId = Number(req.body?.offer_id);
+  if (!Number.isSafeInteger(offerId) || offerId <= 0) return res.status(400).json({ error: 'offer_id is required' });
+  const schoolId = learner.school_id || 1;
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [cancelled] = await sql`
+      UPDATE lesson_offers SET status = 'cancelled'
+       WHERE id = ${offerId} AND school_id = ${schoolId} AND learner_id = ${learner.id}
+         AND pencilled = TRUE AND status = 'pending'
+       RETURNING id, stripe_session_id
+    `;
+    if (!cancelled) return res.status(409).json({ error: 'This pencilled lesson is no longer pending.', code: 'PENCILLED_NOT_PENDING' });
+    await expireExtensionCheckoutSessions([cancelled.stripe_session_id], { stripeClient: stripe });
+    return res.json({ ok: true, offer_id: cancelled.id, status: 'cancelled' });
+  } catch (err) {
+    reportError('/api/offers (cancel pencilled offer)', err);
+    return res.status(500).json({ error: 'Failed to cancel pencilled lesson' });
+  }
+}
+
 // ── GET /api/offers?action=expire-offers ──────────────────────────────────────
 // Cron-triggered: bulk-expire stale pending offers. Vercel Cron always sends
 // GET (per vercel.json), so this handler accepts GET to match. Previously
@@ -1317,10 +1498,10 @@ async function handleExpireOffers(req, res) {
     const expired = await sql`
       UPDATE lesson_offers SET status = 'expired'
       WHERE status = 'pending' AND expires_at <= NOW()
-      RETURNING id, learner_email, scheduled_date::text, extension_booking_id, stripe_session_id
+      RETURNING id, learner_email, scheduled_date::text, extension_booking_id, pencilled, stripe_session_id
     `;
     await expireExtensionCheckoutSessions(
-      expired.filter(row => row.extension_booking_id).map(row => row.stripe_session_id),
+      expired.filter(row => row.extension_booking_id || row.pencilled).map(row => row.stripe_session_id),
       { stripeClient: stripe }
     );
     return { ok: true, expired_count: expired.length };

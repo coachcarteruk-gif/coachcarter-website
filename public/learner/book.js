@@ -56,6 +56,7 @@ function instructorWindowDays(instructorId) {
 // window across the school when browsing "All instructors" (the server
 // still filters each slot by its own instructor's window).
 function feedMaxDays() {
+  if (rescheduleLessonTypeSlug === 'trial') return Math.min(FEED_DEFAULT_DAYS, 28);
   const selected = document.getElementById('instructorFilter')?.value;
   if (selected) return instructorWindowDays(selected);
   if (!instructors.length) return FEED_DEFAULT_DAYS;
@@ -78,6 +79,7 @@ let preselectedInstructorSlug = null;
 let preselectedTypeId = null;
 let prefilledName = null; // from ?name= URL param (shareable booking link)
 let pendingReschedule = null; // { bookingId, date, start, end, instructorName, instructorId }
+let rescheduleLessonTypeSlug = null;
 let locationCheckTimer = null;
 let lastBookingId = null;
 let recurringAnchorBookingId = null;
@@ -287,6 +289,7 @@ function init() {
           if (res.ok) {
             const booking = (data.upcoming || []).find(b => String(b.id) === moveBookingId);
             if (booking) {
+              rescheduleLessonTypeSlug = booking.lesson_type_slug || null;
               // Pre-select the instructor filter to show only their slots
               const sel = document.getElementById('instructorFilter');
               if (sel.querySelector(`option[value="${booking.instructor_id}"]`)) {
@@ -471,7 +474,20 @@ function choosePageLessonType() {
 }
 
 function chooseLessonTypeForExistingBooking(booking) {
-  if (!booking || !availableLessonTypes.length) return false;
+  if (!booking) return false;
+  if (booking.lesson_type_slug === 'trial') {
+    selectedLessonType = normaliseLessonType({
+      id: booking.lesson_type_id,
+      slug: 'trial',
+      name: booking.lesson_type_name || 'Free trial',
+      duration_minutes: booking.duration_minutes,
+      price_pence: 0,
+    });
+    slotFeedDuration = selectedLessonType.duration_minutes;
+    slotFeedLessonTypeId = selectedLessonType.id;
+    return true;
+  }
+  if (!availableLessonTypes.length) return false;
   const bookingTypeId = booking.lesson_type_id == null ? '' : String(booking.lesson_type_id);
   const bookingDuration = parseInt(booking.duration_minutes, 10) || 0;
   let chosen = null;
@@ -3449,6 +3465,7 @@ function startRescheduleMode(bookingId, date, start, end, instructorName, instru
     isReservedMove: !!isReservedMove,
     lessonTypeId: selectedLessonType && selectedLessonType.id,
     durationMinutes: selectedLessonType && selectedLessonType.duration_minutes,
+    lessonTypeSlug: rescheduleLessonTypeSlug || (selectedLessonType && selectedLessonType.slug) || null,
     pickupAddress: pickupAddress || '',
     dropoffAddress: dropoffAddress || ''
   };
@@ -3466,6 +3483,7 @@ window.startRescheduleMode = startRescheduleMode;
 
 function cancelRescheduleMode() {
   pendingReschedule = null;
+  rescheduleLessonTypeSlug = null;
   document.getElementById('rescheduleBanner').style.display = 'none';
   const instructorFilter = document.getElementById('instructorFilter');
   if (instructorFilter) instructorFilter.disabled = false;

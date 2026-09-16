@@ -89,6 +89,7 @@ const {
   unitsForDuration: flexibleUnitsForDuration,
 } = require('./_flexible-package-ledger');
 const { invalidatePendingBookingExtensions } = require('./_booking-extension-invalidation');
+const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
@@ -276,6 +277,15 @@ function isWithinTestDateUpperBound(dateValue) {
   if (!dateObj) return false;
   const today = startOfDay(new Date());
   return dateObj >= today && dateObj <= addDays(today, TEST_DATE_MAX_DAYS_AHEAD);
+}
+
+function allocateRecurringBlockPence(totalPence, itemCount) {
+  if (!Number.isSafeInteger(totalPence) || totalPence < 0 || !Number.isSafeInteger(itemCount) || itemCount <= 0) {
+    throw new TypeError('A non-negative total and positive item count are required');
+  }
+  const base = Math.floor(totalPence / itemCount);
+  const remainder = totalPence - base * itemCount;
+  return Array.from({ length: itemCount }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
 function concreteLessonTransmissionType(requestedTransmissionType, instructorTransmissionType) {
@@ -2984,8 +2994,9 @@ async function handleRecurringBlockCommit(req, res) {
       selected_lessons: preview.requested_lessons,
       balance_minutes: booked.balanceMinutes,
       pricing: {
-        price_per_lesson_pence: preview.pricing.price_per_lesson_pence,
-        total_price_pence: preview.pricing.requested_total_price_pence,
+        price_per_lesson_pence: Math.floor(discountedTotalPence / preview.requested_lessons),
+        total_price_pence: discountedTotalPence,
+        post_trial_discount_pence: postTrialQuote.discountPence,
         price_source: preview.pricing.price_source,
       },
     });
@@ -3531,6 +3542,31 @@ async function handleRecurringBlockBankCheckout(req, res) {
       throw new Error(`Recurring block bank hold failed: ${hold.code || 'UNKNOWN'}`);
     }
 
+    const postTrialQuote = await quotePostTrialPrice(sql, {
+      schoolId, learnerId: user.id,
+      amountPence: preview.pricing.requested_total_price_pence,
+      maxExpiresAt: hold.block.expires_at,
+    });
+    const discountedTotalPence = postTrialQuote.pricePence;
+    if (postTrialQuote.quoteId) {
+      const heldItems = await sql`
+        SELECT id FROM recurring_slot_block_items
+         WHERE block_id=${hold.block.id} AND school_id=${schoolId} AND status='held'
+         ORDER BY scheduled_date, start_time, id
+      `;
+      const allocations = allocateRecurringBlockPence(discountedTotalPence, heldItems.length);
+      const base = Math.floor(discountedTotalPence / heldItems.length);
+      for (let itemIndex = 0; itemIndex < heldItems.length; itemIndex++) {
+        const item = heldItems[itemIndex];
+        const allocation = allocations[itemIndex];
+        await sql`UPDATE recurring_slot_block_items SET price_pence=${allocation}, updated_at=NOW()
+                   WHERE id=${item.id} AND block_id=${hold.block.id} AND school_id=${schoolId} AND status='held'`;
+      }
+      await sql`UPDATE recurring_slot_blocks SET total_price_pence=${discountedTotalPence},
+                   price_per_lesson_pence=${base}, updated_at=NOW()
+                 WHERE id=${hold.block.id} AND school_id=${schoolId} AND status='pending_payment'`;
+    }
+
     const [learner] = await sql`
       SELECT email
         FROM learner_users
@@ -3555,12 +3591,13 @@ async function handleRecurringBlockBankCheckout(req, res) {
       lesson_type_id: String(preview.anchor.lesson_type_id || ''),
       selected_lessons: String(preview.requested_lessons),
       duration_minutes: String(preview.anchor.duration_minutes),
-      amount_pence: String(preview.pricing.requested_total_price_pence),
+      amount_pence: String(discountedTotalPence),
       price_per_lesson_pence: String(preview.pricing.price_per_lesson_pence),
       price_source: preview.pricing.price_source || '',
       first_date: firstDate || '',
       last_date: lastDate || '',
       school_id: String(schoolId),
+      ...postTrialQuote.metadata,
     };
 
     createdSession = await stripe.checkout.sessions.create({
@@ -3568,7 +3605,7 @@ async function handleRecurringBlockBankCheckout(req, res) {
       line_items: [{
         price_data: {
           currency: 'gbp',
-          unit_amount: preview.pricing.requested_total_price_pence,
+          unit_amount: discountedTotalPence,
           product_data: {
             name: `Reserved Weekly Slot - ${preview.requested_lessons} lessons`,
             description: `${preview.anchor.lesson_type_name || 'Driving lesson'} with ${preview.anchor.instructor_name}. Held for ${RESERVATION_MINUTES} minutes while bank checkout starts.`
@@ -3587,6 +3624,11 @@ async function handleRecurringBlockBankCheckout(req, res) {
       success_url: `${origin}/learner/book.html?reserved_bank_checkout=1&block_id=${hold.block.id}`,
       cancel_url: `${origin}/learner/book.html?reserved_bank_cancelled=1&block_id=${hold.block.id}`
     });
+    const recurringQuoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId, schoolId, learnerId: user.id,
+      paymentType: 'checkout_session', paymentIdentity: createdSession.id,
+    });
+    if (!recurringQuoteBinding.ok) throw new Error(recurringQuoteBinding.code);
 
     await sql`
       UPDATE recurring_slot_blocks
@@ -3768,7 +3810,13 @@ async function handleCheckoutTestDate(req, res) {
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(ctx.testDate + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-    const pricePence = directPrice.pricePence;
+    const postTrialQuote = await quotePostTrialPrice(ctx.sql, {
+      schoolId: ctx.schoolId,
+      learnerId: ctx.user.id,
+      amountPence: directPrice.pricePence,
+      maxExpiresAt: new Date(Date.now() + RESERVATION_MINUTES * 60000),
+    });
+    const pricePence = postTrialQuote.pricePence;
     const launchMetadata = await prepareLaunchPaymentCandidate({
       sql: ctx.sql,
       schoolId: ctx.schoolId,
@@ -3819,6 +3867,7 @@ async function handleCheckoutTestDate(req, res) {
         test_time: ctx.testTime,
         test_centre: ctx.testCentre || '',
         effective_rate_pence_per_minute: String(Math.round(pricePence / TEST_DATE_DURATION_MINUTES)),
+        ...postTrialQuote.metadata,
         ...launchMetadata,
       },
       ...(emailValid ? { customer_email: ctx.learner.email } : {}),
@@ -3828,6 +3877,14 @@ async function handleCheckoutTestDate(req, res) {
       success_url: checkoutReturnUrls.successUrl,
       cancel_url: checkoutReturnUrls.cancelUrl,
     });
+    const quoteBinding = await bindPostTrialQuote(ctx.sql, {
+      quoteId: postTrialQuote.quoteId,
+      schoolId: ctx.schoolId,
+      learnerId: ctx.user.id,
+      paymentType: 'checkout_session',
+      paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) throw new Error(quoteBinding.code);
 
     const insertedRows = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
       await lockTestDateSlotMutation(client, {
@@ -5161,7 +5218,16 @@ async function handleCheckoutRequest(req, res) {
       learnerId,
       durationMinutes: durationMins
     });
-    const pricePence = directPrice.pricePence;
+    const postTrialQuote = isGuest ? {
+      pricePence: directPrice.pricePence, discountPence: 0, discountPct: 0,
+      quoteId: null, metadata: {},
+    } : await quotePostTrialPrice(sql, {
+      schoolId,
+      learnerId,
+      amountPence: directPrice.pricePence,
+      maxExpiresAt: new Date(Date.now() + RESERVATION_MINUTES * 60000),
+    });
+    const pricePence = postTrialQuote.pricePence;
 
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(date + 'T00:00:00Z')
@@ -5201,6 +5267,7 @@ async function handleCheckoutRequest(req, res) {
       guest_name: cleanGuestName || '',
       guest_email: cleanGuestEmail || '',
       guest_phone: cleanGuestPhone || '',
+      ...postTrialQuote.metadata,
       ...launchMetadata,
     };
     const session = await stripe.checkout.sessions.create({
@@ -5229,6 +5296,14 @@ async function handleCheckoutRequest(req, res) {
       success_url: checkoutReturnUrls.successUrl,
       cancel_url:  checkoutReturnUrls.cancelUrl
     });
+    const requestQuoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId,
+      schoolId,
+      learnerId,
+      paymentType: 'checkout_session',
+      paymentIdentity: session.id,
+    });
+    if (!requestQuoteBinding.ok) throw new Error(requestQuoteBinding.code);
 
     // Hold the slot while they authorize the card (same reservation flow as
     // checkout-slot; the webhook converts it to a pending request).
@@ -5404,7 +5479,13 @@ async function handleCheckoutSlot(req, res) {
       return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });
     }
     const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);
-    const pricePence = priced.pricePence;
+    const postTrialQuote = await quotePostTrialPrice(sql, {
+      schoolId,
+      learnerId: user.id,
+      amountPence: priced.pricePence,
+      maxExpiresAt: new Date(Date.now() + RESERVATION_MINUTES * 60000),
+    });
+    const pricePence = postTrialQuote.pricePence;
     // The 5% filming discount applies to the Stripe amount only. Preserve the
     // full lesson duration in charge_minutes so a later cancellation returns
     // the complete lesson entitlement.
@@ -5504,6 +5585,7 @@ async function handleCheckoutSlot(req, res) {
         social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false',
         social_video_discount_pct: String(socialVideo.discountPct),
         social_video_discount_pence: String(priced.discountPence),
+        ...postTrialQuote.metadata,
         // Step 4 / Phase 2A: derivable from pricePence/durationMins per the
         // source-of-truth rule, snapshotted for audit clarity.
         effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0),
@@ -5516,6 +5598,14 @@ async function handleCheckoutSlot(req, res) {
       success_url: checkoutReturnUrls.successUrl,
       cancel_url:  checkoutReturnUrls.cancelUrl
     });
+    const quoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId,
+      schoolId,
+      learnerId: user.id,
+      paymentType: 'checkout_session',
+      paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) throw new Error(quoteBinding.code);
 
     // Reserve the slot. uq_slot_reservation_slot enforces one active
     // reservation per (instructor, date, start_time) — the DELETE-expired
@@ -8308,7 +8398,7 @@ async function handleMyBookings(req, res) {
           ELSE NULL
         END AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
-        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour, lt.slug AS lesson_type_slug,
         COALESCE(
           CASE
             WHEN lb.end_time > lb.start_time
@@ -8358,7 +8448,7 @@ async function handleMyBookings(req, res) {
         NULL::boolean AS reserved_move_policy_open,
         NULL::text AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
-        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour, lt.slug AS lesson_type_slug,
         COALESCE(
           CASE
             WHEN lb.end_time > lb.start_time
@@ -8671,6 +8761,7 @@ function formatDateDisplay(str) {
 
 module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
 module.exports._createRecurringBlockBankHoldTransaction = createRecurringBlockBankHoldTransaction;
+module.exports._allocateRecurringBlockPence = allocateRecurringBlockPence;
 module.exports._expireStaleRecurringBlockBankHoldForLearner = expireStaleRecurringBlockBankHoldForLearner;
 module.exports._buildRecurringBlockPreview = buildRecurringBlockPreview;
 module.exports._parseRecurringBlockLessons = parseRecurringBlockLessons;

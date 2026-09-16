@@ -1,5 +1,12 @@
 # Stripe Connect & Instructor Payouts
 
+September 2026 branch note (pending rollout): unpaid pencilled offers do not create
+bookings, credit transactions or payout sources. Successful timely payment follows
+ordinary paid-booking source ingestion. Post-trial discounts reduce actual purchase
+cash and therefore its earning basis; no separate subsidy or payout eligibility
+change is introduced. Narrow idempotent compensation handles unfulfillable pencil
+payments. See [feature contract](trial-discount-pencilled-offers-plan.md).
+
 > Hard rules live in `CLAUDE.md`. This file is reference material — load it when working on payouts, connect onboarding, or fee models.
 
 Instructors are paid via Stripe Connect Express accounts. Money flows: learner pays → platform Stripe account → weekly Friday transfer to instructor's connected account.

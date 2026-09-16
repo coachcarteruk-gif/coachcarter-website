@@ -17,6 +17,7 @@ const {
   productTerms,
   validateFlexibleProviderObject,
 } = require('./_flexible-package-payments');
+const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
 
 function errorResponse(res, status, code, message) {
   return res.status(status).json({ error: true, code, message });
@@ -220,6 +221,23 @@ async function handleCreateCheckout(req, res) {
       return errorResponse(res, 503, error.code || 'FLEXIBLE_PACKAGE_LIVE_STRIPE_NOT_CONFIGURED', 'Live Flexible Hours Pay by Bank is not configured');
     }
 
+    const priceQuote = await quotePostTrialPrice(sql, {
+      schoolId: scope.schoolId,
+      learnerId: scope.learner.id,
+      amountPence: terms.amountPence,
+    });
+    const discountedRatePencePerUnit = priceQuote.pricePence / terms.totalUnits;
+    const productSnapshot = {
+      ...product.content,
+      post_trial_pricing: priceQuote.quoteId ? {
+        base_amount_pence: terms.amountPence,
+        amount_pence: priceQuote.pricePence,
+        discount_pence: priceQuote.discountPence,
+        discount_pct: priceQuote.discountPct,
+        unit_value_basis: 'cumulative_rounding',
+      } : undefined,
+    };
+
     const attemptId = crypto.randomUUID();
     const idempotencyKey = `cc-flexible-package-live-${attemptId}`;
     let inserted;
@@ -231,15 +249,17 @@ async function handleCreateCheckout(req, res) {
           rate_pence_per_unit, customer_terms_version, disclosure_version,
           adult_age_confirmed, terms_accepted, immediate_access_requested,
           stripe_mode, status, client_request_id, idempotency_key,
-          stripe_payment_method_configuration_id
+          stripe_payment_method_configuration_id, base_product_snapshot,
+          post_trial_quote_id, post_trial_quote
         ) VALUES (
           ${attemptId}::uuid, ${scope.schoolId}, ${scope.learner.id},
           ${product.product_id}, ${product.product_version_id}, ${product.product_slug},
-          ${JSON.stringify(product.content)}::jsonb, ${terms.amountPence}, 'GBP',
-          ${terms.totalUnits}, ${terms.unitMinutes}, ${terms.ratePencePerUnit},
+          ${JSON.stringify(productSnapshot)}::jsonb, ${priceQuote.pricePence}, 'GBP',
+          ${terms.totalUnits}, ${terms.unitMinutes}, ${discountedRatePencePerUnit},
           ${product.customer_terms_version}, ${FLEXIBLE_HOURS_DISCLOSURE_VERSION},
           TRUE, TRUE, TRUE, 'live', 'submitting', ${clientRequestId}::uuid,
-          ${idempotencyKey}, ${paymentConfiguration}
+          ${idempotencyKey}, ${paymentConfiguration}, ${JSON.stringify(product.content)}::jsonb,
+          ${priceQuote.quoteId}::uuid, ${JSON.stringify(priceQuote.quoteId ? priceQuote : {})}::jsonb
         ) RETURNING *
       `;
     } catch (insertError) {
@@ -285,6 +305,23 @@ async function handleCreateCheckout(req, res) {
       const [updated] = await sql`
         UPDATE flexible_package_purchase_attempts
            SET status = 'review_required', failure_code = 'STRIPE_CHECKOUT_EVIDENCE_MISMATCH',
+               review_required_at = NOW(), updated_at = NOW()
+         WHERE id = ${attempt.id}::uuid AND school_id = ${scope.schoolId}
+         RETURNING *
+      `;
+      return res.status(202).json({ ok: true, attempt: publicAttempt(updated) });
+    }
+    const quoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: attempt.post_trial_quote_id,
+      schoolId: scope.schoolId,
+      learnerId: scope.learner.id,
+      paymentType: 'learner_flexible_package_live',
+      paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) {
+      const [updated] = await sql`
+        UPDATE flexible_package_purchase_attempts
+           SET status = 'review_required', failure_code = ${quoteBinding.code},
                review_required_at = NOW(), updated_at = NOW()
          WHERE id = ${attempt.id}::uuid AND school_id = ${scope.schoolId}
          RETURNING *
@@ -422,18 +459,22 @@ async function handleAdminOverview(req, res) {
              COALESCE(reduced.units, 0)::numeric AS reduced_units,
              COALESCE(spent.units, 0)::numeric AS spent_units,
              (source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0))::numeric AS raw_remaining_units,
-             ((source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0))
-               * source.rate_pence_per_unit)::int AS raw_refundable_value_pence,
+             (source.original_value_pence - COALESCE(reduced.value_pence, 0)
+               - COALESCE(spent.value_pence, 0))::int AS raw_refundable_value_pence,
              (COALESCE(reduced.units, 0) < 0 OR COALESCE(spent.units, 0) < 0
-               OR source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0) < 0) AS contradictory
+               OR source.initial_units - COALESCE(reduced.units, 0) - COALESCE(spent.units, 0) < 0
+               OR source.original_value_pence - COALESCE(reduced.value_pence, 0)
+                    - COALESCE(spent.value_pence, 0) < 0) AS contradictory
         FROM flexible_package_sources source
         LEFT JOIN LATERAL (
-          SELECT SUM(reduction.units_reduced) AS units
+          SELECT SUM(reduction.units_reduced) AS units,
+                 SUM(reduction.gross_refund_pence) AS value_pence
             FROM flexible_package_source_reductions reduction
            WHERE reduction.school_id = source.school_id AND reduction.source_id = source.id
         ) reduced ON TRUE
         LEFT JOIN LATERAL (
-          SELECT SUM(allocation.units_allocated) AS units
+          SELECT SUM(allocation.units_allocated) AS units,
+                 SUM(allocation.contribution_pence) AS value_pence
             FROM flexible_package_booking_allocations allocation
            WHERE allocation.school_id = source.school_id AND allocation.source_id = source.id
              AND NOT EXISTS (
@@ -491,6 +532,15 @@ async function handleRecordRefundEvidence(req, res) {
     const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
       const sourceResult = await client.query(
         `SELECT source.id, source.learner_id, source.rate_pence_per_unit,
+                source.initial_units, source.original_value_pence,
+                GREATEST(0, source.original_value_pence
+                  - COALESCE((SELECT SUM(r.gross_refund_pence) FROM flexible_package_source_reductions r
+                               WHERE r.school_id = source.school_id AND r.source_id = source.id), 0)
+                  - COALESCE((SELECT SUM(a.contribution_pence) FROM flexible_package_booking_allocations a
+                               WHERE a.school_id = source.school_id AND a.source_id = source.id
+                                 AND NOT EXISTS (SELECT 1 FROM flexible_package_allocation_returns ar
+                                                  WHERE ar.school_id = a.school_id AND ar.allocation_id = a.id)), 0)
+                )::integer AS remaining_value_pence,
                 purchase.stripe_payment_intent_id,
                 GREATEST(0, source.initial_units
                   - COALESCE((SELECT SUM(r.units_reduced) FROM flexible_package_source_reductions r
@@ -515,7 +565,11 @@ async function handleRecordRefundEvidence(req, res) {
       if (units > Number(source.remaining_units)) {
         return { ok: false, status: 409, code: 'REFUND_EXCEEDS_UNUSED_VALUE', message: 'Refund evidence exceeds the unused units on this original payment' };
       }
-      const gross = units * Number(source.rate_pence_per_unit);
+      const remainingUnits = Number(source.remaining_units);
+      const remainingValuePence = Number(source.remaining_value_pence);
+      const gross = units === remainingUnits
+        ? remainingValuePence
+        : Math.round(units * remainingValuePence / remainingUnits);
       const inserted = await client.query(
         `INSERT INTO flexible_package_source_reductions (
            school_id, learner_id, source_id, units_reduced, rate_pence_per_unit,

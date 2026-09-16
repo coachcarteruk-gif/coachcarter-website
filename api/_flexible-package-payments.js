@@ -1,5 +1,7 @@
 'use strict';
 
+const { discountedCheckoutExpiresAt } = require('./_package-checkout-expiry');
+
 const crypto = require('crypto');
 const {
   STRIPE_CLIENT_PURPOSES,
@@ -119,11 +121,15 @@ function metadataForAttempt(attempt) {
     disclosure_version: String(attempt.disclosure_version),
     payment_method_configuration_id: String(attempt.stripe_payment_method_configuration_id),
     stripe_mode: 'live',
+    ...(attempt.post_trial_quote && typeof attempt.post_trial_quote === 'object'
+      ? attempt.post_trial_quote.metadata || {}
+      : {}),
   };
 }
 
 function buildFlexiblePackageCheckoutParams({ attempt, learnerEmail, returnBaseUrl }) {
   const metadata = metadataForAttempt(attempt);
+  const expiresAt = discountedCheckoutExpiresAt(attempt);
   return {
     mode: 'payment',
     client_reference_id: String(attempt.id),
@@ -147,6 +153,7 @@ function buildFlexiblePackageCheckoutParams({ attempt, learnerEmail, returnBaseU
     customer_email: learnerEmail,
     payment_method_configuration: attempt.stripe_payment_method_configuration_id,
     billing_address_collection: 'required',
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
     success_url: `${returnBaseUrl}/learner/packages.html?flexible_return=1&attempt_id=${attempt.id}`,
     cancel_url: `${returnBaseUrl}/learner/packages.html?flexible_cancelled=1&attempt_id=${attempt.id}`,
   };
@@ -170,6 +177,10 @@ function validateFlexibleProviderObject(attempt, object) {
   if (metadata.terms_version !== attempt.customer_terms_version) contradictions.push('terms_version_mismatch');
   if (metadata.disclosure_version !== attempt.disclosure_version) contradictions.push('disclosure_version_mismatch');
   if (metadata.stripe_mode !== 'live') contradictions.push('metadata_mode_mismatch');
+  const frozenPostTrialMetadata = attempt.post_trial_quote?.metadata || {};
+  for (const [key, value] of Object.entries(frozenPostTrialMetadata)) {
+    if (metadata[key] !== String(value)) contradictions.push(`${key}_mismatch`);
+  }
   if (Number(object?.amount_total) !== Number(attempt.amount_pence)) contradictions.push('amount_total_mismatch');
   if (String(object?.currency || '').toUpperCase() !== 'GBP') contradictions.push('currency_mismatch');
   if (configurationId !== attempt.stripe_payment_method_configuration_id) contradictions.push('payment_configuration_mismatch');

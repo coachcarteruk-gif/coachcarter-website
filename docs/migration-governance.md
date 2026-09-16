@@ -15,11 +15,17 @@ mutation.
 
 ## Confirmed file sequence
 
-`db/migrations/` contains 66 SQL files:
+`db/migrations/` contains 69 SQL files (066–068 are prepared, not production receipts):
 
 - one file for every prefix from 001 through 025;
 - two independent files with prefix 026;
-- one file for every prefix from 027 through 065.
+- one file for every prefix from 027 through 068.
+
+Pending feature migrations: 066 adds pencilled-offer holds and overlap guards,
+067 retains post-trial discount quotes, and 068 freezes discounted package cash
+snapshots. Apply only after separate rollout review using the numbered runner.
+This branch does not change the recorded production state through 065 or the
+installed baseline packet. See `trial-discount-pencilled-offers-plan.md`.
 
 The duplicate prefix is historical, not duplicate content:
 

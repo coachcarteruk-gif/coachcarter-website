@@ -331,7 +331,10 @@ test.describe('booking extension offer contract', () => {
     const instructor = read('api/instructor.js');
     expect((instructor.match(/await invalidatePendingBookingExtensions\(sql,/g) || [])).toHaveLength(2);
     expect(instructor).toContain('await expireExtensionCheckoutSessions([updated.stripe_session_id])');
-    expect(read('api/offers.js')).toContain("AND status = 'pending'\n      RETURNING id");
+    const offersSource = read('api/offers.js');
+    expect(offersSource).toContain("AND status = 'pending'");
+    expect(offersSource).toContain('RETURNING id');
+    expect(offersSource).toContain('checkout_attempt_id = ${checkoutAttemptId}::uuid');
   });
 
   test('payment winning the invalidation race is refunded once across repeated webhook delivery', async () => {
