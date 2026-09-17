@@ -36,7 +36,21 @@ function extractAsyncFunction(source, functionName) {
   const start = source.indexOf(marker);
   expect(start).toBeGreaterThanOrEqual(0);
 
-  const openBrace = source.indexOf('{', start);
+  const parameterStart = source.indexOf('(', start);
+  expect(parameterStart).toBeGreaterThanOrEqual(0);
+  let parameterDepth = 0;
+  let parameterEnd = -1;
+  for (let i = parameterStart; i < source.length; i++) {
+    if (source[i] === '(') parameterDepth++;
+    if (source[i] === ')') parameterDepth--;
+    if (parameterDepth === 0) {
+      parameterEnd = i;
+      break;
+    }
+  }
+  expect(parameterEnd).toBeGreaterThan(parameterStart);
+
+  const openBrace = source.indexOf('{', parameterEnd);
   expect(openBrace).toBeGreaterThanOrEqual(0);
 
   let depth = 0;
@@ -186,7 +200,8 @@ test.describe('tenant resolver wiring', () => {
   test('public available slots uses resolver instead of silent school_id default', () => {
     const body = extractAsyncFunction(slotsJs, 'handleAvailable');
     expect(slotsJs).toContain("require('./_tenant')");
-    expect(body).toContain('resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true })');
+    expect(body).toContain('(dependencies.resolveSchoolFromRequest || resolveSchoolFromRequest)(req, {');
+    expect(body).toContain('allowLegacySchoolIdQuery: true');
     expect(body).not.toContain('parseInt(school_id) || 1');
     expect(body).not.toContain('parseInt(req.query.school_id) || 1');
     expect(body).toContain('ia.school_id = ${schoolId}');

@@ -41,7 +41,7 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
     });
     expect(bundle.packet.entries.find(entry => entry.id === '062')).toBeUndefined();
     expect(bundle.manifest.migrations.filter(entry => entry.execution === 'numbered').map(entry => entry.id))
-      .toEqual(['061', '062', '063', '064']);
+      .toEqual(['061', '062', '063', '064', '065', '066', '067', '068']);
     expect(bundle.packet.entries.find(entry => entry.id === '026a').filename)
       .toBe('026_public_tenant_resolution.sql');
     expect(bundle.packet.entries.find(entry => entry.id === '026b').filename)
@@ -53,10 +53,10 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
   test('accepts the installed baseline after later numbered migrations succeed', () => {
     const bundle = loadPacket();
     const futureNumbered = {
-      id: '065',
-      order: 66,
-      prefix: '065',
-      filename: '065_future_numbered.sql',
+      id: '069',
+      order: 70,
+      prefix: '069',
+      filename: '069_future_numbered.sql',
       checksum: 'f'.repeat(64),
       execution: 'numbered',
     };
@@ -97,7 +97,7 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
           targetFingerprint
         ),
       }));
-    for (const id of ['061', '062', '063', '064']) {
+    for (const id of ['061', '062', '063', '064', '065', '066', '067', '068']) {
       const entry = bundle.manifest.migrations.find(migration => migration.id === id);
       rows.push({
         migration_id: entry.id,
@@ -112,7 +112,7 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
       });
     }
 
-    expect(validateLedger(bundle.manifest, rows)).toMatchObject({ applied: 64, pending: [] });
+    expect(validateLedger(bundle.manifest, rows)).toMatchObject({ applied: 68, pending: [] });
     expect(() => verifyBaselineRows(bundle, rows, markerEvidence, targetFingerprint)).not.toThrow();
   });
 
