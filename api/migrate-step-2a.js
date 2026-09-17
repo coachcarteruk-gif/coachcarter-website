@@ -188,7 +188,7 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     console.error('[step-2a] migration failed:', err);
     reportError('/api/migrate-step-2a', err);
-    return res.status(500).json({ ok: false, error: 'Migration failed', details: err.message });
+    return res.status(500).json({ ok: false, error: 'Migration failed', details: 'Internal server error' });
   }
 };
 

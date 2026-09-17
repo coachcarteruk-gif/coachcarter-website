@@ -47,6 +47,7 @@ const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { reportError } = require('./_error-alert');
+const { sanitizePayoutDetails } = require('./_response-sanitizers');
 const { processAllPayouts, getEligibleBookings, simulatePayoutForInstructor } = require('./_payout-helpers');
 const { computePlatformBalance } = require('./_platform-balance');
 const { sendPayoutSummary } = require('./_payout-email');
@@ -5093,7 +5094,7 @@ async function handleProcessPayouts(req, res) {
       skipped: results.skipped,
       failed: results.failed,
       total_transferred_pence: results.total_pence,
-      details: results.details
+      details: sanitizePayoutDetails(results.details)
     });
   } catch (err) {
     console.error('process-payouts error:', err);

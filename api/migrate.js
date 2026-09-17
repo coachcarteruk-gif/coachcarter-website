@@ -36,7 +36,8 @@ module.exports = async function handler(req, res) {
         const label = trimmed.slice(0, 80).replace(/\s+/g, ' ');
         results.push({ status: 'ok', statement: label });
       } catch (err) {
-        results.push({ status: 'error', statement: trimmed.slice(0, 80), error: err.message });
+        console.error('Migration statement failed:', trimmed.slice(0, 80), err);
+        results.push({ status: 'error', statement: trimmed.slice(0, 80), error: 'Statement failed' });
       }
     }
 
