@@ -36,7 +36,7 @@
       renderProfile(data.instructor);
     } catch (err) {
       document.getElementById('profileContent').innerHTML =
-        `<p style="color:var(--red);padding:20px">${err.message}</p>`;
+        `<p style="color:var(--red);padding:20px">${esc(err.message)}</p>`;
     }
   }
 
@@ -52,8 +52,8 @@
   function renderProfile(p) {
     const initials = p.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const avatarHtml = p.photo_url
-      ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" data-fallback-initials="${initials}">`
-      : initials;
+      ? `<img src="${esc(p.photo_url)}" alt="${esc(p.name)}" data-fallback-initials="${esc(initials)}">`
+      : esc(initials);
     const hourlyRatePence = Number(p.effective_hourly_rate_pence || 0);
     const hourlyRateCopy = hourlyRatePence > 0
       ? `Your hourly rate: ${formatPence(hourlyRatePence)}/hr`
@@ -123,12 +123,12 @@
 
         <div class="form-group">
           <label for="inputPassRate">Pass rate (%)</label>
-          <input type="number" id="inputPassRate" min="0" max="100" step="0.1" value="${p.pass_rate != null ? p.pass_rate : ''}" placeholder="e.g. 72.5">
+          <input type="number" id="inputPassRate" min="0" max="100" step="0.1" value="${esc(p.pass_rate != null ? p.pass_rate : '')}" placeholder="e.g. 72.5">
         </div>
 
         <div class="form-group">
           <label for="inputYearsExp">Years of experience</label>
-          <input type="number" id="inputYearsExp" min="0" max="60" step="1" value="${p.years_experience != null ? p.years_experience : ''}" placeholder="e.g. 8">
+          <input type="number" id="inputYearsExp" min="0" max="60" step="1" value="${esc(p.years_experience != null ? p.years_experience : '')}" placeholder="e.g. 8">
         </div>
 
         <div class="form-group">
@@ -323,7 +323,7 @@
         <div class="form-group">
           <label for="inputIcalUrl">iCal feed URL</label>
           <div style="display:flex;gap:8px">
-            <input type="url" id="inputIcalUrl" value="${p.ical_feed_url || ''}" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" style="flex:1">
+            <input type="url" id="inputIcalUrl" value="${esc(p.ical_feed_url || '')}" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" style="flex:1">
             <button type="button" id="icalTestBtn"
               style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:0.82rem;font-weight:600;cursor:pointer;color:var(--primary);white-space:nowrap">
               Test feed
@@ -334,7 +334,7 @@
 
         <div id="icalSyncStatus" style="font-size:0.82rem;border-radius:8px;padding:10px 14px;display:${p.ical_feed_url ? 'block' : 'none'}">
           ${p.ical_sync_error
-            ? '<span style="color:#c0392b">\u274c Sync error: ' + (p.ical_sync_error || '') + '</span>'
+            ? '<span style="color:#c0392b">\u274c Sync error: ' + esc(p.ical_sync_error || '') + '</span>'
             : p.ical_last_synced_at
               ? '<span style="color:#27ae60">\u2705 Last synced: ' + new Date(p.ical_last_synced_at).toLocaleString('en-GB') + '</span>'
               : '<span style="color:#f39c12">\u23f3 Sync pending - will run within 15 minutes</span>'
@@ -394,9 +394,10 @@
       var rows = types.map(function(lt) {
         var isEnabled = isLessonTypeEnabledByProfile(lt.slug);
         var url = window.location.origin + bookingPathForInstructor(slug) + '?type=' + encodeURIComponent(lt.slug);
+        var safeColour = /^#[0-9a-f]{3,8}$/i.test(String(lt.colour || '')) ? lt.colour : '#999999';
         return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'
           + '<label style="display:flex;align-items:center;gap:0;cursor:pointer;position:relative;width:40px;height:22px;flex-shrink:0">'
-          + '<input type="checkbox" data-lt-slug="' + lt.slug + '" class="lt-toggle"'
+          + '<input type="checkbox" data-lt-slug="' + esc(lt.slug) + '" class="lt-toggle"'
           + (isEnabled ? ' checked' : '')
           + ' style="opacity:0;width:0;height:0;position:absolute">'
           + '<span class="lt-toggle-track" style="'
@@ -405,12 +406,12 @@
           + '<span style="position:absolute;top:3px;left:' + (isEnabled ? '21px' : '3px') + ';width:16px;height:16px;border-radius:50%;background:white;transition:left 0.2s"></span>'
           + '</span>'
           + '</label>'
-          + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + lt.colour + ';flex-shrink:0"></span>'
+          + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + safeColour + ';flex-shrink:0"></span>'
           + '<div style="flex:1;min-width:0">'
-          + '<div style="font-weight:600;font-size:0.9rem' + (!isEnabled ? ';color:var(--muted)' : '') + '">' + lt.name + '</div>'
-          + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + url + '</div>'
+          + '<div style="font-weight:600;font-size:0.9rem' + (!isEnabled ? ';color:var(--muted)' : '') + '">' + esc(lt.name) + '</div>'
+          + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(url) + '</div>'
           + '</div>'
-          + '<button data-action="copy-booking-link" data-url="' + url + '"'
+          + '<button data-action="copy-booking-link" data-url="' + esc(url) + '"'
           + (!isEnabled ? ' disabled style="opacity:0.35;cursor:not-allowed;' : ' style="')
           + 'background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;white-space:nowrap;font-family:var(--font-body)">'
           + 'Copy link'
@@ -423,9 +424,9 @@
       var generalLink = '<div style="padding-top:14px;display:flex;align-items:center;gap:10px">'
         + '<div style="flex:1;min-width:0">'
         + '<div style="font-weight:600;font-size:0.85rem;color:var(--muted)">All lesson types</div>'
-        + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + myUrl + '</div>'
+        + '<div style="font-size:0.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(myUrl) + '</div>'
         + '</div>'
-        + '<button data-action="copy-booking-link" data-url="' + myUrl + '" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">'
+        + '<button data-action="copy-booking-link" data-url="' + esc(myUrl) + '" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:8px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font-body)">'
         + 'Copy link'
         + '</button>'
         + '</div>';
@@ -526,7 +527,12 @@
     if (!url) return;
     const avatarEl = document.getElementById('avatarEl');
     if (!avatarEl) return;
-    avatarEl.innerHTML = `<img src="${url}" alt="preview" data-hide-on-error>`;
+    avatarEl.textContent = '';
+    const img = document.createElement('img');
+    img.src = String(url);
+    img.alt = 'preview';
+    img.setAttribute('data-hide-on-error', '');
+    avatarEl.appendChild(img);
   }
 
   async function handlePhotoUpload(input) {
@@ -678,9 +684,10 @@
       });
       const data = await res.json();
       if (data.ok) {
-        resultEl.innerHTML = `<span style="color:#27ae60">\u2705 Feed is valid - ${data.event_count} event${data.event_count !== 1 ? 's' : ''} found</span>`;
+        const eventCount = Number.isFinite(Number(data.event_count)) ? Number(data.event_count) : 0;
+        resultEl.innerHTML = `<span style="color:#27ae60">\u2705 Feed is valid - ${eventCount} event${eventCount !== 1 ? 's' : ''} found</span>`;
       } else {
-        resultEl.innerHTML = `<span style="color:#c0392b">\u274c ${data.error || 'Feed test failed'}</span>`;
+        resultEl.innerHTML = `<span style="color:#c0392b">\u274c ${esc(data.error || 'Feed test failed')}</span>`;
       }
     } catch (err) {
       resultEl.innerHTML = '<span style="color:#c0392b">\u274c Could not test feed</span>';
@@ -691,7 +698,7 @@
   }
 
   function esc(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str == null ? '' : str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function formatPence(pence) {
