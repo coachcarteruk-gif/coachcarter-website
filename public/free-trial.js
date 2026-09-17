@@ -5,9 +5,11 @@
   var META_LEAD_PENDING_KEY = 'cc_meta_lead_pending';
 
   // ── State ────────────────────────────────────────────────────────────────
-  // Slot objects from the API include instructor_name, so no separate fetch needed.
-  var slotsByDate = {}; // { 'YYYY-MM-DD': [ {start_time, end_time, instructor_id, instructor_name}, ... ] }
-  var selectedSlot = null;  // { date, start_time, end_time, instructor_id, instructor_name }
+  var slotsByDate = {}; // { 'YYYY-MM-DD': [ {start_time, end_time, instructor_id, ...}, ... ] }
+  var selectedDate = null;
+  var loadedFromDate = null;
+  var loadedToDate = null;
+  var selectedSlot = null;  // { date, start_time, end_time, instructor_id }
   var referralCode = null;
   var prefInstructorId = null; // ?instructor_id= hint (filters slot feed)
   var prefDate = null;         // ?date= hint (scrolls into view)
@@ -91,6 +93,8 @@
     var to = new Date(today);
     to.setDate(to.getDate() + DAYS_AHEAD);
     var toStr = ymd(to);
+    loadedFromDate = fromStr;
+    loadedToDate = toStr;
 
     var url = '/api/slots?action=available&from=' + fromStr + '&to=' + toStr + '&lesson_type_slug=trial';
     if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
@@ -120,47 +124,139 @@
       return;
     }
 
-    var html = '';
-    dates.forEach(function (date) {
-      var slots = slotsByDate[date] || [];
-      if (!slots.length) return;
+    if (!selectedDate || !slotsByDate[selectedDate] || !slotsByDate[selectedDate].length) {
+      selectedDate = prefDate && slotsByDate[prefDate] && slotsByDate[prefDate].length
+        ? prefDate
+        : dates.find(function (date) { return slotsByDate[date] && slotsByDate[date].length; });
+    }
 
-      var label = formatDateLabel(date);
-      var preselected = (prefDate && date === prefDate) ? ' day-group--preselected' : '';
-      html += '<div class="day-group' + preselected + '" data-date="' + escapeAttr(date) + '">';
-      html += '<div class="day-label">' + escapeHtml(label) + '</div>';
-      html += '<div class="slot-row">';
-      slots.forEach(function (s) {
-        var instructorName = s.instructor_name || 'Instructor';
-        var firstName = instructorName.split(' ')[0];
-        var startShort = (s.start_time || '').slice(0, 5);
-        html += '<button type="button" class="slot-btn" '
-          + 'data-date="' + escapeAttr(date) + '" '
-          + 'data-start="' + escapeAttr(s.start_time) + '" '
-          + 'data-end="' + escapeAttr(s.end_time) + '" '
-          + 'data-transmission-type="' + escapeAttr(s.transmission_type || 'both') + '" '
-          + 'data-instructor-id="' + escapeAttr(String(s.instructor_id)) + '" '
-          + 'data-instructor-name="' + escapeAttr(instructorName) + '">'
-          + escapeHtml(startShort)
-          + '<span class="slot-instructor">with ' + escapeHtml(firstName) + '</span>'
-          + '</button>';
+    picker.innerHTML = renderDateGrid() + renderTimesForSelectedDate();
+
+    picker.querySelectorAll('.date-cell-open').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        selectedDate = btn.dataset.date;
+        selectedSlot = null;
+        updateSummary();
+        clearSlotSelectionError();
+        setSubmitState();
+        renderSlots();
+        var times = document.getElementById('selectedDayTimes');
+        if (times) scrollToElement(times, 'nearest');
       });
-      html += '</div></div>';
     });
-    picker.innerHTML = html;
 
-    // Wire up clicks
     picker.querySelectorAll('.slot-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { selectSlot(btn); });
     });
 
     // If we arrived with a ?date= hint, scroll the matching day group into view.
     if (prefDate) {
-      var target = picker.querySelector('.day-group--preselected');
+      var target = picker.querySelector('.date-cell-open[aria-current="date"]');
       if (target && typeof target.scrollIntoView === 'function') {
         scrollToElement(target, 'center');
       }
     }
+  }
+
+  function renderDateGrid() {
+    var start = new Date((loadedFromDate || ymd(new Date())) + 'T00:00:00');
+    var end = new Date((loadedToDate || loadedFromDate || ymd(new Date())) + 'T00:00:00');
+    var availableDates = Object.keys(slotsByDate).filter(function (date) {
+      return slotsByDate[date] && slotsByDate[date].length;
+    }).sort();
+
+    // Keeps mocked/static feeds useful without changing the production range.
+    if (availableDates.length && (availableDates[0] < ymd(start) || availableDates[0] > ymd(end))) {
+      start = new Date(availableDates[0] + 'T00:00:00');
+      end = new Date(start);
+      end.setDate(end.getDate() + DAYS_AHEAD);
+    }
+
+    var cells = [];
+    var cursor = new Date(start);
+    while (cursor <= end) {
+      var date = ymd(cursor);
+      var count = (slotsByDate[date] || []).length;
+      var selected = date === selectedDate;
+      var dayNumber = cursor.getDate();
+      var todayClass = date === ymd(new Date()) ? ' date-cell-today' : '';
+      if (count) {
+        cells.push('<button type="button" class="date-cell date-cell-open' + todayClass + '" '
+          + 'data-date="' + escapeAttr(date) + '" aria-pressed="' + String(selected) + '" '
+          + (selected ? 'aria-current="date" ' : '')
+          + 'aria-label="' + escapeAttr(formatDateLabel(date) + ', ' + count + ' time' + (count === 1 ? '' : 's') + ' available') + '">'
+          + '<span class="date-cell-num">' + dayNumber + '</span>'
+          + '<span class="date-cell-dot" aria-hidden="true"></span></button>');
+      } else {
+        cells.push('<span class="date-cell date-cell-off' + todayClass + '" aria-hidden="true">'
+          + '<span class="date-cell-num">' + dayNumber + '</span></span>');
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    var firstDayOffset = (start.getDay() + 6) % 7;
+    var blanks = '';
+    for (var i = 0; i < firstDayOffset; i++) {
+      blanks += '<span class="date-cell date-cell-blank" aria-hidden="true"></span>';
+    }
+    var header = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (day) {
+      return '<span class="date-grid-head">' + day + '</span>';
+    }).join('');
+    var firstMonth = start.toLocaleDateString('en-GB', { month: 'long' });
+    var lastMonth = end.toLocaleDateString('en-GB', { month: 'long' });
+    var monthLabel = firstMonth === lastMonth ? firstMonth : firstMonth + ' – ' + lastMonth;
+    monthLabel += ' ' + end.getFullYear();
+    return '<div class="trial-calendar">'
+      + '<div class="date-grid-month">' + escapeHtml(monthLabel) + '</div>'
+      + '<div class="date-grid" role="group" aria-label="Choose a date">'
+      + header + blanks + cells.join('') + '</div></div>';
+  }
+
+  function renderTimesForSelectedDate() {
+    var slots = (slotsByDate[selectedDate] || []).slice().sort(function (a, b) {
+      return String(a.start_time || '').localeCompare(String(b.start_time || ''));
+    });
+    if (!slots.length) return '';
+
+    var groups = [
+      { label: 'Morning', slots: [] },
+      { label: 'Afternoon', slots: [] },
+      { label: 'Evening', slots: [] }
+    ];
+    slots.forEach(function (slot) {
+      var hour = parseInt(String(slot.start_time || '00:00').slice(0, 2), 10);
+      groups[hour < 12 ? 0 : hour < 17 ? 1 : 2].slots.push(slot);
+    });
+
+    var html = '<div class="selected-date-heading" id="selectedDayTimes"><strong>'
+      + escapeHtml(formatDateLabel(selectedDate)) + '</strong><span>' + slots.length + ' time'
+      + (slots.length === 1 ? '' : 's') + ' available</span></div><div class="time-groups">';
+    groups.forEach(function (group) {
+      if (!group.slots.length) return;
+      html += '<section class="time-group"><h3 class="time-group-title">' + group.label + '</h3><div class="slot-row">';
+      group.slots.forEach(function (s) {
+        var startShort = String(s.start_time || '').slice(0, 5);
+        var transmission = formatTransmission(s.transmission_type);
+        html += '<button type="button" class="slot-btn" '
+          + 'data-date="' + escapeAttr(selectedDate) + '" '
+          + 'data-start="' + escapeAttr(s.start_time) + '" '
+          + 'data-end="' + escapeAttr(s.end_time) + '" '
+          + 'data-transmission-type="' + escapeAttr(s.transmission_type || 'both') + '" '
+          + 'data-instructor-id="' + escapeAttr(String(s.instructor_id)) + '" '
+          + 'aria-pressed="false" aria-label="Select ' + escapeAttr(startShort + (transmission ? ', ' + transmission : '')) + '">'
+          + '<span class="slot-time">' + escapeHtml(startShort) + '</span>'
+          + (transmission ? '<span class="slot-meta">' + escapeHtml(transmission) + '</span>' : '')
+          + '</button>';
+      });
+      html += '</div></section>';
+    });
+    return html + '</div>';
+  }
+
+  function formatTransmission(value) {
+    if (value === 'manual') return 'Manual';
+    if (value === 'automatic') return 'Automatic';
+    return '';
   }
 
   function renderSlotsError(msg) {
@@ -169,16 +265,19 @@
   }
 
   function selectSlot(btn) {
-    document.querySelectorAll('.slot-btn.selected').forEach(function (el) { el.classList.remove('selected'); });
+    document.querySelectorAll('.slot-btn.selected').forEach(function (el) {
+      el.classList.remove('selected');
+      el.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('selected');
+    btn.setAttribute('aria-pressed', 'true');
 
     selectedSlot = {
       date: btn.dataset.date,
       start_time: btn.dataset.start,
       end_time: btn.dataset.end,
       transmission_type: btn.dataset.transmissionType,
-      instructor_id: parseInt(btn.dataset.instructorId, 10),
-      instructor_name: btn.dataset.instructorName
+      instructor_id: parseInt(btn.dataset.instructorId, 10)
     };
 
     posthogCapture('free_trial_slot_selected', {
@@ -205,8 +304,7 @@
     if (!selectedSlot) { bar.style.display = 'none'; return; }
     var label = formatDateLabel(selectedSlot.date);
     bar.innerHTML = 'Booking <strong>' + escapeHtml(selectedSlot.start_time.slice(0, 5))
-      + '</strong> on <strong>' + escapeHtml(label) + '</strong> with <strong>'
-      + escapeHtml(selectedSlot.instructor_name) + '</strong>.';
+      + '</strong> on <strong>' + escapeHtml(label) + '</strong>.';
     bar.style.display = 'block';
   }
 

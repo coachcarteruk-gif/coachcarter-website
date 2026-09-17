@@ -36,6 +36,13 @@ test.describe('free trial passwordless journey', () => {
               instructor_id: 7,
               instructor_name: 'Fraser Carter',
             }],
+            '2030-07-21': [{
+              start_time: '15:00:00',
+              end_time: '16:00:00',
+              transmission_type: 'automatic',
+              instructor_id: 8,
+              instructor_name: 'Simon Carter',
+            }],
           },
         }),
       });
@@ -58,6 +65,20 @@ test.describe('free trial passwordless journey', () => {
     await expect(page.getByRole('heading', { name: '1 Pick a time' })).toBeFocused();
   });
 
+  test('shows one day of times at a time without naming instructors', async ({ page }) => {
+    await page.goto('/free-trial.html');
+
+    await expect(page.getByRole('group', { name: 'Choose a date' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /10:00/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /15:00/ })).toHaveCount(0);
+    await expect(page.getByText(/Fraser|Simon/)).toHaveCount(0);
+
+    await page.getByRole('button', { name: /21 July/ }).click();
+    await expect(page.getByRole('button', { name: /15:00/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /10:00/ })).toHaveCount(0);
+    await expect(page.getByText(/Fraser|Simon/)).toHaveCount(0);
+  });
+
   test('shows inline field errors and submits the selected trial without auth friction', async ({ page }) => {
     let submittedPayload = null;
     await page.route('**/api/slots?action=book-free-trial', async (route) => {
@@ -70,12 +91,16 @@ test.describe('free trial passwordless journey', () => {
     });
 
     await page.goto('/free-trial.html');
+    await expect(page.getByRole('group', { name: 'Choose a date' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Fraser/i })).toHaveCount(0);
+    await expect(page.getByText('Fraser Carter')).toHaveCount(0);
     await page.getByRole('button', { name: /10:00/ }).click();
 
     const submit = page.getByRole('button', { name: 'Book my free trial' });
     await expect(submit).toBeEnabled();
     await expect(submit).not.toHaveClass(/needs-slot/);
     await expect(page.locator('#slotSelectionError')).toBeEmpty();
+    await expect(page.locator('#summaryBar')).not.toContainText('Fraser');
 
     await submit.click();
     await expect(page.locator('#guest_name_error')).toHaveText('Enter your full name.');
