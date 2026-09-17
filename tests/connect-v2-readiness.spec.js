@@ -479,7 +479,8 @@ test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
   });
 
   test('migration makes attempts/links append-only, owner mappings unique, and accepted agreements immutable', () => {
-    const sql = fs.readFileSync(path.join(root, 'db', 'migrations', '041_connect_v2_onboarding_readiness.sql'), 'utf8');
+    const sql = fs.readFileSync(path.join(root, 'db', 'migrations', '041_connect_v2_onboarding_readiness.sql'), 'utf8')
+      .replace(/\r\n/g, '\n');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS connect_v2_account_creation_intents');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS connect_v2_account_creation_attempts');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS connect_v2_account_link_events');
@@ -489,7 +490,8 @@ test.describe('Slice 4 Accounts v2 inactive readiness contract', () => {
     expect(sql).toContain("ELSIF OLD.accepted_at IS NOT NULL");
     expect(sql).toContain('accepted payout agreement facts are immutable');
     expect(sql).toContain('payout agreement effective ranges overlap');
-    const aggregate = fs.readFileSync(path.join(root, 'db', 'migration.sql'), 'utf8');
+    const aggregate = fs.readFileSync(path.join(root, 'db', 'migration.sql'), 'utf8')
+      .replace(/\r\n/g, '\n');
     const marker = '-- Stripe Connect Simon launch Slice 4: Accounts v2 onboarding readiness.';
     const start = aggregate.lastIndexOf(marker);
     expect(start).toBeGreaterThanOrEqual(0);
