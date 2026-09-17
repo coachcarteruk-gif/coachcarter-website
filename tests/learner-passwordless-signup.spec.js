@@ -86,6 +86,7 @@ async function withMockedLearnerAuth(sql, auditCalls, run) {
       SESSION_COOKIE_NAMES: { learner: 'cc_learner' },
       SESSION_MAX_AGE_SEC: { learner: 180 * 24 * 60 * 60 },
       buildSessionCookie: (name, token) => `${name}=${token}; Path=/; HttpOnly`,
+      requireAuth: () => null,
     },
   };
   require.cache[require.resolve(path.join(repoRoot, 'api/_csrf.js'))] = {

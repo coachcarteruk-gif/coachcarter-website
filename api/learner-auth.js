@@ -11,7 +11,7 @@
  *   POST ?action=signup-with-code { ticket, name, referral_code? }
  *   POST ?action=set-password   { ticket, password } — completes migration / reset
  *   POST ?action=request-reset  { email } — sends reset link (no enumeration leak)
- *   POST ?action=add-email      { phone, email } — phone-only users adding email
+ *   POST ?action=add-email      { email } — authenticated phone-only users adding email
  *
  * Sets the standard cc_learner httpOnly session cookie + cc_csrf double-submit
  * cookie on success. Login/legacy signup/signup-with-code/set-password issue a
@@ -24,7 +24,7 @@
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const { sanitizeEmail } = require('./_auth-helpers');
-const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie } = require('./_auth');
+const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, buildSessionCookie, requireAuth } = require('./_auth');
 const { buildCsrfCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const {
   validatePassword, hashPassword, verifyPassword,
@@ -32,6 +32,8 @@ const {
 } = require('./_password');
 const { logAudit } = require('./_audit');
 const { reportError } = require('./_error-alert');
+const { checkRateLimit, getClientIp: getRateLimitClientIp } = require('./_rate-limit');
+const { resolveSchoolFromRequest } = require('./_tenant');
 
 const FREE_TRIAL_CREDITS = 0;
 const ROLE = 'learner';
@@ -432,31 +434,51 @@ async function handleSetPassword(req, res) {
       });
     }
 
-    if (claims.role !== ROLE) {
+    if (claims.role !== ROLE || (claims.purpose !== 'migration' && claims.purpose !== 'reset')) {
       return res.status(400).json({ error: 'invalid_ticket', message: 'Verification is for a different account type.' });
     }
 
     const sql = neon(process.env.POSTGRES_URL);
     const cleanEmail = sanitizeEmail(claims.sub);
-    if (!cleanEmail) return res.status(400).json({ error: 'invalid_ticket' });
+    const schoolId = Number.parseInt(claims.school_id, 10);
+    if (!cleanEmail || !Number.isInteger(schoolId) || schoolId <= 0) {
+      return res.status(400).json({ error: 'invalid_ticket' });
+    }
 
-    const [user] = await sql`
-      SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at, password_hash
-        FROM learner_users
-       WHERE email = ${cleanEmail}`;
+    const passwordHash = await hashPassword(password);
+    let user;
+    if (claims.purpose === 'migration') {
+      const learnerId = Number.parseInt(claims.learner_id, 10);
+      if (!Number.isInteger(learnerId) || learnerId <= 0) {
+        return res.status(400).json({ error: 'invalid_ticket' });
+      }
+      [user] = await sql`
+        UPDATE learner_users
+           SET email = ${cleanEmail},
+               password_hash = ${passwordHash},
+               password_set_at = NOW(),
+               email_verified = TRUE,
+               last_activity_at = NOW()
+         WHERE id = ${learnerId}
+           AND school_id = ${schoolId}
+           AND password_hash IS NULL
+        RETURNING id, name, email, phone, school_id, current_tier, terms_accepted_at, password_hash`;
+    } else {
+      [user] = await sql`
+        UPDATE learner_users
+           SET password_hash = ${passwordHash},
+               password_set_at = NOW(),
+               email_verified = TRUE,
+               last_activity_at = NOW()
+         WHERE LOWER(email) = LOWER(${cleanEmail})
+           AND school_id = ${schoolId}
+           AND password_hash IS NOT NULL
+        RETURNING id, name, email, phone, school_id, current_tier, terms_accepted_at, password_hash`;
+    }
 
     if (!user) {
       return res.status(400).json({ error: 'invalid_ticket', message: 'Account not found.' });
     }
-
-    const passwordHash = await hashPassword(password);
-    await sql`
-      UPDATE learner_users
-         SET password_hash = ${passwordHash},
-             password_set_at = NOW(),
-             email_verified = TRUE,
-             last_activity_at = NOW()
-       WHERE id = ${user.id}`;
 
     // Clear any failed-login lockout the user might have accumulated.
     await clearLoginLockout(sql, ROLE, cleanEmail);
@@ -481,6 +503,12 @@ async function handleSetPassword(req, res) {
       terms_accepted: !!user.terms_accepted_at,
     });
   } catch (err) {
+    if (err?.code === '23505') {
+      return res.status(409).json({
+        error: 'email_in_use',
+        message: 'That email is already linked to a different account.',
+      });
+    }
     console.error('set-password error:', err);
     reportError('/api/learner-auth', err);
     return res.status(500).json({ error: 'Could not set password' });
@@ -516,7 +544,7 @@ async function handleSetPasswordFromOffer(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const [offer] = await sql`
-      SELECT id, learner_id, accepted_at, status
+      SELECT id, learner_id, school_id, accepted_at, status
         FROM lesson_offers
        WHERE token = ${offerToken}`;
 
@@ -532,7 +560,8 @@ async function handleSetPasswordFromOffer(req, res) {
     const [user] = await sql`
       SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at, password_hash
         FROM learner_users
-       WHERE id = ${offer.learner_id}`;
+       WHERE id = ${offer.learner_id}
+         AND school_id = ${offer.school_id}`;
 
     if (!user) {
       return res.status(400).json({ error: 'invalid_offer', message: 'Account not found.' });
@@ -553,7 +582,8 @@ async function handleSetPasswordFromOffer(req, res) {
              password_set_at = NOW(),
              email_verified = TRUE,
              last_activity_at = NOW()
-       WHERE id = ${user.id}`;
+       WHERE id = ${user.id}
+         AND school_id = ${offer.school_id}`;
 
     await clearLoginLockout(sql, ROLE, user.email);
 
@@ -606,7 +636,13 @@ async function handleRequestReset(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     // Enumeration-safe: same response regardless of account existence.
-    const [acct] = await sql`SELECT id, password_hash FROM learner_users WHERE email = ${cleanEmail}`;
+    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    const schoolId = tenant?.schoolId || 1;
+    const [acct] = await sql`
+      SELECT id, password_hash, school_id
+        FROM learner_users
+       WHERE LOWER(email) = LOWER(${cleanEmail})
+         AND school_id = ${schoolId}`;
     const shouldSend = !!(acct && acct.password_hash);
 
     if (shouldSend) {
@@ -618,11 +654,15 @@ async function handleRequestReset(req, res) {
 
       // Invalidate older unused reset rows
       await sql`UPDATE magic_link_tokens SET used = true
-                 WHERE email = ${cleanEmail} AND purpose = 'reset' AND role = 'learner' AND used = false`;
+                 WHERE email = ${cleanEmail}
+                   AND school_id = ${schoolId}
+                   AND purpose = 'reset'
+                   AND role = 'learner'
+                   AND used = false`;
 
       await sql`
         INSERT INTO magic_link_tokens (token, email_code, email, method, expires_at, school_id, purpose, role)
-        VALUES (${longToken}, ${emailCode}, ${cleanEmail}, 'email', ${expiresAt}, ${acct.id ? 1 : 1}, 'reset', 'learner')`;
+        VALUES (${longToken}, ${emailCode}, ${cleanEmail}, 'email', ${expiresAt}, ${schoolId}, 'reset', 'learner')`;
 
       // Send the email
       try {
@@ -672,60 +712,69 @@ async function handleRequestReset(req, res) {
 
 // ── POST ?action=add-email ──────────────────────────────────────────────────
 //
-// For phone-only learners migrating to password auth. Takes a phone + new
-// email, sends a 6-digit code to the email so they can verify ownership,
-// then a follow-up set-password call attaches both to the account.
+// For phone-only learners migrating to password auth. The caller must already
+// hold the learner session issued after successful SMS verification. The new
+// email remains only on the short-lived verification token until its code is
+// verified; set-password then attaches the email and password atomically.
 //
-// We don't issue a session here; the user must complete via verify-email-code
-// + set-password. To bind the email to the account we update the row before
-// the email goes out (the email-code is the proof of ownership).
-//
-// Body: { phone, email }
+// Body: { email }
 async function handleAddEmail(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
-    const phone = (req.body?.phone || '').replace(/\s+/g, '').trim();
+    const auth = requireAuth(req, { roles: ['learner'], requireSchool: true });
+    if (!auth) return res.status(401).json({ error: 'Unauthorised' });
+
     const cleanEmail = sanitizeEmail(req.body?.email);
-    if (!phone || !cleanEmail) {
-      return res.status(400).json({ error: 'Phone and email are required.' });
+    if (!cleanEmail) {
+      return res.status(400).json({ error: 'A valid email is required.' });
     }
 
     const sql = neon(process.env.POSTGRES_URL);
+    const schoolId = Number(auth.school_id);
+    const learnerId = Number(auth.id);
 
-    const [user] = await sql`SELECT id, school_id, email, password_hash FROM learner_users WHERE phone = ${phone}`;
-    if (!user) {
-      // Don't reveal whether phone exists. Same response either way.
-      return res.json({
-        success: true,
-        message: 'If that phone number matches an account, we\'ve sent a code to the email.',
-      });
+    const accountLimit = await checkRateLimit(sql, {
+      key: `learner_add_email:${schoolId}:${learnerId}`,
+      max: 5,
+      windowSeconds: 3600,
+    });
+    const ipLimit = await checkRateLimit(sql, {
+      key: `learner_add_email_ip:${getRateLimitClientIp(req)}`,
+      max: 20,
+      windowSeconds: 3600,
+    });
+    if (!accountLimit.allowed || !ipLimit.allowed) {
+      return res.status(429).json({ error: 'Too many code requests. Please try again in an hour.' });
     }
-    if (user.password_hash) {
+
+    const [user] = await sql`
+      SELECT id, school_id, phone, email, password_hash
+        FROM learner_users
+       WHERE id = ${learnerId}
+         AND school_id = ${schoolId}`;
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorised' });
+    }
+    if (!user.phone || user.password_hash || user.email) {
       // User already migrated. Don't overwrite.
-      return res.status(400).json({
+      return res.status(409).json({
         error: 'already_migrated',
-        message: 'That account already has a password. Please sign in with email + password.',
+        message: 'This account already has an email or password. Please sign in normally.',
       });
     }
 
     // Conflict check: is the email already used by a different account?
-    const [emailConflict] = await sql`SELECT id FROM learner_users WHERE email = ${cleanEmail} AND id != ${user.id}`;
+    const [emailConflict] = await sql`
+      SELECT id FROM learner_users
+       WHERE LOWER(email) = LOWER(${cleanEmail})
+         AND school_id = ${schoolId}
+         AND id != ${user.id}`;
     if (emailConflict) {
       return res.status(409).json({
         error: 'email_in_use',
         message: 'That email is already linked to a different account.',
       });
     }
-
-    // Bind the email to the account now (email_verified stays FALSE until
-    // the user completes set-password). This is necessary because
-    // set-password looks the user up by email — without binding, the SMS
-    // user can't be resolved. If the user abandons the flow, the email is
-    // "claimed" but unverified. A different person later trying to sign up
-    // with the same email will hit account_exists → can sign in once they
-    // know the password (which they don't, so they're prompted to migrate
-    // and verify). Edge case but bounded.
-    await sql`UPDATE learner_users SET email = ${cleanEmail}, email_verified = FALSE WHERE id = ${user.id}`;
 
     // Generate + store + send the migration code (mirrors send-email-code)
     const crypto = require('crypto');
@@ -734,11 +783,15 @@ async function handleAddEmail(req, res) {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await sql`UPDATE magic_link_tokens SET used = true
-               WHERE email = ${cleanEmail} AND purpose = 'migration' AND role = 'learner' AND used = false`;
+               WHERE phone = ${user.phone}
+                 AND school_id = ${schoolId}
+                 AND purpose = 'migration'
+                 AND role = 'learner'
+                 AND used = false`;
 
     await sql`
-      INSERT INTO magic_link_tokens (token, email_code, email, method, expires_at, school_id, purpose, role)
-      VALUES (${longToken}, ${emailCode}, ${cleanEmail}, 'email', ${expiresAt}, ${user.school_id || 1}, 'migration', 'learner')`;
+      INSERT INTO magic_link_tokens (token, email_code, email, phone, method, expires_at, school_id, purpose, role)
+      VALUES (${longToken}, ${emailCode}, ${cleanEmail}, ${user.phone}, 'email', ${expiresAt}, ${schoolId}, 'migration', 'learner')`;
 
     try {
       const { createTransporter } = require('./_auth-helpers');

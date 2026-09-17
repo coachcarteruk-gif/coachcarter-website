@@ -632,10 +632,10 @@
     var btn = document.getElementById('add-email-btn');
     btn.disabled = true; btn.textContent = 'Sending…';
 
-    fetch('/api/learner-auth?action=add-email', {
+    window.ccAuth.fetchAuthed('/api/learner-auth?action=add-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: smsPhone, email: email })
+      body: JSON.stringify({ email: email })
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (out) {
