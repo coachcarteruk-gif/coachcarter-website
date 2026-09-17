@@ -61,20 +61,33 @@ The mandatory gate then found a pre-existing authentication vulnerability in `ap
 
 No confirmed launch blocker remains. The score still reflects non-blocking hardening, accessibility, performance, and SEO debt.
 
+## Post-launch Hardening Update — 17 September 2026
+
+The readiness score above is the original audit snapshot and has not been artificially recalculated without rerunning every scored check. The following findings are now remediated on `codex/trial-discount-pencilled-offers` and are ready for preview verification:
+
+- The confirmed XSS sinks in learner data export and instructor profile rendering now escape untrusted values or use safe DOM properties, with executable payload tests.
+- Migration endpoints and the admin payout summary no longer serialize raw database/provider errors; detailed failures remain in server-side logs and retained financial evidence.
+- Nodemailer is upgraded to 9.1.1 and transitive `qs` to 6.16.0; `npm audit --omit=dev` reports zero vulnerabilities.
+- The Stripe boundary test pollution is fixed by restoring every mocked module-cache entry after the free-trial API test harness loads.
+- The unused 5.56 MB `FraserDiag.JPG` deployment asset is removed; pages already use the visually verified 201 KB WebP derivative.
+- Learner reset/SMS verification digits now have programmatic labels, and canonical/sitemap URLs use the production `www` host with the retired landing URL removed.
+
+Post-hardening verification completed with 1,458 passing and 312 intentionally skipped tests in the full six-worker suite. The formerly polluted Stripe boundary tests passed in that run. Syntax validation passed all 253 JavaScript files, all 69 migration files validated, the production dependency audit reported zero vulnerabilities, and `git diff --check` passed.
+
 ## Failed Checks Requiring Remediation
 
-1. **Stored/DOM XSS exposure:** unsafe rendering sinks were found in `public/learner/my-data.js` and `public/instructor/profile.js`. Replace HTML-string insertion for untrusted values with text-safe DOM APIs or context-appropriate escaping, then add payload tests.
-2. **Dependency security:** the dependency audit reports a high-severity Nodemailer advisory and a moderate `qs` advisory. Upgrade to patched compatible versions and rerun the full test suite and dependency audit.
-3. **Accessibility labels:** a broad scan found 252 controls without reliable programmatic label association, including the admin dashboard filters. Add `label[for]`/matching `id`, `aria-label`, or `aria-labelledby` as appropriate and verify with an accessibility scanner.
-4. **Performance asset budget:** `public/FraserDiag.JPG` is approximately 5.56 MB. Resize and encode an appropriately dimensioned WebP/AVIF derivative, retain a fallback if needed, and verify visual quality.
-5. **Error disclosure:** migration/admin API responses can expose raw database error detail. Log detailed errors server-side and return stable, non-sensitive client error envelopes.
+1. **RESOLVED — Stored/DOM XSS exposure:** unsafe rendering sinks in `public/learner/my-data.js` and `public/instructor/profile.js` are covered by executable payload regressions.
+2. **RESOLVED — Dependency security:** Nodemailer and `qs` are on patched compatible versions and the production dependency audit is clean.
+3. **PARTIAL — Accessibility labels:** learner verification-code inputs are now labelled and covered by a page-level control-label test. The broader admin/dashboard control sweep and rendered accessibility scan remain.
+4. **RESOLVED — Performance asset budget:** the unused 5.56 MB JPEG source is removed; the existing 201 KB WebP remains the referenced production asset.
+5. **RESOLVED — Error disclosure:** migration/admin responses use stable client-safe errors while retaining detailed server-side logging.
 
 ## Warnings
 
 - **Security:** no enforceable Content Security Policy was found; public email/mutation routes need explicit rate limits.
 - **Performance:** testimonial images should be lazy-loaded; `public/admin/portal.js` is approximately 270 KB; multiple N+1 access patterns and render-blocking/large inline assets need profiling; compression must be verified against the deployed response.
 - **Accessibility:** page landmarks and heading hierarchy are inconsistent; colour contrast and touch targets require rendered-page testing.
-- **SEO:** many pages lack descriptions, Open Graph metadata, and canonicals; several titles are too long; the sitemap contains a stale `coachcarter-landing.html` URL; no structured data was found.
+- **SEO:** many secondary pages still lack descriptions/Open Graph metadata and no structured data was found. Production-host canonicals are aligned and the stale `coachcarter-landing.html` sitemap URL is removed.
 - **GDPR:** Setmore usage should be disclosed consistently in the privacy/cookie material.
 - **Broken links:** several HTML pages appear orphaned and should be confirmed intentional or linked/removed.
 - **Code quality:** seven production `console.log` calls and two TODO markers remain; API error envelopes are inconsistent; `GOOGLE_PLACE_ID` is used but not clearly documented.
@@ -93,11 +106,10 @@ No confirmed launch blocker remains. The score still reflects non-blocking harde
 
 ## Recommended Remediation Order
 
-1. Remove the identified XSS sinks and raw database-error disclosure.
-2. Upgrade vulnerable dependencies and rerun the dependency audit.
-3. Address accessibility labels and the 5.56 MB image; schedule the remaining warnings with owners and dates.
-4. Remove cross-test module-cache pollution in the Stripe boundary suites. The affected tests pass in isolation, while the full parallel run completed with 1,446 passes, 312 skips, and two cache-pollution failures.
-5. Commit and push the exact deployed working-tree patch through the normal review workflow so production is reproducible from source control.
+1. Complete the broader admin/dashboard accessibility-label sweep and verify with a rendered accessibility scanner.
+2. Harden adjacent legacy learner-auth risks: enumeration-prone legacy account checks, single-use reset tickets, required password-mutation audit persistence, and reset-request rate limiting/timing.
+3. Add descriptions/Open Graph/structured data to the remaining genuinely public marketing pages.
+4. Run the complete parallel suite and preview-browser checks against this post-launch hardening set.
 
 ## Methodology and Limitations
 
