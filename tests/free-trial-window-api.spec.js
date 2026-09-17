@@ -62,17 +62,30 @@ async function loadHandler(sql) {
   const neonPath = require.resolve('@neondatabase/serverless');
   const resolvedSlots = require.resolve(slotsPath);
   const resolvedStripeClients = require.resolve(stripeClientsPath);
-  delete require.cache[resolvedSlots];
-  delete require.cache[neonPath];
-  delete require.cache[resolvedStripeClients];
-  require.cache[neonPath] = { exports: { neon: () => sql } };
-  require.cache[resolvedStripeClients] = {
-    exports: {
-      STRIPE_CLIENT_PURPOSES: { PAYMENTS: 'payments' },
-      createPlatformStripeClient: () => ({}),
-    },
-  };
-  return require(slotsPath);
+  const originals = new Map([
+    [resolvedSlots, require.cache[resolvedSlots]],
+    [neonPath, require.cache[neonPath]],
+    [resolvedStripeClients, require.cache[resolvedStripeClients]],
+  ]);
+
+  try {
+    delete require.cache[resolvedSlots];
+    delete require.cache[neonPath];
+    delete require.cache[resolvedStripeClients];
+    require.cache[neonPath] = { exports: { neon: () => sql } };
+    require.cache[resolvedStripeClients] = {
+      exports: {
+        STRIPE_CLIENT_PURPOSES: { PAYMENTS: 'payments' },
+        createPlatformStripeClient: () => ({}),
+      },
+    };
+    return require(slotsPath);
+  } finally {
+    for (const [resolved, original] of originals) {
+      if (original) require.cache[resolved] = original;
+      else delete require.cache[resolved];
+    }
+  }
 }
 
 async function call(handler, { method, action, query = {}, body = {} }) {
