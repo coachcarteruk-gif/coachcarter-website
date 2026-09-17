@@ -115,7 +115,8 @@ test.describe('free trial scheduling safeguards', () => {
     const freeTrialBooking = functionBody(api, 'handleBookFreeTrial');
     expect(paidCheckout).toContain('isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)');
     expect(paidCheckout).not.toContain('FREE_TRIAL_MAX_DAYS_AHEAD');
-    expect(freeTrialBooking).toContain('isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD)');
+    expect(freeTrialBooking).toContain('FREE_TRIAL_MAX_DAYS_AHEAD,');
+    expect(freeTrialBooking).toContain('todayStart');
   });
 
   test('free trial reschedules use the same bounded window', () => {

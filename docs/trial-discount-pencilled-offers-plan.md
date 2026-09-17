@@ -129,30 +129,71 @@ rotation; completed, processing or unknown provider states are not rotated. The
 same quote-recovery rule covers discounted extensions. Retained contact details in
 the payload participate in GDPR export/anonymisation.
 
-## Final verification (17 September 2026)
+## Review remediation (17 September 2026)
 
-- Combined focused regression run: **201 passed, 2 skipped** across trial windows,
-  offers/extensions, discount pricing/timing, package gates/accounting, API mocks,
-  browser journeys and local database integration. The two skipped tests are the
-  existing Reserved Weekly Slot Neon-only smoke tests; their external test-branch
-  gate was deliberately disabled. Its cash allocator is covered locally.
-- Real local PostgreSQL tests exercise two-client overlap locking, both commit
-  orders, duplicate pencil fulfilment, cancellation, tenant boundaries and schema
-  checks. Package ledger conservation includes non-last returns, reductions,
-  rescheduling and final drain: 901p active allocations + 100p reduction = 1001p.
-- Handler-level fake Stripe tests reproduce concurrent Checkout clicks and a
-  successful provider creation followed by a failed local session save. Recovery
-  retains one quote, identical provider parameters and the original session even
-  when the retry submits different contact details.
-- Root reviewed rendered instructor, learner, offer-payment and package screens.
-  Browser network responses are fixtures; no real Stripe charge was made.
-- All 252 JavaScript files pass the repository syntax check. `git diff --check`
-  and `npm run migrations:check` pass (69 manifest entries). Migrations 066–068
-  were applied together twice to a disposable local schema; agents also tested
-  individual migrations. Historical numbered SQL and baseline receipts are intact.
+- Delayed paid pencils now reacquire the shared school/instructor/day lock and
+  recheck bookings, requests, reservations, recurring holds, busy blocks and other
+  active pencils before fulfilment. An occupied slot retains one idempotent refund
+  outcome instead of creating a double booking. Migration 066 also protects an
+  ordinary calendar writer that waited behind fulfilment, including after the
+  accepted booking is moved to another instructor/day, without adding a general
+  booking-versus-booking exclusion.
+- Paid pencils with expired, revoked or contradictory discount evidence now pass
+  through canonical offer, school, learner and retained Checkout validation before
+  the narrow compensation path. Refund failures retain `manual_review`, fail the
+  webhook receipt so Stripe can retry, and reuse the same refund idempotency key.
+  Unpaid/processing callbacks and unrelated products keep their prior behavior.
+- Credit-funded Reserved Weekly Slot commits now return the preview's credit
+  pricing after a successful mutation; they no longer reference variables owned by
+  the separate bank-checkout discount path.
+- Pencilled-offer and discounted-extension retries repair quote binding against the
+  saved Checkout session and frozen payload. A bind rejection clears that identity
+  only after expiry of the exact session is confirmed; ambiguous expiry preserves
+  it, so a retry cannot create a second payable Checkout.
+- The public trial picker obtains a host-resolved school window from `api/slots.js`.
+  Trial availability, booking, rescheduling and minimum-notice checks use the
+  school's operational timezone and the shorter instructor horizon. Ordinary paid
+  booking windows retain their existing behavior.
 
-Implementation and focused testing used GPT-5.6 Sol; GPT-6 Astra coordinated,
-reviewed integration, checked rendered output and ran combined verification.
+## Final verification (review remediation, 17 September 2026)
+
+- A fresh combined behavioral run completed **95 passed, 1 skipped** across the
+  actual webhook dispatcher, fulfilment and refund retries, lock-order contracts,
+  quote-binding recovery, recurring-credit commit, payout-v2 regressions, trial API
+  and browser behavior, BST/DST boundaries, exact day 28/day 29 and shorter
+  instructor windows. The skip is the real PostgreSQL concurrency scenario: this
+  workstation has no loopback PostgreSQL server or container runtime and
+  `PENCILLED_TEST_DATABASE_URL` was intentionally unset. No remote Neon database
+  was substituted.
+- A separate adjacent-regression run completed **91 passed, 3 skipped** across
+  booking extensions, ordinary slot webhooks, recurring/existing-learner offers,
+  pencilled UI and migration governance. The skips are existing environment- or
+  fixture-gated integration/auth cases; there were no failures. The governance
+  contract now covers numbered migrations 061–068 and all 69 manifest entries.
+- Handler-level fake Stripe tests cover payment-before-deadline/webhook-after-
+  deadline, different-start overlaps, adjacency, duplicate deliveries,
+  cancellation/payment races, compensation failure/retry, malformed advisory
+  metadata, session persistence before quote binding, and ambiguous provider
+  expiry. These are signed-event/provider mocks; no Stripe test-mode event or real
+  payment was sent.
+- Trial regressions cover London after-midnight BST, both UK DST transitions,
+  non-default tenant resolution, a timezone west of UTC, shorter instructor
+  horizons and timezone-correct minimum notice. A successful credit-funded
+  recurring mutation returns HTTP 201 with its non-purchase pricing response.
+- All **252** JavaScript files pass `npm run check:syntax`.
+  `npm run migrations:check` passes all **69** manifest entries, migration 066 and
+  its aggregate mirror are byte-for-byte aligned, and `git diff --check` passes.
+  Migration 066's final manifest SHA-256 is
+  `df194ea75f0fbfbaf49b823425decdf93633681f7c5888c49898348ad43b2a2a`.
+- Because no disposable loopback PostgreSQL instance was available, migrations
+  066–068 were not applied or repeat-applied during this remediation pass. Signed
+  Stripe test-mode and staging rehearsals also remain unperformed. No deployment,
+  production migration, live configuration change or real payment was made.
+
+Implementation and focused testing were delegated with exclusive file ownership
+to GPT-5.6 Sol. GPT-6 Astra coordinated, ran the combined verification and completed
+an independent integration review. The branch is suitable for a draft PR; staging
+rehearsal remains required before merge or rollout.
 
 ## Rollout packet (not executed)
 

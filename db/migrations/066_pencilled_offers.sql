@@ -60,15 +60,32 @@ DECLARE
   v_school_id INTEGER;
   v_instructor_id INTEGER;
   v_date DATE;
+  v_old_school_id INTEGER;
+  v_old_instructor_id INTEGER;
+  v_old_date DATE;
   v_start TIME;
   v_end TIME;
   v_active BOOLEAN;
 BEGIN
   v_school_id := NEW.school_id;
   v_instructor_id := NEW.instructor_id;
-  v_date := NEW.scheduled_date;
   v_start := NEW.start_time;
   v_end := NEW.end_time;
+  IF TG_TABLE_NAME = 'instructor_busy_blocks' THEN
+    v_date := NEW.block_date;
+    IF TG_OP = 'UPDATE' THEN
+      v_old_school_id := OLD.school_id;
+      v_old_instructor_id := OLD.instructor_id;
+      v_old_date := OLD.block_date;
+    END IF;
+  ELSE
+    v_date := NEW.scheduled_date;
+    IF TG_OP = 'UPDATE' THEN
+      v_old_school_id := OLD.school_id;
+      v_old_instructor_id := OLD.instructor_id;
+      v_old_date := OLD.scheduled_date;
+    END IF;
+  END IF;
   IF TG_TABLE_NAME = 'lesson_bookings' THEN
     v_active := NEW.status IN ('scheduled', 'chargeable');
   ELSIF TG_TABLE_NAME = 'lesson_requests' THEN
@@ -79,20 +96,22 @@ BEGIN
     v_active := NEW.status IN ('held', 'booked');
   ELSIF TG_TABLE_NAME = 'lesson_offers' THEN
     v_active := NEW.status = 'pending' AND NEW.expires_at > clock_timestamp();
+  ELSIF TG_TABLE_NAME = 'instructor_busy_blocks' THEN
+    v_active := TRUE;
   ELSE
     v_active := FALSE;
   END IF;
   IF NOT v_active THEN RETURN NEW; END IF;
   IF TG_OP = 'UPDATE'
-     AND (OLD.school_id, OLD.instructor_id, OLD.scheduled_date)
-         IS DISTINCT FROM (NEW.school_id, NEW.instructor_id, NEW.scheduled_date) THEN
-    IF (OLD.school_id, OLD.instructor_id, OLD.scheduled_date)
-       < (NEW.school_id, NEW.instructor_id, NEW.scheduled_date) THEN
-      PERFORM lock_pencilled_slot_day(OLD.school_id, OLD.instructor_id, OLD.scheduled_date);
+     AND (v_old_school_id, v_old_instructor_id, v_old_date)
+         IS DISTINCT FROM (v_school_id, v_instructor_id, v_date) THEN
+    IF (v_old_school_id, v_old_instructor_id, v_old_date)
+       < (v_school_id, v_instructor_id, v_date) THEN
+      PERFORM lock_pencilled_slot_day(v_old_school_id, v_old_instructor_id, v_old_date);
       PERFORM lock_pencilled_slot_day(v_school_id, v_instructor_id, v_date);
     ELSE
       PERFORM lock_pencilled_slot_day(v_school_id, v_instructor_id, v_date);
-      PERFORM lock_pencilled_slot_day(OLD.school_id, OLD.instructor_id, OLD.scheduled_date);
+      PERFORM lock_pencilled_slot_day(v_old_school_id, v_old_instructor_id, v_old_date);
     END IF;
   ELSE
     PERFORM lock_pencilled_slot_day(v_school_id, v_instructor_id, v_date);
@@ -120,6 +139,11 @@ BEGIN
      WHERE item.school_id=v_school_id AND item.instructor_id=v_instructor_id
        AND item.scheduled_date=v_date AND item.status IN ('held','booked')
        AND item.start_time<v_end AND item.end_time>v_start
+    UNION ALL
+    SELECT 1 FROM instructor_busy_blocks busy
+     WHERE busy.school_id=v_school_id AND busy.instructor_id=v_instructor_id
+       AND busy.block_date=v_date
+       AND busy.start_time<v_end AND busy.end_time>v_start
   ) THEN
     RAISE EXCEPTION 'pencilled offer conflicts with active calendar row'
       USING ERRCODE = '23P01';
@@ -137,6 +161,30 @@ BEGIN
        AND offer.end_time > v_start
   ) THEN
     RAISE EXCEPTION 'active pencilled offer conflicts with calendar row'
+      USING ERRCODE = '23P01';
+  END IF;
+  -- If this writer waited behind a pencilled-offer fulfilment, the pencil is
+  -- accepted by the time the advisory lock is released and is therefore no
+  -- longer caught by the active-pending check above. Protect only bookings
+  -- created by accepted pencils; ordinary booking-vs-booking behaviour stays
+  -- unchanged. Exclude the linked booking itself so its normal updates work.
+  IF EXISTS (
+    SELECT 1
+      FROM lesson_offers offer
+      JOIN lesson_bookings booking
+        ON booking.id = offer.booking_id
+       AND booking.school_id = offer.school_id
+     WHERE offer.school_id = v_school_id
+       AND offer.pencilled = TRUE
+       AND offer.status = 'accepted'
+       AND booking.instructor_id = v_instructor_id
+       AND booking.scheduled_date = v_date
+       AND booking.status IN ('scheduled','chargeable')
+       AND (TG_TABLE_NAME <> 'lesson_bookings' OR booking.id <> NEW.id)
+       AND booking.start_time < v_end
+       AND booking.end_time > v_start
+  ) THEN
+    RAISE EXCEPTION 'fulfilled pencilled offer conflicts with calendar row'
       USING ERRCODE = '23P01';
   END IF;
   RETURN NEW;
@@ -167,3 +215,8 @@ DROP TRIGGER IF EXISTS trg_offer_pencilled_guard ON lesson_offers;
 CREATE TRIGGER trg_offer_pencilled_guard
   BEFORE INSERT OR UPDATE OF school_id, instructor_id, scheduled_date, start_time, end_time, status, expires_at
   ON lesson_offers FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();
+
+DROP TRIGGER IF EXISTS trg_busy_block_pencilled_guard ON instructor_busy_blocks;
+CREATE TRIGGER trg_busy_block_pencilled_guard
+  BEFORE INSERT OR UPDATE OF school_id, instructor_id, block_date, start_time, end_time
+  ON instructor_busy_blocks FOR EACH ROW EXECUTE FUNCTION guard_calendar_row_against_pencilled_offer();

@@ -11,6 +11,7 @@
   var referralCode = null;
   var prefInstructorId = null; // ?instructor_id= hint (filters slot feed)
   var prefDate = null;         // ?date= hint (scrolls into view)
+  var displayedDaysAhead = DAYS_AHEAD;
 
   // ── Init ────────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
@@ -86,15 +87,13 @@
 
   // ── Slot loading ─────────────────────────────────────────────────────────
   function loadSlots() {
-    var today = new Date();
-    var fromStr = ymd(today);
-    var to = new Date(today);
-    to.setDate(to.getDate() + DAYS_AHEAD);
-    var toStr = ymd(to);
-
-    var url = '/api/slots?action=available&from=' + fromStr + '&to=' + toStr + '&lesson_type_slug=trial';
-    if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
-    fetch(url)
+    getTrialWindowContext().then(function (context) {
+      displayedDaysAhead = context.days_ahead;
+      var url = '/api/slots?action=available&from=' + encodeURIComponent(context.from)
+        + '&to=' + encodeURIComponent(context.to) + '&lesson_type_slug=trial';
+      if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
+      return fetch(url);
+    })
       .then(function (r) { return r.json(); })
       .then(function (slotsResp) {
         if (slotsResp && slotsResp.slots) {
@@ -110,13 +109,34 @@
       });
   }
 
+  function getTrialWindowContext() {
+    var url = '/api/slots?action=trial-window-context';
+    if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
+    return fetch(url)
+      .then(function (response) {
+        if (!response.ok) throw new Error('Trial window request failed');
+        return response.json();
+      })
+      .then(function (context) {
+        if (!context || !/^\d{4}-\d{2}-\d{2}$/.test(context.from)
+            || !/^\d{4}-\d{2}-\d{2}$/.test(context.to)) {
+          throw new Error('Invalid trial window response');
+        }
+        return {
+          from: context.from,
+          to: context.to,
+          days_ahead: Number.isInteger(context.days_ahead) ? context.days_ahead : DAYS_AHEAD
+        };
+      });
+  }
+
   function renderSlots() {
     var picker = document.getElementById('slotPicker');
     var dates = Object.keys(slotsByDate).sort();
 
     var hasAny = dates.some(function (d) { return slotsByDate[d] && slotsByDate[d].length; });
     if (!hasAny) {
-      picker.innerHTML = '<div class="slot-empty">No free trial slots available in the next ' + DAYS_AHEAD + ' days. Please check back soon.</div>';
+      picker.innerHTML = '<div class="slot-empty">No free trial slots available in the next ' + displayedDaysAhead + ' days. Please check back soon.</div>';
       return;
     }
 
@@ -412,13 +432,6 @@
     var reduceMotion = window.matchMedia
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: block || 'start' });
-  }
-
-  function ymd(d) {
-    var y = d.getFullYear();
-    var m = String(d.getMonth() + 1).padStart(2, '0');
-    var day = String(d.getDate()).padStart(2, '0');
-    return y + '-' + m + '-' + day;
   }
 
   function formatDateLabel(dateStr) {

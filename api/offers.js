@@ -56,6 +56,41 @@ function dateOnly(value) {
   return null;
 }
 
+async function bindPersistedOfferQuote(sql, { offer, schoolId, session }) {
+  const providerQuoteId = session?.metadata?.post_trial_quote_id;
+  if (!providerQuoteId) return { ok: true, skipped: true };
+
+  // Recovery must bind the quote frozen before Checkout creation to the exact
+  // provider session already retained on the offer. Never substitute request
+  // data from a later click or rotate to a second payable session here.
+  const frozenPayload = offer.checkout_attempt_payload;
+  const frozenQuoteId = frozenPayload?.postTrialQuote?.quoteId;
+  const learnerId = Number(offer.learner_id);
+  const frozenLearnerId = Number(frozenPayload?.learnerDetails?.learner_id);
+  const providerLearnerId = Number(session?.metadata?.learner_id);
+  const frozenAmountPence = Number(frozenPayload?.checkoutTotalPence);
+  const providerAmountPence = Number(session?.metadata?.amount_pence);
+  if (String(session?.id || '') !== String(offer.stripe_session_id || '')
+      || Number(session?.metadata?.offer_id) !== Number(offer.id)
+      || Number(session?.metadata?.school_id) !== schoolId
+      || !frozenQuoteId || String(frozenQuoteId) !== String(providerQuoteId)
+      || !Number.isSafeInteger(learnerId) || learnerId <= 0
+      || !Number.isSafeInteger(frozenLearnerId) || frozenLearnerId !== learnerId
+      || !Number.isSafeInteger(providerLearnerId) || providerLearnerId !== learnerId
+      || !Number.isSafeInteger(frozenAmountPence) || frozenAmountPence <= 0
+      || !Number.isSafeInteger(providerAmountPence) || providerAmountPence !== frozenAmountPence) {
+    return { ok: false, code: 'POST_TRIAL_QUOTE_BINDING_MISMATCH' };
+  }
+
+  return bindPostTrialQuote(sql, {
+    quoteId: frozenQuoteId,
+    schoolId,
+    learnerId,
+    paymentType: 'checkout_session',
+    paymentIdentity: session.id,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Series fan-out for offer-driven weekly repeats (May 2026)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -824,6 +859,17 @@ async function handleAcceptOffer(req, res) {
         if (existingSession.status === 'open' && existingSession.url) {
           const quoteDeadline = new Date(existingSession.metadata?.post_trial_checkout_expires_at || 0);
           if (!Number.isNaN(quoteDeadline.getTime()) && quoteDeadline > new Date()) {
+            const boundQuote = await bindPersistedOfferQuote(sql, {
+              offer,
+              schoolId,
+              session: existingSession,
+            });
+            if (!boundQuote?.ok) {
+              return res.status(409).json({
+                error: 'This price quote could not be confirmed. Please try again.',
+                code: 'POST_TRIAL_QUOTE_NOT_BOUND',
+              });
+            }
             return res.json({ ok: true, url: existingSession.url, reused: true });
           }
           if (!existingSession.metadata?.post_trial_quote_id) {
@@ -1251,7 +1297,16 @@ async function handleAcceptOffer(req, res) {
         paymentIdentity: session.id,
       });
       if (!boundQuote?.ok) {
-        await expireExtensionCheckoutSessions([session.id], { stripeClient: stripe });
+        const expiryResults = await expireExtensionCheckoutSessions([session.id], { stripeClient: stripe });
+        const expiryConfirmed = expiryResults.some(result =>
+          result.sessionId === session.id && result.expired === true
+        );
+        if (!expiryConfirmed) {
+          return res.status(409).json({
+            error: 'This price quote could not be confirmed. Please try again.',
+            code: 'POST_TRIAL_QUOTE_NOT_BOUND',
+          });
+        }
         if (checkoutAttemptId) await sql`
           UPDATE lesson_offers SET stripe_session_id=NULL, checkout_attempt_id=NULL,
              checkout_attempt_started_at=NULL, checkout_attempt_payload=NULL

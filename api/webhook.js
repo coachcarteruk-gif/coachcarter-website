@@ -1,5 +1,6 @@
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
 const stripe = createPlatformStripeClient({ purpose: STRIPE_CLIENT_PURPOSES.RECONCILIATION });
+let pencilledOfferRefundStripe = null;
 let extensionRefundStripe = null;
 const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
@@ -224,6 +225,31 @@ function metadataPositiveInteger(metadata, field) {
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
+async function resolvePaidPencilledReceiptScope(event, sql) {
+  const session = event?.data?.object;
+  if ((event?.type !== 'checkout.session.completed' &&
+       event?.type !== 'checkout.session.async_payment_succeeded') ||
+      session?.metadata?.payment_type !== 'lesson_offer' ||
+      !isPaid(session) || !session.id) {
+    return null;
+  }
+  const rows = await sql`
+    SELECT offer.id, offer.school_id
+      FROM lesson_offers offer
+      JOIN instructors instructor
+        ON instructor.id = offer.instructor_id
+       AND instructor.school_id = offer.school_id
+      JOIN learner_users learner
+        ON learner.id = offer.learner_id
+       AND learner.school_id = offer.school_id
+     WHERE offer.stripe_session_id = ${session.id}
+       AND offer.pencilled = TRUE
+     LIMIT 2
+  `;
+  if (rows.length !== 1) return null;
+  return { offerId: Number(rows[0].id), schoolId: Number(rows[0].school_id) };
+}
+
 async function prepareLegacyPostTrialEvent(event, paymentType, dependencies = {}) {
   const object = event?.data?.object || {};
   const metadata = object.metadata || {};
@@ -407,13 +433,16 @@ async function validatePayoutV2ReceiptScope(event, sql, schoolId) {
 
 async function claimPayoutV2Receipt(event) {
   if (!isPayoutV2ReceiptEvent(event)) return null;
-  const schoolId = payoutV2ReceiptSchoolId(event);
+  const sql = neon(process.env.POSTGRES_URL);
+  const canonicalPencil = await resolvePaidPencilledReceiptScope(event, sql);
+  const schoolId = canonicalPencil?.schoolId || payoutV2ReceiptSchoolId(event);
   if (!schoolId) return null;
 
-  const sql = neon(process.env.POSTGRES_URL);
   const launchConfig = await loadShadowLaunchConfig(sql, schoolId);
   if (!launchConfig) return null;
-  await validatePayoutV2ReceiptScope(event, sql, schoolId);
+  if (!canonicalPencil) {
+    await validatePayoutV2ReceiptScope(event, sql, schoolId);
+  }
   try {
     const result = await claimStripeEventReceipt({
       sql,
@@ -702,37 +731,11 @@ module.exports = async (req, res) => {
         if (checked.proceed) await handleSlotBooking(checked.object, { ...paymentEventContext, postTrial: checked.result });
       } else if (paymentType === 'lesson_offer') {
         // ── Instructor-initiated offer: learner accepted + paid ────────
-        if (session.metadata?.post_trial_quote_id) {
-          paymentEventContext.postTrial = await preprocessPostTrialWebhook(neon(process.env.POSTGRES_URL), {
-            event,
-            schoolId: Number(session.metadata.school_id),
-            learnerId: Number(session.metadata.learner_id),
-            paymentType: 'checkout_session',
-            paymentIdentity: session.id,
-          });
-          if (!paymentEventContext.postTrial.ok) {
-            if (paymentEventContext.postTrial.retryable) {
-              const error = new Error('lesson_offer requires authoritative post-trial initiation history');
-              error.code = paymentEventContext.postTrial.code;
-              throw error;
-            }
-            reportError('/api/webhook (lesson_offer post-trial validation)', new Error(
-              `lesson_offer ${session.id}: ${paymentEventContext.postTrial.code}`
-            ));
-            paymentEventContext.postTrialBlocked = true;
-          }
-          if (!paymentEventContext.postTrial.fulfill) paymentEventContext.postTrialBlocked = true;
-          if (paymentEventContext.postTrial.monetary && Number(session.metadata?.repeat_weeks || 1) === 1) {
-            session.metadata = {
-              ...session.metadata,
-              amount_pence: String(paymentEventContext.postTrial.monetary.paidAmountPence),
-              effective_rate_pence_per_minute: String(Math.round(
-                paymentEventContext.postTrial.monetary.paidAmountPence / Number(session.metadata.duration_minutes || 1)
-              )),
-            };
-          }
-        }
-        if (!paymentEventContext.postTrialBlocked) await handleOfferBooking(session, paymentEventContext);
+        // Defer quote validation until the handler has resolved the canonical
+        // offer, school and learner. A paid pencilled offer with a terminal
+        // quote failure must reach its retained compensation path; ordinary
+        // offers remain blocked from fulfilment.
+        await handleOfferBooking(session, { ...paymentEventContext, stripeEvent: event });
       } else if (paymentType === 'lesson_request_hold') {
         // Manual-capture Checkout completion creates the pending request;
         // payment_intent.succeeded later records the captured funding source.
@@ -2456,7 +2459,7 @@ function toICSDate(dateStr, timeStr) {
 // ── Lesson offer handler ─────────────────────────────────────────────────────
 // Instructor created an offer, learner accepted and paid via Stripe.
 async function handleOfferBooking(session, payoutV2Receipt = null) {
-  if (!isPaid(session)) return;
+  const paid = isPaid(session);
 
   const metadata       = session.metadata || {};
   const offerToken     = metadata.offer_token;
@@ -2480,8 +2483,11 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
 
   const isFlexible = metadata.is_flexible === '1';
   const repeatWeeks = Math.max(1, parseInt(metadata.repeat_weeks, 10) || 1);
-  if (!offerToken || !instructorId || !Number.isSafeInteger(amountPence) || amountPence <= 0 ||
-      (!isFlexible && (!scheduledDate || !startTime || !endTime))) {
+  if (!paid && !metadata.post_trial_quote_id) return;
+  const requiredMetadataMissing = !offerToken || !instructorId ||
+    !Number.isSafeInteger(amountPence) || amountPence <= 0 ||
+    (!isFlexible && (!scheduledDate || !startTime || !endTime));
+  if (!paid && requiredMetadataMissing) {
     console.error('❌ lesson_offer webhook missing required metadata', metadata);
     return;
   }
@@ -2489,20 +2495,40 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Trust boundary: metadata is advisory. The token points at the canonical
-    // pending-payment row, and that DB row owns tenant + learner binding.
-    const [offer] = await sql`
-      SELECT id, status, booking_id, learner_id, school_id FROM lesson_offers
-      WHERE token = ${offerToken}
-    `;
+    // Trust boundary: metadata is advisory. For paid callbacks, prefer the
+    // Checkout session retained on the canonical offer. That lets a damaged
+    // metadata payload reach durable compensation without trusting a token or
+    // numeric id that may itself be missing or contradictory. The token
+    // remains the established fallback identity; the numeric id is only
+    // cross-checked below and is never trusted for lookup.
+    let offer;
+    if (paid) {
+      [offer] = await sql`
+        SELECT id, status, booking_id, learner_id, school_id FROM lesson_offers
+        WHERE stripe_session_id = ${session.id}
+        ORDER BY id DESC
+        LIMIT 1
+      `;
+    }
+    if (!offer && offerToken) {
+      [offer] = await sql`
+        SELECT id, status, booking_id, learner_id, school_id FROM lesson_offers
+        WHERE token = ${offerToken}
+      `;
+    }
     if (!offer) {
-      console.error('❌ lesson_offer webhook: offer not found for token', offerToken);
+      console.error('❌ lesson_offer webhook: canonical offer could not be resolved', {
+        session_id: session.id,
+        offer_token: offerToken || null,
+        offer_id: Number.isInteger(offerId) ? offerId : null,
+      });
       return;
     }
 
     const [offerShape] = await sql`
       SELECT instructor_id, extension_booking_id, extension_minutes,
              extension_base_list_price_pence, offer_price_pence,
+             lesson_type_id, token,
              scheduled_date::text AS scheduled_date,
              start_time::text AS start_time, end_time::text AS end_time,
              stripe_session_id, expires_at, COALESCE(pencilled, FALSE) AS pencilled
@@ -2515,7 +2541,7 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
     Object.assign(offer, offerShape);
 
     const schoolId = offer.school_id;
-    const rejectOfferMetadata = (reason) => {
+    const rejectOfferMetadata = async (reason) => {
       const err = new Error(`lesson_offer ${session.id}: ${reason}`);
       console.error('❌ lesson_offer metadata mismatch:', err.message, {
         offer_id: offer.id,
@@ -2525,14 +2551,63 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
         metadata_learner_id: metadata.learner_id,
       });
       reportError('/api/webhook (lesson_offer metadata mismatch)', err);
+      if (paid && offer.pencilled === true) {
+        if (!offer.learner_id) {
+          throw new Error(`lesson_offer ${session.id}: paid pencilled offer ${offer.id} has no canonical learner`);
+        }
+        const [canonicalLearner] = await sql`
+          SELECT id FROM learner_users
+           WHERE id = ${offer.learner_id}
+             AND school_id = ${schoolId}
+        `;
+        if (!canonicalLearner) {
+          throw new Error(
+            `lesson_offer ${session.id}: canonical learner ${offer.learner_id} is not in school ${schoolId}`
+          );
+        }
+        const paymentIntentId = stripePaymentIntentId(session);
+        if (!paymentIntentId || !Number.isSafeInteger(amountPence) || amountPence <= 0) {
+          throw new Error(
+            `lesson_offer ${session.id}: paid pencilled metadata failure has no canonical refund identity`
+          );
+        }
+        const pencilResult = await fulfilPencilledOffer({
+          session,
+          offer,
+          learnerId: Number(offer.learner_id),
+          schoolId: Number(schoolId),
+          instructorId: Number(offer.instructor_id),
+          lessonTypeId: Number(offer.lesson_type_id) || null,
+          durationMins,
+          pickupAddress: '',
+          amountPence,
+          fundingEvidence: { feePence: null },
+          paymentSucceededAt: payoutV2Receipt?.providerInitiatedAt,
+          quoteValidation: { ok: true, fulfill: true },
+          validationFailureReason: 'metadata_validation_failed',
+        });
+        if (pencilResult.refundRequired) {
+          await settleUnfulfilledPencilledOfferRefund({ sql, session, result: pencilResult });
+        }
+      }
       return true;
     };
+
+    if (requiredMetadataMissing) {
+      return rejectOfferMetadata('required advisory metadata is missing or invalid');
+    }
 
     if (metadata.school_id && metadataSchoolId !== schoolId) {
       return rejectOfferMetadata(`metadata school_id ${metadata.school_id} does not match offer.school_id ${schoolId}`);
     }
+    if (offerToken !== offer.token) {
+      return rejectOfferMetadata(`metadata offer_token does not match offer.token for offer ${offer.id}`);
+    }
     if (metadata.offer_id && offerId !== offer.id) {
       return rejectOfferMetadata(`metadata offer_id ${metadata.offer_id} does not match offer.id ${offer.id}`);
+    }
+    if (Number(offer.instructor_id) !== instructorId) {
+      return rejectOfferMetadata(`metadata instructor_id ${metadata.instructor_id} does not match offer.instructor_id ${offer.instructor_id}`);
     }
     if (metadata.learner_id) {
       if (!metadataLearnerId) {
@@ -2544,6 +2619,54 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
       if (metadataLearnerId !== offer.learner_id) {
         return rejectOfferMetadata(`metadata learner_id ${metadataLearnerId} does not match offer.learner_id ${offer.learner_id}`);
       }
+    }
+
+    if (metadata.post_trial_quote_id) {
+      if (!offer.learner_id) {
+        return rejectOfferMetadata(`post-trial quote was supplied for unbound offer ${offer.id}`);
+      }
+      const [canonicalLearner] = await sql`
+        SELECT id FROM learner_users
+         WHERE id = ${offer.learner_id}
+           AND school_id = ${schoolId}
+      `;
+      if (!canonicalLearner) {
+        throw new Error(`lesson_offer ${session.id}: canonical learner ${offer.learner_id} is not in school ${schoolId}`);
+      }
+      const stripeEvent = payoutV2Receipt?.stripeEvent;
+      if (!stripeEvent) {
+        throw new Error(`lesson_offer ${session.id}: signed Stripe event context is required for post-trial validation`);
+      }
+      const postTrial = await preprocessPostTrialWebhook(sql, {
+        event: stripeEvent,
+        schoolId: Number(schoolId),
+        learnerId: Number(offer.learner_id),
+        paymentType: 'checkout_session',
+        paymentIdentity: session.id,
+      });
+      payoutV2Receipt.postTrial = postTrial;
+      payoutV2Receipt.postTrialBlocked = !postTrial.ok || !postTrial.fulfill;
+      if (!postTrial.ok) {
+        if (postTrial.retryable) {
+          const error = new Error('lesson_offer requires authoritative post-trial initiation history');
+          error.code = postTrial.code;
+          throw error;
+        }
+        reportError('/api/webhook (lesson_offer post-trial validation)', new Error(
+          `lesson_offer ${session.id}: ${postTrial.code}`
+        ));
+      }
+      if (postTrial.monetary && repeatWeeks === 1) {
+        metadata.amount_pence = String(postTrial.monetary.paidAmountPence);
+        metadata.effective_rate_pence_per_minute = String(Math.round(
+          postTrial.monetary.paidAmountPence / Number(metadata.duration_minutes || 1)
+        ));
+        session.metadata = metadata;
+      }
+      if (!paid) return;
+      if (payoutV2Receipt.postTrialBlocked && offer.pencilled !== true) return;
+    } else if (!paid) {
+      return;
     }
 
     if (offer.status === 'accepted') {
@@ -3277,9 +3400,46 @@ async function notifyPencilledOfferBooked({ sql, schoolId, learnerId, instructor
   }
 }
 
+async function findPencilledFulfilmentConflict(client, {
+  schoolId, instructorId, scheduledDate, startTime, endTime, offerId,
+}) {
+  const result = await client.query(
+    `SELECT source FROM (
+       SELECT 'booking' AS source FROM lesson_bookings
+        WHERE school_id=$1 AND instructor_id=$2 AND scheduled_date=$3::date
+          AND status=ANY($7::text[]) AND start_time < $5::time AND end_time > $4::time
+       UNION ALL
+       SELECT 'offer' FROM lesson_offers
+        WHERE school_id=$1 AND instructor_id=$2 AND scheduled_date=$3::date
+          AND id<>$6 AND status='pending' AND expires_at>NOW()
+          AND start_time < $5::time AND end_time > $4::time
+       UNION ALL
+       SELECT 'request' FROM lesson_requests
+        WHERE school_id=$1 AND instructor_id=$2 AND scheduled_date=$3::date
+          AND status='pending' AND expires_at>NOW()
+          AND start_time < $5::time AND end_time > $4::time
+       UNION ALL
+       SELECT 'reservation' FROM slot_reservations
+        WHERE school_id=$1 AND instructor_id=$2 AND scheduled_date=$3::date
+          AND expires_at>NOW() AND start_time < $5::time AND end_time > $4::time
+       UNION ALL
+       SELECT 'recurring_hold' FROM recurring_slot_block_items
+        WHERE school_id=$1 AND instructor_id=$2 AND scheduled_date=$3::date
+          AND status IN ('held','booked') AND start_time < $5::time AND end_time > $4::time
+       UNION ALL
+       SELECT 'busy_block' FROM instructor_busy_blocks
+        WHERE school_id=$1 AND instructor_id=$2 AND block_date=$3::date
+          AND start_time < $5::time AND end_time > $4::time
+     ) conflicts LIMIT 1`,
+    [schoolId, instructorId, scheduledDate, startTime, endTime, offerId, BLOCKING_STATUSES]
+  );
+  return result.rows[0]?.source || null;
+}
+
 async function fulfilPencilledOffer({
   session, offer, learnerId, schoolId, instructorId, lessonTypeId, durationMins,
   pickupAddress, amountPence, fundingEvidence, paymentSucceededAt, quoteValidation,
+  validationFailureReason = null,
   transactionRunner = withNeonTransaction,
   connectionString = process.env.POSTGRES_URL,
 }) {
@@ -3296,7 +3456,7 @@ async function fulfilPencilledOffer({
     if (locked?.status === 'accepted' && locked.booking_id && locked.stripe_session_id === session.id) {
       return { applied: false, idempotent: true, bookingId: Number(locked.booking_id) };
     }
-    const valid = locked && locked.pencilled === true
+    const valid = !validationFailureReason && locked && locked.pencilled === true
       && locked.status === 'pending'
       && Number(locked.learner_id) === Number(learnerId)
       && Number(locked.instructor_id) === Number(instructorId)
@@ -3335,7 +3495,25 @@ async function fulfilPencilledOffer({
         refundEventStatus: found.status, schoolId, learnerId, amountPence, paymentIntentId,
         bookingId: locked?.booking_id ? Number(locked.booking_id) : null, reason };
     };
-    if (!valid) return requireRefund(!locked ? 'offer_missing' : (quoteValidation?.code || `offer_${locked.status}`));
+    if (!valid) {
+      return requireRefund(
+        validationFailureReason || (!locked ? 'offer_missing' : (quoteValidation?.code || `offer_${locked.status}`))
+      );
+    }
+
+    // Once the 48-hour hold deadline passes, ordinary calendar writers are
+    // allowed to use the time again. A timely payment may still arrive later,
+    // so recheck every calendar hold while the same school/instructor/day lock
+    // is held before changing the pencil to accepted and inserting a booking.
+    const conflictSource = await findPencilledFulfilmentConflict(client, {
+      schoolId,
+      instructorId,
+      scheduledDate: locked.scheduled_date,
+      startTime: locked.start_time,
+      endTime: locked.end_time,
+      offerId: locked.id,
+    });
+    if (conflictSource) return requireRefund(`calendar_${conflictSource}_overlap`);
 
     await client.query(`UPDATE lesson_offers SET status='accepted',accepted_at=NOW() WHERE id=$1 AND school_id=$2`, [offer.id, schoolId]);
     const rate = Math.round(amountPence / durationMins);
@@ -3370,12 +3548,22 @@ async function fulfilPencilledOffer({
   });
 }
 
-async function settleUnfulfilledPencilledOfferRefund({ sql, session, result }) {
+async function settleUnfulfilledPencilledOfferRefund({
+  sql,
+  session,
+  result,
+  stripeClient = null,
+  transactionRunner = withNeonTransaction,
+  connectionString = process.env.POSTGRES_URL,
+}) {
   if (result.refundEventStatus === 'executed') return;
   if (!result.paymentIntentId) throw new Error(`Pencilled offer ${session.id} has no PaymentIntent for compensation`);
+  const refunds = stripeClient || (pencilledOfferRefundStripe ||= createPlatformStripeClient({
+    purpose: STRIPE_CLIENT_PURPOSES.REFUNDS,
+  }));
   let refund;
   try {
-    refund = await stripe.refunds.create({
+    refund = await refunds.refunds.create({
       payment_intent: result.paymentIntentId,
       amount: result.amountPence,
       reason: 'requested_by_customer',
@@ -3384,16 +3572,21 @@ async function settleUnfulfilledPencilledOfferRefund({ sql, session, result }) {
   } catch (error) {
     await sql`UPDATE refund_events SET status='manual_review', metadata=metadata || ${JSON.stringify({ refund_error: error.message })}::jsonb WHERE id=${result.refundEventId} AND school_id=${result.schoolId} AND status <> 'executed'`;
     reportError('/api/webhook (pencilled offer compensation)', error);
-    return;
+    throw error;
   }
   if (refund.status !== 'succeeded') {
     await sql`UPDATE refund_events SET status='manual_review' WHERE id=${result.refundEventId} AND school_id=${result.schoolId} AND status <> 'executed'`;
-    return;
+    const error = new Error(
+      `Pencilled offer ${session.id} refund is ${refund.status || 'not_succeeded'} and requires retry`
+    );
+    error.code = 'PENCILLED_OFFER_REFUND_NOT_SUCCEEDED';
+    reportError('/api/webhook (pencilled offer compensation)', error);
+    throw error;
   }
   // Stripe's idempotency key makes the external refund replay-safe. Commit
   // its receipt and optional accounting line together while holding the
   // canonical refund row, so a retry cannot duplicate a line after a crash.
-  await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+  await transactionRunner(connectionString, async client => {
     const locked = await client.query(
       `SELECT status FROM refund_events WHERE id=$1 AND school_id=$2 FOR UPDATE`,
       [result.refundEventId, result.schoolId]

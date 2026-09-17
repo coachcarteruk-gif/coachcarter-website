@@ -10,8 +10,15 @@ const slotsPath = path.join(repoRoot, 'api', 'slots.js');
 const stripeClientsPath = path.join(repoRoot, 'api', '_stripe-clients.js');
 
 function isoDaysFromToday(days) {
-  const now = new Date();
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date())
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
+  );
+  const date = new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
@@ -97,6 +104,17 @@ function trialBody(daysAhead) {
 test.describe('free trial API booking window', () => {
   test('picker requests 28 days and renders a slot on the boundary', async ({ page }) => {
     let requestedRangeDays = null;
+    await page.route('**/api/slots?action=trial-window-context**', route => route.fulfill({
+      json: {
+        ok: true,
+        school_id: 1,
+        operational_timezone: 'Europe/London',
+        operational_date: isoDaysFromToday(0),
+        from: isoDaysFromToday(0),
+        to: isoDaysFromToday(28),
+        days_ahead: 28,
+      },
+    }));
     await page.route('**/api/slots?action=available**', async route => {
       const url = new URL(route.request().url());
       const from = new Date(url.searchParams.get('from') + 'T00:00:00Z');

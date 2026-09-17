@@ -36,9 +36,9 @@ function expectCode(fn, code) {
 }
 
 test.describe('migration governance', () => {
-  test('the checked-in manifest covers 61 historical files plus numbered 061 through 065', () => {
+  test('the checked-in manifest covers 61 historical files plus numbered 061 through 068', () => {
     const repository = loadRepository({ allowIndexFallback: true });
-    expect(repository.result.count).toBe(66);
+    expect(repository.result.count).toBe(69);
     expect(repository.manifest.legacyPrefixCollisions['026']).toEqual(['026a', '026b']);
     expect(repository.manifest.migrations.find(item => item.id === '026a').filename)
       .toBe('026_public_tenant_resolution.sql');
@@ -50,6 +50,9 @@ test.describe('migration governance', () => {
     expect(repository.manifest.migrations.find(item => item.id === '063').execution).toBe('numbered');
     expect(repository.manifest.migrations.find(item => item.id === '064').execution).toBe('numbered');
     expect(repository.manifest.migrations.find(item => item.id === '065').execution).toBe('numbered');
+    expect(repository.manifest.migrations.find(item => item.id === '066').execution).toBe('numbered');
+    expect(repository.manifest.migrations.find(item => item.id === '067').execution).toBe('numbered');
+    expect(repository.manifest.migrations.find(item => item.id === '068').execution).toBe('numbered');
   });
 
   test('checksums are canonical across CRLF and LF worktrees', () => {

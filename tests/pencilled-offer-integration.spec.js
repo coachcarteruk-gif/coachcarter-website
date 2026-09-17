@@ -23,6 +23,7 @@ test.describe('pencilled offer database concurrency', () => {
         CREATE TABLE lesson_requests(id serial primary key,school_id int,instructor_id int,scheduled_date date,start_time time,end_time time,status text,expires_at timestamptz);
         CREATE TABLE slot_reservations(id serial primary key,school_id int,instructor_id int,scheduled_date date,start_time time,end_time time,expires_at timestamptz);
         CREATE TABLE recurring_slot_block_items(id serial primary key,school_id int,instructor_id int,scheduled_date date,start_time time,end_time time,status text);
+        CREATE TABLE instructor_busy_blocks(id serial primary key,school_id int,instructor_id int,block_date date,start_time time,end_time time);
         CREATE TABLE lesson_offers(id serial primary key,school_id int,instructor_id int,learner_id int,learner_email text,learner_name text,scheduled_date date,start_time time,end_time time,kind text,status text,expires_at timestamptz,extension_booking_id int,extension_minutes int,extension_base_list_price_pence int,max_repeat_weeks int,offer_price_pence int,token text,lesson_type_id int,discount_pct int,stripe_session_id text,booking_id int,accepted_at timestamptz);
         CREATE TABLE refund_events(id serial primary key,refund_type text,status text CHECK(status IN ('previewed','processing','manual_review','blocked','executed')),school_id int,learner_id int,gross_refund_pence int,processing_fee_withheld_pence int,net_refund_pence int,stripe_payment_intent_id text,idempotency_key text,reason text,metadata jsonb,stripe_refund_id text);
         CREATE UNIQUE INDEX refund_events_idempotency_idx ON refund_events(idempotency_key) WHERE idempotency_key IS NOT NULL;
@@ -92,6 +93,115 @@ test.describe('pencilled offer database concurrency', () => {
         await expect(pencilAttempt).rejects.toMatchObject({ code: '23P01' });
         await second.query('ROLLBACK');
 
+        // Busy blocks participate in the same lock from either creation
+        // order. The waiting writer rechecks the committed interval, while
+        // exact adjacency remains available.
+        await first.query('BEGIN');
+        await first.query(`INSERT INTO lesson_offers(school_id,instructor_id,learner_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled) VALUES(1,40,3,'2026-12-05','10:00','11:00','manual','pending',clock_timestamp()+interval '1 day',1,9000,true)`);
+        await second.query('BEGIN');
+        const busyAfterPencil = second.query(
+          `INSERT INTO instructor_busy_blocks(school_id,instructor_id,block_date,start_time,end_time)
+           VALUES(1,40,'2026-12-05','10:30','11:30')`
+        );
+        await waitUntilBlocked(secondPid);
+        await first.query('COMMIT');
+        await expect(busyAfterPencil).rejects.toMatchObject({ code: '23P01' });
+        await second.query('ROLLBACK');
+        await admin.query(
+          `INSERT INTO instructor_busy_blocks(school_id,instructor_id,block_date,start_time,end_time)
+           VALUES(1,40,'2026-12-05','11:00','12:00')`
+        );
+
+        await first.query('BEGIN');
+        await first.query(
+          `INSERT INTO instructor_busy_blocks(school_id,instructor_id,block_date,start_time,end_time)
+           VALUES(1,41,'2026-12-06','10:00','11:00')`
+        );
+        await second.query('BEGIN');
+        const pencilAfterBusy = second.query(`INSERT INTO lesson_offers(school_id,instructor_id,learner_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled) VALUES(1,41,3,'2026-12-06','10:30','11:30','manual','pending',clock_timestamp()+interval '1 day',1,9000,true)`);
+        await waitUntilBlocked(secondPid);
+        await first.query('COMMIT');
+        await expect(pencilAfterBusy).rejects.toMatchObject({ code: '23P01' });
+        await second.query('ROLLBACK');
+
+        // Fulfilment wins the shared day lock. The waiting ordinary writer
+        // wakes after the pencil has become accepted, but must still observe
+        // the booking linked to that fulfilled pencil and reject its
+        // differently-started overlap. Adjacency remains allowed.
+        const fulfilledFirst = (await admin.query(
+          `INSERT INTO lesson_offers(school_id,instructor_id,learner_id,lesson_type_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled,stripe_session_id)
+           VALUES(1,30,3,5,'2026-01-20','10:00','11:00','manual','pending','2026-01-18T10:00:00Z',1,9000,true,'cs_fulfil_first') RETURNING *`
+        )).rows[0];
+        await first.query('BEGIN');
+        await first.query(`SELECT lock_pencilled_slot_day(1,30,'2026-01-20'::date)`);
+        await first.query(`UPDATE lesson_offers SET status='accepted',accepted_at=NOW() WHERE id=$1`, [fulfilledFirst.id]);
+        const fulfilledBooking = (await first.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,learner_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,30,3,'2026-01-20','10:00','11:00','scheduled') RETURNING id`
+        )).rows[0];
+        await first.query(`UPDATE lesson_offers SET booking_id=$1 WHERE id=$2`, [fulfilledBooking.id, fulfilledFirst.id]);
+        await second.query('BEGIN');
+        const waitingOverlap = second.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,30,'2026-01-20','10:30','11:30','scheduled')`
+        );
+        await waitUntilBlocked(secondPid);
+        await first.query('COMMIT');
+        await expect(waitingOverlap).rejects.toMatchObject({ code: '23P01' });
+        await second.query('ROLLBACK');
+        await admin.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,30,'2026-01-20','11:00','12:00','scheduled')`
+        );
+        await expect(admin.query(
+          `INSERT INTO instructor_busy_blocks(school_id,instructor_id,block_date,start_time,end_time)
+           VALUES(1,30,'2026-01-20','10:45','11:15')`
+        )).rejects.toMatchObject({ code: '23P01' });
+        await admin.query(
+          `INSERT INTO instructor_busy_blocks(school_id,instructor_id,block_date,start_time,end_time)
+           VALUES(1,30,'2026-01-20','11:00','12:00')`
+        );
+
+        // Provenance remains attached through offer.booking_id even if the
+        // accepted booking is later moved to another instructor/day. The
+        // linked booking may update itself, but subsequent writers must use
+        // its current calendar coordinates rather than the offer's originals.
+        await admin.query(
+          `UPDATE lesson_bookings
+              SET instructor_id=36, scheduled_date='2026-01-24', start_time='09:00', end_time='10:00'
+            WHERE id=$1`,
+          [fulfilledBooking.id]
+        );
+        await expect(admin.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,36,'2026-01-24','09:30','10:30','scheduled')`
+        )).rejects.toMatchObject({ code: '23P01' });
+        await admin.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,36,'2026-01-24','10:00','11:00','scheduled')`
+        );
+        expect((await admin.query(
+          `SELECT offer.instructor_id AS offer_instructor_id, booking.instructor_id AS booking_instructor_id
+             FROM lesson_offers offer JOIN lesson_bookings booking ON booking.id=offer.booking_id
+            WHERE offer.id=$1`,
+          [fulfilledFirst.id]
+        )).rows[0]).toMatchObject({ offer_instructor_id: 30, booking_instructor_id: 36 });
+
+        // The new trigger branch is intentionally pencil-specific. Two
+        // ordinary differently-started bookings retain their historical
+        // behaviour when no accepted pencil owns either booking.
+        await admin.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,31,'2026-01-21','10:00','11:00','scheduled')`
+        );
+        await admin.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,31,'2026-01-21','10:30','11:30','scheduled')`
+        );
+        expect((await admin.query(
+          `SELECT count(*)::int count FROM lesson_bookings WHERE instructor_id=31 AND scheduled_date='2026-01-21'`
+        )).rows[0].count).toBe(2);
+
         // Moving an ordinary row into an active pencil, plus request and
         // reservation collisions, all use interval overlap rather than exact start.
         await admin.query(`INSERT INTO lesson_offers(school_id,instructor_id,learner_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled) VALUES(1,11,3,'2026-12-03','09:00','10:00','manual','pending',clock_timestamp()+interval '1 day',1,9000,true)`);
@@ -128,6 +238,83 @@ test.describe('pencilled offer database concurrency', () => {
           fundingEvidence: { feePence: 300 }, paymentSucceededAt: new Date('2026-12-18T09:59:59Z'),
           quoteValidation: { ok: true }, transactionRunner, connectionString: url,
         });
+
+        // The inverse lock order: an ordinary booking commits while the paid
+        // fulfilment waits. Once fulfilment acquires the day lock, its in-
+        // transaction overlap recheck retains compensation and creates no
+        // booking or earning source.
+        const ordinaryFirst = (await admin.query(
+          `INSERT INTO lesson_offers(school_id,instructor_id,learner_id,lesson_type_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled,stripe_session_id)
+           VALUES(1,32,3,5,'2026-01-22','10:00','11:00','manual','pending','2026-01-20T10:00:00Z',1,9000,true,'cs_ordinary_first') RETURNING *`
+        )).rows[0];
+        await first.query('BEGIN');
+        await first.query(
+          `INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status)
+           VALUES(1,32,'2026-01-22','10:30','11:30','scheduled')`
+        );
+        await second.query('BEGIN');
+        const ordinaryFirstResult = fulfilPencilledOffer({
+          session: { id: 'cs_ordinary_first', payment_intent: 'pi_ordinary_first', currency: 'gbp', total_details: { amount_discount: 0 } },
+          offer: ordinaryFirst, learnerId: 3, schoolId: 1, instructorId: 32, lessonTypeId: 5,
+          durationMins: 60, pickupAddress: null, amountPence: 9000,
+          fundingEvidence: { feePence: 300 }, paymentSucceededAt: new Date('2026-01-20T09:59:59Z'),
+          quoteValidation: { ok: true },
+          transactionRunner: async (_connectionString, callback) => callback(second),
+          connectionString: url,
+        });
+        await waitUntilBlocked(secondPid);
+        await first.query('COMMIT');
+        const compensated = await ordinaryFirstResult;
+        expect(compensated).toMatchObject({
+          applied: false,
+          refundRequired: true,
+          reason: 'calendar_booking_overlap',
+        });
+        await second.query('COMMIT');
+        expect((await admin.query(
+          `SELECT count(*)::int count FROM lesson_bookings WHERE instructor_id=32`
+        )).rows[0].count).toBe(1);
+        expect((await admin.query(
+          `SELECT count(*)::int count FROM credit_transactions WHERE instructor_id=32`
+        )).rows[0].count).toBe(0);
+
+        // A busy block can also win the lock after a timely payment was
+        // recorded but before delayed fulfilment runs. The transaction-level
+        // recheck compensates without creating earnings or a booking.
+        const busyFirst = (await admin.query(
+          `INSERT INTO lesson_offers(school_id,instructor_id,learner_id,lesson_type_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled,stripe_session_id)
+           VALUES(1,33,3,5,'2026-01-23','10:00','11:00','manual','pending','2026-01-21T10:00:00Z',1,9000,true,'cs_busy_first') RETURNING *`
+        )).rows[0];
+        await first.query('BEGIN');
+        await first.query(
+          `INSERT INTO instructor_busy_blocks(school_id,instructor_id,block_date,start_time,end_time)
+           VALUES(1,33,'2026-01-23','10:30','11:30')`
+        );
+        await second.query('BEGIN');
+        const busyFirstResult = fulfilPencilledOffer({
+          session: { id: 'cs_busy_first', payment_intent: 'pi_busy_first', currency: 'gbp', total_details: { amount_discount: 0 } },
+          offer: busyFirst, learnerId: 3, schoolId: 1, instructorId: 33, lessonTypeId: 5,
+          durationMins: 60, pickupAddress: null, amountPence: 9000,
+          fundingEvidence: { feePence: 300 }, paymentSucceededAt: new Date('2026-01-21T09:59:59Z'),
+          quoteValidation: { ok: true },
+          transactionRunner: async (_connectionString, callback) => callback(second),
+          connectionString: url,
+        });
+        await waitUntilBlocked(secondPid);
+        await first.query('COMMIT');
+        const busyCompensated = await busyFirstResult;
+        expect(busyCompensated).toMatchObject({
+          applied: false,
+          refundRequired: true,
+          reason: 'calendar_busy_block_overlap',
+        });
+        await second.query('COMMIT');
+        expect((await admin.query(
+          `SELECT count(*)::int count FROM lesson_bookings WHERE instructor_id=33`
+        )).rows[0].count).toBe(0);
+        expect((await admin.query(
+          `SELECT count(*)::int count FROM credit_transactions WHERE instructor_id=33`
+        )).rows[0].count).toBe(0);
 
         // Two simultaneous deliveries for the same paid session serialize on
         // the day/offer locks and produce exactly one booking and one ledger row.

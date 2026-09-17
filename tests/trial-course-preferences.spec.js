@@ -20,6 +20,15 @@ test('reveals multiple months, clears deselected interest and submits preference
   await page.addInitScript(() => localStorage.setItem('cc_cookie_consent', JSON.stringify({
     analytics: false, marketing: false, version: 2, timestamp: '2026-01-01T00:00:00.000Z'
   })));
+  await page.route('**/api/slots?action=trial-window-context**', route => route.fulfill({ json: {
+    ok: true,
+    school_id: 9,
+    operational_timezone: 'Pacific/Auckland',
+    operational_date: '2030-06-22',
+    from: '2030-06-22',
+    to: '2030-07-20',
+    days_ahead: 28,
+  } }));
   await page.route('**/api/slots?action=available**', route => route.fulfill({ json: { slots: {
     '2030-07-20': [{ start_time: '10:00:00', end_time: '11:00:00', instructor_id: 7, instructor_name: 'Fraser Carter', transmission_type: 'manual' }]
   } } }));

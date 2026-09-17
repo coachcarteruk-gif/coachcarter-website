@@ -341,11 +341,12 @@ test.describe('post-trial discount core', () => {
     expect(checked).toMatchObject({ proceed: false, result: { compensationRequired: true } });
   });
 
-  test('webhook routes initiation events and gates ordinary offers before fulfilment', () => {
+  test('webhook routes initiation events and delegates paid offers to canonical validation', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'webhook.js'), 'utf8');
     expect(source).toContain("event.type === 'payment_intent.processing'");
     expect(source).toContain("event.type === 'payment_intent.amount_capturable_updated'");
-    expect(source).toContain('if (!paymentEventContext.postTrialBlocked) await handleOfferBooking');
+    expect(source).toContain('await handleOfferBooking(session, { ...paymentEventContext, stripeEvent: event })');
+    expect(source).toContain('if (payoutV2Receipt.postTrialBlocked && offer.pencilled !== true) return;');
     expect(source).toContain("effective_rate_pence_per_minute: String(Math.round(result.monetary.paidAmountPence / pricedMinutes))");
   });
 
