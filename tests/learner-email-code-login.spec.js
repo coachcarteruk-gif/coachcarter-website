@@ -48,7 +48,7 @@ async function call(handler, { action, body = {} }) {
   return res;
 }
 
-function makeSql({ learner = null, tokenRows = [] } = {}) {
+function makeSql({ learner = null, tokenRows = [], migrationPhone = null } = {}) {
   const calls = [];
   const sql = async (strings, ...values) => {
     const text = Array.isArray(strings) ? strings.join('?') : String(strings);
@@ -58,6 +58,12 @@ function makeSql({ learner = null, tokenRows = [] } = {}) {
     if (/SELECT id FROM instructors/i.test(text)) return [];
     if (/SELECT id, password_hash FROM learner_users/i.test(text)) return learner ? [learner] : [];
     if (/SELECT id, school_id FROM magic_link_tokens/i.test(text)) return tokenRows;
+    if (/SELECT phone FROM magic_link_tokens/i.test(text)) {
+      return migrationPhone ? [{ phone: migrationPhone }] : [];
+    }
+    if (/SELECT id FROM learner_users/i.test(text) && /phone =/i.test(text)) {
+      return learner ? [{ id: learner.id }] : [];
+    }
     if (/SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at/i.test(text)) {
       return learner ? [learner] : [];
     }
@@ -229,6 +235,37 @@ test.describe('learner email-code login', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toBe('invalid_code');
       expect(res.getHeader('Set-Cookie')).toBeUndefined();
+    });
+  });
+
+  test('migration verification binds the password ticket to the phone learner and school', async () => {
+    const learner = { id: 27 };
+    const sql = makeSql({
+      learner,
+      tokenRows: [{ id: 61, school_id: 3 }],
+      migrationPhone: '07700900123',
+    });
+
+    await withMockedMagicLink(sql, async () => {}, async (handler) => {
+      const res = await call(handler, {
+        action: 'verify-email-code',
+        body: { email: 'owner@example.test', code: '123456', purpose: 'migration', role: 'learner' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const claims = jwt.verify(res.body.ticket, process.env.JWT_SECRET, { audience: 'password-set' });
+      expect(claims).toMatchObject({
+        sub: 'owner@example.test',
+        purpose: 'migration',
+        learner_id: 27,
+        school_id: 3,
+      });
+
+      const learnerLookup = sql.calls.find((call) =>
+        /SELECT id FROM learner_users/i.test(call.text) && /phone =/i.test(call.text)
+      );
+      expect(learnerLookup.text).toMatch(/AND school_id = \?/i);
+      expect(learnerLookup.values).toEqual(['07700900123', 3]);
     });
   });
 

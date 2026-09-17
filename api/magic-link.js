@@ -117,7 +117,7 @@ async function handleSendLink(req, res) {
     const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
 
     // Derive school_id from request (login pages pass it as a query/body param)
-    const schoolId = parseInt(req.body.school_id || req.query.school_id) || 1;
+    const schoolId = await resolveEmailCodeSchoolId(req, sql);
     const referralCode = req.body.referral_code || null;
 
     // Store the token
@@ -217,7 +217,10 @@ async function handleVerifyCode(req, res) {
     const linkRecord = rows[0];
 
     // Mark as used
-    await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+    await sql`
+      UPDATE magic_link_tokens SET used = true
+       WHERE id = ${linkRecord.id}
+         AND school_id = ${linkRecord.school_id}`;
 
     // Look up or create the user by phone
     let user;
@@ -225,7 +228,9 @@ async function handleVerifyCode(req, res) {
 
     const existing = await sql`
       SELECT id, name, email, phone, school_id, current_tier, terms_accepted_at
-      FROM learner_users WHERE phone = ${linkRecord.phone}`;
+      FROM learner_users
+      WHERE phone = ${linkRecord.phone}
+        AND school_id = ${linkRecord.school_id}`;
     if (existing.length > 0) {
       user = existing[0];
     } else {
@@ -270,7 +275,12 @@ async function handleVerifyCode(req, res) {
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
     // GDPR: update last activity timestamp
-    try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id}`; } catch (e) {}
+    try {
+      await sql`
+        UPDATE learner_users SET last_activity_at = NOW()
+         WHERE id = ${user.id}
+           AND school_id = ${user.school_id}`;
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -453,20 +463,13 @@ async function handleVerifyEmailCode(req, res) {
     const sql = neon(process.env.POSTGRES_URL);
 
     const requestedSchoolId = await resolveEmailCodeSchoolId(req, sql);
-    const rows = role === 'instructor' ? await sql`
+    const rows = await sql`
       SELECT id, school_id FROM magic_link_tokens
        WHERE email = ${cleanEmail}
          AND email_code = ${String(code).trim()}
          AND purpose = ${purpose}
          AND role = ${role}
          AND school_id = ${requestedSchoolId}
-         AND used = false
-         AND expires_at > NOW()` : await sql`
-      SELECT id, school_id FROM magic_link_tokens
-       WHERE email = ${cleanEmail}
-         AND email_code = ${String(code).trim()}
-         AND purpose = ${purpose}
-         AND role = ${role}
          AND used = false
          AND expires_at > NOW()`;
 
@@ -591,15 +594,53 @@ async function handleVerifyEmailCode(req, res) {
     const secret = process.env.JWT_SECRET;
     if (!secret) return res.status(500).json({ error: 'JWT_SECRET not configured' });
 
+    let learnerId = null;
+    if (purpose === 'migration' && role === 'learner') {
+      const [migrationToken] = await sql`
+        SELECT phone FROM magic_link_tokens
+         WHERE id = ${linkRecord.id}
+           AND school_id = ${linkRecord.school_id}
+           AND purpose = 'migration'
+           AND role = 'learner'
+           AND used = false`;
+      if (!migrationToken?.phone) {
+        return res.status(400).json({ error: 'invalid_code', message: 'Invalid or expired code. Please request a new one.' });
+      }
+      const [migrationLearner] = await sql`
+        SELECT id FROM learner_users
+         WHERE phone = ${migrationToken.phone}
+           AND school_id = ${linkRecord.school_id}
+           AND email IS NULL
+           AND password_hash IS NULL`;
+      if (!migrationLearner) {
+        await sql`
+          UPDATE magic_link_tokens SET used = true
+           WHERE id = ${linkRecord.id}
+             AND school_id = ${linkRecord.school_id}`;
+        return res.status(400).json({ error: 'invalid_code', message: 'Invalid or expired code. Please request a new one.' });
+      }
+      learnerId = migrationLearner.id;
+    }
+
     const ticketAudience = purpose === 'signup' ? 'learner-signup' : 'password-set';
     const ticket = jwt.sign(
-      { sub: cleanEmail, role, purpose, token_id: linkRecord.id, school_id: linkRecord.school_id },
+      {
+        sub: cleanEmail,
+        role,
+        purpose,
+        token_id: linkRecord.id,
+        school_id: linkRecord.school_id,
+        ...(learnerId ? { learner_id: learnerId } : {}),
+      },
       secret,
       { expiresIn: '5m', audience: ticketAudience }
     );
 
     // Mark the token as used now — ticket is what authorises the next step.
-    await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
+    await sql`
+      UPDATE magic_link_tokens SET used = true
+       WHERE id = ${linkRecord.id}
+         AND school_id = ${linkRecord.school_id}`;
 
     return res.json({ success: true, ticket });
   } catch (err) {
