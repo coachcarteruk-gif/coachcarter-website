@@ -1,172 +1,106 @@
-# Launch Readiness Audit — 2026-04-30 (FULL)
+# CoachCarter Launch Readiness Audit
 
-**Mode:** Full audit — static analysis + browser-based runtime checks
-**Context:** Public launch · handles payments · stores PII · multi-tenant · no fast-rollback assumed
-**Commit at audit time:** `8e7c1c3`
-**Browser checks:** mobile (375px), tablet (768px), desktop (1280px) on 5 key pages
+**Audit date:** 17 September 2026
 
----
+**Target:** `codex/trial-discount-pencilled-offers` at `7c10ce1` plus the audited working-tree security patch
 
-## ✅ No launch blockers found
+**Launch type:** Public production launch
 
-All 8 launch-blocker checks (LB-1 through LB-8) passed. Cookie consent fires correctly in the browser, analytics gating works, privacy policy is substantive, CORS, secrets, SQL injection, tenant isolation, and auth-on-mutation patterns are all in place.
+**Verdict:** **LIVE — BLOCKERS REMEDIATED AND VERIFIED**
 
----
+> [!IMPORTANT]
+> The audit originally found two confirmed launch blockers in the learner identity-migration flow. Both were remediated before launch: `add-email` now requires the SMS-authenticated learner session and CSRF token, proposed email remains uncommitted until verification, and the final mutation is bound to the signed learner ID and `school_id`. The former unauthenticated production request now returns HTTP 401.
 
-## ⚠ HIGH-STAKES LAUNCH: Manual Verification Required
+Production migrations 066–068 and deployment `dpl_j5girvSU2vfpGUMtckq4iomnqHL5` completed on 17 September 2026. The public alias is `https://www.coachcarter.uk`. Database snapshot `snap-dry-art-ab9rji4w` was created immediately before migration.
 
-Your app handles payments and personal data. This audit checks configuration patterns and observed UI behaviour, but cannot replace these manual steps:
+## Executive Summary
 
-1. ☐ Test the complete payment flow end-to-end (book slot → pay → confirm → email)
-2. ☐ Have a security-literate person review authentication and authorization logic
-3. ☐ Have a lawyer/DPO review `privacy.html` against ICO/GDPR requirements
-4. ☐ Test account creation, magic-link login, and deletion flows manually
-5. ☐ Verify Stripe webhook handling with Stripe test mode + simulated failures
+The branch-specific Stripe test-mode rehearsal succeeded end-to-end: a signed event was accepted with HTTP 200, its duplicate was accepted idempotently, Vercel runtime logs confirmed the preview function response, and the isolated rehearsal database showed no unexpected booking, offer, refund, or credit mutations.
 
----
+The mandatory gate then found a pre-existing authentication vulnerability in `api/learner-auth.js`. It was repaired and covered by focused regression tests. A fresh preview rejected the former attack with HTTP 401, the updated preview accepted a newly resent signed Stripe test event with HTTP 200, and the public production route also rejects the attack with HTTP 401. Runtime inspection additionally confirmed the expected security headers are present, correcting the original static false negative. Remaining findings are follow-up hardening and quality work rather than launch blockers.
 
-## Score Summary
+## Resolved Launch Blockers
 
-```
-Configuration Readiness: 86% (±4%) — based on ~70 static checks
-Runtime Readiness:       72% (±4%) — based on 18 browser-verified checks
-Overall Score:           82% (±4%) (configuration + runtime weighted)
-```
+### LB-3 — Unauthenticated learner account takeover — RESOLVED
 
-**Verdict: Launch with Known Issues.**
-The hard stuff is solid (security, GDPR, tenant isolation). The runtime score is dragged down by **two real defects discovered in the browser**: tablet breakpoint is broken, and 60–80% of form inputs on auth/booking pages have no labels or aria-labels. These are launch-quality issues, not launch blockers — but a new learner on an iPad or using a screen reader will hit them.
+**Evidence:** `POST /api/learner-auth?action=add-email` accepts a phone number and a new email without requiring an authenticated learner session or a challenge delivered to a previously trusted channel. It selects the learner by phone at line 695 and updates the stored email to the caller-supplied address before verification at line 728. The verification code is then sent to the new address controlled by the caller.
 
-**Confidence breakdown:** 18 verified-behavior · 55 verified-pattern · 10 verified-file
+**Impact:** A caller who knows a learner's phone number can redirect the identity flow to their own email and proceed toward setting a password for the victim account.
 
----
+**Resolution:** The endpoint now requires the learner session issued after SMS verification and the normal CSRF header. It rate-limits by account and IP, stores the proposed address only on the short-lived token, and changes the learner email and password together after email-code verification. Focused tests cover rejection without a session, non-mutation before verification, and learner-bound final mutation. Preview and production both return HTTP 401 for the former attack request.
 
-## Top 5 Critical Fixes (do these first)
+### LB-7 — Missing tenant scope in identity mutation — RESOLVED
 
-1. **[medium effort] Fix tablet layout (768px breakpoint).** Homepage renders at ~300px wide column on tablet with massive white space on the right. CSS media queries are not handling 768–1024px. Likely a `max-width` on a wrapper that doesn't release. Affects everyone on iPad.
-2. **[medium effort] Add labels/aria-labels to form inputs.** Login page: 11/14 inputs unlabelled (email, phone, name, OTP digits, referral). Book page: 12/18 unlabelled. Placeholders ≠ labels for screen readers. WCAG 2.1 AA fail.
-3. **[low effort] Add `<main>` landmark and a `<h1>`** to `learner/login.html` and `learner/book.html` (currently zero h1 elements; sidebar `<nav>` is the only landmark).
-4. **[low effort] Increase bottom-tab font size.** Mobile bottom-tab pills render at **9.92px font** (e.g. "📅Book") — well below the 12px floor for readable mobile text.
-5. **[low effort] Add canonical URLs** to public marketing pages — currently 0/55 pages have `<link rel="canonical">`. Important: `coachcarter.uk`, `instructorbook.co.uk`, and `*.vercel.app` all serve the same content.
+**Evidence:** The same learner lookup and update do not include `school_id`. Additional legacy learner password/offer mutation paths also use learner identifiers without consistently binding the query to authenticated school context.
 
----
+**Impact:** In a multi-tenant application, identity resolution and mutation can cross school boundaries or resolve the wrong tenant record.
 
-## Category Scores
+**Resolution:** SMS lookup, email-code verification, password reset, offer-password setup, and final learner mutation now carry trusted `school_id`. The migration ticket is signed with learner ID and school ID, and the update requires both.
 
-| Category | Score | Notes |
-|----------|-------|-------|
-| Security (18%) | **94%** | Headers, CORS, no secrets, no SQLi. Minor WARN: `err.message` exposure in `offers.js:383`; XSS sweep recommended on 269 `innerHTML` sinks. |
-| Accessibility (12%) | **62%** ⬇ | Down from quick scan. Browser confirmed real label gaps (login: 11/14, book: 12/18 inputs unlabelled). Homepage `<main>` landmark missing. Bottom-tab font 9.92px. |
-| GDPR (12%) | **96%** | Cookie banner verified rendering and gating PostHog. Privacy policy substantive. 2 learner pages still missing consent scripts. |
-| Data Isolation (11%) | **98%** | School-id filtering enforced at JWT → resolver → SQL. No missing-filter queries found. |
-| Performance (10%) | **80%** | JS bundles fine. WARN: 2 images >500KB; render-blocking head scripts; no `Cache-Control` headers in `vercel.json`. |
-| Infrastructure (9%) | **90%** | Vercel config solid, all 13 cron handlers present. FAIL: `package.json` has no `scripts` block. |
-| SEO (7%) | **55%** | FAIL: 0 canonicals, OG on 3/55 pages, descriptions on 14/55. PASS: titles, robots.txt, sitemap (small). |
-| **Responsive (7%)** | **55%** ⬇ | Browser-verified. Mobile (375px) clean. **Tablet (768px) BROKEN** — homepage column ~300px wide, white-space right. Desktop fine. |
-| Broken Links (5%) | **95%** | All sampled internal hrefs, assets, and API routes resolve. `classroom.html` is dead code. |
-| Code Quality (5%) | **80%** | Try/catch coverage near 1:1, error shape consistent, `console.log` count clean. WARN: 251 TODO/FIXME comments across 38 files. |
-| **UX Consistency (4%)** | **80%** | Browser-verified. Branding consistent (Lato font, orange CTA, white bg on public pages, dark bg on auth). Cookie banner renders correctly. No console errors on homepage. |
+## Readiness Scorecard
 
----
+| Category | Score | Result |
+|---|---:|---|
+| Security | 67% | Follow-up hardening |
+| Accessibility | 67% | Needs work |
+| GDPR / privacy | 94% | Mostly ready |
+| Data isolation | 100% | Ready |
+| Performance | 40% | Needs work |
+| Infrastructure | 79% | Needs work |
+| SEO | 57% | Needs work |
+| Broken links | 90% | Mostly ready |
+| Code quality | 67% | Needs work |
+| Responsive design | N/A | Not runtime-tested in quick scan |
+| UX flows | N/A | Not runtime-tested in quick scan |
 
-## Runtime findings (new — from browser checks)
+**Weighted readiness score:** approximately **73%** across applicable categories.
 
-**Tablet layout broken (FAIL · verified-behavior).** At 768x1024, the homepage `<body>` reports `clientWidth: 753`, `scrollWidth: 753` (no horizontal overflow), but the visible content column is ~300px and the rest is white space. Screenshot confirms. The mobile layout is being applied to tablet without expansion. Affected pages likely include all marketing pages using the same shell.
+**Static checks after remediation/runtime correction:** 34 pass, 23 warn, 5 fail, 3 not applicable.
 
-**Login page is missing core landmarks and labels (FAIL · verified-behavior).**
-- `<h1>` count: 0
-- `<main>` landmark: missing
-- 11/14 visible/hidden inputs have no `<label>`, `aria-label`, or `aria-labelledby` (only the 3 cookie/terms checkboxes are labelled)
-- Inputs affected: email, phone, name, referral code, 6 OTP digit fields
+**Confidence:** 59 pattern-verified checks, 3 file-verified checks, 0 full runtime-behaviour checks in the launch-audit scan. The earlier signed Stripe rehearsal is recorded separately above.
 
-**Book page has the same input-label problem (FAIL · verified-behavior).**
-- `<h1>` count: 0
-- `<main>` landmark: missing
-- 12/18 inputs unlabelled
+No confirmed launch blocker remains. The score still reflects non-blocking hardening, accessibility, performance, and SEO debt.
 
-**Free-trial page is exemplary (PASS · verified-behavior).** `<main>` present, single h1, all 6 inputs labelled, no overflow at mobile. Use this as the reference for fixing the others.
+## Failed Checks Requiring Remediation
 
-**Mobile CTA size (PASS · verified-behavior).** Hero CTAs are 47–49px tall on mobile (above 44px touch-target floor), 16px font.
+1. **Stored/DOM XSS exposure:** unsafe rendering sinks were found in `public/learner/my-data.js` and `public/instructor/profile.js`. Replace HTML-string insertion for untrusted values with text-safe DOM APIs or context-appropriate escaping, then add payload tests.
+2. **Dependency security:** the dependency audit reports a high-severity Nodemailer advisory and a moderate `qs` advisory. Upgrade to patched compatible versions and rerun the full test suite and dependency audit.
+3. **Accessibility labels:** a broad scan found 252 controls without reliable programmatic label association, including the admin dashboard filters. Add `label[for]`/matching `id`, `aria-label`, or `aria-labelledby` as appropriate and verify with an accessibility scanner.
+4. **Performance asset budget:** `public/FraserDiag.JPG` is approximately 5.56 MB. Resize and encode an appropriately dimensioned WebP/AVIF derivative, retain a fallback if needed, and verify visual quality.
+5. **Error disclosure:** migration/admin API responses can expose raw database error detail. Log detailed errors server-side and return stable, non-sensitive client error envelopes.
 
-**Mobile bottom-tab font size (WARN · verified-behavior).** Tab pills render at 9.92px font ("📅Book"). 12px is the absolute floor; 14–16px is recommended.
+## Warnings
 
-**No console errors on homepage (PASS · verified-behavior).** Empty error log after page load + cookie consent interaction.
+- **Security:** no enforceable Content Security Policy was found; public email/mutation routes need explicit rate limits.
+- **Performance:** testimonial images should be lazy-loaded; `public/admin/portal.js` is approximately 270 KB; multiple N+1 access patterns and render-blocking/large inline assets need profiling; compression must be verified against the deployed response.
+- **Accessibility:** page landmarks and heading hierarchy are inconsistent; colour contrast and touch targets require rendered-page testing.
+- **SEO:** many pages lack descriptions, Open Graph metadata, and canonicals; several titles are too long; the sitemap contains a stale `coachcarter-landing.html` URL; no structured data was found.
+- **GDPR:** Setmore usage should be disclosed consistently in the privacy/cookie material.
+- **Broken links:** several HTML pages appear orphaned and should be confirmed intentional or linked/removed.
+- **Code quality:** seven production `console.log` calls and two TODO markers remain; API error envelopes are inconsistent; `GOOGLE_PLACE_ID` is used but not clearly documented.
+- **Infrastructure:** the environment-variable contract needs a single authoritative inventory; there is no aggregate predeploy verification command; a dedicated 5xx error page was not found.
 
-**Cookie banner renders correctly (PASS · verified-behavior).** Necessary/Analytics distinction visible, Reject All / Save / Accept All buttons present.
+## Checks That Passed
 
----
+- No wildcard CORS policy was found.
+- Reviewed database calls use parameterised SQL rather than interpolated SQL strings.
+- No real hard-coded production secrets were found in the audited source.
+- No insecure external HTTP endpoints were found.
+- Stripe webhook signature verification is present.
+- JWTs carry school context, role-gated overrides are present, new pencilled-offer routes are school-scoped, and migrations 066–068 are school-scoped.
+- Image alternative text, language attributes, consent gating, privacy/terms surfaces, data export/deletion paths, cookie categories, `robots.txt`, and keyboard focus replacements passed the static checks performed.
+- Focused automated tests completed with 61 passing checks during the audit; the earlier branch verification completed with 55 passing and 2 expected remote-loopback skips, plus syntax validation across 252 JavaScript files.
 
-## All FAILs
+## Recommended Remediation Order
 
-- **Responsive — tablet layout broken at 768px.** Column ~300px instead of expanding. Affects iPad users.
-- **Accessibility — 23 unlabelled visible inputs across login + book pages.** Screen-reader users cannot identify form fields.
-- **Accessibility — login + book pages have zero `<h1>` and no `<main>` landmark.**
-- **SEO — canonical URLs missing on every page (0/55).**
-- **SEO — Open Graph tags on only 3/55 pages.**
-- **SEO — meta descriptions on only 14/55 pages.**
-- **Infrastructure — `package.json` has no `scripts` block.**
-- **Code Quality — 251 TODO/FIXME/HACK comments across 38 files.**
+1. Remove the identified XSS sinks and raw database-error disclosure.
+2. Upgrade vulnerable dependencies and rerun the dependency audit.
+3. Address accessibility labels and the 5.56 MB image; schedule the remaining warnings with owners and dates.
+4. Remove cross-test module-cache pollution in the Stripe boundary suites. The affected tests pass in isolation, while the full parallel run completed with 1,446 passes, 312 skips, and two cache-pollution failures.
+5. Commit and push the exact deployed working-tree patch through the normal review workflow so production is reproducible from source control.
 
----
+## Methodology and Limitations
 
-## All WARNs by category
+This was a rapid, code-first launch-readiness audit using repository inspection, targeted searches, dependency/test output, configuration review, and parallel security, frontend, and operations passes. It did not constitute a penetration test, legal opinion, full assistive-technology review, load test, or exhaustive runtime crawl. Responsive behaviour, colour contrast, touch targets, compression, and end-user UX require deployed-browser validation after the blockers are corrected.
 
-**Security**
-- `err.message` leaked in `api/offers.js:383` (learner-facing). Lower-priority: `cron-auto-complete.js:35`, `cron-reconcile-payments.js:94`, `cron-referral-rewards.js:151`.
-- 269 `innerHTML =` usages in `public/` — targeted XSS audit recommended on user-derived sinks.
-- Auth-on-mutation not exhaustively verified per handler — recommend explicit sweep of every `POST/PUT/PATCH/DELETE` in `api/admin.js`, `api/learner.js`, `api/instructor.js`, `api/slots.js`.
-
-**Accessibility**
-- Bottom-tab font size 9.92px on mobile.
-- Homepage `<main>` landmark missing (sidebar `<nav>` present).
-- 39 `outline:none` occurrences across 23 files. Spot-checks show focus replacements in `shared-auth.css`, others should be audited.
-- Form-label coverage on remaining auth pages (instructor login, admin login, dashboards) not yet runtime-verified — likely same pattern.
-
-**GDPR**
-- 2/55 pages missing consent scripts: `public/learner/learn.html`, `public/learner/lessons-hub.html`.
-
-**Performance**
-- 2 images >500KB: `icons/screenshot-desktop-1.png` (525KB), `images/home/strip-2.jpg` (507KB).
-- `vercel.json` has no `headers` block — no long-cache `Cache-Control` for static assets.
-- Render-blocking `<script>` in `<head>` on `index.html`, `learner/book.html`, `free-trial.html`. `dark-mode.js`, `font-swap.js` can be `defer`.
-
-**Broken Links**
-- `public/classroom.html` is permanently redirected to `/` by `vercel.json` — dead code.
-
-**SEO**
-- `sitemap.xml` only has 5 URLs; missing `free-trial.html`, `learner-journey.html`.
-
-**UX Consistency**
-- Login/book/dashboard pages use dark bg (rgb(26,26,26)) while marketing pages use white. Likely intentional (auth-shell vs marketing-shell), but worth a deliberate decision rather than accidental drift.
-
----
-
-## What this audit did and did not verify
-
-**Verified at runtime (browser):**
-- Homepage, free-trial, login, book pages render at mobile/tablet/desktop
-- Cookie consent banner appears, has correct categories, has Reject/Save/Accept buttons
-- Form input labelling on login + book + free-trial
-- Bottom-tab font size and CTA touch targets on mobile
-- Console errors on homepage load
-- Page landmarks, h1 counts, viewport, favicon, lang attribute
-- Branding consistency (font, bg color, CTA color) across 4 pages
-
-**Verified by code (static):**
-- Security headers, CORS, auth patterns, SQL injection, secrets
-- Cookie consent script structure, PostHog gating logic
-- Multi-tenancy SQL filters across all `api/*.js`
-- API surface integrity, cron handlers, error alerting wiring
-
-**NOT verified (still required for public launch):**
-- Whether auth *actually rejects* tampered tokens
-- Whether rate limiting holds under load
-- Whether Stripe payment flow works end-to-end (test mode booking → webhook → confirmation email)
-- Whether tenant isolation holds under adversarial probing
-- Whether `privacy.html` is legally adequate (lawyer/DPO review)
-- Cross-browser testing (only Chromium tested via preview)
-- Real iOS/Android device testing
-- Loading and error states under network failure conditions
-
----
-
-*Saved as `LAUNCH-AUDIT-REPORT.md`. Config: `.launch-audit-config.json` (last_audit: 2026-04-30, full mode).*
+After the initial blocker report, the user authorised remediation and launch. Production migrations were applied to the independently verified protected branch after snapshot creation, with exact manifest checksums recorded in `schema_migration_history`. Postflight found zero invalid indexes and zero unvalidated constraints. The production deployment reached READY and public probes returned 200 for the home/login pages and 401 for the former attack. No Stripe live-mode payment, refund, transfer, payout, or webhook test mutation was made.
