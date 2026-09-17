@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 function read(rel) {
-  return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+  return fs.readFileSync(path.join(__dirname, '..', rel), 'utf8').replace(/\r\n/g, '\n');
 }
 
 function functionBody(source, name) {
