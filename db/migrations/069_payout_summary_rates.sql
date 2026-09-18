@@ -88,12 +88,17 @@ CREATE TABLE IF NOT EXISTS learner_legacy_rates (
   -- whatever ties it back (a Stripe id, a bank date, an invoice number).
   purchased_on           DATE,
   purchase_reference     TEXT,
+  -- What was paid, and what the processor took. Both are needed for the
+  -- rendered rate note to reproduce: the rate derives from the NET, so showing
+  -- "gross ÷ hours" would not divide back to the amount actually paid.
   original_amount_pence  INTEGER,
+  original_fee_pence     INTEGER,
   original_hours         NUMERIC(8,2),
   note                   TEXT,
   created_by             TEXT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_legacy_rate_positive CHECK (rate_pence_per_hour > 0),
+  CONSTRAINT chk_legacy_fee_nonneg CHECK (original_fee_pence IS NULL OR original_fee_pence >= 0),
   CONSTRAINT chk_legacy_settlement CHECK (settlement IN ('flat', 'share'))
 );
 

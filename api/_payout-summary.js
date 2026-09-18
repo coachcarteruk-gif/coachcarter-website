@@ -331,6 +331,30 @@ function poundsFromPence(pence) {
 }
 
 /**
+ * A rate, shown so the instructor can actually reproduce the line.
+ *
+ * A package or legacy rate is derived by dividing a real purchase by its hours
+ * and rarely lands on a whole penny. Viba's is 5371.6667 pence/hour — £805.75
+ * net over 15 hours. Printing that as "£53.72/hr" is worse than useless: an
+ * instructor reproducing the line gets £48.35, but the row says £48.34, and the
+ * 1p gap looks like an error rather than the rounding of a display string.
+ *
+ * So a whole-penny rate prints as a rate, and a fractional one prints as the
+ * division it came from. Spec §6.5: the sub-note "is what lets the instructor
+ * reproduce the total themselves — it is not decorative, keep it."
+ */
+function rateLabel(pencePerHour, source) {
+  const exact = Number(pencePerHour);
+  if (Number.isInteger(exact)) return `£${poundsFromPence(exact).toFixed(2)}/hr`;
+  if (source && Number.isFinite(source.total_pence) && Number.isFinite(source.hours)) {
+    return `£${poundsFromPence(source.total_pence).toFixed(2)} ÷ ${source.hours} hr`;
+  }
+  // No purchase detail to hand: show enough precision that the figure divides
+  // back out, rather than a 2dp rate that does not.
+  return `£${(exact / 100).toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}/hr`;
+}
+
+/**
  * Spec §6.5: the sub-note is the rate basis, and it is what lets the instructor
  * reproduce the total themselves. It is not decorative — keep it.
  */
@@ -353,9 +377,9 @@ function formatNote(lesson, computed) {
     case FUNDING.TRIAL:
       return 'Free trial';
     case FUNDING.LEGACY:
-      return `Legacy rate £${poundsFromPence(lesson.flat_rate_pence_per_hour).toFixed(2)}/hr`;
+      return `Legacy rate ${rateLabel(lesson.flat_rate_pence_per_hour, lesson.rate_source)}`;
     case FUNDING.PACKAGE:
-      return `Package rate £${poundsFromPence(lesson.price_pence_per_hour).toFixed(2)}/hr`;
+      return `Package rate ${rateLabel(lesson.price_pence_per_hour, lesson.rate_source)}`;
     case FUNDING.DIRECT: {
       const perHour = poundsFromPence(lesson.price_pence_per_hour) * computed.share_rate;
       return `Direct payment £${perHour.toFixed(2)}/hr`;
@@ -585,4 +609,5 @@ module.exports = {
   buildPayoutSummary,
   formatRowDate,
   formatDescription,
+  rateLabel,
 };

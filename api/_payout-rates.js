@@ -104,7 +104,8 @@ async function franchiseFeeAsOf(sql, { schoolId, instructorId, asOf }) {
 async function legacyRateFor(sql, { schoolId, learnerId }) {
   const [row] = await sql`
     SELECT rate_pence_per_hour, settlement, purchased_on::text AS purchased_on,
-           purchase_reference, note
+           purchase_reference, original_amount_pence, original_fee_pence,
+           original_hours, note
       FROM learner_legacy_rates
      WHERE school_id = ${schoolId} AND learner_id = ${learnerId}
   `;
@@ -114,6 +115,12 @@ async function legacyRateFor(sql, { schoolId, learnerId }) {
     settlement: row.settlement,
     purchased_on: row.purchased_on,
     purchase_reference: row.purchase_reference,
+    // What the learner actually paid and for how many hours. The renderer shows
+    // this division when the derived rate is not a whole penny, so the line can
+    // be reproduced from the note rather than from a rounded rate.
+    original_amount_pence: row.original_amount_pence == null ? null : Number(row.original_amount_pence),
+    original_fee_pence: row.original_fee_pence == null ? null : Number(row.original_fee_pence),
+    original_hours: row.original_hours == null ? null : Number(row.original_hours),
     note: row.note,
   };
 }

@@ -150,6 +150,14 @@ async function buildWeek(sql, { instructorId, schoolId = 1, periodStart, periodE
           funding: FUNDING.PACKAGE,
           price_pence_per_hour: legacy.rate_pence_per_hour,
           stripe_fee_pence: null,
+          // Lets the note show the division the rate came from, rather than a
+          // 2dp rate that does not reproduce the line. See rateLabel().
+          rate_source: legacy.original_amount_pence != null && legacy.original_hours != null
+            ? {
+              total_pence: Number(legacy.original_amount_pence) - Number(legacy.original_fee_pence || 0),
+              hours: Number(legacy.original_hours),
+            }
+            : null,
         });
         lessons.push(lesson);
         continue;

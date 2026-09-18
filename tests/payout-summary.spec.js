@@ -203,6 +203,49 @@ test.describe('fractional rates — truncate once, never round the rate first', 
   });
 });
 
+test.describe('rate notes must reproduce the line (spec §6.5)', () => {
+  const { rateLabel } = require('../api/_payout-summary');
+
+  test('a whole-penny rate prints as a rate', () => {
+    expect(rateLabel(4677)).toBe('£46.77/hr');
+    expect(rateLabel(5500)).toBe('£55.00/hr');
+  });
+
+  test('a derived rate prints the division it came from', () => {
+    // Viba: £810.00 less the £4.25 Stripe fee, over 15 hours. Printing
+    // "£53.72/hr" would have the instructor reproduce £48.35 against a row
+    // showing £48.34 — a 1p gap that looks like an error.
+    expect(rateLabel(5371.6667, { total_pence: 80575, hours: 15 }))
+      .toBe('£805.75 ÷ 15 hr');
+  });
+
+  test('without purchase detail it keeps enough precision to divide back', () => {
+    expect(rateLabel(5371.6667)).toBe('£53.7167/hr');
+    expect(rateLabel(4983.25)).toBe('£49.8325/hr');
+  });
+
+  test('the note on a fractional package rate reconciles to the amount', () => {
+    const summary = buildPayoutSummary({
+      instructor: { id: 6, name: 'Simon Edwards' },
+      periodStart: '2026-09-11', periodEnd: '2026-09-18',
+      lessons: [lesson({
+        pupil_id: 143,
+        pupil_name: 'Viba Balaji',
+        duration_minutes: 60,
+        funding: FUNDING.PACKAGE,
+        price_pence_per_hour: (81000 - 425) / 15,
+        share_rate: SHARE,
+        stripe_fee_pence: null,
+        rate_source: { total_pence: 80575, hours: 15 },
+      })],
+    });
+    expect(summary.earnings[0].note).toBe('Package rate £805.75 ÷ 15 hr');
+    expect(summary.earnings[0].amount_pence).toBe(4834);
+    // The note divides back to the rate that produced the amount.
+    expect(Math.floor((80575 / 15) * 1 * 0.9)).toBe(4834);
+  });
+});
+
 test.describe('the specific bug this replaces — never multiply a derived rate', () => {
   test('same duration and price always yields the same amount', () => {
     // Spec §1: the same lesson length produced £72.86 / £72.95 / £72.96 / £73.02
