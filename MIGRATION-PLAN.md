@@ -789,3 +789,39 @@ Each phase produces working, testable output. The web version keeps running thro
 ## Legacy school-wide hours portability (2026-09-07)
 
 Flexible Hours balance rows can have `product_slug=legacy-lesson-credit` and no purchase. Use integer `remaining_minutes` for entitlement display; allow decimal base units and original rates. Lesson durations remain multiples of 30 minutes. Conversion stays in the operator-only database function. See `docs/legacy-schoolwide-hours.md`.
+
+## Instructor payout summaries portability (2026-09-18)
+
+Migration 069 adds two tables and the payout summary adds three shared modules.
+All are app-portable: the calculation is pure JavaScript with no DOM or Node
+dependency, so it ports to the React Native app unchanged.
+
+**New tables**
+
+- `instructor_rate_history` — effective-dated `commission_share` (basis points)
+  and `weekly_franchise_fee` (pence) per instructor.
+- `learner_legacy_rates` — off-platform purchase rates, `NUMERIC(12,4)` pence per
+  hour, `settlement` of `flat` or `share`.
+
+**New modules**
+
+- `api/_payout-summary.js` — the calculation. Pure: rows in, lines and totals
+  out. No I/O, no SQL, no rendering. Ports directly; it is the natural first
+  candidate for the TypeScript port alongside `competency-config.js`.
+- `api/_payout-rates.js` — as-of rate resolution. Takes `sql` as an argument
+  rather than importing a client, so the app can supply its own data layer.
+- `api/_payout-summary-html.js` — render. Returns an HTML string with inlined
+  CSS and fonts. **The app will not use this as HTML**, but the layout tokens
+  (spec §6.2) and measurements (§6.4) are the specification for a native
+  earnings screen, which is why spec §8 recommended HTML over image composition:
+  the same design serves both.
+
+**App implication.** An in-app "my earnings" screen consumes the same JSON the
+renderer already emits alongside each PNG (`earnings`, `deductions`, `totals`,
+`blocked`, `warnings`, and a per-line `basis` carrying the inputs that produced
+each amount). No new endpoint shape is needed — it follows the existing
+`?action=` convention and returns `{ ok: true, ... }`.
+
+**Do not** reimplement the arithmetic in the app. Truncate-once-at-the-end and
+never-store-a-derived-rate are the rules the whole exercise exists to enforce;
+a second implementation is a second place for them to drift.

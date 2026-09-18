@@ -304,6 +304,42 @@ When making structural changes (new tables, new API routes, new shared modules, 
 - [`docs/franchise-benefits.md`](docs/franchise-benefits.md) — CoachCarter franchise pack: live + pipeline benefits, CoachCarter-vs-InstructorBook split
 - [`docs/credits-grandfather.md`](docs/credits-grandfather.md) — PITR rollback procedure for credits migration + drill record + (TODO) grandfather scenarios for Step 6
 
+## Instructor payout summaries
+
+> Full reference: [`PROJECT.md`](PROJECT.md) "Instructor payout summaries", spec in [`docs/payout/`](docs/payout/)
+
+Weekly payout images are generated from lesson data by `api/_payout-summary.js`
+(calculation) and `api/_payout-summary-html.js` (render). Hard rules:
+
+1. **Truncate to the penny, once, at the end.** Never round. Never store a
+   derived hourly payout rate and multiply it up — that produced four different
+   amounts for the same lesson length across four weeks.
+2. **Never default a pupil's price, a duration, or a Stripe fee.** A missing one
+   blocks. A NULL `stripe_fee_pence` means "unknown", never "no fee": treating it
+   as zero overpays 93p on a £55 hour.
+3. **Never recompute a Stripe fee from a percentage.** Use only what the balance
+   transaction reports. UK cards are 1.5% + 20p, but PayPal passthrough is ~3.9%
+   and Flexible Hours packages ~0.54%, and a lesson is always one charge.
+4. **Every rendered total must reconcile exactly to the sum of its lines**, or
+   refuse to render. Enforced in both the calculation and the renderer.
+5. **Duration comes from `end_time − start_time`** on the booking, never
+   `lesson_types.duration_minutes` and never a `COALESCE(..., 90)` default.
+6. **Resolve pupils by `learner_id`, never by name.** `ILIKE '%Esha%'` also
+   matches "Aleesha".
+7. **Rates are effective-dated** in `instructor_rate_history` and
+   `learner_legacy_rates` (migration 069). Read them as-of the period start so an
+   old week reproduces its own figures. The franchise fee has no default.
+8. **The reference PNG is a structural regression test, not a byte comparison.**
+   Font and rasteriser versions move glyphs while the layout is unchanged; assert
+   geometry, colours and ink-profile correlation.
+9. **Blocked lessons are reported, never dropped.** A week that silently omits a
+   lesson is indistinguishable from one where it never happened.
+
+`api/cron-stripe-fee-backfill.js` (hourly, :45) repairs any fee the webhook fails
+to persist. The webhook's capture is deliberately best-effort so a Stripe timeout
+cannot cost a learner their credit; do not make it fatal, and do not remove the
+cron that compensates for it.
+
 ## Original-rate legacy conversion
 
 An explicitly approved offline legacy balance may move to Flexible Hours through migration 058's preview/fingerprint-bound operator function. Never relabel historical Stripe/CT/BCS facts or grant the original purchased hours again. Preserve exact remaining minutes and confirmed purchase rate. Ordinary Lesson Credit remains instructor-scoped. See `docs/legacy-schoolwide-hours.md`.

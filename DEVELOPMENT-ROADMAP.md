@@ -1,5 +1,67 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.133 - Automated Instructor Payout Summaries (18 September 2026)
+
+Replaces the hand-built weekly payout image with one generated from lesson data.
+Five weeks of building it by hand had produced repeated errors: durations logged
+wrong, the same pupil billed at two different rates in one week, and the same
+lesson length yielding four different amounts across four weeks purely from
+rounding order.
+
+`api/_payout-summary.js` is the pure calculation — rows in, lines and totals out,
+no I/O. It computes from the pupil's price and the lesson's real duration every
+time and truncates once at the end, never storing a derived hourly rate and
+multiplying it up. Six funding types are distinguished because each changes the
+arithmetic: standard, direct (no fee at all, not "zero fixed fees" — that would
+still deduct 1.5% and underpay 75p/hr), package, off-platform legacy, free trial,
+and segmented for a lesson funded by several sources at different rates. A
+missing pupil price, duration or fee blocks rather than defaulting. Blocked
+lessons are reported with an `operator_action` flag separating "a human must act"
+from "the data is broken", never silently dropped.
+
+`api/_payout-summary-html.js` renders it, captured by headless Chromium, so the
+same markup can later serve an in-app earnings page. Output matches
+`docs/payout/reference-output.png` at 1080x2514 with cards, bands, spines and
+dividers on identical rows. Regression tests are structural — canvas size, token
+colours at fixed positions, divider pitch, ink-profile correlation — because a
+byte comparison would fail on any font or browser update while nothing was broken.
+
+Migration 069 adds effective-dated `instructor_rate_history` and
+`learner_legacy_rates`, so regenerating an old week reproduces that week's
+figures rather than today's. The franchise fee has no default: inventing £90
+would deduct money nobody agreed to.
+
+**Resolved the spec's open question empirically.** 18 production bookings at
+£82.50/90min all carry `stripe_fee_pence = 144`, so a 1.5-hour lesson is one
+charge and pays £72.95. The £72.86 in historic sheets implied a pro-rated fixed
+fee, which is not how Stripe bills — a hand-calculation artefact, not a rate.
+
+**Three data repairs.** 92 credit_transactions rows and 86 booking_credit_sources
+rows were missing the fee Stripe had actually charged, so credit-funded lessons
+computed as though no fee was paid; two identical Shannon Savage lessons paid
+£72.95 and £74.25 purely from which row had evidence. Both backfilled from
+balance transactions, never recomputed. The cause was
+`api/cron-stripe-fee-backfill.js` — the cron `api/webhook.js` has claimed exists
+since Step 4f.b and which was never built, leaving every miss permanent since
+1 August. Now running hourly, with the silent `console.warn` that hid it replaced
+by an error-level log.
+
+Regenerating 11-18 Sep found the hand-built sheet had underpaid Simon £50.50:
+two 90-minute lessons recorded as 1 hour, and one pupil billed at another pupil's
+rate. The totals had nearly matched by coincidence, because a fourth lesson was
+being paid without any funding record.
+
+**Files:** `api/_payout-summary.js`, `api/_payout-summary-html.js`,
+`api/_payout-rates.js`, `api/cron-stripe-fee-backfill.js`, `api/_stripe-fee.js`,
+`api/webhook.js`, `db/migrations/069_payout_summary_rates.sql`,
+`db/migrations/manifest.json`, `scripts/render-payout-summary.cjs`,
+`scripts/payout-week.cjs`, `scripts/payout-fixture.cjs`,
+`scripts/backfill-stripe-fee-evidence.cjs`,
+`scripts/backfill-bcs-fee-apportionment.cjs`, `tests/payout-summary.spec.js`,
+`tests/payout-summary-render.spec.js`, `tests/cron-stripe-fee-backfill.spec.js`,
+`docs/payout/`, `vercel.json`, `CLAUDE.md`, `PROJECT.md`, `MIGRATION-PLAN.md`,
+`DEVELOPMENT-ROADMAP.md`.
+
 ## 2.132 - Migration Governance Phase 2 Rehearsal Package (9 September 2026)
 
 Prepared—but did not operate—the reviewed append-only migration ledger and

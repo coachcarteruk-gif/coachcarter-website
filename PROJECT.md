@@ -1419,3 +1419,102 @@ The strict rollout gate is `schools.config.features.curriculum_progress_beta ===
 ## Legacy school-wide hours (2026-09-07)
 
 Migration 058 adds a database-owner preview/fingerprint-bound conversion from reconciled offline Lesson Credit to Flexible Hours, preserving original rates and exact remaining minutes. CSA, LCB, source, state and audit writes are atomic; no Stripe purchase is created. See [the runbook](docs/legacy-schoolwide-hours.md).
+
+## Instructor payout summaries (2026-09-18)
+
+The weekly payout image sent to instructors is generated from lesson data rather
+than assembled by hand. Spec and reference implementation live in `docs/payout/`.
+
+### Calculation — `api/_payout-summary.js`
+
+Pure: rows in, lines and totals out. No SQL, no I/O, no rendering, so a display
+change can never alter a figure.
+
+```
+gross      = pupil_hourly_price × duration_hours
+stripe_fee = the actual fee from the Stripe balance transaction
+payout     = truncate_2dp((gross − stripe_fee) × share_rate)
+```
+
+Truncate, never round, and **once, at the end**. Never store a derived hourly
+rate and multiply it up — that is what produced £72.86 / £72.95 / £72.96 / £73.02
+for the same lesson length across four weeks.
+
+Six funding types, because each changes the arithmetic:
+
+| Funding | Treatment |
+|---|---|
+| `standard` | gross − actual Stripe fee, × share |
+| `direct` | × share, **no fee at all** — not "zero fixed fees", which would still deduct 1.5% and underpay 75p/hr |
+| `package` | package per-hour price; the fee was taken once on the package purchase |
+| `legacy` | off-platform purchase: flat rate, no share, no fee |
+| `trial` | flat hourly trial rate from `schools.config.pricing.free_trial_rate_pence_per_hour` |
+| `segmented` | several sources at different rates in one lesson, each truncated on its own |
+
+Blocks rather than guesses: a missing pupil price, duration or fee evidence
+throws. Blocked lessons are reported with an `operator_action` flag separating
+"a human must act" (unreconciled Flexible Hours funding, an unrecorded legacy
+rate) from "the data is broken", and are excluded from every total — never
+silently dropped.
+
+Duration comes from `end_time − start_time` on the booking. `lesson_types.
+duration_minutes` is the catalogue's nominal length and is wrong for any extended
+lesson; the payout query's `COALESCE(..., 90)` silently turns an unknown duration
+into 90 minutes.
+
+### Rates — `api/_payout-rates.js`, migration 069
+
+Effective-dated, so regenerating an old week reproduces that week's figures:
+
+- **`instructor_rate_history`** — one row per (instructor, `rate_kind`, start
+  date), open-ended. `commission_share` in basis points, `weekly_franchise_fee`
+  in pence.
+- **`learner_legacy_rates`** — off-platform purchases. `rate_pence_per_hour` is
+  `NUMERIC(12,4)`, deliberately not an integer: a rate derived by dividing a real
+  purchase by its hours rarely lands on a whole penny, and rounding it before
+  multiplying is the bug above. `settlement` is `flat` (no share) or `share`.
+
+Where no dated row covers the period, the current-value column is used and the
+result reports which — a dated fact is never silently blended with a current
+guess. The franchise fee has **no default**: an unset fee returns null rather
+than inventing a £90 deduction nobody agreed to.
+
+### Render — `api/_payout-summary-html.js`
+
+HTML captured by headless Chromium, so the same markup can later serve an in-app
+instructor earnings page. Reproduces `docs/payout/reference-output.png` at
+1080×2514. Fonts are base64-inlined because a headless capture can fire before a
+linked font loads and silently render in a fallback with different metrics.
+
+Regression tests are **structural** — canvas size, token colours at fixed
+positions, divider pitch within 2px, row ink-profile correlation above 0.98 — not
+byte equality, which would fail on any font, Pillow or Chromium update while
+nothing was broken. See `docs/payout/fonts/README.md`.
+
+Both the calculation and the render refuse to emit a total that does not
+reconcile to the sum of its lines.
+
+### Stripe fee evidence
+
+One charge per lesson, so a 1.5-hour lesson's fee is £1.4375 and it pays £72.95
+(confirmed against 18 production bookings all carrying `stripe_fee_pence = 144`).
+The fee is **never** recomputed as 1.5% + 20p: PayPal passthrough legitimately
+costs ~3.9% and Flexible Hours packages ~0.54%.
+
+`api/cron-stripe-fee-backfill.js` runs hourly at :45 and recovers any fee the
+webhook failed to persist, from the immutable balance transaction. The webhook's
+capture is deliberately best-effort so a transient Stripe error cannot cost a
+learner their credit — but that only works because this repairs the gap. A NULL
+fee is **not** treated as zero downstream; `assertPayoutEvidenceComplete()`
+blocks on it, because treating a missing fee as no fee overpays.
+
+### Usage
+
+```bash
+node scripts/render-payout-summary.cjs --instructor 6 --week 2026-09-11
+```
+
+Emits `payout-{slug}-{week}.png` and the matching `.json`, so a disputed figure
+traces to lesson ids without regenerating anything. Pay weeks run **midday Friday
+to midday Friday, Europe/London** — a lesson at 11:00 Friday belongs to the
+closing week, one at 13:00 to the opening week.
