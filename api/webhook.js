@@ -871,9 +871,13 @@ async function handleCreditPurchase(session, eventContext = null) {
     const minutes = parseInt(metadata.minutes_purchased, 10) || (credits * 90);
     const hoursStr = (minutes / 60) % 1 === 0 ? `${minutes / 60}` : (minutes / 60).toFixed(1);
 
-    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
-    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
-    // as zero in the meantime.
+    // Snapshot the Stripe processing fee (Step 4f.b). Best-effort: NULL on
+    // failure so a transient Stripe error cannot cost the learner their credit.
+    // api/cron-stripe-fee-backfill.js repairs any NULL within the hour.
+    //
+    // NULL is NOT treated as zero downstream. assertPayoutEvidenceComplete()
+    // blocks on it, because treating a missing fee as no fee overpays the
+    // instructor (£49.50 instead of £48.57 on a £55 hour).
     const fundingEvidence = await fetchSessionFundingEvidence(session);
     const stripeFeePence = fundingEvidence.feePence;
 
@@ -1393,9 +1397,13 @@ async function handleSlotBooking(session, eventContext = null) {
       return;
     }
 
-    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
-    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
-    // as zero in the meantime.
+    // Snapshot the Stripe processing fee (Step 4f.b). Best-effort: NULL on
+    // failure so a transient Stripe error cannot cost the learner their credit.
+    // api/cron-stripe-fee-backfill.js repairs any NULL within the hour.
+    //
+    // NULL is NOT treated as zero downstream. assertPayoutEvidenceComplete()
+    // blocks on it, because treating a missing fee as no fee overpays the
+    // instructor (£49.50 instead of £48.57 on a £55 hour).
     const stripeFeePence = fundingEvidence.feePence;
 
     // 1. Record the transaction. uq_credit_tx_session backstops the
@@ -2586,9 +2594,13 @@ async function handleOfferBooking(session, payoutV2Receipt = null) {
     const totalMinutes     = durationMins * repeatWeeks;
     const totalCredits     = repeatWeeks;
 
-    // Snapshot the Stripe processing fee (Step 4f.b). NULL on failure; the
-    // reconcile cron (4f.e) backfills, and the payout pipeline treats NULL
-    // as zero in the meantime. For repeat-weeks series this is the fee on
+    // Snapshot the Stripe processing fee (Step 4f.b). Best-effort: NULL on
+    // failure so a transient Stripe error cannot cost the learner their credit.
+    // api/cron-stripe-fee-backfill.js repairs any NULL within the hour.
+    //
+    // NULL is NOT treated as zero downstream. assertPayoutEvidenceComplete()
+    // blocks on it, because treating a missing fee as no fee overpays the
+    // instructor (£49.50 instead of £48.57 on a £55 hour). For repeat-weeks series this is the fee on
     // the FULL charge (totalAmountPence) — Step 4g splits it pro-rata across
     // the N bookings via booking_credit_sources.
     const offerFundingEvidence = await fetchSessionFundingEvidence(session);

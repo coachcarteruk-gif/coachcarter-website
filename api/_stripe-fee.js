@@ -155,7 +155,23 @@ async function fetchSessionFundingEvidence(session, stripeClient = null, options
         : null,
     };
   } catch (err) {
-    console.warn('fetchSessionFundingEvidence failed:', err.message);
+    // Deliberately non-fatal: a learner's credit must not be lost to a
+    // transient Stripe timeout, so callers get empty evidence and fulfilment
+    // continues. The gap is repaired by api/cron-stripe-fee-backfill.js within
+    // the hour.
+    //
+    // Logged at error level with the payment identity because this is how the
+    // gap becomes visible at all. Between August and September 2026 this
+    // swallowed ~90% of fee captures silently: the backfill cron the webhook
+    // comment promised did not exist, so every miss was permanent and only
+    // surfaced months later as blocked payouts.
+    console.error('[stripe-fee] funding evidence unavailable, left for backfill cron:', JSON.stringify({
+      checkoutSessionId: checkoutSessionId || null,
+      paymentIntentId: suppliedPaymentIntentId || null,
+      error: err.message,
+      code: err.code || null,
+      type: err.type || null,
+    }));
     return emptyFundingEvidence({
       checkoutSessionId,
       paymentIntentId: suppliedPaymentIntentId,
