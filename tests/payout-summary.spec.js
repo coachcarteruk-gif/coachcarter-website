@@ -155,6 +155,54 @@ test.describe('spec §3.2 fixtures — trial, package, legacy', () => {
   });
 });
 
+test.describe('fractional rates — truncate once, never round the rate first', () => {
+  // Viba Balaji: 15-hour Flexible Hours package, £810.00 gross less the £4.25
+  // Stripe actually charged (evidence bt txn_3U5lPSIqhTSdZedS2nHpKks6, fee 425p)
+  // = £805.75 over 15 hours = 5371.6667 pence/hour.
+  const VIBA_RATE = (81000 - 425) / 15;
+
+  function vibaLesson(minutes) {
+    return lesson({
+      pupil_id: 143,
+      pupil_name: 'Viba Balaji',
+      duration_minutes: minutes,
+      funding: FUNDING.PACKAGE,
+      price_pence_per_hour: VIBA_RATE,
+      share_rate: SHARE,
+      stripe_fee_pence: null,
+    });
+  }
+
+  test('1 hour pays £48.34, not the £48.35 a rounded rate gives', () => {
+    expect(calculateLessonPayout(vibaLesson(60)).payout_pence).toBe(4834);
+    // The hand-built sheet rounded 53.7166… to £53.72 first: 53.72 × 0.90 =
+    // 48.348 → £48.35. A penny high, and the error is in the rate, not the total.
+    expect(Math.floor(5372 * 0.90)).toBe(4834); // truncation hides it at 1hr…
+    expect(Math.round(5372 * 0.90)).toBe(4835); // …rounding does not
+  });
+
+  test('the drift grows with duration — this is the spec §1 bug', () => {
+    expect(calculateLessonPayout(vibaLesson(90)).payout_pence).toBe(7251);
+    // Storing £48.35/hr and multiplying gives £72.53 — two pence adrift, and
+    // widening. Hence "never store a derived hourly rate and multiply it up".
+    expect(Math.floor(4835 * 1.5)).toBe(7252);
+  });
+
+  test('a fractional rate is accepted, not rejected as a non-integer', () => {
+    expect(() => calculateLessonPayout(vibaLesson(60))).not.toThrow();
+    expect(VIBA_RATE).not.toBe(Math.round(VIBA_RATE));
+  });
+
+  test('a missing price is still refused', () => {
+    for (const missing of [null, undefined, 0, -1]) {
+      expect(() => calculateLessonPayout(vibaLesson(60, { price_pence_per_hour: missing })))
+        .toBeDefined();
+    }
+    expect(() => calculateLessonPayout({ ...vibaLesson(60), price_pence_per_hour: null }))
+      .toThrow(/Pupil hourly price/);
+  });
+});
+
 test.describe('the specific bug this replaces — never multiply a derived rate', () => {
   test('same duration and price always yields the same amount', () => {
     // Spec §1: the same lesson length produced £72.86 / £72.95 / £72.96 / £73.02

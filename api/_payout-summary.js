@@ -253,7 +253,15 @@ function calculateLessonPayout(lesson) {
   }
 
   // Spec §5 + §9 rule 7: never silently default a pupil's price to £55.
-  const pricePerHour = requirePositiveInteger(lesson.price_pence_per_hour, 'PUPIL_PRICE_MISSING',
+  //
+  // Accepts a fraction for the same reason legacy rates do: a package price is
+  // derived by dividing a real purchase by its hours and rarely lands on a whole
+  // penny. Viba's 15-hour package is £810.00 less the £4.25 Stripe actually
+  // charged = £805.75 over 15 hours = 5371.6667 pence/hour. Rounding that to
+  // 5372 before multiplying is exactly the "rate rounded before being multiplied
+  // by hours" drift in spec §1 — it pays £48.35 for an hour where truncating
+  // once gives £48.34, and the gap widens with duration.
+  const pricePerHour = requirePositiveRate(lesson.price_pence_per_hour, 'PUPIL_PRICE_MISSING',
     'Pupil hourly price (pence)', context);
 
   const shareRate = Number(lesson.share_rate);
