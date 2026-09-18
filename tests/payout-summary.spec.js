@@ -337,6 +337,74 @@ test.describe('presentation (spec §6.5)', () => {
   });
 });
 
+test.describe('segmented lessons — a free trial extended with paid time', () => {
+  // Real case: booking #580, learner 168. A 60-minute free trial extended by
+  // 120 paid minutes (£110 gross, 185p fee), total 180 minutes.
+  const segmented = {
+    lesson_id: 580,
+    pupil_id: 168,
+    pupil_name: 'Annettiea Johnson',
+    date: '2026-09-21',
+    start_time: '07:00',
+    duration_minutes: 180,
+    funding: FUNDING.SEGMENTED,
+    share_rate: SHARE,
+    segments: [
+      { funding: FUNDING.TRIAL, duration_minutes: 60, flat_rate_pence_per_hour: 3000, price_pence_per_hour: 0, stripe_fee_pence: null },
+      { funding: FUNDING.STANDARD, duration_minutes: 120, price_pence_per_hour: 5500, stripe_fee_pence: 185 },
+    ],
+  };
+
+  test('pays each segment on its own terms: £30.00 + £97.33 = £127.33', () => {
+    const result = calculateLessonPayout(segmented);
+    expect(result.payout_pence).toBe(12733);
+    expect(result.segments.map((s) => s.payout_pence)).toEqual([3000, 9733]);
+  });
+
+  test('both single-classification answers are wrong', () => {
+    // As one standard lesson: swallows the free hour, pays £97.33 (£30 short).
+    expect(calculateLessonPayout({
+      ...segmented, funding: FUNDING.STANDARD, segments: undefined,
+      price_pence_per_hour: Math.round(11000 / 3), stripe_fee_pence: 185,
+    }).payout_pence).toBeLessThan(12733);
+    // As one trial: gives away two paid hours, pays £90.00 (£37.33 short).
+    expect(calculateLessonPayout({
+      ...segmented, funding: FUNDING.TRIAL, segments: undefined,
+      flat_rate_pence_per_hour: 3000, price_pence_per_hour: 0, stripe_fee_pence: null,
+    }).payout_pence).toBe(9000);
+  });
+
+  test('segment minutes must sum to the lesson duration', () => {
+    expect(() => calculateLessonPayout({ ...segmented, duration_minutes: 120 }))
+      .toThrow(/do not sum to the lesson duration/);
+  });
+
+  test('an empty segment list is refused', () => {
+    expect(() => calculateLessonPayout({ ...segmented, segments: [] }))
+      .toThrow(/at least one segment/);
+  });
+
+  test('the note spells out both parts so the total can be reproduced', () => {
+    const summary = buildPayoutSummary({
+      instructor: { id: 6, name: 'Simon Edwards' },
+      periodStart: '2026-09-18', periodEnd: '2026-09-25',
+      lessons: [segmented],
+    });
+    expect(summary.earnings[0].note).toBe('Free trial 1 hr + £110.00/2 hr');
+    expect(summary.earnings[0].amount_pence).toBe(12733);
+    expect(summary.counts).toEqual({ lessons: 1, hours: 3 });
+  });
+
+  test('two rates inside one lesson do not trip the price-conflict block', () => {
+    const summary = buildPayoutSummary({
+      instructor: { id: 6, name: 'Simon Edwards' },
+      periodStart: '2026-09-18', periodEnd: '2026-09-25',
+      lessons: [segmented, lesson({ lesson_id: 581, pupil_id: 168, price_pence_per_hour: 5500 })],
+    });
+    expect(summary.earnings).toHaveLength(2);
+  });
+});
+
 test.describe('blocked lessons are reported, never silently dropped', () => {
   const { describeBlock } = require('../api/_payout-summary');
 

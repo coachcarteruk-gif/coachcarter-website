@@ -38,6 +38,9 @@ const FUNDING = Object.freeze({
   PACKAGE: 'package',
   LEGACY: 'legacy',
   TRIAL: 'trial',
+  // A lesson funded by several sources at different rates — see
+  // calculateSegmentedPayout. Carries `segments`, not its own price.
+  SEGMENTED: 'segmented',
 });
 
 class PayoutCalculationError extends Error {
@@ -175,8 +178,56 @@ function hoursFromMinutes(minutes, context) {
  * quietly mis-pay it. Spec §4 is settled — one charge per lesson — so there is
  * no transaction_count multiplier.
  */
+/**
+ * A lesson can be funded by several sources at different rates, and they must
+ * each be calculated on their own terms.
+ *
+ * The real case: a free trial extended with paid time. Booking #580 is 180
+ * minutes made of a 60-minute free trial (£0) plus a 120-minute paid extension
+ * (£110, fee 185p). Treating the whole thing as one lesson is wrong either way
+ * — as a standard lesson it pays £97.33 and swallows the free hour; as a trial
+ * it pays £90.00 and gives away two paid hours. The correct payout is £30.00 +
+ * £97.33 = £127.33.
+ *
+ * Each segment is truncated on its own, because each is a separate funding fact
+ * with its own gross and its own fee. Summing untruncated segments and
+ * truncating once at the end would be a different (and wrong) answer: it would
+ * silently move pennies between funding sources.
+ */
+function calculateSegmentedPayout(lesson) {
+  const segments = lesson.segments;
+  if (!Array.isArray(segments) || segments.length === 0) {
+    throw new PayoutCalculationError('SEGMENTS_EMPTY', 'A segmented lesson needs at least one segment',
+      { lesson_id: lesson.lesson_id });
+  }
+
+  const totalMinutes = segments.reduce((sum, s) => sum + Number(s.duration_minutes || 0), 0);
+  if (totalMinutes !== Number(lesson.duration_minutes)) {
+    throw new PayoutCalculationError('SEGMENT_MINUTES_MISMATCH',
+      'Segment minutes do not sum to the lesson duration',
+      { lesson_id: lesson.lesson_id, totalMinutes, duration_minutes: lesson.duration_minutes });
+  }
+
+  const computed = segments.map((segment) => calculateLessonPayout({
+    ...segment,
+    lesson_id: lesson.lesson_id,
+    share_rate: segment.share_rate ?? lesson.share_rate,
+  }));
+
+  return {
+    payout_pence: computed.reduce((sum, c) => sum + c.payout_pence, 0),
+    gross_pence: computed.reduce((sum, c) => sum + (c.gross_pence || 0), 0) || null,
+    stripe_fee_pence: computed.reduce((sum, c) => sum + c.stripe_fee_pence, 0),
+    share_rate: null,
+    hours: totalMinutes / 60,
+    funding: FUNDING.SEGMENTED,
+    segments: computed,
+  };
+}
+
 function calculateLessonPayout(lesson) {
   const context = { lesson_id: lesson?.lesson_id };
+  if (lesson?.funding === FUNDING.SEGMENTED) return calculateSegmentedPayout(lesson);
   const funding = lesson?.funding;
   if (!Object.values(FUNDING).includes(funding)) {
     throw new PayoutCalculationError('UNKNOWN_FUNDING', `Unknown funding type: ${funding}`, context);
@@ -277,6 +328,20 @@ function poundsFromPence(pence) {
  */
 function formatNote(lesson, computed) {
   switch (computed.funding) {
+    // Spell out each part: the whole point of the note is that the instructor
+    // can reproduce the total, and a segmented lesson's total reconciles to
+    // nothing without its parts. "Free trial 1 hr + £110.00/2 hr".
+    case FUNDING.SEGMENTED:
+      return lesson.segments.map((segment, i) => {
+        const hours = Number(segment.duration_minutes) / 60;
+        const h = Number.isInteger(hours) ? `${hours} hr` : `${hours} hr`;
+        if (segment.funding === FUNDING.TRIAL) return `Free trial ${h}`;
+        if (segment.funding === FUNDING.LEGACY) {
+          return `Legacy £${poundsFromPence(segment.flat_rate_pence_per_hour).toFixed(2)}/hr ${h}`;
+        }
+        const gross = poundsFromPence(segment.price_pence_per_hour * hours);
+        return `${i === 0 ? '' : '+ '}£${gross.toFixed(2)}/${h}`;
+      }).join(' ');
     case FUNDING.TRIAL:
       return 'Free trial';
     case FUNDING.LEGACY:
@@ -320,7 +385,10 @@ function validateLessons(lessons) {
     }
 
     // Spec §5: a genuine tier change should be dated, not concurrent.
-    if (lesson.price_pence_per_hour != null) {
+    // Segmented lessons are exempt: a free trial extended with paid time
+    // legitimately carries two rates within one lesson, which is not the
+    // "same pupil billed at two different rates" error this check exists for.
+    if (lesson.funding !== FUNDING.SEGMENTED && lesson.price_pence_per_hour != null) {
       const prior = priceByPupil.get(pupilKey);
       if (prior != null && prior !== lesson.price_pence_per_hour) {
         throw new PayoutCalculationError('PUPIL_PRICE_CONFLICT',
