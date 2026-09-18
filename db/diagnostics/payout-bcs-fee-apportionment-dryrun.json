@@ -1,0 +1,1358 @@
+[
+ {
+  "ct": 205,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 240,
+    "booking_id": 478,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 247,
+  "verdict": "OK",
+  "ct_fee_pence": 92,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 92,
+  "allocations": [
+   {
+    "bcs_id": 192,
+    "booking_id": 429,
+    "minutes": 60,
+    "fee": 92
+   }
+  ]
+ },
+ {
+  "ct": 248,
+  "verdict": "OK",
+  "ct_fee_pence": 92,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 92,
+  "allocations": [
+   {
+    "bcs_id": 200,
+    "booking_id": 437,
+    "minutes": 60,
+    "fee": 92
+   }
+  ]
+ },
+ {
+  "ct": 251,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 190,
+    "booking_id": 427,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 252,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 193,
+    "booking_id": 430,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 253,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 194,
+    "booking_id": 431,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 254,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 195,
+    "booking_id": 432,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 255,
+  "verdict": "OK",
+  "ct_fee_pence": 98,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 98,
+  "allocations": [
+   {
+    "bcs_id": 254,
+    "booking_id": 491,
+    "minutes": 60,
+    "fee": 98
+   }
+  ]
+ },
+ {
+  "ct": 256,
+  "verdict": "OK",
+  "ct_fee_pence": 98,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 98,
+  "allocations": [
+   {
+    "bcs_id": 197,
+    "booking_id": 434,
+    "minutes": 60,
+    "fee": 98
+   }
+  ]
+ },
+ {
+  "ct": 258,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 204,
+    "booking_id": 441,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 259,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 205,
+    "booking_id": 442,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 260,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 206,
+    "booking_id": 443,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 261,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 207,
+    "booking_id": 444,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 266,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 214,
+    "booking_id": 451,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 268,
+  "verdict": "OK",
+  "ct_fee_pence": 202,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 202,
+  "allocations": [
+   {
+    "bcs_id": 216,
+    "booking_id": 453,
+    "minutes": 60,
+    "fee": 202
+   }
+  ]
+ },
+ {
+  "ct": 269,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 249,
+    "booking_id": 485,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 275,
+  "verdict": "OK",
+  "ct_fee_pence": 138,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 138,
+  "allocations": [
+   {
+    "bcs_id": 275,
+    "booking_id": 516,
+    "minutes": 30,
+    "fee": 46
+   },
+   {
+    "bcs_id": 290,
+    "booking_id": 538,
+    "minutes": 60,
+    "fee": 92
+   }
+  ]
+ },
+ {
+  "ct": 281,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 239,
+    "booking_id": 477,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 290,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 248,
+    "booking_id": 484,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 293,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 252,
+    "booking_id": 489,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 294,
+  "verdict": "OK",
+  "ct_fee_pence": 98,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 98,
+  "allocations": [
+   {
+    "bcs_id": 253,
+    "booking_id": 490,
+    "minutes": 60,
+    "fee": 98
+   }
+  ]
+ },
+ {
+  "ct": 295,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 256,
+    "booking_id": 493,
+    "minutes": 120,
+    "fee": 185
+   }
+  ]
+ },
+ {
+  "ct": 296,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 257,
+    "booking_id": 494,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 297,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 261,
+    "booking_id": 498,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 300,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 296,
+    "booking_id": 544,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 301,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 333,
+    "booking_id": 589,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 302,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 265,
+    "booking_id": 504,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 304,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 270,
+    "booking_id": 511,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 307,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 288,
+    "booking_id": 534,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 310,
+  "verdict": "OK",
+  "ct_fee_pence": 61,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 30,
+  "allocated_pence": 31,
+  "allocations": [
+   {
+    "bcs_id": 346,
+    "booking_id": 601,
+    "minutes": 30,
+    "fee": 31
+   }
+  ]
+ },
+ {
+  "ct": 311,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 313,
+    "booking_id": 562,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 312,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 309,
+    "booking_id": 558,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 313,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 281,
+    "booking_id": 523,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 314,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 282,
+    "booking_id": 524,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 315,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 284,
+    "booking_id": 530,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 316,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 285,
+    "booking_id": 531,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 318,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 362,
+    "booking_id": 533,
+    "minutes": 90,
+    "fee": 139
+   },
+   {
+    "bcs_id": 363,
+    "booking_id": 585,
+    "minutes": 30,
+    "fee": 46
+   }
+  ]
+ },
+ {
+  "ct": 322,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 292,
+    "booking_id": 540,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 323,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 358,
+    "booking_id": 615,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 324,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 297,
+    "booking_id": 545,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 325,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 327,
+    "booking_id": 583,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 327,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 316,
+    "booking_id": 565,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 329,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 304,
+    "booking_id": 553,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 330,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 332,
+    "booking_id": 588,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 331,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 306,
+    "booking_id": 555,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 335,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 308,
+    "booking_id": 557,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 337,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 310,
+    "booking_id": 559,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 338,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 311,
+    "booking_id": 560,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 340,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 314,
+    "booking_id": 563,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 341,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 315,
+    "booking_id": 564,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 342,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 317,
+    "booking_id": 566,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 343,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 318,
+    "booking_id": 567,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 345,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 319,
+    "booking_id": 570,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 346,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 320,
+    "booking_id": 571,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 347,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 321,
+    "booking_id": 572,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 349,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 323,
+    "booking_id": 576,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 352,
+  "verdict": "OK",
+  "ct_fee_pence": 268,
+  "purchase_minutes": 180,
+  "undrawn_minutes": 0,
+  "allocated_pence": 268,
+  "allocations": [
+   {
+    "bcs_id": 326,
+    "booking_id": 581,
+    "minutes": 180,
+    "fee": 268
+   }
+  ]
+ },
+ {
+  "ct": 353,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 328,
+    "booking_id": 584,
+    "minutes": 120,
+    "fee": 185
+   }
+  ]
+ },
+ {
+  "ct": 354,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 329,
+    "booking_id": 585,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 356,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 330,
+    "booking_id": 586,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 357,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 331,
+    "booking_id": 587,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 358,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 334,
+    "booking_id": 590,
+    "minutes": 120,
+    "fee": 185
+   }
+  ]
+ },
+ {
+  "ct": 359,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 335,
+    "booking_id": 591,
+    "minutes": 120,
+    "fee": 185
+   }
+  ]
+ },
+ {
+  "ct": 363,
+  "verdict": "OK",
+  "ct_fee_pence": 138,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 138,
+  "allocations": [
+   {
+    "bcs_id": 340,
+    "booking_id": 596,
+    "minutes": 90,
+    "fee": 138
+   }
+  ]
+ },
+ {
+  "ct": 364,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 350,
+    "booking_id": 604,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 365,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 351,
+    "booking_id": 605,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 366,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 343,
+    "booking_id": 599,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 367,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 344,
+    "booking_id": 600,
+    "minutes": 120,
+    "fee": 185
+   }
+  ]
+ },
+ {
+  "ct": 368,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 347,
+    "booking_id": 602,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 374,
+  "verdict": "OK",
+  "ct_fee_pence": 98,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 98,
+  "allocations": [
+   {
+    "bcs_id": 354,
+    "booking_id": 610,
+    "minutes": 60,
+    "fee": 98
+   }
+  ]
+ },
+ {
+  "ct": 377,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 361,
+    "booking_id": 618,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 378,
+  "verdict": "OK",
+  "ct_fee_pence": 185,
+  "purchase_minutes": 120,
+  "undrawn_minutes": 0,
+  "allocated_pence": 185,
+  "allocations": [
+   {
+    "bcs_id": 364,
+    "booking_id": 619,
+    "minutes": 120,
+    "fee": 185
+   }
+  ]
+ },
+ {
+  "ct": 379,
+  "verdict": "OK",
+  "ct_fee_pence": 131,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 131,
+  "allocations": [
+   {
+    "bcs_id": 365,
+    "booking_id": 620,
+    "minutes": 90,
+    "fee": 131
+   }
+  ]
+ },
+ {
+  "ct": 380,
+  "verdict": "OK",
+  "ct_fee_pence": 131,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 131,
+  "allocations": [
+   {
+    "bcs_id": 366,
+    "booking_id": 621,
+    "minutes": 90,
+    "fee": 131
+   }
+  ]
+ },
+ {
+  "ct": 382,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 368,
+    "booking_id": 623,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 386,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 372,
+    "booking_id": 627,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 387,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 373,
+    "booking_id": 628,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 388,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 374,
+    "booking_id": 629,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 389,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 375,
+    "booking_id": 630,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 390,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 376,
+    "booking_id": 631,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 393,
+  "verdict": "OK",
+  "ct_fee_pence": 144,
+  "purchase_minutes": 90,
+  "undrawn_minutes": 0,
+  "allocated_pence": 144,
+  "allocations": [
+   {
+    "bcs_id": 380,
+    "booking_id": 643,
+    "minutes": 90,
+    "fee": 144
+   }
+  ]
+ },
+ {
+  "ct": 394,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 383,
+    "booking_id": 646,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 396,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 384,
+    "booking_id": 647,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ },
+ {
+  "ct": 397,
+  "verdict": "OK",
+  "ct_fee_pence": 103,
+  "purchase_minutes": 60,
+  "undrawn_minutes": 0,
+  "allocated_pence": 103,
+  "allocations": [
+   {
+    "bcs_id": 385,
+    "booking_id": 648,
+    "minutes": 60,
+    "fee": 103
+   }
+  ]
+ }
+]
