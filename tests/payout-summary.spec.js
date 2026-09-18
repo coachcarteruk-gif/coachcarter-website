@@ -337,6 +337,73 @@ test.describe('presentation (spec §6.5)', () => {
   });
 });
 
+test.describe('blocked lessons are reported, never silently dropped', () => {
+  const { describeBlock } = require('../api/_payout-summary');
+
+  test('a blocked lesson is excluded from totals but listed', () => {
+    const summary = buildPayoutSummary({
+      instructor: { id: 6, name: 'Simon Edwards' },
+      periodStart: '2026-09-11', periodEnd: '2026-09-18',
+      lessons: [
+        lesson({ lesson_id: 1 }),
+        {
+          lesson_id: 2, pupil_id: 200, pupil_name: 'Shannon Savage',
+          date: '2026-09-21', duration_minutes: 90,
+          blocked_reason: 'FLEXIBLE_SOURCE_EVIDENCE_INCOMPLETE',
+          blocked_context: { source_id: 8 },
+        },
+      ],
+      deductions: [{ label: 'Franchise fee', amount_pence: 9000 }],
+    });
+    expect(summary.earnings).toHaveLength(1);
+    expect(summary.totals.subtotal_pence).toBe(4857);
+    expect(summary.blocked).toHaveLength(1);
+    expect(summary.blocked[0]).toMatchObject({
+      code: 'FLEXIBLE_SOURCE_EVIDENCE_INCOMPLETE',
+      operator_action: true,
+      lesson_id: 2,
+      pupil_name: 'Shannon Savage',
+      source_id: 8,
+    });
+  });
+
+  test('counts describe rendered lines only, so the footer cannot contradict them', () => {
+    const summary = buildPayoutSummary({
+      instructor: { id: 6, name: 'Simon Edwards' },
+      periodStart: '2026-09-11', periodEnd: '2026-09-18',
+      lessons: [
+        lesson({ lesson_id: 1, duration_minutes: 60 }),
+        { lesson_id: 2, pupil_id: 201, pupil_name: 'Blocked', date: '2026-09-12', duration_minutes: 120, blocked_reason: 'LEGACY_RATE_MISSING' },
+      ],
+    });
+    expect(summary.counts).toEqual({ lessons: 1, hours: 1 });
+  });
+
+  test('operator_action separates "you must act" from "the data is broken"', () => {
+    expect(describeBlock('FLEXIBLE_SOURCE_EVIDENCE_INCOMPLETE').operator_action).toBe(true);
+    expect(describeBlock('LEGACY_RATE_MISSING').operator_action).toBe(true);
+    expect(describeBlock('STRIPE_FEE_EVIDENCE_MISSING').operator_action).toBe(false);
+  });
+
+  test('an unknown block code still returns a usable shape', () => {
+    const d = describeBlock('SOMETHING_NEW', { lesson_id: 9 });
+    expect(d.code).toBe('SOMETHING_NEW');
+    expect(d.lesson_id).toBe(9);
+    expect(d.summary).toBeTruthy();
+  });
+
+  test('duplicate ids are still caught across blocked and payable lessons', () => {
+    expect(() => buildPayoutSummary({
+      instructor: { id: 6, name: 'Simon Edwards' },
+      periodStart: '2026-09-11', periodEnd: '2026-09-18',
+      lessons: [
+        lesson({ lesson_id: 5 }),
+        { lesson_id: 5, pupil_id: 202, pupil_name: 'X', date: '2026-09-12', duration_minutes: 60, blocked_reason: 'LEGACY_RATE_MISSING' },
+      ],
+    })).toThrow(/Duplicate lesson_id/);
+  });
+});
+
 test.describe('emitted basis supports dispute resolution (spec §8)', () => {
   test('every line carries the inputs that produced it', () => {
     const summary = buildPayoutSummary({

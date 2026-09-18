@@ -50,6 +50,59 @@ class PayoutCalculationError extends Error {
 }
 
 /**
+ * Why a lesson could not be included, and whose problem it is.
+ *
+ * `operator_action` distinguishes "a human must do something" from "the data is
+ * broken". A Flexible Hours lesson whose source has no terminal evidence row is
+ * not a defect: evidence capture is a deliberate admin-attested reconciliation
+ * (api/_interim-v1-payout.js, action interim-v1-reconcile-funding-evidence), so
+ * the summary should say "awaiting reconciliation" and name the source, not
+ * report a generic failure the operator cannot act on.
+ */
+const BLOCK_REASONS = Object.freeze({
+  FLEXIBLE_SOURCE_EVIDENCE_INCOMPLETE: {
+    operator_action: true,
+    summary: 'Flexible Hours funding is not yet reconciled',
+    detail: 'An admin must record the Stripe funding evidence for this source before the lesson can be paid.',
+  },
+  FLEXIBLE_SOURCE_EVIDENCE_CONTRADICTORY: {
+    operator_action: true,
+    summary: 'Flexible Hours funding evidence contradicts the source',
+    detail: 'The recorded Stripe facts do not match the stored source. Investigate before paying.',
+  },
+  LEGACY_RATE_MISSING: {
+    operator_action: true,
+    summary: 'Off-platform legacy rate is not recorded',
+    detail: 'This pupil paid outside the platform. Store their agreed hourly rate before the lesson can be paid.',
+  },
+  STRIPE_FEE_EVIDENCE_MISSING: {
+    operator_action: false,
+    summary: 'Stripe processing fee evidence is missing',
+    detail: 'The fee Stripe charged was never recorded against this funding. Recover it from the balance transaction.',
+  },
+  PUPIL_PRICE_MISSING: {
+    operator_action: true,
+    summary: 'No price record for this pupil',
+    detail: 'Never defaulted. Record what this lesson was worth before it can be paid.',
+  },
+});
+
+/**
+ * Describe a blocked lesson for the operator. Unknown codes still return a
+ * usable shape so a new failure mode is never swallowed.
+ */
+function describeBlock(code, context = {}) {
+  const known = BLOCK_REASONS[code];
+  return {
+    code,
+    operator_action: known ? known.operator_action : false,
+    summary: known ? known.summary : 'Lesson could not be calculated',
+    detail: known ? known.detail : 'Unrecognised block reason — investigate before rendering.',
+    ...context,
+  };
+}
+
+/**
  * Truncate to the penny. Never round. Applied ONCE, at the end (spec §3.1).
  *
  * Works in a scaled integer domain and nudges by a hair before flooring:
@@ -317,7 +370,19 @@ function buildPayoutSummary({ instructor, periodStart, periodEnd, lessons, deduc
     throw new PayoutCalculationError('INSTRUCTOR_MISSING', 'Instructor name is required');
   }
 
-  const warnings = validateLessons(lessons);
+  // Blocked lessons are excluded from validation: they have no resolved price
+  // or rate yet, so a price-conflict or duration check on them would report a
+  // problem the operator cannot act on and that says nothing about the payable
+  // lines. Duplicate-id checking still covers every lesson, below.
+  const warnings = validateLessons(lessons.filter((l) => !l.blocked_reason));
+  const allIds = new Set();
+  for (const lesson of lessons) {
+    if (allIds.has(lesson.lesson_id)) {
+      throw new PayoutCalculationError('DUPLICATE_LESSON_ID',
+        `Duplicate lesson_id: ${lesson.lesson_id}`, { lesson_id: lesson.lesson_id });
+    }
+    allIds.add(lesson.lesson_id);
+  }
 
   const ordered = [...lessons].sort((a, b) => {
     const byDate = String(a.date).localeCompare(String(b.date));
@@ -325,8 +390,47 @@ function buildPayoutSummary({ instructor, periodStart, periodEnd, lessons, deduc
     return String(a.start_time || '').localeCompare(String(b.start_time || ''));
   });
 
-  const earnings = ordered.map((lesson) => {
-    const computed = calculateLessonPayout(lesson);
+  // A lesson the caller has already determined cannot be calculated. It is
+  // reported, never silently dropped: a week that quietly omits a lesson is
+  // indistinguishable from one where the lesson never happened, and the
+  // instructor would have no way to notice the difference.
+  const blocked = ordered
+    .filter((lesson) => lesson.blocked_reason)
+    .map((lesson) => describeBlock(lesson.blocked_reason, {
+      lesson_id: lesson.lesson_id,
+      pupil_id: lesson.pupil_id,
+      pupil_name: lesson.pupil_name,
+      date: lesson.date,
+      ...(lesson.blocked_context || {}),
+    }));
+
+  const payable = ordered.filter((lesson) => !lesson.blocked_reason);
+
+  // A lesson that cannot be calculated becomes a reported block rather than an
+  // exception that kills the whole week. One unpayable lesson must not stop the
+  // operator seeing the other fifteen — but it must never be silently dropped
+  // either, so it lands in `blocked` with the reason and is excluded from every
+  // total. Errors that indicate a broken caller (duplicate ids, a missing
+  // instructor) are still thrown, above.
+  const earnings = [];
+  for (const lesson of payable) {
+    let computed;
+    try {
+      computed = calculateLessonPayout(lesson);
+    } catch (err) {
+      if (!(err instanceof PayoutCalculationError)) throw err;
+      blocked.push(describeBlock(err.code, {
+        lesson_id: lesson.lesson_id,
+        pupil_id: lesson.pupil_id,
+        pupil_name: lesson.pupil_name,
+        date: lesson.date,
+      }));
+      continue;
+    }
+    earnings.push(buildEarningLine(lesson, computed));
+  }
+
+  function buildEarningLine(lesson, computed) {
     return {
       lesson_id: lesson.lesson_id,
       pupil_id: lesson.pupil_id,
@@ -341,9 +445,10 @@ function buildPayoutSummary({ instructor, periodStart, periodEnd, lessons, deduc
         gross_pence: computed.gross_pence,
         stripe_fee_pence: computed.stripe_fee_pence,
         share_rate: computed.share_rate,
+        minutes: Number(lesson.duration_minutes),
       },
     };
-  });
+  }
 
   const deductionLines = deductions.map((d) => {
     const amount = requirePositiveInteger(d.amount_pence, 'DEDUCTION_INVALID', 'Deduction amount (pence)', { label: d.label });
@@ -367,7 +472,11 @@ function buildPayoutSummary({ instructor, periodStart, periodEnd, lessons, deduc
       { subtotalPence, deductedPence, netPence });
   }
 
-  const totalMinutes = ordered.reduce((sum, l) => sum + Number(l.duration_minutes), 0);
+  // Counts describe the rendered lines only, and are derived from `earnings`
+  // rather than the input: a lesson that failed calculation moved to `blocked`
+  // after `payable` was built, so counting the input would make the footer
+  // ("17 lessons, 22 hours") contradict the lines above it.
+  const totalMinutes = earnings.reduce((sum, line) => sum + line.basis.minutes, 0);
   const totalHours = totalMinutes / 60;
 
   return {
@@ -381,7 +490,8 @@ function buildPayoutSummary({ instructor, periodStart, periodEnd, lessons, deduc
       deducted_pence: deductedPence,
       net_pence: netPence,
     },
-    counts: { lessons: ordered.length, hours: totalHours },
+    counts: { lessons: earnings.length, hours: totalHours },
+    blocked,
     warnings,
   };
 }
@@ -389,6 +499,8 @@ function buildPayoutSummary({ instructor, periodStart, periodEnd, lessons, deduc
 module.exports = {
   CALCULATION_VERSION,
   FUNDING,
+  BLOCK_REASONS,
+  describeBlock,
   PayoutCalculationError,
   truncatePence,
   hoursFromMinutes,
