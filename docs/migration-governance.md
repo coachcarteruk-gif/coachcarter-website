@@ -1,25 +1,25 @@
 # Migration governance audit and phased cleanup
 
-Status: **production ledger installed; numbered history current through 065**
+Status: **production ledger installed; numbered history current through 069**
 
-Audit date: 2026-09-13; last production receipt: 2026-09-14
+Audit date: 2026-09-13; last read-only verification and production receipt: 2026-09-19
 
 Production target inspected read-only: Neon project `neon-green-elephant`
 (`falling-firefly-48751671`), protected/default branch `main`
 (`br-summer-silence-abcpp6vw`), database `neondb`.
 
 This document is the migration-system source of truth. It records the completed
-ledger bootstrap and numbered receipts through 065, but does not authorise a
+ledger bootstrap and numbered receipts through 069, but does not authorise a
 future production migration, legacy endpoint change, or financial/data
 mutation.
 
 ## Confirmed file sequence
 
-`db/migrations/` contains 66 SQL files:
+`db/migrations/` contains 70 SQL files:
 
 - one file for every prefix from 001 through 025;
 - two independent files with prefix 026;
-- one file for every prefix from 027 through 065.
+- one file for every prefix from 027 through 069.
 
 The duplicate prefix is historical, not duplicate content:
 
@@ -39,7 +39,7 @@ SHA-256 values are in `db/migrations/manifest.json`. The immutable installation
 packet is the exact 62-entry artifact reviewed when the ledger was installed:
 the 61 identities through 060 plus 061 recorded only as pending numbered work.
 It created 60 baseline receipts, omitted deferred 041, and did not create a row
-for 061. Migrations 061 through 065 now have separate successful production
+for 061. Migrations 061 through 069 now have separate successful production
 execution receipts. Future numbered migrations belong only in the manifest and
 ledger; they must not rewrite the installed packet or its checksum.
 
@@ -103,6 +103,34 @@ The following evidence is authoritative enough to state exact execution:
   consent rows defaulted to `false`.
 - Ten data-migration marker rows prove the successful one-off operations listed
   below, with timestamps from 2026-05-20 through 2026-05-21.
+
+### 19 September reconciliation
+
+The governed `--status` check against the production fingerprint above returned
+`applied: 69` and `pending: []`; the repository check found 70 manifest entries,
+including deferred 041. All recorded filenames and canonical checksums matched.
+
+| Migration | Execution receipt (UTC) | Canonical SHA-256 |
+|---|---|---|
+| 066 | 2026-09-17 08:51:04.082 | `df194ea75f0fbfbaf49b823425decdf93633681f7c5888c49898348ad43b2a2a` |
+| 067 | 2026-09-17 08:51:04.082 | `3c3b6a1ea6463fabe1092990b390dfbad0839ce8f9c4670096f0a8264285b270` |
+| 068 | 2026-09-17 08:51:04.082 | `ac40af08a1ee63b38393dae8670d4dcda19498131e03fe96be27812c0922f87b` |
+| 069 | 2026-09-19 10:03:02.881 | `2ae9dffbbc1d3efbb366bcf923d906c53517b90424ee62eb6a44ad5e01c8af88` |
+
+PR #465 restored 066-068 to the repository. The handover records that 069 was
+replayed through the governed runner after its schema was already live; its
+receipt proves that replay, not the time of the original schema creation.
+
+Schema presence is not feature rollout: the trial-discount/pencilled-offer
+application remains in draft PR #462. At this check, school 1 had 81 offers,
+zero pencilled offers and zero post-trial discount quotes. Six pencilled-offer
+guard triggers remain installed. They still execute on relevant writes even
+without pencilled rows; do not describe them as disabled. Fraser confirmed on
+19 September that pencilled offers remain wanted. Preserve the feature branch
+and schema for completion; PR #462 currently conflicts with main and must be
+reviewed and reconciled before rollout. This reconciliation does not deploy it.
+
+### Original catalog audit scope
 
 Read-only catalog probes confirmed representative terminal effects for
 001-013, 015, 017-020, 022-040, and 042-060, with these exceptions and
@@ -277,6 +305,64 @@ The Phase 1 runner/checker now blocks on:
 CLI output is sanitized and never includes database URLs, secrets, or raw SQL
 errors.
 
+### Diagnosing a blocked runner
+
+Known governance failures retain their specific code (for example,
+`DIRECT_URL_MISSING` or `POOLED_URL_REFUSED`). Unexpected errors, including
+connection/authentication failures, surface as the generic sanitized line:
+
+```json
+{"ok":false,"code":"MIGRATION_RUNNER_FAILED","error":"Migration runner blocked"}
+```
+
+**`POSTGRES_URL_NON_POOLING` is the first thing to check.** The runner refuses
+pooled URLs; it uses this variable or the `DATABASE_URL_UNPOOLED` fallback. This
+is a separate connection configuration from the
+pooled `POSTGRES_URL` the application uses. A rotation that
+updates one and not the other leaves the app healthy while the runner cannot
+authenticate at all. Nothing user-facing breaks, so the failure is silent until
+someone tries to run a migration.
+
+The 19 September handover reports a stale direct credential during the 069
+investigation. Migrations 066-068 were missing from the repository but already
+had execution receipts; 069 lacked a receipt. Do not infer the execution path
+or cause of the missing files from a later connection failure.
+
+To identify a connection error, load the local environment explicitly and
+report only its error code (read-only; Node 22, repository root). Requiring the
+runner module alone does not load `.env.local`:
+
+```sh
+node --env-file=.env.local -e "const m=require('./scripts/migration-runner.js'); const {Client}=require('pg'); (async()=>{let c; try {c=new Client({connectionString:m.directDatabaseUrl(),connectionTimeoutMillis:10000}); await c.connect(); await c.query('BEGIN TRANSACTION READ ONLY'); console.log(JSON.stringify({ledgerRows:(await m.readLedger(c)).length})); await c.query('ROLLBACK');} catch(e) {console.error(JSON.stringify({code:e.code||'CONNECTION_CHECK_FAILED'})); process.exitCode=1;} finally {if(c) await c.end();}})();"
+```
+
+`28P01 password authentication failed` means the direct credential is wrong.
+Copy a fresh **direct** (non-pooled, no `-pooler` in the hostname) connection
+string from the Neon dashboard into `POSTGRES_URL_NON_POOLING`. Check Vercel's
+copy of the same variable too — it is set per environment and can drift
+independently.
+
+Once the connection works, `--status` is read-only and safe, and reports what
+the ledger is missing:
+
+```json
+{"ok":true,"applied":69,"pending":[]}
+```
+
+### Recording a migration that was applied outside the runner
+
+When the schema change is already live but has no ledger row, prepare a reviewed,
+explicitly approved replay through `--apply-approved` rather than inserting a
+row by hand. Read-only status is not replay approval. The runner writes the
+ledger entry in the same transaction as the SQL, so the record cannot diverge
+from what actually executed; a hand-written row is unverifiable evidence.
+
+This is only safe when every statement in the file is genuinely idempotent.
+Read the whole migration first — `IF NOT EXISTS` on the DDL is not enough on its
+own. 069, for example, also carries an `UPDATE schools`, which is safe only
+because it is guarded by a `WHERE` clause that matches zero rows once the key is
+set. Confirm the guard against production before re-running, not just the DDL.
+
 ## Phased cleanup and rollback
 
 ### Phase 1 — completed in this branch
@@ -309,8 +395,8 @@ Completed in the repository:
    append-only enforcement, failure states, ordering/checksum rejection, and
    Phase 1 runner compatibility.
 
-The production ledger now contains 65 successful rows: 60 baseline receipts and
-numbered execution receipts for 061 through 065. There are no running, failed,
+The 2026-09-19 read-only verification found 69 successful rows: 60 baseline
+receipts and numbered execution receipts for 061 through 069. There were no running, failed,
 pending, duplicate, unknown, or checksum-mismatched rows. Migration 041 remains
 deliberately deferred and has no false success row.
 
