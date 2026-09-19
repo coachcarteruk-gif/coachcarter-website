@@ -45,7 +45,7 @@ function allowedTransition(current, target) {
   return false;
 }
 
-async function processVerifiedFlexibleEvent({ connectionString, event, rawBody }) {
+async function processVerifiedFlexibleEvent({ connectionString, event, rawBody, stripe }) {
   const object = event.data?.object || {};
   const metadata = object.metadata || {};
   const attemptId = String(metadata.flexible_attempt_id || '');
@@ -102,6 +102,46 @@ async function processVerifiedFlexibleEvent({ connectionString, event, rawBody }
         [event.id, schoolId]
       );
       return { duplicate: true, status: attempt.status, sourceCreated: false };
+    }
+
+    // A failed authorisation is diagnostic evidence, not a terminal Checkout
+    // failure. Bind it to the saved Checkout before recording it; never fulfil
+    // or run settlement/discount processing from this event.
+    if (event.type === 'payment_intent.payment_failed') {
+      if (!attempt.stripe_checkout_session_id) throw new Error('Failure evidence awaits saved Checkout identity');
+      const session = await stripe.checkout.sessions.retrieve(attempt.stripe_checkout_session_id);
+      const sessionValidation = validateFlexibleProviderObject(attempt, session);
+      const intentValidation = validateFlexibleProviderObject(attempt, {
+        ...session, metadata: object.metadata, amount_total: object.amount,
+        currency: object.currency, livemode: object.livemode, payment_intent: object.id,
+      });
+      if (object.object !== 'payment_intent' || !/^pi_[A-Za-z0-9]+$/.test(object.id || '')
+          || !sessionValidation.ok || !intentValidation.ok
+          || sessionValidation.paymentIntentId !== object.id) {
+        throw new Error('Flexible Hours failure evidence does not match its Checkout');
+      }
+      const safeCode = value => typeof value === 'string' && /^[a-z0-9_]{1,100}$/.test(value) ? value : null;
+      const detail = {
+        stripe_event_id: event.id,
+        stripe_payment_intent_id: object.id,
+        failed_at: new Date(Number(event.created) * 1000).toISOString(),
+        code: safeCode(object.last_payment_error?.code) || 'payment_failed',
+        decline_code: safeCode(object.last_payment_error?.decline_code),
+      };
+      await client.query(
+        `INSERT INTO flexible_package_state_events (
+           school_id, learner_id, event_type, attempt_id, detail
+         ) VALUES ($1,$2,'payment_authorisation_failed',$3::uuid,$4::jsonb)`,
+        [schoolId, attempt.learner_id, attemptId, JSON.stringify(detail)]
+      );
+      await client.query(
+        `UPDATE flexible_package_payment_events
+            SET processing_state = 'processed', failure_code = $3,
+                processed_at = NOW(), last_received_at = NOW()
+          WHERE stripe_event_id = $1 AND school_id = $2`,
+        [event.id, schoolId, detail.code]
+      );
+      return { duplicate: false, status: attempt.status, sourceCreated: false, sourceId: null };
     }
 
     const validation = validateFlexibleProviderObject(attempt, object);
@@ -325,6 +365,7 @@ module.exports = async function handler(req, res) {
       connectionString: process.env.POSTGRES_URL,
       event,
       rawBody,
+      stripe,
     });
     return res.json({
       received: true,

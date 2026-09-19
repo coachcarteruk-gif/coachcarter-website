@@ -161,6 +161,10 @@ class FlexibleWebhookDatabase {
     }
 
     if (statement.startsWith('INSERT INTO flexible_package_state_events')) {
+      if (statement.includes("'payment_authorisation_failed'")) {
+        this.state.stateEvents.push({ event_type: 'payment_authorisation_failed', detail: JSON.parse(params[3]) });
+        return { rowCount: 1, rows: [] };
+      }
       this.state.stateEvents.push({
         event_type: 'entitlement_created',
         attempt_id: params[2],
@@ -182,11 +186,18 @@ class FlexibleWebhookDatabase {
   }
 }
 
-function loadWebhookWithDatabase(database) {
+function loadWebhookWithDatabase(database, stripe) {
   const transactionPath = require.resolve('../api/_db-transaction');
   const webhookPath = require.resolve('../api/flexible-package-webhook');
   const originalTransaction = require.cache[transactionPath];
   const originalWebhook = require.cache[webhookPath];
+  const paymentsPath = require.resolve('../api/_flexible-package-payments');
+  const originalPayments = require.cache[paymentsPath];
+  if (stripe) require.cache[paymentsPath] = { ...originalPayments, exports: {
+    ...originalPayments.exports,
+    createFlexiblePackageLiveStripeClient: () => stripe,
+    getFlexiblePackageLiveWebhookSecret: () => 'whsec_failure_test',
+  } };
   require.cache[transactionPath] = {
     id: transactionPath,
     filename: transactionPath,
@@ -198,6 +209,7 @@ function loadWebhookWithDatabase(database) {
   return {
     webhook,
     restore() {
+      require.cache[paymentsPath] = originalPayments;
       if (originalTransaction) require.cache[transactionPath] = originalTransaction;
       else delete require.cache[transactionPath];
       if (originalWebhook) require.cache[webhookPath] = originalWebhook;
@@ -323,4 +335,120 @@ test('a signed paid Flexible Hours event avoids the 42P08 bind failure and fulfi
       else process.env[key] = value;
     }
   }
+});
+
+function failureFixture() {
+  const attempt = {
+    id: ATTEMPT_ID, school_id: 1, learner_id: 101, product_id: '11', product_version_id: '12',
+    product_slug: 'flexible-15-hours', product_snapshot: { name: 'Flexible Hours' },
+    amount_pence: 81000, currency: 'GBP', total_units: 30, unit_minutes: 30, rate_pence_per_unit: 2700,
+    customer_terms_version: 'flexible-hours-v1', disclosure_version: 'flexible-hours-consumer-rights-v1',
+    stripe_payment_method_configuration_id: 'pmc_fixture', stripe_checkout_session_id: 'cs_live_fixture',
+    stripe_payment_intent_id: null, status: 'pending', paid_at: null,
+  };
+  const session = {
+    id: attempt.stripe_checkout_session_id, livemode: true, mode: 'payment',
+    amount_total: attempt.amount_pence, currency: 'gbp', payment_intent: 'pi_fixture',
+    payment_method_configuration_details: { id: attempt.stripe_payment_method_configuration_id },
+    metadata: metadataForAttempt(attempt), payment_status: 'paid',
+  };
+  const event = {
+    id: 'evt_failure_fixture', type: 'payment_intent.payment_failed', created: 1789757513, livemode: true,
+    data: { object: { id: 'pi_fixture', object: 'payment_intent', livemode: true, amount: 81000,
+      currency: 'gbp', metadata: metadataForAttempt(attempt),
+      last_payment_error: { code: 'payment_intent_authentication_failure', decline_code: 'generic_decline',
+        message: 'Sensitive unstructured provider text', payment_method: { billing_details: { name: 'Private' } } },
+    } },
+  };
+  const stripe = { checkout: { sessions: { retrieve: async id => {
+    expect(id).toBe(attempt.stripe_checkout_session_id);
+    return session;
+  } } } };
+  return { attempt, session, event, stripe };
+}
+
+for (const status of ['pending', 'paid', 'expired', 'review_required']) {
+  test(`failed authorisation records once without changing ${status} checkout or granting hours`, async () => {
+    const f = failureFixture(); f.attempt.status = status;
+    // Failure diagnostics must not attempt discount settlement processing.
+    f.attempt.post_trial_quote_id = 'quote_fixture';
+    const db = new FlexibleWebhookDatabase(f.attempt);
+    const loaded = loadWebhookWithDatabase(db);
+    try {
+      const args = { event: f.event, stripe: f.stripe, rawBody: Buffer.from(JSON.stringify(f.event)) };
+      await loaded.webhook._test.processVerifiedFlexibleEvent(args);
+      const duplicate = await loaded.webhook._test.processVerifiedFlexibleEvent(args);
+      expect(duplicate.duplicate).toBe(true);
+      expect(db.state.attempt).toEqual(f.attempt);
+      expect(db.state.stateEvents).toHaveLength(1);
+      expect(db.state.stateEvents[0].detail).toEqual({ stripe_event_id: f.event.id,
+        stripe_payment_intent_id: 'pi_fixture', failed_at: '2026-09-18T18:51:53.000Z',
+        code: 'payment_intent_authentication_failure', decline_code: 'generic_decline' });
+      expect(db.state.paymentEvents[0]).toMatchObject({ delivery_count: 2, processing_state: 'processed' });
+      expect(db.state.purchases).toEqual([]); expect(db.state.sources).toEqual([]);
+    } finally { loaded.restore(); }
+  });
+}
+
+for (const mismatch of ['school_id', 'learner_id', 'amount', 'intent', 'configuration', 'mode']) {
+  test(`failure rejects ${mismatch} mismatch and rolls back evidence`, async () => {
+    const f = failureFixture();
+    if (mismatch === 'school_id' || mismatch === 'learner_id') f.event.data.object.metadata[mismatch] = '999';
+    if (mismatch === 'amount') f.event.data.object.amount = 1;
+    if (mismatch === 'intent') f.session.payment_intent = 'pi_other';
+    if (mismatch === 'configuration') f.session.payment_method_configuration_details.id = 'pmc_other';
+    if (mismatch === 'mode') f.event.data.object.livemode = false;
+    const db = new FlexibleWebhookDatabase(f.attempt); const loaded = loadWebhookWithDatabase(db);
+    try {
+      await expect(loaded.webhook._test.processVerifiedFlexibleEvent({event:f.event,stripe:f.stripe,
+        rawBody:Buffer.from(JSON.stringify(f.event))})).rejects.toThrow();
+      expect(db.state.paymentEvents).toEqual([]); expect(db.state.stateEvents).toEqual([]);
+      expect(db.state.attempt).toEqual(f.attempt);
+    } finally { loaded.restore(); }
+  });
+}
+
+test('retries retain each failure in provider order and later success fulfils exactly once', async () => {
+  const f = failureFixture(); const db = new FlexibleWebhookDatabase(f.attempt);
+  const loaded = loadWebhookWithDatabase(db);
+  try {
+    async function deliver(event) { return loaded.webhook._test.processVerifiedFlexibleEvent({event,
+      stripe:f.stripe,rawBody:Buffer.from(JSON.stringify(event))}); }
+    await deliver({...f.event,id:'evt_newer',created:f.event.created+60});
+    await deliver(f.event);
+    const success = {...f.event,id:'evt_paid',type:'checkout.session.completed',data:{object:f.session}};
+    await deliver(success); await deliver(success);
+    await deliver({...f.event,id:'evt_delayed'});
+    expect(db.state.attempt.status).toBe('paid');
+    expect(db.state.purchases).toHaveLength(1); expect(db.state.sources).toHaveLength(1);
+    expect(db.state.stateEvents.filter(e=>e.event_type==='payment_authorisation_failed')).toHaveLength(3);
+  } finally { loaded.restore(); }
+});
+
+test('signed live failures reach diagnostics, invalid signatures are rejected', async () => {
+  const f = failureFixture();
+  const signer = new Stripe('sk_test_signature_only');
+  f.stripe.webhooks = signer.webhooks;
+  const db = new FlexibleWebhookDatabase(f.attempt); const loaded = loadWebhookWithDatabase(db,f.stripe);
+  try {
+    const payload = JSON.stringify(f.event);
+    for (const valid of [false,true]) {
+      const req = Readable.from([Buffer.from(payload)]); req.method='POST';
+      req.headers={'stripe-signature':signer.webhooks.generateTestHeaderString({payload,
+        secret:valid?'whsec_failure_test':'whsec_wrong'})};
+      const res=responseRecorder(); await loaded.webhook(req,res);
+      expect(res.statusCode).toBe(valid?200:400);
+      expect(db.state.stateEvents).toHaveLength(valid?1:0);
+    }
+  } finally { loaded.restore(); }
+});
+
+test('provider read failure rolls back so Stripe can retry safely', async () => {
+  const f=failureFixture(); f.stripe.checkout.sessions.retrieve=async()=>{throw new Error('Unavailable');};
+  const db=new FlexibleWebhookDatabase(f.attempt); const loaded=loadWebhookWithDatabase(db);
+  try {
+    await expect(loaded.webhook._test.processVerifiedFlexibleEvent({event:f.event,stripe:f.stripe,
+      rawBody:Buffer.from(JSON.stringify(f.event))})).rejects.toThrow('Unavailable');
+    expect(db.state.paymentEvents).toEqual([]); expect(db.state.stateEvents).toEqual([]);
+  } finally { loaded.restore(); }
 });

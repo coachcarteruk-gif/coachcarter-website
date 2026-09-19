@@ -437,6 +437,20 @@ async function handleAdminOverview(req, res) {
          AND event_type IN ('reconciliation_contradiction','manual_review_required')
        ORDER BY created_at DESC, id DESC LIMIT 200
     `;
+    const paymentFailures = await sql`
+      SELECT event.id, event.attempt_id, event.detail,
+             learner.name AS learner_name, attempt.product_slug,
+             attempt.amount_pence, attempt.status AS checkout_status,
+             COUNT(*) OVER (PARTITION BY event.attempt_id) AS failure_count
+        FROM flexible_package_state_events event
+        JOIN flexible_package_purchase_attempts attempt
+          ON attempt.id = event.attempt_id AND attempt.school_id = ${scope.schoolId}
+        LEFT JOIN learner_users learner
+          ON learner.id = event.learner_id AND learner.school_id = ${scope.schoolId}
+       WHERE event.school_id = ${scope.schoolId}
+         AND event.event_type = 'payment_authorisation_failed'
+       ORDER BY (event.detail->>'failed_at')::timestamptz DESC, event.id DESC LIMIT 200
+    `;
     const attemptExceptions = await sql`
       SELECT attempt.id, attempt.learner_id, learner.name AS learner_name,
              attempt.product_slug, attempt.amount_pence,
@@ -502,6 +516,7 @@ async function handleAdminOverview(req, res) {
       reductions,
       exceptions,
       attempt_exceptions: attemptExceptions,
+      payment_failures: paymentFailures,
       reconciliation,
     });
   } catch (error) {
