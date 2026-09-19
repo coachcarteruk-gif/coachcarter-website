@@ -49,7 +49,10 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
     expect(body).toContain('const directPrice  = await calcDirectLessonPrice(sql, {');
     expect(body).toContain('learnerId: user.id,');
     expect(body).toContain('const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);');
-    expect(body).toContain('const pricePence = priced.pricePence;');
+    expect(body).toContain('const postTrialQuote = await quotePostTrialPrice(sql, {');
+    expect(body).toContain('amountPence: priced.pricePence,');
+    expect(body).toContain('const pricePence = postTrialQuote.pricePence;');
+    expect(body).toContain('...postTrialQuote.metadata,');
     expect(body).toContain('const chargeMins = durationMins;');
     expect(body).toContain('unit_amount: pricePence');
     expect(body).toContain('amount_pence:    String(pricePence)');

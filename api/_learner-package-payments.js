@@ -1,5 +1,7 @@
 'use strict';
 
+const { discountedCheckoutExpiresAt } = require('./_package-checkout-expiry');
+
 const crypto = require('crypto');
 const {
   STRIPE_CLIENT_PURPOSES,
@@ -107,6 +109,9 @@ function packageMetadata(attempt) {
     currency: String(attempt.currency).toUpperCase(),
     customer_terms_version: String(attempt.customer_terms_version),
     stripe_mode: 'test',
+    ...(attempt.post_trial_quote && typeof attempt.post_trial_quote === 'object'
+      ? attempt.post_trial_quote.metadata || {}
+      : {}),
   };
   if (attempt.full_curriculum_test_booking_id) {
     metadata.full_curriculum_test_booking_id = String(attempt.full_curriculum_test_booking_id);
@@ -119,6 +124,7 @@ function packageMetadata(attempt) {
 
 function buildPackageCheckoutParams({ attempt, learnerEmail, returnBaseUrl, paymentMethodConfiguration }) {
   const metadata = packageMetadata(attempt);
+  const expiresAt = discountedCheckoutExpiresAt(attempt);
   const productName = String(attempt.product_name).slice(0, 240);
   const description = String(attempt.product_description || '').slice(0, 500);
   return {
@@ -144,6 +150,7 @@ function buildPackageCheckoutParams({ attempt, learnerEmail, returnBaseUrl, paym
     customer_email: learnerEmail,
     payment_method_configuration: paymentMethodConfiguration,
     billing_address_collection: 'required',
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
     success_url: `${returnBaseUrl}/learner/packages.html?package_return=1&attempt_id=${attempt.id}`,
     cancel_url: `${returnBaseUrl}/learner/packages.html?package_cancelled=1&attempt_id=${attempt.id}`,
   };
@@ -175,6 +182,10 @@ function validateProviderObject(attempt, object) {
   if (currency !== String(attempt.currency).toUpperCase()) contradictions.push('currency_mismatch');
   if (metadata.customer_terms_version !== String(attempt.customer_terms_version)) contradictions.push('terms_version_mismatch');
   if (metadata.stripe_mode !== 'test') contradictions.push('metadata_mode_mismatch');
+  const frozenPostTrialMetadata = attempt.post_trial_quote?.metadata || {};
+  for (const [key, value] of Object.entries(frozenPostTrialMetadata)) {
+    if (metadata[key] !== String(value)) contradictions.push(`${key}_mismatch`);
+  }
   if (
     attempt.full_curriculum_test_booking_id
     && positiveInteger(metadata.full_curriculum_test_booking_id) !== Number(attempt.full_curriculum_test_booking_id)

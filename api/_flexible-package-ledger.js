@@ -52,14 +52,24 @@ function planFlexiblePackageFifo(sources, unitsRequired) {
     const minutes = Math.min(available, remaining);
     const units = minutes / FLEXIBLE_UNIT_MINUTES;
     const rate = Number(source.rate_pence_per_unit);
+    const remainingValuePence = source.remaining_value_pence == null
+      ? Math.round((available / FLEXIBLE_UNIT_MINUTES) * rate)
+      : Number(source.remaining_value_pence);
     if (!Number.isFinite(rate) || rate <= 0 || !Number.isSafeInteger(Math.round(rate * 1e6))) {
       return { ok: false, code: 'INVALID_SOURCE_RATE', source_id: source.id, allocations: [] };
     }
+    if (!Number.isSafeInteger(remainingValuePence) || remainingValuePence < 0) {
+      return { ok: false, code: 'INVALID_SOURCE_VALUE', source_id: source.id, allocations: [] };
+    }
+    const availableUnits = available / FLEXIBLE_UNIT_MINUTES;
+    const contributionPence = units === availableUnits
+      ? remainingValuePence
+      : Math.round(units * remainingValuePence / availableUnits);
     allocations.push({
       source_id: Number(source.id),
       units,
       rate_pence_per_unit: rate,
-      contribution_pence: Math.round(units * rate),
+      contribution_pence: contributionPence,
     });
     remaining -= minutes;
   }
@@ -156,6 +166,17 @@ async function bookFlexiblePackageSlotTransaction({
 
       const sources = await client.query(
         `SELECT s.id, s.rate_pence_per_unit,
+                GREATEST(0, s.original_value_pence
+                  - COALESCE((SELECT SUM(r.gross_refund_pence) FROM flexible_package_source_reductions r
+                               WHERE r.source_id = s.id AND r.school_id = $1), 0)
+                  - COALESCE((SELECT SUM(a.contribution_pence)
+                                FROM flexible_package_booking_allocations a
+                               WHERE a.source_id = s.id AND a.school_id = $1
+                                 AND NOT EXISTS (
+                                   SELECT 1 FROM flexible_package_allocation_returns ar
+                                    WHERE ar.allocation_id = a.id AND ar.school_id = a.school_id
+                                 )), 0)
+                )::integer AS remaining_value_pence,
                 GREATEST(0, s.initial_units
                   - COALESCE((SELECT SUM(r.units_reduced) FROM flexible_package_source_reductions r
                                WHERE r.source_id = s.id AND r.school_id = $1), 0)

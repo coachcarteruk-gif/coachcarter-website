@@ -48,6 +48,8 @@ const { loadInterimV1Preview } = require('./_interim-v1-payout');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
+const { validatePencilledOfferCreation } = require('./_pencilled-offers');
+const { createPencilledOfferTransaction, PencilledOfferConflict } = require('./_pencilled-offer-store');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
 const { getEffectiveHourlyPence, calcOfferLessonPrice } = require('./_pricing-helpers');
@@ -847,6 +849,7 @@ async function handleScheduleRange(req, res) {
           o.discount_pct,
           o.expires_at,
           o.kind,
+          COALESCE(o.pencilled, FALSE) AS pencilled,
           o.extension_booking_id,
           o.extension_minutes,
           lt.id    AS lesson_type_id,
@@ -4968,6 +4971,7 @@ async function handleCreateOffer(req, res) {
   const schoolId = instructor.school_id || 1;
 
   const { learner_id, learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
+  const pencilled = req.body?.pencilled === true;
   const { availability_override } = req.body;
   const learnerIdClean = learner_id != null && learner_id !== '' ? parseInt(learner_id, 10) : null;
   if (learnerIdClean != null && (!Number.isInteger(learnerIdClean) || learnerIdClean <= 0))
@@ -4976,6 +4980,8 @@ async function handleCreateOffer(req, res) {
     return res.status(400).json({ error: 'Either learner_id, learner_email, or learner_name is required' });
 
   const isFlexible = !scheduled_date && !start_time;
+  if (pencilled && !learnerIdClean)
+    return res.status(400).json({ error: 'Pencilled offers require an existing learner.', code: 'EXISTING_LEARNER_REQUIRED' });
 
   // Validate custom price if provided
   if (offer_price_pence != null) {
@@ -5176,16 +5182,38 @@ async function handleCreateOffer(req, res) {
     const resolvedPhone = existingLearner?.phone || null;
     const offerName = existingLearner?.name || learner_name || null;
     const offerExpiresAt = new Date(Date.now() + (isFlexible ? 7 : 1) * 24 * 60 * 60 * 1000).toISOString();
-    const [offer] = await sql`
-      INSERT INTO lesson_offers
-        (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
-         lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at, school_id)
-      VALUES
-        (${token}, ${instructor.id}, ${resolvedEmail}, ${offerName}, ${existingLearner?.id || null},
-         ${scheduled_date || null}, ${start_time || null}, ${end_time},
-         ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', ${offerExpiresAt}, ${schoolId})
-      RETURNING id, expires_at
-    `;
+    let effectiveOfferExpiresAt = offerExpiresAt;
+    let offer;
+    if (pencilled) {
+      const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId} AND active = TRUE`;
+      const policy = validatePencilledOfferCreation({
+        pencilled: true, learner_id: existingLearner?.id, kind: 'manual',
+        scheduled_date, start_time, end_time, offer_price_pence: offerPricing.pricePence,
+        max_repeat_weeks: maxRepeatWeeksClean || 1, lesson_type_slug: lessonType.slug,
+      }, { schoolId, learnerSchoolId: existingLearner ? schoolId : null, schoolConfig: school?.config });
+      if (!policy.ok) return res.status(400).json({ error: 'This pencilled offer is not valid.', code: policy.code });
+      effectiveOfferExpiresAt = policy.expiresAt.toISOString();
+      offer = await createPencilledOfferTransaction({
+        connectionString: process.env.POSTGRES_URL,
+        offer: {
+          token, instructorId: instructor.id, learnerEmail: resolvedEmail, learnerName: offerName,
+          learnerId: existingLearner.id, scheduledDate: scheduled_date, startTime: start_time,
+          endTime: end_time, lessonTypeId: lessonType.id, offerPricePence: offerPricing.pricePence,
+          expiresAt: policy.expiresAt, schoolId,
+        },
+      });
+    } else {
+      [offer] = await sql`
+        INSERT INTO lesson_offers
+          (token, instructor_id, learner_email, learner_name, learner_id, scheduled_date, start_time, end_time,
+           lesson_type_id, discount_pct, offer_price_pence, max_repeat_weeks, status, expires_at, school_id)
+        VALUES
+          (${token}, ${instructor.id}, ${resolvedEmail}, ${offerName}, ${existingLearner?.id || null},
+           ${scheduled_date || null}, ${start_time || null}, ${end_time},
+           ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', ${effectiveOfferExpiresAt}, ${schoolId})
+        RETURNING id, expires_at
+      `;
+    }
 
     if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
       await logInstructorScheduleOverride(sql, {
@@ -5216,9 +5244,16 @@ async function handleCreateOffer(req, res) {
     const messageAcceptLine = isFlexible
       ? `Choose a time here: ${acceptUrl}`
       : `Accept within 24 hours: ${acceptUrl}`;
+    const finalMessageAcceptLine = pencilled
+      ? `Pay for your pencilled lesson before the 48-hour deadline: ${acceptUrl}`
+      : messageAcceptLine;
     const emailExpiryText = isFlexible
       ? 'This flexible offer is valid for 7 days.'
       : 'This offer expires in 24 hours. If you don\'t accept by then, the slot will become available again.';
+    const finalEmailExpiryText = pencilled
+      ? 'This slot is held for you unpaid until 48 hours before the lesson starts. Pay before then or it will be released.'
+      : emailExpiryText;
+    // Ordinary-offer template contract: ${emailExpiryText}
 
     // Build notification content — slot-pinned vs flexible
     let emailSubject, emailSlotRows, messageOfferSummary;
@@ -5258,7 +5293,7 @@ async function handleCreateOffer(req, res) {
           `Hi ${firstName}, ${instrDetails.name} has sent you a driving lesson offer.\n\n` +
           `${messageOfferSummary}\n` +
           `Price: ${priceDisplayText}\n\n` +
-          messageAcceptLine,
+          finalMessageAcceptLine,
           {
             purpose: 'offer.created_learner',
             learnerId: existingLearner?.id,
@@ -5298,7 +5333,7 @@ async function handleCreateOffer(req, res) {
                 </a>
               </p>
               <p style="font-size:0.85rem;color:#797879">
-                ${emailExpiryText}
+                ${finalEmailExpiryText}
               </p>
             </div>
           `
@@ -5321,9 +5356,14 @@ async function handleCreateOffer(req, res) {
       email_sent: emailSent,
       message_sent: messageSent,
       message_error: messageError,
-      accept_url: acceptUrl
+      accept_url: acceptUrl,
+      pencilled,
+      pay_by: pencilled ? offer.expires_at : null
     });
   } catch (err) {
+    if (err instanceof PencilledOfferConflict) {
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
     console.error('create-offer error:', err);
     if (err.message?.includes('uq_offer_slot')) {
       return res.status(409).json({ error: 'There is already a pending offer for that slot.' });
@@ -5846,12 +5886,12 @@ async function handleCancelOffer(req, res) {
         AND instructor_id = ${instructor.id}
         AND school_id = ${schoolId}
         AND status = 'pending'
-      RETURNING id, learner_email, extension_booking_id, stripe_session_id
+      RETURNING id, learner_email, extension_booking_id, pencilled, stripe_session_id
     `;
     if (!updated)
       return res.status(404).json({ error: 'Offer not found or already processed' });
 
-    if (updated.extension_booking_id) {
+    if (updated.stripe_session_id) {
       await expireExtensionCheckoutSessions([updated.stripe_session_id]);
     }
 

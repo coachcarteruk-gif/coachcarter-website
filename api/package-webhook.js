@@ -15,6 +15,7 @@ const {
   safeFailureCode,
   validateProviderObject,
 } = require('./_learner-package-payments');
+const { preprocessPostTrialWebhook } = require('./_post-trial-webhook');
 
 function providerCreatedAt(event) {
   return Number.isFinite(Number(event?.created))
@@ -186,6 +187,42 @@ async function processPackageEvent(sql, { event, attempt }) {
     });
   }
 
+  if (attempt.post_trial_quote_id) {
+    const quoteValidation = await preprocessPostTrialWebhook(sql, {
+      event,
+      schoolId: attempt.school_id,
+      learnerId: attempt.learner_id,
+      paymentType: 'learner_package_test',
+      paymentIdentity: object.id,
+    });
+    if (!quoteValidation.ok) {
+      if (quoteValidation.retryable === true) {
+        const error = new Error('Post-trial settlement arrived before signed initiation evidence');
+        error.code = quoteValidation.code;
+        throw error;
+      }
+      return transitionAttempt(sql, {
+        attempt,
+        targetStatus: 'review_required',
+        event,
+        object,
+        failureCode: quoteValidation.code,
+      });
+    }
+    const providerInitiatedAt = quoteValidation.quote?.provider_initiated_at || null;
+    if (providerInitiatedAt && !attempt.post_trial_provider_initiated_at) {
+      const rows = await sql`
+        UPDATE package_purchase_attempts
+           SET post_trial_provider_initiated_at = ${providerInitiatedAt}::timestamptz,
+               updated_at = NOW()
+         WHERE id = ${attempt.id}::uuid AND school_id = ${attempt.school_id}
+           AND post_trial_provider_initiated_at IS NULL
+         RETURNING *
+      `;
+      attempt = rows[0] || attempt;
+    }
+  }
+
   if (event.type === 'checkout.session.completed') {
     return transitionAttempt(sql, {
       attempt,
@@ -271,12 +308,14 @@ async function fulfilFullCurriculum(sql, { attempt }) {
         school_id, learner_id, attempt_id, product_id, product_version_id,
         product_slug, product_snapshot, amount_pence, currency,
         customer_terms_version, stripe_mode, stripe_checkout_session_id,
-        stripe_payment_intent_id, paid_at
+        stripe_payment_intent_id, paid_at, base_product_snapshot,
+        post_trial_quote_id, post_trial_quote, post_trial_provider_initiated_at
       )
       SELECT school_id, learner_id, id, product_id, product_version_id,
              product_slug, product_snapshot, amount_pence, currency,
              customer_terms_version, stripe_mode, stripe_checkout_session_id,
-             stripe_payment_intent_id, paid_at
+             stripe_payment_intent_id, paid_at, base_product_snapshot,
+             post_trial_quote_id, post_trial_quote, post_trial_provider_initiated_at
         FROM source
       ON CONFLICT (attempt_id) DO UPDATE
         SET attempt_id = EXCLUDED.attempt_id

@@ -2,6 +2,7 @@ const { neon } = require('@neondatabase/serverless');
 const { reportError } = require('./_error-alert');
 const { safeEqual } = require('./_auth');
 const { validateBulkPricingConfig } = require('./_pricing-helpers');
+const { validatePostTrialConfig } = require('./_post-trial-discount');
 const { logAudit } = require('./_audit');
 
 module.exports = async (req, res) => {
@@ -78,6 +79,8 @@ module.exports = async (req, res) => {
       if (bulkErr) {
         return res.status(400).json({ error: bulkErr });
       }
+      const postTrialErr = validatePostTrialConfig(config.pricing);
+      if (postTrialErr) return res.status(400).json({ error: postTrialErr });
 
       const { _source, _updated, _school_id, ...cleanConfig } = config;
       cleanConfig.last_updated = new Date().toISOString();

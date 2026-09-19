@@ -42,8 +42,10 @@ const {
   OWNER_CERTIFIED_TERMS_VERSION,
   PILOT_CERTIFICATION_VERSION,
   buildConsumerContractSnapshot,
+  discountedConsumerRightsSnapshot,
   normaliseConsumerRightsConfig,
 } = require('./_full-curriculum-consumer-rights');
+const { applyPostTrialDiscount, getPostTrialDiscount, quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
 
 function ownerCertifiedPilotTermsReady(product) {
   const pilot = product?.content?.controlled_pilot;
@@ -329,6 +331,7 @@ async function handleCatalogue(req, res) {
     let learnerDisplayName = null;
     let learnerEmailVerified = false;
     let flexibleRemainingMinutes = 0;
+    let postTrialDiscount = { eligible: false, discountPct: 0 };
     if (sameSchoolLearner) {
       const [learnerViewer] = await sql`
         SELECT name, email, email_verified FROM learner_users
@@ -378,6 +381,10 @@ async function handleCatalogue(req, res) {
          LIMIT 1
       `;
       pilotAccessApproved = !!pilotAccess[0];
+      postTrialDiscount = await getPostTrialDiscount(sql, {
+        schoolId: school.schoolId,
+        learnerId: sameSchoolLearner.id,
+      });
     }
 
     return res.json({
@@ -404,6 +411,10 @@ async function handleCatalogue(req, res) {
       flexible_live_purchasing_enabled: flexibleLivePurchasingEnabled,
       payment_method: purchasingEnabled ? 'pay_by_bank_test' : (flexibleLivePurchasingEnabled ? 'pay_by_bank' : null),
       products: products.map((product) => {
+        const discountedPrice = applyPostTrialDiscount(
+          Number(product.price_pence),
+          postTrialDiscount.eligible ? postTrialDiscount.discountPct : 0
+        );
         const consumerRights = normaliseConsumerRightsConfig(product.content, product.price_pence);
         const ownerCertified = ownerCertifiedPilotTermsReady(product);
         const isFlexible = product.product_type === 'flexible_hours';
@@ -444,6 +455,13 @@ async function handleCatalogue(req, res) {
                   };
         return {
           ...product,
+          checkout_price_pence: discountedPrice.pricePence,
+          post_trial_discount: postTrialDiscount.eligible ? {
+            eligible: true,
+            discount_pct: discountedPrice.discountPct,
+            discount_pence: discountedPrice.discountPence,
+            eligible_until: postTrialDiscount.eligibleUntil,
+          } : { eligible: false },
           consumer_rights: isFlexible ? {
             ready: !!flexibleTerms,
             disclosure_version: FLEXIBLE_HOURS_DISCLOSURE_VERSION,
@@ -1037,35 +1055,27 @@ async function handleCreateCheckout(req, res) {
     if (product.product_slug !== FULL_CURRICULUM_SLUG) {
       return errorResponse(res, 409, 'PACKAGE_FULFILMENT_UNAVAILABLE', 'Only Full Curriculum has approved test-mode fulfilment in this foundation');
     }
-    const amountPence = Number(product.price_pence);
-    if (!Number.isSafeInteger(amountPence) || amountPence < MIN_PAY_BY_BANK_PENCE || amountPence > MAX_PAY_BY_BANK_PENCE) {
+    const baseAmountPence = Number(product.price_pence);
+    if (!Number.isSafeInteger(baseAmountPence) || baseAmountPence < MIN_PAY_BY_BANK_PENCE || baseAmountPence > MAX_PAY_BY_BANK_PENCE) {
       return errorResponse(res, 409, 'PACKAGE_AMOUNT_UNSUPPORTED', 'This package amount is outside the approved Pay by Bank test range');
     }
     if (product.currency !== 'GBP') {
       return errorResponse(res, 409, 'PACKAGE_CURRENCY_UNSUPPORTED', 'Only GBP package versions are supported');
     }
-    const content = product.content && typeof product.content === 'object' && !Array.isArray(product.content)
+    const baseContent = product.content && typeof product.content === 'object' && !Array.isArray(product.content)
       ? product.content
       : null;
-    const productName = String(content?.name || '').trim();
-    if (!content || !productName) {
+    const productName = String(baseContent?.name || '').trim();
+    if (!baseContent || !productName) {
       return errorResponse(res, 409, 'PACKAGE_VERSION_INVALID', 'The active package version is incomplete');
     }
-    const consumerRights = normaliseConsumerRightsConfig(content, amountPence);
-    if (!consumerRights.ok) {
-      return errorResponse(res, 409, consumerRights.code, 'Full Curriculum purchasing is blocked until the approved consumer-rights values are configured in an immutable product version');
+    const baseConsumerRights = normaliseConsumerRightsConfig(baseContent, baseAmountPence);
+    if (!baseConsumerRights.ok) {
+      return errorResponse(res, 409, baseConsumerRights.code, 'Full Curriculum purchasing is blocked until the approved consumer-rights values are configured in an immutable product version');
     }
-    if (!ownerCertifiedPilotTermsReady({ ...product, content })) {
+    if (!ownerCertifiedPilotTermsReady({ ...product, content: baseContent })) {
       return errorResponse(res, 409, 'OWNER_CERTIFIED_TERMS_REQUIRED', 'Full Curriculum controlled-pilot purchasing requires the exact owner-certified prospective terms version');
     }
-    const contractEvidence = buildConsumerContractSnapshot({
-      amountPence,
-      currency: product.currency,
-      customerTermsVersion: product.customer_terms_version,
-      config: consumerRights.config,
-      earlyStartRequested,
-      adultAgeConfirmed,
-    });
     const schoolTimezone = operationalTimeZone(school.config);
 
     const verifiedBookings = await sql`
@@ -1106,6 +1116,29 @@ async function handleCreateCheckout(req, res) {
       return errorResponse(res, 403, 'CONTROLLED_PILOT_ACCESS_REQUIRED', 'Full Curriculum purchasing is limited to the learner approved for the controlled pilot');
     }
 
+    const priceQuote = await quotePostTrialPrice(sql, {
+      schoolId: scope.schoolId,
+      learnerId: scope.learner.id,
+      amountPence: baseAmountPence,
+    });
+    const amountPence = priceQuote.pricePence;
+    if (amountPence < MIN_PAY_BY_BANK_PENCE || amountPence > MAX_PAY_BY_BANK_PENCE) {
+      return errorResponse(res, 409, 'PACKAGE_AMOUNT_UNSUPPORTED', 'This package amount is outside the approved Pay by Bank test range');
+    }
+    const content = discountedConsumerRightsSnapshot(baseContent, baseAmountPence, amountPence);
+    if (!content) {
+      return errorResponse(res, 409, 'DISCOUNTED_CONSUMER_RIGHTS_INVALID', 'The discounted package valuation could not be frozen safely');
+    }
+    const consumerRights = normaliseConsumerRightsConfig(content, amountPence);
+    const contractEvidence = buildConsumerContractSnapshot({
+      amountPence,
+      currency: product.currency,
+      customerTermsVersion: product.customer_terms_version,
+      config: consumerRights.config,
+      earlyStartRequested,
+      adultAgeConfirmed,
+    });
+
     const attemptId = crypto.randomUUID();
     const idempotencyKey = `cc-package-test-checkout-${attemptId}`;
     const inserted = await sql`
@@ -1114,7 +1147,8 @@ async function handleCreateCheckout(req, res) {
         product_slug, product_name, product_description, product_snapshot,
         amount_pence, currency, customer_terms_version, stripe_mode, status,
         client_request_id, idempotency_key, full_curriculum_test_booking_id,
-        eligibility_snapshot, stripe_payment_method_configuration_id
+        eligibility_snapshot, stripe_payment_method_configuration_id,
+        base_product_snapshot, post_trial_quote_id, post_trial_quote
       ) VALUES (
         ${attemptId}::uuid, ${scope.schoolId}, ${scope.learner.id},
         ${product.product_id}, ${product.product_version_id}, ${product.product_slug},
@@ -1131,7 +1165,8 @@ async function handleCreateCheckout(req, res) {
            test_at: verifiedTestBooking.test_at,
            timezone: schoolTimezone,
            checked_at: new Date().toISOString(),
-        })}::jsonb, ${paymentMethodConfiguration}
+        })}::jsonb, ${paymentMethodConfiguration}, ${JSON.stringify(baseContent)}::jsonb,
+        ${priceQuote.quoteId}::uuid, ${JSON.stringify(priceQuote.quoteId ? priceQuote : {})}::jsonb
       )
       ON CONFLICT (school_id, learner_id, client_request_id) DO NOTHING
       RETURNING *
@@ -1254,6 +1289,23 @@ async function handleCreateCheckout(req, res) {
         failureCode: 'STRIPE_CHECKOUT_EVIDENCE_MISMATCH',
         failureMessage: 'Stripe Checkout evidence did not match the durable attempt.',
         detail: { contradictions: validation.contradictions },
+      });
+      return res.status(202).json({ ok: true, attempt: safeAttempt(attempt) });
+    }
+
+    const quoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: attempt.post_trial_quote_id,
+      schoolId: scope.schoolId,
+      learnerId: scope.learner.id,
+      paymentType: 'learner_package_test',
+      paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) {
+      attempt = await setAttemptStatus(sql, {
+        attempt,
+        status: 'review_required',
+        failureCode: quoteBinding.code,
+        failureMessage: 'The post-trial price evidence could not be bound to Checkout safely.',
       });
       return res.status(202).json({ ok: true, attempt: safeAttempt(attempt) });
     }

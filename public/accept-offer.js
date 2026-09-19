@@ -73,6 +73,10 @@
     // Broadcast offer (first-come-first-served): swap copy + show banner.
     var isBroadcast = o.kind === 'broadcast';
     var isExtension = o.is_extension === true;
+    if (o.pencilled === true) {
+      document.getElementById('page-title').textContent = 'Your pencilled-in lesson';
+      document.getElementById('page-sub').textContent = o.instructor_name + ' is holding this time for you, unpaid';
+    }
     if (isExtension) {
       document.getElementById('page-title').textContent = 'Extend your lesson';
       document.getElementById('page-sub').textContent = o.instructor_name + ' has invited you to add more time';
@@ -138,10 +142,17 @@
       var saving = document.createElement('span');
       saving.style.color = '#22c55e';
       saving.style.fontSize = '0.8rem';
-      saving.textContent = '(\u00A3' + ((o.original_price_pence - o.price_pence) / 100).toFixed(2) + ' off)';
-      priceEl.appendChild(saving);
+      var savingLine = document.getElementById('offer-saving');
+      savingLine.textContent = 'You save \u00A3' + ((o.original_price_pence - o.price_pence) / 100).toFixed(2);
+      savingLine.style.display = '';
     } else {
       priceEl.textContent = '\u00A3' + (o.price_pence / 100).toFixed(2);
+    }
+    if (o.post_trial_discount_pct > 0 && o.post_trial_eligible_until) {
+      var discountNote = document.getElementById('post-trial-discount-note');
+      discountNote.textContent = o.post_trial_discount_pct + '% post-trial discount available until ' +
+        new Date(o.post_trial_eligible_until).toLocaleString('en-GB');
+      discountNote.style.display = '';
     }
 
     // Weekly-repeat picker (slot-pinned offers only). Builds 1..max_repeat_weeks.
@@ -183,7 +194,9 @@
 
     // Update button text: extensions distinguish free acceptance from payment.
     var btn = document.getElementById('accept-btn');
-    if (isExtension && o.price_pence === 0) {
+    if (o.pencilled && o.price_pence > 0) {
+      btn.textContent = 'Pay for pencilled lesson →';
+    } else if (isExtension && o.price_pence === 0) {
       btn.textContent = 'Accept free extension →';
     } else if (o.price_pence === 0) {
       btn.textContent = 'Accept free lesson →';
@@ -225,6 +238,13 @@
     var seconds = Math.floor((diff % 60000) / 1000);
 
     var text = offerData.is_flexible ? 'Valid for ' : 'Expires in ';
+    var exactPayBy = document.getElementById('pay-by-exact');
+    if (offerData.pencilled) {
+      exactPayBy.textContent = 'Pay by ' + new Date(offerData.pay_by || offerData.expires_at).toLocaleString('en-GB');
+      text = 'Time remaining: ';
+    } else {
+      exactPayBy.textContent = '';
+    }
     if (days > 0) text += days + 'd ' + (hours % 24) + 'h';
     else if (hours > 0) text += hours + 'h ' + minutes + 'm';
     else if (minutes > 0) text += minutes + 'm ' + seconds + 's';
@@ -303,6 +323,7 @@
   }
 
   function acceptButtonLabel() {
+    if (offerData && offerData.pencilled) return 'Pay for pencilled lesson →';
     if (offerData && offerData.is_extension && offerData.price_pence === 0) return 'Accept free extension →';
     if (offerData && offerData.is_extension) return 'Add time & pay →';
     if (offerData && offerData.kind === 'broadcast') return 'Book this slot →';

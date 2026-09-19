@@ -120,7 +120,7 @@ test.describe('webhook paid offer BCS attribution', () => {
     const body = getOfferBookingBody();
     const bcsBody = getBcsBody();
 
-    expect(body).toContain('const totalAmountPence = amountPence * repeatWeeks');
+    expect(body).toContain('const totalAmountPence = amountPence;');
     expect(body).toContain("(${learnerId}, 'slot_purchase', ${totalCredits}, ${totalAmountPence}");
     expect(body).toContain('RETURNING id, amount_pence, stripe_fee_pence, effective_rate_pence_per_minute');
     expect(bcsBody).toContain('rate_pence_per_minute, contribution_pence, stripe_fee_pence, absorbed_by');
@@ -231,7 +231,9 @@ test.describe('webhook paid offer BCS attribution', () => {
     expect(offerUpdateIndex).toBeGreaterThan(throwIndex);
     expect(learnerEmailIndex).toBeGreaterThan(throwIndex);
     expect(body).toContain('Missing payment_intent for partial repeat-offer refund');
-    expect(body).toContain('refund_amount_pence=${amountPence * unused}');
+    expect(body).toContain('const requestedCashAllocations = splitPenceAcrossCount(totalAmountPence, repeatWeeks);');
+    expect(body).toContain('const partialRefundPence = requestedCashAllocations.slice(bookedCount)');
+    expect(body).toContain('refund_amount_pence=${partialRefundPence}');
   });
 
   test('retry after a one-off offer mid-flight failure invokes guarded orphan recovery', () => {

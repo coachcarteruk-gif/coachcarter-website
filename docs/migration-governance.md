@@ -122,13 +122,14 @@ replayed through the governed runner after its schema was already live; its
 receipt proves that replay, not the time of the original schema creation.
 
 Schema presence is not feature rollout: the trial-discount/pencilled-offer
-application remains in draft PR #462. At this check, school 1 had 81 offers,
+application was absent from main at the initial check. At that check, school 1 had 81 offers,
 zero pencilled offers and zero post-trial discount quotes. Six pencilled-offer
 guard triggers remain installed. They still execute on relevant writes even
 without pencilled rows; do not describe them as disabled. Fraser confirmed on
-19 September that pencilled offers remain wanted. Preserve the feature branch
-and schema for completion; PR #462 currently conflicts with main and must be
-reviewed and reconciled before rollout. This reconciliation does not deploy it.
+19 September that pencilled offers remain wanted, then requested their
+restoration together with the trial changes. PR #462 now reconciles the feature
+with current main; see `trial-discount-pencilled-offers-plan.md` for restoration
+verification. The production schema needs no replay for this application rollout.
 
 ### Original catalog audit scope
 

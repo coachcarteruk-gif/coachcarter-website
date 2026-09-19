@@ -1,5 +1,13 @@
 # Per-Instructor Credits Audit
 
+September 2026 branch note (pending rollout): post-trial quotes freeze reduced
+actual purchase cash after local discounts and, where enabled, Stripe promotions.
+Credit/booking sources use that cash; there is no platform-funded instructor
+subsidy. Flexible sources conserve pennies across allocations and returns, while
+Full Curriculum monetary refund caps scale with the paid snapshot. Existing source
+rows, purchase gates and refund execution policy remain unchanged. See
+[feature contract](trial-discount-pencilled-offers-plan.md).
+
 Last updated: 2026-09-14
 
 This is the living implementation audit for the move from pooled learner credit
