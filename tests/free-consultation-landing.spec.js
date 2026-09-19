@@ -334,7 +334,7 @@ test.describe('free consultation advertising landing page', () => {
     expect(api).toContain('experiment_key, experiment_variant, utm_source, utm_medium, utm_campaign, utm_content');
     expect(admin).toContain("'free-consultation': 'Free Consultation'");
     expect(admin).toContain('Ad source:');
-    expect(sitemap).toContain('<loc>https://coachcarter.uk/free-consultation</loc>');
+    expect(sitemap).toContain('<loc>https://www.coachcarter.uk/free-consultation</loc>');
     expect(migration).toContain('ALTER TABLE enquiries');
     expect(migration).toContain('ON enquiries (school_id, experiment_key, experiment_variant, submitted_at DESC)');
     expect(landing).not.toContain('—');

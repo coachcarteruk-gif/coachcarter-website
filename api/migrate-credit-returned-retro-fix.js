@@ -206,7 +206,7 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     console.error('[migrate-credit-returned-retro-fix] failed:', err);
     reportError('/api/migrate-credit-returned-retro-fix', err);
-    return res.status(500).json({ ok: false, error: 'Migration failed', details: err.message });
+    return res.status(500).json({ ok: false, error: 'Migration failed', details: 'Internal server error' });
   }
 };
 

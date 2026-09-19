@@ -8,7 +8,7 @@ const {
 } = require('../api/_instructor-schedule-warnings');
 
 const root = path.resolve(__dirname, '..');
-const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
+const read = rel => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 
 test.describe('instructor schedule warning overrides', () => {
   test('reports busy, blackout, external-calendar, and outside-hours warnings together', () => {
