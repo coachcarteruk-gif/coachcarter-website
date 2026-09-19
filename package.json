@@ -4,7 +4,7 @@
   "description": "CoachCarter Driving School",
   "scripts": {
     "vercel:dev": "vercel dev --listen 3000",
-    "deploy": "vercel --prod",
+    "deploy": "node scripts/preflight-deploy.js && vercel --prod",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:seed": "node scripts/seed-codex-test-data.js",
