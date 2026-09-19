@@ -23,6 +23,7 @@ const FLEXIBLE_PACKAGE_TERMS = Object.freeze({
   'flexible-30-hours': Object.freeze({ amountPence: 159000, totalUnits: 60, unitMinutes: 30, ratePencePerUnit: 2650 }),
 });
 const FLEXIBLE_PACKAGE_EVENT_TYPES = new Set([
+  'payment_intent.payment_failed',
   'checkout.session.completed',
   'checkout.session.async_payment_succeeded',
   'checkout.session.async_payment_failed',

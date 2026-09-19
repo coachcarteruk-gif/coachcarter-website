@@ -55,6 +55,36 @@ The application never calls `stripe.refunds.create` for Flexible Hours. An opera
 
 ## Monitoring and incident response
 
+### Payment authorisation failure history
+
+The Flexible Hours webhook accepts signed live `payment_intent.payment_failed`
+events. It retrieves the attempt's saved Checkout using the dedicated restricted
+key and validates the Checkout/PaymentIntent association, school, learner,
+immutable product metadata, amount, currency and payment configuration before
+recording evidence. The restricted key needs Checkout Session read permission.
+
+Each Stripe event creates at most one `payment_authorisation_failed` state event
+and one payment-event record. Only provider time, event/payment IDs and bounded
+error/decline codes are retained; raw error messages, billing details and client
+secrets are not copied. Existing Flexible Hours GDPR export and anonymisation
+cover these state events. Repeated delivery increments the delivery count.
+
+The admin Packages page shows the latest 200 failures, newest provider timestamp
+first, with learner, package, amount, failure count per checkout, current checkout
+status and a Stripe payment link. Previously failed checkouts that later succeed
+are labelled "Subsequently paid". A failure does not terminate an open Checkout,
+change its status, grant hours or run post-trial discount settlement processing.
+
+Rollout: deploy the handler and admin changes, then add
+`payment_intent.payment_failed` to the existing dedicated live endpoint's enabled
+events, preserving its URL, signing secret and all existing Checkout subscriptions.
+Verify a signed failure is recorded once and a replay adds no duplicate history.
+No migration is needed. Historical failures do not appear automatically; after
+activation an operator can resend the relevant Stripe events to this endpoint.
+Do not create synthetic events or manually modify balances to backfill history.
+If activation must be rolled back, remove only the new event subscription; keep
+Checkout fulfilment subscriptions active. Retained diagnostics remain available.
+
 Monitor pending/review attempts, signed-event failures, duplicate delivery counts, entitlement/source counts, raw source reconciliation and exception events. Paid must never regress; valid late success may promote expired/failed/review to paid. On contradiction, grant nothing manually and investigate school, learner, product/version, amount, currency, Checkout, PaymentIntent and Payment Method Configuration identities.
 
 To stop new purchases, set the School 1 live gate to exact Boolean `false`. Do not delete evidence or disable webhook processing for in-flight payments: a later signed success must still fulfil idempotently. Existing hours and bookings remain valid while purchasing is off.

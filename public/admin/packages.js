@@ -122,7 +122,15 @@
     var exceptionRows=attemptExceptions.map(function(row){return '<li>'+esc(row.learner_name||'Anonymised learner')+' / '+esc(row.product_slug)+' / '+esc(row.operational_status)+' / '+esc(row.failure_code||'confirmation overdue')+' / attempt '+esc(row.id)+'</li>';}).join('');
     var ledgerExceptionRows=ledgerExceptions.map(function(row){return '<li>'+esc(row.event_type)+' / '+esc(row.detail&&row.detail.contradictions?row.detail.contradictions.join(', '):'manual review')+' / '+esc(new Date(row.created_at).toLocaleString('en-GB'))+'</li>';}).join('');
     var reviewQueue='<article class="operation-card"><div><h3>Checkout review queue</h3><p class="operation-note">'+(attemptExceptions.length?'<strong>'+esc(attemptExceptions.length)+' overdue or ambiguous attempt(s) require manual provider review.</strong>':'No overdue or ambiguous Checkout attempts.')+'</p>'+(exceptionRows?'<details><summary>Review attempts</summary><ul>'+exceptionRows+'</ul></details>':'')+(ledgerExceptionRows?'<details><summary>Ledger exceptions</summary><ul>'+ledgerExceptionRows+'</ul></details>':'')+'</div></article>';
-    flexibleOperationsEl.innerHTML=summary+reviewQueue+(purchases||'<p class="empty-state">No Flexible Hours purchases.</p>');
+    var failureRows=(data.payment_failures||[]).map(function(row){
+      var detail=row.detail||{};
+      var paymentId=detail.stripe_payment_intent_id||'';
+      var paymentLink=/^pi_[A-Za-z0-9]+$/.test(paymentId)?' · <a target="_blank" rel="noopener noreferrer" href="https://dashboard.stripe.com/payments/'+encodeURIComponent(paymentId)+'">View in Stripe</a>':'';
+      var reason=detail.code==='payment_intent_authentication_failure'?'Bank authorisation did not complete':(detail.code||'Payment failed');
+      return '<li><strong>'+esc(row.learner_name||'Anonymised learner')+'</strong> · '+esc(row.product_slug)+' · '+esc(pounds(row.amount_pence))+'<br>'+esc(new Date(detail.failed_at).toLocaleString('en-GB'))+' · '+esc(reason)+' · '+esc(detail.code||'')+(detail.decline_code?' / '+esc(detail.decline_code):'')+'<br>'+esc(row.failure_count)+' failed authorisation(s) on this checkout · '+(row.checkout_status==='paid'?'Subsequently paid':'Checkout status: '+esc(row.checkout_status))+paymentLink+'</li>';
+    }).join('');
+    var failureHistory='<article class="operation-card"><div><h3>Payment failure history</h3><p class="operation-note">Failed authorisations can be retried in the same checkout. Stripe may provide only a generic reason. Times use your device timezone. Showing the latest 200 recorded failures.</p>'+(failureRows?'<ul>'+failureRows+'</ul>':'<p>No recorded payment authorisation failures.</p>')+'</div></article>';
+    flexibleOperationsEl.innerHTML=summary+reviewQueue+failureHistory+(purchases||'<p class="empty-state">No Flexible Hours purchases.</p>');
   }
 
   async function loadOperations(){
