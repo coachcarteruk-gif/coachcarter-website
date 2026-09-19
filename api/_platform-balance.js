@@ -21,6 +21,7 @@
  * global/all-school snapshot mode for cron, not a fallback to school 1.
  */
 const { simulatePayoutForInstructor } = require('./_payout-helpers');
+const { normalizeRequestReleaseSources } = require('./_refund-exposure-request-cycles');
 
 const REFUND_EXPOSURE_VALUATION_POLICY = Object.freeze({
   current: Object.freeze({
@@ -284,6 +285,7 @@ async function loadExactRefundExposureRows(sql, { schoolId }) {
           lcb.instructor_id,
           lcb.balance_minutes::int AS lcb_balance_minutes,
           ct.id AS credit_transaction_id,
+          ct.type AS source_type,
           ct.created_at,
           COALESCE(ct.minutes, 0)::int AS source_minutes,
           COALESCE(ct.amount_pence, 0)::int AS source_amount_pence,
@@ -343,6 +345,7 @@ async function loadExactRefundExposureRows(sql, { schoolId }) {
         lcb.instructor_id,
         lcb.balance_minutes::int AS lcb_balance_minutes,
         ct.id AS credit_transaction_id,
+        ct.type AS source_type,
         ct.created_at,
         COALESCE(ct.minutes, 0)::int AS source_minutes,
         COALESCE(ct.amount_pence, 0)::int AS source_amount_pence,
@@ -440,11 +443,36 @@ async function computeExactRefundExposure(sql, opts = {}) {
   const scope = resolveBalanceScope(opts);
   const rows = await loadExactRefundExposureRows(sql, { schoolId: scope.schoolId });
   const netCashInPence = await loadStripeOriginatedNetCashIn(sql, { schoolId: scope.schoolId });
-  return summarizeExactRefundExposureRows(rows, {
+  // Keep tenant identities in the grouping even for an explicit global snapshot.
+  const cycles = scope.isGlobal
+    ? await sql`
+        SELECT school_id, learner_id, instructor_id,
+               COALESCE(SUM(-minutes) FILTER (WHERE type = 'request_hold'), 0)::int AS held_minutes,
+               COALESCE(SUM(minutes) FILTER (WHERE type = 'request_refund'), 0)::int AS released_minutes,
+               COUNT(*) FILTER (WHERE minutes IS NULL OR (type = 'request_hold' AND minutes >= 0)
+                                  OR (type = 'request_refund' AND minutes <= 0))::int AS invalid_sign_count
+          FROM credit_transactions
+         WHERE type IN ('request_hold', 'request_refund')
+         GROUP BY school_id, learner_id, instructor_id
+      `
+    : await sql`
+        SELECT school_id, learner_id, instructor_id,
+               COALESCE(SUM(-minutes) FILTER (WHERE type = 'request_hold'), 0)::int AS held_minutes,
+               COALESCE(SUM(minutes) FILTER (WHERE type = 'request_refund'), 0)::int AS released_minutes,
+               COUNT(*) FILTER (WHERE minutes IS NULL OR (type = 'request_hold' AND minutes >= 0)
+                                  OR (type = 'request_refund' AND minutes <= 0))::int AS invalid_sign_count
+          FROM credit_transactions
+         WHERE school_id = ${scope.schoolId}
+           AND type IN ('request_hold', 'request_refund')
+         GROUP BY school_id, learner_id, instructor_id
+      `;
+  const normalized = normalizeRequestReleaseSources(rows, cycles);
+  const summary = summarizeExactRefundExposureRows(normalized.sources, {
     schoolId: scope.schoolId,
     isGlobal: scope.isGlobal,
     netCashInPence,
   });
+  return { ...summary, request_cycle_normalization: normalized.evidence };
 }
 
 async function computePlatformBalance(sql, stripe, opts = {}) {

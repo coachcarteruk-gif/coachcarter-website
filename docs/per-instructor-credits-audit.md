@@ -1,5 +1,14 @@
 # Per-Instructor Credits Audit
 
+19 September 2026 read-model correction (pending deployment): exact refund
+exposure excludes zero-value, unallocated `request_refund` rows only when the
+same school/learner/instructor has a completely balanced request-hold/release
+cycle. These releases restore existing reservations; they do not create new
+purchased credit. Unbalanced cycles, source adjustments, provider-linked or
+priced releases, and active booking allocations remain visible for review.
+The output reports the excluded row/minute counts. This correction is read-only
+and does not change booking eligibility, source allocation, refunds or payouts.
+
 September 2026 branch note (pending rollout): post-trial quotes freeze reduced
 actual purchase cash after local discounts and, where enabled, Stripe promotions.
 Credit/booking sources use that cash; there is no platform-funded instructor
