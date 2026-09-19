@@ -537,8 +537,32 @@
       "execution": "numbered"
     },
     {
-      "id": "069",
+      "id": "066",
       "order": 67,
+      "prefix": "066",
+      "filename": "066_pencilled_offers.sql",
+      "checksum": "df194ea75f0fbfbaf49b823425decdf93633681f7c5888c49898348ad43b2a2a",
+      "execution": "numbered"
+    },
+    {
+      "id": "067",
+      "order": 68,
+      "prefix": "067",
+      "filename": "067_post_trial_discount.sql",
+      "checksum": "3c3b6a1ea6463fabe1092990b390dfbad0839ce8f9c4670096f0a8264285b270",
+      "execution": "numbered"
+    },
+    {
+      "id": "068",
+      "order": 69,
+      "prefix": "068",
+      "filename": "068_post_trial_package_snapshots.sql",
+      "checksum": "ac40af08a1ee63b38393dae8670d4dcda19498131e03fe96be27812c0922f87b",
+      "execution": "numbered"
+    },
+    {
+      "id": "069",
+      "order": 70,
       "prefix": "069",
       "filename": "069_payout_summary_rates.sql",
       "checksum": "2ae9dffbbc1d3efbb366bcf923d906c53517b90424ee62eb6a44ad5e01c8af88",
