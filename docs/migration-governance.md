@@ -277,6 +277,66 @@ The Phase 1 runner/checker now blocks on:
 CLI output is sanitized and never includes database URLs, secrets, or raw SQL
 errors.
 
+### Diagnosing a blocked runner
+
+Because output is sanitized, every failure above surfaces as the same opaque
+line, with no indication of which one fired:
+
+```json
+{"ok":false,"code":"MIGRATION_RUNNER_FAILED","error":"Migration runner blocked"}
+```
+
+**`POSTGRES_URL_NON_POOLING` is the first thing to check.** The runner refuses
+pooled URLs, so this is its only route to the database — and it is a different
+credential from the pooled `POSTGRES_URL` the application uses. A rotation that
+updates one and not the other leaves the app healthy while the runner cannot
+authenticate at all. Nothing user-facing breaks, so the failure is silent until
+someone tries to run a migration.
+
+That happened between 14 and 19 September 2026: migrations 066-068 ran outside
+the runner and were missing from the repo, and 069 ran outside the runner and
+was missing from the ledger. Both gaps trace to the same stale credential.
+
+To identify the real error, reproduce the runner's steps with the sanitizer out
+of the way (read-only; run from the repository root):
+
+```js
+// node -e "..." — loads .env.local, then connects exactly as the runner does
+const m = require('./scripts/migration-runner.js');
+const { Client } = require('pg');
+const c = new Client({ connectionString: m.directDatabaseUrl() });
+await c.connect();            // 28P01 here means the direct credential is stale
+await c.query('BEGIN TRANSACTION READ ONLY');
+console.log((await m.readLedger(c)).length);
+await c.query('ROLLBACK');
+```
+
+`28P01 password authentication failed` means the direct credential is wrong.
+Copy a fresh **direct** (non-pooled, no `-pooler` in the hostname) connection
+string from the Neon dashboard into `POSTGRES_URL_NON_POOLING`. Check Vercel's
+copy of the same variable too — it is set per environment and can drift
+independently.
+
+Once the connection works, `--status` is read-only and safe, and reports what
+the ledger is missing:
+
+```json
+{"ok":true,"applied":68,"pending":["069"]}
+```
+
+### Recording a migration that was applied outside the runner
+
+When the schema change is already live but has no ledger row, re-run it through
+`--apply-approved` rather than inserting a row by hand. The runner writes the
+ledger entry in the same transaction as the SQL, so the record cannot diverge
+from what actually executed; a hand-written row is unverifiable evidence.
+
+This is only safe when every statement in the file is genuinely idempotent.
+Read the whole migration first — `IF NOT EXISTS` on the DDL is not enough on its
+own. 069, for example, also carries an `UPDATE schools`, which is safe only
+because it is guarded by a `WHERE` clause that matches zero rows once the key is
+set. Confirm the guard against production before re-running, not just the DDL.
+
 ## Phased cleanup and rollback
 
 ### Phase 1 — completed in this branch
