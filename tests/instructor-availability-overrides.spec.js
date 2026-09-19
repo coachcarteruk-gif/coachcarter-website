@@ -92,7 +92,8 @@ test.describe('instructor availability overrides', () => {
     expect(slots).toContain('async function slotFitsActiveAvailability');
     expect(slots).toContain('if (externalEvents.some(e => e.is_all_day)) return false');
     expect(slots).toContain('COALESCE(min_booking_notice_hours, 24) AS min_booking_notice_hours');
-    expect(slots).toContain('if (((slotDateTime - new Date()) / 3600000) < minNoticeHours) return false');
+    expect(slots).toContain('if (minNoticeHours > 0 && !meetsMinimumBookingNotice({');
+    expect(slots).toContain('operationalTimezone,');
     expect(slots).toContain('return [...weeklyWindows, ...overrideWindows].some');
     expect(slots).toContain('const unavailableDates = []');
     expect(slots).toContain('transmissionType: requestedTransmissionType');

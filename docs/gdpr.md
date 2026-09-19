@@ -1,5 +1,10 @@
 # GDPR Compliance (April 2026)
 
+September 2026 branch note (pending rollout): `post_trial_discount_quotes` is
+retained financial evidence, included in learner export and anonymised by clearing
+its learner binding during deletion. Its cash, trial source and provider binding
+remain immutable; do not delete quote rows or rewrite package purchase snapshots.
+
 > Hard rules live in `CLAUDE.md`. This file is reference material — load it when adding PII, admin actions, consent flows, or retention logic.
 
 The platform is GDPR-compliant.

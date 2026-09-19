@@ -5,6 +5,9 @@ process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_free_t
 const {
   _hasBufferedSlotConflict,
   _findAdjacentTravelSpacingConflict,
+  _effectiveBookingWindowDays,
+  _isDateWithinBookingWindow,
+  _FREE_TRIAL_MAX_DAYS_AHEAD,
 } = require('../api/slots');
 
 const root = path.resolve(__dirname, '..');
@@ -76,6 +79,52 @@ test.describe('free trial scheduling safeguards', () => {
     expect(page).not.toContain('lesson_type_id=37');
     expect(api).toContain('lesson_type_slug');
     expect(api).toContain('WHERE slug = ${slug} AND active = true AND school_id = ${schoolId}');
+  });
+
+  test('free trial picker requests the full bounded 28-day window', () => {
+    const page = read('public/free-trial.js');
+
+    expect(page).toContain('var DAYS_AHEAD = 28;');
+    expect(page).toContain("lesson_type_slug=trial");
+  });
+
+  test('free trial window is the shorter of 28 days and the instructor setting', () => {
+    expect(_FREE_TRIAL_MAX_DAYS_AHEAD).toBe(28);
+    expect(_effectiveBookingWindowDays(84, _FREE_TRIAL_MAX_DAYS_AHEAD)).toBe(28);
+    expect(_effectiveBookingWindowDays(14, _FREE_TRIAL_MAX_DAYS_AHEAD)).toBe(14);
+  });
+
+  test('free trial booking allows day 28 but rejects a malicious day-29 submission', () => {
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const day28 = new Date(today);
+    day28.setUTCDate(day28.getUTCDate() + 28);
+    const day29 = new Date(today);
+    day29.setUTCDate(day29.getUTCDate() + 29);
+
+    expect(_isDateWithinBookingWindow(day28, 84, _FREE_TRIAL_MAX_DAYS_AHEAD)).toBe(true);
+    expect(_isDateWithinBookingWindow(day29, 84, _FREE_TRIAL_MAX_DAYS_AHEAD)).toBe(false);
+  });
+
+  test('ordinary paid booking windows retain the platform and instructor limits', () => {
+    expect(_effectiveBookingWindowDays(84)).toBe(84);
+    expect(_effectiveBookingWindowDays(21)).toBe(21);
+
+    const api = read('api/slots.js');
+    const paidCheckout = functionBody(api, 'handleCheckoutSlot');
+    const freeTrialBooking = functionBody(api, 'handleBookFreeTrial');
+    expect(paidCheckout).toContain('isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)');
+    expect(paidCheckout).not.toContain('FREE_TRIAL_MAX_DAYS_AHEAD');
+    expect(freeTrialBooking).toContain('FREE_TRIAL_MAX_DAYS_AHEAD,');
+    expect(freeTrialBooking).toContain('todayStart');
+  });
+
+  test('free trial reschedules use the same bounded window', () => {
+    const reschedule = functionBody(read('api/slots.js'), 'handleReschedule');
+
+    expect(reschedule).toContain("booking.lesson_type_slug === 'trial'");
+    expect(reschedule).toContain('? FREE_TRIAL_MAX_DAYS_AHEAD');
+    expect(reschedule).toContain('Free trials can only be rescheduled up to');
   });
 
   test('learner cancellation releases self-serve free trial bookings', () => {

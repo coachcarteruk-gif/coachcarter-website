@@ -175,14 +175,21 @@
   }
 
   function renderProductPrice(product) {
-    var price = '<div class="product-price">' + escapeHtml(formatPrice(product.price_pence, product.currency)) + '</div>';
+    var checkoutPrice = Number(product.checkout_price_pence == null ? product.price_pence : product.checkout_price_pence);
+    var discounted = product.post_trial_discount && product.post_trial_discount.eligible && checkoutPrice < Number(product.price_pence);
+    var price = '<div class="product-price">' + escapeHtml(formatPrice(checkoutPrice, product.currency)) + '</div>';
+    if (discounted) {
+      price += '<div class="product-price-comparison"><span class="price-was"><s>' +
+        escapeHtml(formatPrice(product.price_pence, product.currency)) + '</s></span> ' +
+        '<span>' + escapeHtml(String(product.post_trial_discount.discount_pct)) + '% post-trial discount</span></div>';
+    }
     if (product.product_type !== 'flexible_hours') return price;
 
     var entitlement = product.content && product.content.entitlement || {};
     var hours = Number(entitlement.hours || 0);
     var payAsYouGoHourlyPence = Number(cataloguePricing.pay_as_you_go_hourly_pence || 0);
     var payAsYouGoTotalPence = Math.round(hours * payAsYouGoHourlyPence);
-    var savingPence = payAsYouGoTotalPence - Number(product.price_pence || 0);
+    var savingPence = payAsYouGoTotalPence - checkoutPrice;
     if (!(hours > 0 && payAsYouGoHourlyPence > 0 && savingPence > 0)) return price;
 
     return price + '<div class="product-price-comparison">' +
@@ -221,7 +228,7 @@
             '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
             '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted" aria-describedby="' + termsDetailId + '"> I accept the Flexible Hours terms and request immediate access to my hours.</label>' +
             '<details class="consumer-terms-detail"><summary>Important cancellation and refund information</summary><p id="' + termsDetailId + '">' + escapeHtml((rights.checkout_acknowledgement || '') + ' ' + (rights.immediate_access_request || '')) + '</p></details>' +
-            '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' by bank</button>' +
+            '<button type="button" class="product-action is-purchasable" data-flexible-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.checkout_price_pence == null ? product.price_pence : product.checkout_price_pence, product.currency)) + ' by bank</button>' +
           '</div>' +
         '</details>';
       }
@@ -233,7 +240,7 @@
           '<p class="consumer-choice-detail">' + escapeHtml(rights.early_start_request || '') + '</p>' +
           '<label class="consumer-choice consumer-age"><input type="checkbox" name="adult_age_confirmed"> I confirm that I am 18 or over.</label>' +
           '<label class="consumer-choice consumer-terms"><input type="checkbox" name="consumer_terms_accepted"> ' + escapeHtml(rights.checkout_acknowledgement || '') + '</label>' +
-          '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.price_pence, product.currency)) + ' and enrol</button>' +
+          '<button type="button" class="product-action is-purchasable" data-package-checkout="' + escapeHtml(product.id) + '" data-disclosure-version="' + escapeHtml(rights.disclosure_version || '') + '" aria-describedby="' + describedBy + '">Pay ' + escapeHtml(formatPrice(product.checkout_price_pence == null ? product.price_pence : product.checkout_price_pence, product.currency)) + ' and enrol</button>' +
         '</div>' +
       '</details>';
     }

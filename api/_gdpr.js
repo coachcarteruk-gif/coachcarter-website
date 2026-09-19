@@ -83,6 +83,22 @@ async function packagePurchaseAttemptsTableExists(sql) {
   return Boolean(row?.has_package_purchase_attempts);
 }
 
+async function postTrialDiscountQuotesTableExists(sql) {
+  const [row] = await sql`
+    SELECT to_regclass('public.post_trial_discount_quotes') IS NOT NULL AS present
+  `;
+  return Boolean(row?.present);
+}
+
+async function pencilledOfferColumnsExist(sql) {
+  const [row] = await sql`
+    SELECT COUNT(*)::integer AS column_count FROM information_schema.columns
+     WHERE table_schema='public' AND table_name='lesson_offers'
+       AND column_name IN ('pencilled','checkout_attempt_id','checkout_attempt_started_at','checkout_attempt_payload')
+  `;
+  return Number(row?.column_count) === 4;
+}
+
 async function flexiblePackageTablesExist(sql) {
   const [row] = await sql`
     SELECT
@@ -163,6 +179,8 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasRefundLedger = await refundLedgerTablesExist(sql);
   const hasLearnerBroadcasts = await learnerBroadcastTablesExist(sql);
   const hasPackagePurchaseAttempts = await packagePurchaseAttemptsTableExists(sql);
+  const hasPostTrialDiscountQuotes = await postTrialDiscountQuotesTableExists(sql);
+  const hasPencilledOfferColumns = await pencilledOfferColumnsExist(sql);
   const hasFlexiblePackages = await flexiblePackageTablesExist(sql);
   const hasFullCurriculum = await fullCurriculumTablesExist(sql);
   const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
@@ -231,6 +249,24 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   }
 
   const retainedAnonymisation = [];
+  if (hasPostTrialDiscountQuotes) {
+    retainedAnonymisation.push(sql`
+      UPDATE post_trial_discount_quotes
+         SET learner_id = NULL
+       WHERE learner_id = ${learnerId}
+         AND school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId})
+    `);
+  }
+  if (hasPencilledOfferColumns) {
+    retainedAnonymisation.push(sql`
+      UPDATE lesson_offers
+         SET status=CASE WHEN status='pending' AND pencilled=TRUE THEN 'cancelled' ELSE status END,
+             learner_id=NULL, learner_name=NULL, learner_email=NULL,
+             checkout_attempt_id=NULL, checkout_attempt_started_at=NULL, checkout_attempt_payload=NULL
+       WHERE learner_id=${learnerId}
+         AND school_id=(SELECT school_id FROM learner_users WHERE id=${learnerId})
+    `);
+  }
   if (hasRefundLedger) {
     retainedAnonymisation.push(sql`UPDATE refund_events SET learner_id = NULL WHERE learner_id = ${learnerId}`);
   }
@@ -315,6 +351,7 @@ module.exports = {
   refundLedgerTablesExist,
   learnerBroadcastTablesExist,
   packagePurchaseAttemptsTableExists,
+  postTrialDiscountQuotesTableExists,
   flexiblePackageTablesExist,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,

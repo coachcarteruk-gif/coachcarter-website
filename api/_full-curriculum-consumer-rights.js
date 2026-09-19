@@ -110,6 +110,25 @@ function normaliseConsumerRightsConfig(content, amountPence) {
   };
 }
 
+function discountedConsumerRightsSnapshot(content, baseAmountPence, finalAmountPence) {
+  const base = positiveInteger(baseAmountPence);
+  const finalAmount = positiveInteger(finalAmountPence);
+  const original = normaliseConsumerRightsConfig(content, base);
+  if (!base || !finalAmount || finalAmount > base || !original.ok) return null;
+  if (finalAmount === base) return JSON.parse(JSON.stringify(content));
+  const snapshot = JSON.parse(JSON.stringify(content));
+  const rights = snapshot.consumer_rights;
+  const scale = value => Math.floor(Number(value) * finalAmount / base);
+  rights.teaching_deductions.base_90_minutes_pence = scale(rights.teaching_deductions.base_90_minutes_pence);
+  rights.teaching_deductions.base_cap_pence = scale(rights.teaching_deductions.base_cap_pence);
+  rights.teaching_deductions.retake_90_minutes_pence = scale(rights.teaching_deductions.retake_90_minutes_pence);
+  rights.teaching_deductions.retake_120_minutes_pence = scale(rights.teaching_deductions.retake_120_minutes_pence);
+  rights.teaching_deductions.retake_cap_pence = scale(rights.teaching_deductions.retake_cap_pence);
+  rights.assessment_deductions.each_completed_pence = scale(rights.assessment_deductions.each_completed_pence);
+  rights.assessment_deductions.cap_pence = scale(rights.assessment_deductions.cap_pence);
+  return normaliseConsumerRightsConfig(snapshot, finalAmount).ok ? snapshot : null;
+}
+
 function buildConsumerContractSnapshot({
   amountPence,
   currency = 'GBP',
@@ -265,6 +284,7 @@ module.exports = {
   OWNER_CERTIFIED_TERMS_VERSION,
   buildConsumerContractSnapshot,
   calculateRefund,
+  discountedConsumerRightsSnapshot,
   coolingOffExpiresAt,
   normaliseConsumerRightsConfig,
   sha256,

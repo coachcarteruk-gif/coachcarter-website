@@ -146,10 +146,10 @@ test.describe('Stage 6B reserved recurring block bank checkout/webhook contract'
     const source = read('api/webhook.js');
 
     expect(source).toContain("paymentType === 'slot_booking'");
-    expect(source).toContain('await handleSlotBooking(session, paymentEventContext);');
+    expect(source).toContain('await handleSlotBooking(checked.object, { ...paymentEventContext, postTrial: checked.result });');
     expect(source).toContain("paymentType === 'recurring_block_bank_checkout'");
-    expect(source).toContain('await handleRecurringBlockBankPaymentSuccess(session);');
-    expect(source).toContain('await handleRecurringBlockBankPaymentSuccess(paymentIntentToRecurringBlockSession(paymentIntent));');
+    expect(source).toContain('await handleRecurringBlockBankPaymentSuccess(checked.object);');
+    expect(source).toContain('await handleRecurringBlockBankPaymentSuccess(paymentIntentToRecurringBlockSession(checked.object));');
   });
 
   test('success conversion confirms the block, books held items, and creates scheduled bookings', () => {

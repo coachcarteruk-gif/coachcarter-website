@@ -12,6 +12,16 @@ const {
   payloadSha256,
   validateFlexibleProviderObject,
 } = require('./_flexible-package-payments');
+const { preprocessPostTrialWebhook } = require('./_post-trial-webhook');
+
+function taggedSql(client) {
+  return async (strings, ...values) => {
+    let text = strings[0];
+    for (let i = 0; i < values.length; i += 1) text += `$${i + 1}${strings[i + 1]}`;
+    const result = await client.query(text, values);
+    return result.rows;
+  };
+}
 
 function positiveInteger(value) {
   const number = Number(value);
@@ -126,6 +136,52 @@ async function processVerifiedFlexibleEvent({ connectionString, event, rawBody }
       return { duplicate: false, status, sourceCreated: false, sourceId: null, reviewRequired: true };
     }
 
+    if (attempt.post_trial_quote_id) {
+      const quoteValidation = await preprocessPostTrialWebhook(taggedSql(client), {
+        event,
+        schoolId,
+        learnerId: attempt.learner_id,
+        paymentType: FLEXIBLE_PACKAGE_PAYMENT_TYPE,
+        paymentIdentity: object.id,
+      });
+      if (!quoteValidation.ok) {
+        if (quoteValidation.retryable === true) {
+          const error = new Error('Post-trial settlement needs earlier signed initiation history');
+          error.code = quoteValidation.code;
+          throw error;
+        }
+        await client.query(
+          `UPDATE flexible_package_purchase_attempts
+              SET status = CASE WHEN status = 'paid' THEN status ELSE 'review_required' END,
+                  failure_code = $1,
+                  review_required_at = CASE WHEN status = 'paid' THEN review_required_at ELSE COALESCE(review_required_at, NOW()) END,
+                  updated_at = NOW()
+            WHERE id = $2::uuid AND school_id = $3`,
+          [quoteValidation.code, attemptId, schoolId]
+        );
+        await client.query(
+          `UPDATE flexible_package_payment_events
+              SET processing_state = $1, failure_code = $2,
+                  processed_at = NOW(), last_received_at = NOW()
+            WHERE stripe_event_id = $3 AND school_id = $4`,
+          [quoteValidation.compensationRequired ? 'processed' : 'failed', quoteValidation.code, event.id, schoolId]
+        );
+        return { duplicate: false, status: attempt.status === 'paid' ? 'paid' : 'review_required', sourceCreated: false, sourceId: null, reviewRequired: true };
+      }
+      const initiatedAt = quoteValidation.quote?.provider_initiated_at || null;
+      if (initiatedAt && !attempt.post_trial_provider_initiated_at) {
+        const initiated = await client.query(
+          `UPDATE flexible_package_purchase_attempts
+              SET post_trial_provider_initiated_at = $1::timestamptz, updated_at = NOW()
+            WHERE id = $2::uuid AND school_id = $3
+              AND post_trial_provider_initiated_at IS NULL
+            RETURNING *`,
+          [initiatedAt, attemptId, schoolId]
+        );
+        attempt = initiated.rows[0] || attempt;
+      }
+    }
+
     const providerIdentity = await client.query(
       `UPDATE flexible_package_purchase_attempts
           SET stripe_checkout_session_id = COALESCE(stripe_checkout_session_id, $1),
@@ -169,11 +225,15 @@ async function processVerifiedFlexibleEvent({ connectionString, event, rawBody }
            school_id, learner_id, attempt_id, product_id, product_version_id,
            product_slug, product_snapshot, amount_pence, currency, total_units,
            unit_minutes, rate_pence_per_unit, customer_terms_version,
-           stripe_checkout_session_id, stripe_payment_intent_id, paid_at
+           stripe_checkout_session_id, stripe_payment_intent_id, paid_at,
+           base_product_snapshot, post_trial_quote_id, post_trial_quote,
+           post_trial_provider_initiated_at
          ) SELECT school_id, learner_id, id, product_id, product_version_id,
                   product_slug, product_snapshot, amount_pence, currency, total_units,
                   unit_minutes, rate_pence_per_unit, customer_terms_version,
-                  stripe_checkout_session_id, stripe_payment_intent_id, paid_at
+                  stripe_checkout_session_id, stripe_payment_intent_id, paid_at,
+                  base_product_snapshot, post_trial_quote_id, post_trial_quote,
+                  post_trial_provider_initiated_at
              FROM flexible_package_purchase_attempts
             WHERE id = $1::uuid AND school_id = $2 AND status = 'paid'
          ON CONFLICT (attempt_id) DO NOTHING

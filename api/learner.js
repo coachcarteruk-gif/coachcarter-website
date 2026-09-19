@@ -81,6 +81,7 @@ const {
   refundLedgerTablesExist,
   learnerBroadcastTablesExist,
   packagePurchaseAttemptsTableExists,
+  postTrialDiscountQuotesTableExists,
   flexiblePackageTablesExist,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
@@ -1650,19 +1651,30 @@ async function handleExportData(req, res) {
           SELECT lo.scheduled_date::text, lo.start_time::text, lo.end_time::text,
                  lo.discount_pct, lo.status, lo.kind, lo.trigger,
                  lo.created_at, lo.expires_at,
+                 (to_jsonb(lo)->>'pencilled')::boolean AS pencilled,
+                 CASE WHEN COALESCE((to_jsonb(lo)->>'pencilled')::boolean, FALSE)
+                      THEN lo.expires_at END AS pay_by,
+                 to_jsonb(lo)->>'checkout_attempt_started_at' AS checkout_attempt_started_at,
+                 to_jsonb(lo)->'checkout_attempt_payload' AS checkout_attempt_payload,
                  i.name AS instructor_name
           FROM lesson_offers lo
-          JOIN instructors i ON i.id = lo.instructor_id
-          WHERE (lo.learner_id = ${user.id} OR LOWER(lo.learner_email) = LOWER(${learnerEmail}))
+          JOIN instructors i ON i.id = lo.instructor_id AND i.school_id = lo.school_id
+          WHERE lo.school_id=${schoolId}
+            AND (lo.learner_id = ${user.id} OR LOWER(lo.learner_email) = LOWER(${learnerEmail}))
           ORDER BY lo.created_at DESC`
       : await sql`
           SELECT lo.scheduled_date::text, lo.start_time::text, lo.end_time::text,
                  lo.discount_pct, lo.status, lo.kind, lo.trigger,
                  lo.created_at, lo.expires_at,
+                 (to_jsonb(lo)->>'pencilled')::boolean AS pencilled,
+                 CASE WHEN COALESCE((to_jsonb(lo)->>'pencilled')::boolean, FALSE)
+                      THEN lo.expires_at END AS pay_by,
+                 to_jsonb(lo)->>'checkout_attempt_started_at' AS checkout_attempt_started_at,
+                 to_jsonb(lo)->'checkout_attempt_payload' AS checkout_attempt_payload,
                  i.name AS instructor_name
           FROM lesson_offers lo
-          JOIN instructors i ON i.id = lo.instructor_id
-          WHERE lo.learner_id = ${user.id}
+          JOIN instructors i ON i.id = lo.instructor_id AND i.school_id = lo.school_id
+          WHERE lo.learner_id = ${user.id} AND lo.school_id=${schoolId}
           ORDER BY lo.created_at DESC`;
 
     // Lesson requests (request-to-book): the learner's request history,
@@ -1725,6 +1737,18 @@ async function handleExportData(req, res) {
                  customer_terms_version, stripe_mode, status,
                  paid_at, failed_at, expired_at, refunded_at, created_at
             FROM package_purchase_attempts
+           WHERE learner_id = ${user.id} AND school_id = ${schoolId}
+           ORDER BY created_at DESC`
+      : null;
+
+    const hasPostTrialDiscountQuotes = await postTrialDiscountQuotesTableExists(sql);
+    const postTrialDiscountQuotes = hasPostTrialDiscountQuotes
+      ? await sql`
+          SELECT trial_booking_id, policy_version, base_amount_pence,
+                 discount_pct, discount_pence, final_amount_pence,
+                 trial_ended_at, eligible_until, checkout_expires_at,
+                 payment_type, bound_at, provider_initiated_at, created_at
+            FROM post_trial_discount_quotes
            WHERE learner_id = ${user.id} AND school_id = ${schoolId}
            ORDER BY created_at DESC`
       : null;
@@ -2024,6 +2048,7 @@ async function handleExportData(req, res) {
           'test_swap_listings', 'test_swap_requests',
           'credit_balances', 'booking_credit_sources', 'credit_adjustments',
           ...(hasPackagePurchaseAttempts ? ['package_purchase_attempts'] : []),
+          ...(hasPostTrialDiscountQuotes ? ['post_trial_discount_quotes'] : []),
           ...(hasFlexiblePackages ? ['flexible_hours'] : []),
           ...(hasFullCurriculum ? ['full_curriculum'] : []),
           ...(hasRefundLedger ? ['refund_events'] : []),
@@ -2058,6 +2083,7 @@ async function handleExportData(req, res) {
       booking_credit_sources: bookingCreditSources,
       credit_adjustments: creditAdjustments,
       ...(hasPackagePurchaseAttempts ? { package_purchase_attempts: packagePurchaseAttempts } : {}),
+      ...(hasPostTrialDiscountQuotes ? { post_trial_discount_quotes: postTrialDiscountQuotes } : {}),
       ...(hasFlexiblePackages ? { flexible_hours: flexibleHours } : {}),
       ...(hasFullCurriculum ? { full_curriculum: fullCurriculum } : {}),
       ...(hasRefundLedger ? { refund_events: refundEvents } : {}),

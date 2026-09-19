@@ -97,6 +97,8 @@ function populateForm() {
     bulkInput.value = bulkHourlyPence != null ? (bulkHourlyPence / 100).toFixed(2) : '';
   }
   renderBulkTiers(Array.isArray(p.bulk_discount_tiers) ? p.bulk_discount_tiers : []);
+  document.getElementById('postTrialDiscountPct').value = Number.isFinite(Number(p.post_trial_discount_pct)) ? p.post_trial_discount_pct : 10;
+  document.getElementById('postTrialDiscountHours').value = Number.isFinite(Number(p.post_trial_discount_hours)) ? p.post_trial_discount_hours : 48;
   
   // Hero
   document.getElementById('heroHeadline').value = c.hero.headline;
@@ -481,6 +483,8 @@ function gatherFormData() {
     delete currentConfig.pricing.bulk_hourly_pence;
   }
   currentConfig.pricing.bulk_discount_tiers = readTiersFromDom();
+  currentConfig.pricing.post_trial_discount_pct = Number(document.getElementById('postTrialDiscountPct').value);
+  currentConfig.pricing.post_trial_discount_hours = Number(document.getElementById('postTrialDiscountHours').value);
   currentConfig.pricing.core_programme = parseInt(document.getElementById('coreProgramme').value) || 2400;
   currentConfig.pricing.core_hours = parseInt(document.getElementById('coreHours').value) || 30;
   currentConfig.pricing.retake_1 = parseInt(document.getElementById('retake1').value) || 200;

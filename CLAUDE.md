@@ -140,6 +140,11 @@ The historical `bookOfferSeries()` path in `api/offers.js` can create bookings p
 
 Don't add paths that bypass the 84-day platform ceiling for ordinary learner self-serve booking.
 
+Free-trial self-service is capped at **28 days**, or the instructor's shorter
+`max_booking_days_ahead` setting. The free-trial picker, trial availability,
+`book-free-trial`, and learner trial rescheduling use this same inclusive cap.
+Ordinary paid booking windows remain unchanged.
+
 ## Simon Slice 3 retired products
 
 `schools.config.features.retire_incompatible_products === true` is the only active retirement value; missing, malformed, string, numeric, or false values are inactive. The state is always loaded by exact authenticated/offer `school_id`. When active, server routes must return `410 PRODUCT_CREATION_RETIRED` before any insert, credit mutation, hold, notification, or Stripe call for learner repeats, Reserved Weekly Slot creation, flexible offers, or repeating offers. UI hiding is defence-in-depth, not authority.
@@ -259,6 +264,17 @@ Before any architectural decision, consider: "Will this be straightforward to po
 When making structural changes (new tables, new API routes, new shared modules, competency changes), update `MIGRATION-PLAN.md` to reflect the current state.
 
 ## Working practices
+
+### Trial discounts and pencilled offers (pending rollout, September 2026)
+
+Use `_post-trial-discount.js` and `_post-trial-webhook.js` for account eligibility,
+server price snapshots and signed payment timing. Never infer payment initiation
+from a Stripe object's creation timestamp. The configured repeatable discount
+stacks after local pricing; existing Stripe promotion entry applies last. Earnings
+and new package cash/refund values follow the reduced actual payment. Preserve
+existing product gates. An unpaid pencilled offer is only a calendar hold; its
+84-day horizon and start-minus-48-hour payment deadline are separate from ordinary
+learner booking windows. See `docs/trial-discount-pencilled-offers-plan.md`.
 
 - Small fixes: commit directly to main
 - Bigger features: feature branch + PR

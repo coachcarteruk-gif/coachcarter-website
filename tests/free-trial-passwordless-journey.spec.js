@@ -23,6 +23,22 @@ test.describe('free trial passwordless journey', () => {
       }
     });
 
+    await page.route('**/api/slots?action=trial-window-context**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          school_id: 9,
+          operational_timezone: 'Pacific/Auckland',
+          operational_date: '2030-06-23',
+          from: '2030-06-23',
+          to: '2030-07-21',
+          days_ahead: 28,
+        }),
+      });
+    });
+
     await page.route('**/api/slots?action=available**', async (route) => {
       await route.fulfill({
         status: 200,

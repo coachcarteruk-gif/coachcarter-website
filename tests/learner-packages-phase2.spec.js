@@ -148,6 +148,15 @@ function loadPackagesApi({ sql, learner, stripeClient, audits = [] }) {
       createPackageTestStripeClient: () => stripeClient,
       getPackageTestPaymentConfiguration: () => 'pmc_package_test',
     }],
+    [path.join(root, 'api', '_post-trial-discount.js'), {
+      applyPostTrialDiscount: (amountPence, discountPct) => ({ pricePence: amountPence, discountPence: 0, discountPct: discountPct || 0 }),
+      getPostTrialDiscount: async () => ({ eligible: false, discountPct: 0 }),
+      quotePostTrialPrice: async (_sql, { amountPence }) => ({
+        pricePence: amountPence, discountPence: 0, discountPct: 0,
+        quoteId: null, metadata: {},
+      }),
+      bindPostTrialQuote: async () => ({ ok: true, skipped: true }),
+    }],
   ];
   const originals = new Map();
   for (const [request, exports] of entries) {
@@ -855,6 +864,34 @@ test.describe('Learner Packages Phase 2 page states', () => {
         products: phase2UiCatalogue(),
       }),
     }));
+  });
+
+  test('shows the frozen discounted package total and shared offer expiry', async ({ page }) => {
+    const eligibleUntil = '2026-09-18T17:30:00.000Z';
+    await page.route('**/api/credits?action=post-trial-discount**', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ eligible: true, discountPct: 10, eligibleUntil }),
+    }));
+    await page.route('**/api/packages?action=catalogue**', route => {
+      const products = phase2UiCatalogue().map(product => product.slug === 'full-curriculum' ? {
+        ...product,
+        checkout_price_pence: 180000,
+        post_trial_discount: { eligible: true, discount_pct: 10, discount_pence: 20000, eligible_until: eligibleUntil },
+      } : product);
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        ok: true, checkout_available: true, purchasing_test_enabled: true,
+        viewer: { signed_in_as_learner: true, learner_id: 41 },
+        full_curriculum_eligibility: { test_booking: { verification_status: 'verified', is_future: true }, has_active_enrolment: false },
+        school: { id: 1, slug: 'coachcarter', name: 'CoachCarter' }, products,
+      }) });
+    });
+    await page.goto('/learner/packages.html', { waitUntil: 'networkidle' });
+    const card = page.locator('#full-curriculum-product');
+    await expect(card.locator('.product-price')).toHaveText('£1,800');
+    await expect(card.locator('.product-price-comparison')).toContainText('£2,000');
+    await expect(card.locator('.product-price-comparison')).toContainText('10% post-trial discount');
+    await expect(page.locator('.post-trial-discount-banner')).toContainText('10% post-trial discount active until');
+    await page.screenshot({ path: 'test-results/post-trial-package-discount.png', fullPage: true });
   });
 
   test('mobile checkout controls expose accessible review state and send no client pricing', async ({ page }) => {

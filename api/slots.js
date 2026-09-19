@@ -89,10 +89,13 @@ const {
   unitsForDuration: flexibleUnitsForDuration,
 } = require('./_flexible-package-ledger');
 const { invalidatePendingBookingExtensions } = require('./_booking-extension-invalidation');
+const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
+const { operationalTimeZone, zonedDateTimeToDate } = require('./_full-curriculum');
 
 
 const DEFAULT_SLOT_MINUTES = 90;  // fallback if no lesson type specified
 const MAX_DAYS_AHEAD      = 84;   // platform ceiling — instructors.max_booking_days_ahead (1–84) is the learner-facing window (offer-driven series may exceed this — see api/webhook.js handleOfferBooking)
+const FREE_TRIAL_MAX_DAYS_AHEAD = 28;
 const MAX_RANGE_DAYS      = 31;   // max days per API request
 const CANCEL_HOURS_CUTOFF = 48;   // hours notice needed to get hours back
 const RESERVATION_MINUTES = 10;   // hold slot for 10 mins during checkout
@@ -277,6 +280,15 @@ function isWithinTestDateUpperBound(dateValue) {
   return dateObj >= today && dateObj <= addDays(today, TEST_DATE_MAX_DAYS_AHEAD);
 }
 
+function allocateRecurringBlockPence(totalPence, itemCount) {
+  if (!Number.isSafeInteger(totalPence) || totalPence < 0 || !Number.isSafeInteger(itemCount) || itemCount <= 0) {
+    throw new TypeError('A non-negative total and positive item count are required');
+  }
+  const base = Math.floor(totalPence / itemCount);
+  const remainder = totalPence - base * itemCount;
+  return Array.from({ length: itemCount }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
 function concreteLessonTransmissionType(requestedTransmissionType, instructorTransmissionType) {
   const requested = normaliseSlotTransmissionType(requestedTransmissionType);
   if (requested === 'manual' || requested === 'automatic') return requested;
@@ -404,13 +416,72 @@ function normaliseMaxBookingDaysAhead(value) {
   return Math.min(days, MAX_DAYS_AHEAD);
 }
 
-function bookingWindowLimitDate(maxBookingDaysAhead) {
-  return addDays(startOfDay(new Date()), normaliseMaxBookingDaysAhead(maxBookingDaysAhead));
+function effectiveBookingWindowDays(maxBookingDaysAhead, absoluteMaxDaysAhead = MAX_DAYS_AHEAD) {
+  return Math.min(normaliseMaxBookingDaysAhead(maxBookingDaysAhead), absoluteMaxDaysAhead);
 }
 
-function isDateWithinBookingWindow(dateValue, maxBookingDaysAhead) {
+function bookingWindowLimitDate(maxBookingDaysAhead, absoluteMaxDaysAhead = MAX_DAYS_AHEAD, baseDate = null) {
+  const today = baseDate instanceof Date ? startOfDay(baseDate) : startOfDay(new Date());
+  return addDays(today, effectiveBookingWindowDays(maxBookingDaysAhead, absoluteMaxDaysAhead));
+}
+
+function isDateWithinBookingWindow(dateValue, maxBookingDaysAhead, absoluteMaxDaysAhead = MAX_DAYS_AHEAD, baseDate = null) {
   const dateObj = dateValue instanceof Date ? dateValue : parseDate(String(dateValue).slice(0, 10));
-  return !!dateObj && dateObj <= bookingWindowLimitDate(maxBookingDaysAhead);
+  return !!dateObj && dateObj <= bookingWindowLimitDate(maxBookingDaysAhead, absoluteMaxDaysAhead, baseDate);
+}
+
+function operationalDateParts(now = new Date(), timezone = 'Europe/London') {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  return Object.fromEntries(
+    formatter.formatToParts(now)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)])
+  );
+}
+
+function operationalDateAt(now = new Date(), timezone = 'Europe/London') {
+  const parts = operationalDateParts(now, timezone);
+  return parseDate(`${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`);
+}
+
+async function loadSchoolOperationalClock(sql, schoolId, now = new Date()) {
+  const [school] = await sql`
+    SELECT config
+      FROM schools
+     WHERE id = ${schoolId}
+     LIMIT 1
+  `;
+  const timezone = operationalTimeZone(school?.config || {});
+  const parts = operationalDateParts(now, timezone);
+  return {
+    timezone,
+    date: parseDate(`${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`),
+    minutes: parts.hour * 60 + parts.minute,
+  };
+}
+
+function slotStartInstant(date, startTime, operationalTimezone = null) {
+  if (operationalTimezone) {
+    return zonedDateTimeToDate(
+      String(date).slice(0, 10),
+      String(startTime).slice(0, 5),
+      operationalTimezone
+    );
+  }
+  const instant = new Date(String(date).slice(0, 10) + 'T00:00:00Z');
+  instant.setUTCHours(Math.floor(timeToMinutes(startTime) / 60), timeToMinutes(startTime) % 60, 0, 0);
+  return instant;
+}
+
+function meetsMinimumBookingNotice({ date, startTime, minNoticeHours, now = new Date(), operationalTimezone = null }) {
+  const slotInstant = slotStartInstant(date, startTime, operationalTimezone);
+  if (!slotInstant || Number.isNaN(slotInstant.getTime())) return false;
+  return ((slotInstant - now) / 3600000) >= minNoticeHours;
 }
 
 function advanceWindowError(maxBookingDaysAhead, verb = 'book') {
@@ -425,7 +496,10 @@ async function slotFitsActiveAvailability(sql, {
   startTime,
   endTime,
   transmissionType = null,
-  enforceBookingWindow = true
+  enforceBookingWindow = true,
+  bookingWindowBaseDate = null,
+  operationalTimezone = null,
+  now = null,
 }) {
   const slotStart = timeToMinutes(startTime);
   const slotEnd = timeToMinutes(endTime);
@@ -442,14 +516,21 @@ async function slotFitsActiveAvailability(sql, {
   `;
   if (!instructor) return false;
   const instructorTransmissionType = normaliseSlotTransmissionType(instructor.transmission_type) || 'manual';
-  if (enforceBookingWindow && !isDateWithinBookingWindow(date, instructor.max_booking_days_ahead)) return false;
+  if (enforceBookingWindow && !isDateWithinBookingWindow(
+    date,
+    instructor.max_booking_days_ahead,
+    MAX_DAYS_AHEAD,
+    bookingWindowBaseDate
+  )) return false;
 
   const minNoticeHours = Math.max(0, parseInt(instructor.min_booking_notice_hours, 10) || 0);
-  if (minNoticeHours > 0) {
-    const slotDateTime = new Date(date + 'T00:00:00Z');
-    slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
-    if (((slotDateTime - new Date()) / 3600000) < minNoticeHours) return false;
-  }
+  if (minNoticeHours > 0 && !meetsMinimumBookingNotice({
+    date,
+    startTime,
+    minNoticeHours,
+    now: now || new Date(),
+    operationalTimezone,
+  })) return false;
 
   let overrideWindows = [];
   try {
@@ -938,6 +1019,7 @@ module.exports = async (req, res) => {
     });
   }
 
+  if (action === 'trial-window-context') return handleTrialWindowContext(req, res);
   if (action === 'available')    return handleAvailable(req, res);
   if (action === 'durations-for-slot') return handleDurationsForSlot(req, res);
   if (action === 'recurring-block-preview') return handleRecurringBlockPreview(req, res);
@@ -964,8 +1046,64 @@ module.exports = async (req, res) => {
   return res.status(400).json({ error: 'Unknown action' });
 };
 
+// ── GET /api/slots?action=trial-window-context ─────────────────────────────
+// Returns the authoritative school-local calendar window used by the public
+// trial picker. Tenant resolution intentionally matches `available` so a custom
+// school host never inherits school 1's timezone or booking horizon.
+async function handleTrialWindowContext(req, res, dependencies = {}) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const rawInstructorId = req.query.instructor_id;
+  const instructorId = rawInstructorId == null || rawInstructorId === ''
+    ? null
+    : parseInt(rawInstructorId, 10);
+  if (instructorId !== null && (!Number.isInteger(instructorId) || instructorId <= 0)) {
+    return res.status(400).json({ error: 'instructor_id must be a positive integer' });
+  }
+
+  try {
+    const sql = dependencies.sql || neon(process.env.POSTGRES_URL);
+    const tenant = await (dependencies.resolveSchoolFromRequest || resolveSchoolFromRequest)(req, {
+      sql,
+      allowLegacySchoolIdQuery: true,
+    });
+    if (!tenant) return res.status(404).json({ error: 'School not found' });
+
+    let instructorWindowDays = MAX_DAYS_AHEAD;
+    if (instructorId !== null) {
+      const [instructor] = await sql`
+        SELECT COALESCE(max_booking_days_ahead, ${MAX_DAYS_AHEAD}) AS max_booking_days_ahead
+          FROM instructors
+         WHERE id = ${instructorId}
+           AND school_id = ${tenant.schoolId}
+           AND active = TRUE
+         LIMIT 1
+      `;
+      if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
+      instructorWindowDays = instructor.max_booking_days_ahead;
+    }
+
+    const now = dependencies.now || new Date();
+    const clock = await loadSchoolOperationalClock(sql, tenant.schoolId, now);
+    const daysAhead = effectiveBookingWindowDays(instructorWindowDays, FREE_TRIAL_MAX_DAYS_AHEAD);
+    return res.json({
+      ok: true,
+      school_id: tenant.schoolId,
+      operational_timezone: clock.timezone,
+      operational_date: formatDate(clock.date),
+      from: formatDate(clock.date),
+      to: formatDate(addDays(clock.date, daysAhead)),
+      days_ahead: daysAhead,
+    });
+  } catch (err) {
+    console.error('trial-window-context error:', err);
+    reportError('/api/slots?action=trial-window-context', err);
+    return res.status(500).json({ error: 'Failed to load free trial booking window', details: 'Internal server error' });
+  }
+}
+
 // ── GET /api/slots?action=available ──────────────────────────────────────────
-async function handleAvailable(req, res) {
+async function handleAvailable(req, res, dependencies = {}) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { from, to, instructor_id, lesson_type_id, lesson_type_slug, pickup_postcode, transmission_type } = req.query;
@@ -990,16 +1128,8 @@ async function handleAvailable(req, res) {
   if (!fromDate || !toDate)
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
 
-  const today    = startOfDay(new Date());
-  const maxAhead = addDays(today, MAX_DAYS_AHEAD);
-
-  if (fromDate < today)
-    return res.status(400).json({ error: '"from" date cannot be in the past' });
-
-  if (toDate > maxAhead)
-    return res.status(400).json({
-      error: `"to" date cannot be more than ${MAX_DAYS_AHEAD} days from today`
-    });
+  const requestNow = dependencies.now || new Date();
+  const today = startOfDay(requestNow);
 
   if (daysBetween(fromDate, toDate) > MAX_RANGE_DAYS)
     return res.status(400).json({
@@ -1007,8 +1137,11 @@ async function handleAvailable(req, res) {
     });
 
   try {
-    const sql = neon(process.env.POSTGRES_URL);
-    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    const sql = dependencies.sql || neon(process.env.POSTGRES_URL);
+    const tenant = await (dependencies.resolveSchoolFromRequest || resolveSchoolFromRequest)(req, {
+      sql,
+      allowLegacySchoolIdQuery: true,
+    });
     if (!tenant) return res.status(404).json({ error: 'School not found' });
     const schoolId = tenant.schoolId;
 
@@ -1016,7 +1149,25 @@ async function handleAvailable(req, res) {
     const lessonType = await getLessonType(sql, lesson_type_id, schoolId, lesson_type_slug);
     if (!lessonType) return res.status(404).json({ error: 'Lesson type not found or inactive' });
     const slotMinutes = lessonType.duration_minutes;
+    const isFreeTrial = lessonType.slug === 'trial';
+    const trialClock = isFreeTrial
+      ? await loadSchoolOperationalClock(sql, schoolId, requestNow)
+      : null;
+    const availabilityToday = trialClock?.date || today;
 
+    if (fromDate < availabilityToday)
+      return res.status(400).json({ error: '"from" date cannot be in the past' });
+
+    if (isFreeTrial && toDate > addDays(availabilityToday, FREE_TRIAL_MAX_DAYS_AHEAD)) {
+      return res.status(400).json({
+        error: `Free trial availability cannot be requested more than ${FREE_TRIAL_MAX_DAYS_AHEAD} days from today`
+      });
+    }
+    if (!isFreeTrial && toDate > addDays(today, MAX_DAYS_AHEAD)) {
+      return res.status(400).json({
+        error: `"to" date cannot be more than ${MAX_DAYS_AHEAD} days from today`
+      });
+    }
     // 1. Load availability windows (optionally filtered to one instructor).
     // When minDurationOnly is set, we don't filter by offered_lesson_types —
     // the slot feed shows everyone, and per-duration filtering happens in
@@ -1633,8 +1784,10 @@ async function handleAvailable(req, res) {
 
     // For same-day booking: calculate current time in minutes to filter past slots
     const now          = new Date();
-    const todayStr     = formatDate(today);
-    const nowMinutes   = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const todayStr     = formatDate(availabilityToday);
+    const nowMinutes   = trialClock
+      ? trialClock.minutes
+      : now.getUTCHours() * 60 + now.getUTCMinutes();
 
     let cursor = new Date(fromDate);
     while (cursor <= toDate) {
@@ -1645,7 +1798,14 @@ async function handleAvailable(req, res) {
       const daySlotKeys = new Set();
 
       for (const instructor of Object.values(byInstructor)) {
-        if (!isDateWithinBookingWindow(cursor, instructor.max_booking_days_ahead)) continue;
+        if (isFreeTrial) {
+          if (!isDateWithinBookingWindow(
+            cursor,
+            instructor.max_booking_days_ahead,
+            FREE_TRIAL_MAX_DAYS_AHEAD,
+            availabilityToday
+          )) continue;
+        } else if (!isDateWithinBookingWindow(cursor, instructor.max_booking_days_ahead)) continue;
         if (externalAllDayIndex.has(`${instructor.id}|${dateStr}`)) continue;
         const dateWindows = instructor.windows.filter(w => w.override_date === dateStr);
         const isBlackout = blackoutIndex.has(`${instructor.id}|${dateStr}`);
@@ -1674,10 +1834,21 @@ async function handleAvailable(req, res) {
 
             // Skip slots within the instructor's minimum booking notice period
             if (instructor.min_booking_notice_hours > 0) {
-              const slotDateTime = new Date(cursor);
-              slotDateTime.setUTCHours(Math.floor(slotStart / 60), slotStart % 60, 0, 0);
-              const hoursUntilSlot = (slotDateTime - now) / 3600000;
-              if (hoursUntilSlot < instructor.min_booking_notice_hours) {
+              const noticeSatisfied = trialClock
+                ? meetsMinimumBookingNotice({
+                    date: dateStr,
+                    startTime: minutesToTime(slotStart),
+                    minNoticeHours: instructor.min_booking_notice_hours,
+                    now: requestNow,
+                    operationalTimezone: trialClock.timezone,
+                  })
+                : meetsMinimumBookingNotice({
+                    date: dateStr,
+                    startTime: minutesToTime(slotStart),
+                    minNoticeHours: instructor.min_booking_notice_hours,
+                    now,
+                  });
+              if (!noticeSatisfied) {
                 slotStart += slotStartIncrementMinutes;
                 continue;
               }
@@ -2852,20 +3023,22 @@ async function handleRecurringBlockPreview(req, res) {
   }
 }
 
-async function handleRecurringBlockCommit(req, res) {
+async function handleRecurringBlockCommit(req, res, dependencies = {}) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = verifyAuth(req);
+  const user = (dependencies.verifyAuth || verifyAuth)(req);
   if (!user) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = user.school_id || 1;
   const { anchor_booking_id, lessons } = req.body || {};
 
   try {
-    const sql = neon(process.env.POSTGRES_URL);
-    if (await loadRetiredProductState(sql, schoolId)) {
+    const sql = dependencies.sql || neon(process.env.POSTGRES_URL);
+    const retiredStateLoader = dependencies.loadRetiredProductState || loadRetiredProductState;
+    if (await retiredStateLoader(sql, schoolId)) {
       return sendRetiredProduct(res, 'reserved_weekly_slot');
     }
-    const preview = await buildRecurringBlockPreview(sql, {
+    const previewBuilder = dependencies.buildRecurringBlockPreview || buildRecurringBlockPreview;
+    const preview = await previewBuilder(sql, {
       anchorBookingId: anchor_booking_id,
       learnerId: user.id,
       schoolId,
@@ -2898,8 +3071,9 @@ async function handleRecurringBlockCommit(req, res) {
       });
     }
 
-    const seriesId = crypto.randomUUID();
-    const booked = await bookCreditFundedSlotsTransaction({
+    const seriesId = (dependencies.randomUUID || crypto.randomUUID)();
+    const bookSlots = dependencies.bookCreditFundedSlotsTransaction || bookCreditFundedSlotsTransaction;
+    const booked = await bookSlots({
       connectionString: process.env.POSTGRES_URL,
       learnerId: user.id,
       instructorId: Number(preview.anchor.instructor_id),
@@ -2951,7 +3125,7 @@ async function handleRecurringBlockCommit(req, res) {
     try { await sql`UPDATE learner_users SET last_activity_at = NOW() WHERE id = ${user.id} AND school_id = ${schoolId}`; } catch (_) {}
 
     for (const b of booked.createdBookings) {
-      supersedeBroadcastSiblings({
+      (dependencies.supersedeBroadcastSiblings || supersedeBroadcastSiblings)({
         instructor_id: preview.anchor.instructor_id,
         scheduled_date: String(b.scheduled_date).slice(0, 10),
         start_time: String(b.start_time).slice(0, 5),
@@ -3517,6 +3691,31 @@ async function handleRecurringBlockBankCheckout(req, res) {
       throw new Error(`Recurring block bank hold failed: ${hold.code || 'UNKNOWN'}`);
     }
 
+    const postTrialQuote = await quotePostTrialPrice(sql, {
+      schoolId, learnerId: user.id,
+      amountPence: preview.pricing.requested_total_price_pence,
+      maxExpiresAt: hold.block.expires_at,
+    });
+    const discountedTotalPence = postTrialQuote.pricePence;
+    if (postTrialQuote.quoteId) {
+      const heldItems = await sql`
+        SELECT id FROM recurring_slot_block_items
+         WHERE block_id=${hold.block.id} AND school_id=${schoolId} AND status='held'
+         ORDER BY scheduled_date, start_time, id
+      `;
+      const allocations = allocateRecurringBlockPence(discountedTotalPence, heldItems.length);
+      const base = Math.floor(discountedTotalPence / heldItems.length);
+      for (let itemIndex = 0; itemIndex < heldItems.length; itemIndex++) {
+        const item = heldItems[itemIndex];
+        const allocation = allocations[itemIndex];
+        await sql`UPDATE recurring_slot_block_items SET price_pence=${allocation}, updated_at=NOW()
+                   WHERE id=${item.id} AND block_id=${hold.block.id} AND school_id=${schoolId} AND status='held'`;
+      }
+      await sql`UPDATE recurring_slot_blocks SET total_price_pence=${discountedTotalPence},
+                   price_per_lesson_pence=${base}, updated_at=NOW()
+                 WHERE id=${hold.block.id} AND school_id=${schoolId} AND status='pending_payment'`;
+    }
+
     const [learner] = await sql`
       SELECT email
         FROM learner_users
@@ -3541,12 +3740,13 @@ async function handleRecurringBlockBankCheckout(req, res) {
       lesson_type_id: String(preview.anchor.lesson_type_id || ''),
       selected_lessons: String(preview.requested_lessons),
       duration_minutes: String(preview.anchor.duration_minutes),
-      amount_pence: String(preview.pricing.requested_total_price_pence),
+      amount_pence: String(discountedTotalPence),
       price_per_lesson_pence: String(preview.pricing.price_per_lesson_pence),
       price_source: preview.pricing.price_source || '',
       first_date: firstDate || '',
       last_date: lastDate || '',
       school_id: String(schoolId),
+      ...postTrialQuote.metadata,
     };
 
     createdSession = await stripe.checkout.sessions.create({
@@ -3554,7 +3754,7 @@ async function handleRecurringBlockBankCheckout(req, res) {
       line_items: [{
         price_data: {
           currency: 'gbp',
-          unit_amount: preview.pricing.requested_total_price_pence,
+          unit_amount: discountedTotalPence,
           product_data: {
             name: `Reserved Weekly Slot - ${preview.requested_lessons} lessons`,
             description: `${preview.anchor.lesson_type_name || 'Driving lesson'} with ${preview.anchor.instructor_name}. Held for ${RESERVATION_MINUTES} minutes while bank checkout starts.`
@@ -3573,6 +3773,11 @@ async function handleRecurringBlockBankCheckout(req, res) {
       success_url: `${origin}/learner/book.html?reserved_bank_checkout=1&block_id=${hold.block.id}`,
       cancel_url: `${origin}/learner/book.html?reserved_bank_cancelled=1&block_id=${hold.block.id}`
     });
+    const recurringQuoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId, schoolId, learnerId: user.id,
+      paymentType: 'checkout_session', paymentIdentity: createdSession.id,
+    });
+    if (!recurringQuoteBinding.ok) throw new Error(recurringQuoteBinding.code);
 
     await sql`
       UPDATE recurring_slot_blocks
@@ -3754,7 +3959,13 @@ async function handleCheckoutTestDate(req, res) {
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(ctx.testDate + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-    const pricePence = directPrice.pricePence;
+    const postTrialQuote = await quotePostTrialPrice(ctx.sql, {
+      schoolId: ctx.schoolId,
+      learnerId: ctx.user.id,
+      amountPence: directPrice.pricePence,
+      maxExpiresAt: new Date(Date.now() + RESERVATION_MINUTES * 60000),
+    });
+    const pricePence = postTrialQuote.pricePence;
     const launchMetadata = await prepareLaunchPaymentCandidate({
       sql: ctx.sql,
       schoolId: ctx.schoolId,
@@ -3805,6 +4016,7 @@ async function handleCheckoutTestDate(req, res) {
         test_time: ctx.testTime,
         test_centre: ctx.testCentre || '',
         effective_rate_pence_per_minute: String(Math.round(pricePence / TEST_DATE_DURATION_MINUTES)),
+        ...postTrialQuote.metadata,
         ...launchMetadata,
       },
       ...(emailValid ? { customer_email: ctx.learner.email } : {}),
@@ -3814,6 +4026,14 @@ async function handleCheckoutTestDate(req, res) {
       success_url: checkoutReturnUrls.successUrl,
       cancel_url: checkoutReturnUrls.cancelUrl,
     });
+    const quoteBinding = await bindPostTrialQuote(ctx.sql, {
+      quoteId: postTrialQuote.quoteId,
+      schoolId: ctx.schoolId,
+      learnerId: ctx.user.id,
+      paymentType: 'checkout_session',
+      paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) throw new Error(quoteBinding.code);
 
     const insertedRows = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
       await lockTestDateSlotMutation(client, {
@@ -5147,7 +5367,16 @@ async function handleCheckoutRequest(req, res) {
       learnerId,
       durationMinutes: durationMins
     });
-    const pricePence = directPrice.pricePence;
+    const postTrialQuote = isGuest ? {
+      pricePence: directPrice.pricePence, discountPence: 0, discountPct: 0,
+      quoteId: null, metadata: {},
+    } : await quotePostTrialPrice(sql, {
+      schoolId,
+      learnerId,
+      amountPence: directPrice.pricePence,
+      maxExpiresAt: new Date(Date.now() + RESERVATION_MINUTES * 60000),
+    });
+    const pricePence = postTrialQuote.pricePence;
 
     const origin = req.headers.origin || 'https://coachcarter.uk';
     const lessonDate = new Date(date + 'T00:00:00Z')
@@ -5187,6 +5416,7 @@ async function handleCheckoutRequest(req, res) {
       guest_name: cleanGuestName || '',
       guest_email: cleanGuestEmail || '',
       guest_phone: cleanGuestPhone || '',
+      ...postTrialQuote.metadata,
       ...launchMetadata,
     };
     const session = await stripe.checkout.sessions.create({
@@ -5215,6 +5445,14 @@ async function handleCheckoutRequest(req, res) {
       success_url: checkoutReturnUrls.successUrl,
       cancel_url:  checkoutReturnUrls.cancelUrl
     });
+    const requestQuoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId,
+      schoolId,
+      learnerId,
+      paymentType: 'checkout_session',
+      paymentIdentity: session.id,
+    });
+    if (!requestQuoteBinding.ok) throw new Error(requestQuoteBinding.code);
 
     // Hold the slot while they authorize the card (same reservation flow as
     // checkout-slot; the webhook converts it to a pending request).
@@ -5390,7 +5628,13 @@ async function handleCheckoutSlot(req, res) {
       return res.status(400).json({ error: 'Social media filming consent is only available when the learner confirms they are 18 or over.' });
     }
     const priced = applySocialVideoDiscount(directPrice.pricePence, socialVideo.selected);
-    const pricePence = priced.pricePence;
+    const postTrialQuote = await quotePostTrialPrice(sql, {
+      schoolId,
+      learnerId: user.id,
+      amountPence: priced.pricePence,
+      maxExpiresAt: new Date(Date.now() + RESERVATION_MINUTES * 60000),
+    });
+    const pricePence = postTrialQuote.pricePence;
     // The 5% filming discount applies to the Stripe amount only. Preserve the
     // full lesson duration in charge_minutes so a later cancellation returns
     // the complete lesson entitlement.
@@ -5490,6 +5734,7 @@ async function handleCheckoutSlot(req, res) {
         social_video_age_confirmed: socialVideo.ageConfirmed ? 'true' : 'false',
         social_video_discount_pct: String(socialVideo.discountPct),
         social_video_discount_pence: String(priced.discountPence),
+        ...postTrialQuote.metadata,
         // Step 4 / Phase 2A: derivable from pricePence/durationMins per the
         // source-of-truth rule, snapshotted for audit clarity.
         effective_rate_pence_per_minute: String(chargeMins > 0 ? Math.round(pricePence / chargeMins) : 0),
@@ -5502,6 +5747,14 @@ async function handleCheckoutSlot(req, res) {
       success_url: checkoutReturnUrls.successUrl,
       cancel_url:  checkoutReturnUrls.cancelUrl
     });
+    const quoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId,
+      schoolId,
+      learnerId: user.id,
+      paymentType: 'checkout_session',
+      paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) throw new Error(quoteBinding.code);
 
     // Reserve the slot. uq_slot_reservation_slot enforces one active
     // reservation per (instructor, date, start_time) — the DELETE-expired
@@ -5956,7 +6209,6 @@ async function handleBookFreeTrial(req, res) {
   const cleanPhone = guest_phone.replace(/\s+/g, '').trim();
   const cleanName  = guest_name.trim();
   const cleanAddr  = guest_pickup_address.trim();
-  const schoolId   = parseInt(req.body.school_id, 10) || 1;
   const requestedTransmissionType = parseRequestTransmissionType(transmission_type);
   if (transmission_type && !requestedTransmissionType) {
     return res.status(400).json({ error: 'transmission_type must be manual, automatic, or both' });
@@ -5964,6 +6216,11 @@ async function handleBookFreeTrial(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
+    const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+    if (!tenant) return res.status(404).json({ error: 'School not found' });
+    const schoolId = tenant.schoolId;
+    const bookingNow = new Date();
+    const trialClock = await loadSchoolOperationalClock(sql, schoolId, bookingNow);
 
     // ── Rate limiting: 10 per IP per hour, 3 per phone per hour ──
     // Tighter than paid checkout (which is 5/phone) — free is more abusable.
@@ -6003,13 +6260,11 @@ async function handleBookFreeTrial(req, res) {
     const startMins = timeToMinutes(start_time);
     const endMins   = timeToMinutes(end_time);
     const checkoutDate = parseDate(date);
-    const todayStart   = startOfDay(new Date());
+    const todayStart   = trialClock.date;
     if (!checkoutDate)
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     if (checkoutDate && checkoutDate.getTime() === todayStart.getTime()) {
-      const now = new Date();
-      const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
-      if (startMins <= nowMins)
+      if (startMins <= trialClock.minutes)
         return res.status(400).json({ error: 'This slot has already started. Please choose a later time.' });
     }
     if (endMins - startMins !== durationMins)
@@ -6089,8 +6344,16 @@ async function handleBookFreeTrial(req, res) {
     if (!isLessonTypeOffered(instructor.offered_lesson_types, trialType.slug)) {
       return res.status(400).json({ error: 'This instructor does not offer free trials.' });
     }
-    if (!isDateWithinBookingWindow(checkoutDate, instructor.max_booking_days_ahead)) {
-      return res.status(400).json({ error: advanceWindowError(instructor.max_booking_days_ahead) });
+    if (!isDateWithinBookingWindow(
+      checkoutDate,
+      instructor.max_booking_days_ahead,
+      FREE_TRIAL_MAX_DAYS_AHEAD,
+      todayStart
+    )) {
+      const trialWindowDays = effectiveBookingWindowDays(instructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD);
+      return res.status(400).json({
+        error: `Free trials can only be booked up to ${trialWindowDays} day${trialWindowDays !== 1 ? 's' : ''} in advance. Please choose an earlier date.`
+      });
     }
 
     const stillAvailable = await slotFitsActiveAvailability(sql, {
@@ -6099,7 +6362,10 @@ async function handleBookFreeTrial(req, res) {
       date,
       startTime: start_time,
       endTime: end_time,
-      transmissionType: requestedTransmissionType
+      transmissionType: requestedTransmissionType,
+      bookingWindowBaseDate: todayStart,
+      operationalTimezone: trialClock.timezone,
+      now: bookingNow,
     });
     if (!stillAvailable) {
       return res.status(409).json({ error: 'This slot is no longer available. Please choose another time.' });
@@ -7662,7 +7928,24 @@ async function handleReschedule(req, res) {
       targetInstructor = replacementInstructor;
     }
 
-    if (!isDateWithinBookingWindow(newBookingDate, targetInstructor.max_booking_days_ahead)) {
+    const rescheduleMaxDays = booking.lesson_type_slug === 'trial'
+      ? FREE_TRIAL_MAX_DAYS_AHEAD
+      : MAX_DAYS_AHEAD;
+    const trialRescheduleClock = booking.lesson_type_slug === 'trial'
+      ? await loadSchoolOperationalClock(sql, schoolId)
+      : null;
+    if (!isDateWithinBookingWindow(
+      newBookingDate,
+      targetInstructor.max_booking_days_ahead,
+      rescheduleMaxDays,
+      trialRescheduleClock?.date || null
+    )) {
+      if (booking.lesson_type_slug === 'trial') {
+        const trialWindowDays = effectiveBookingWindowDays(targetInstructor.max_booking_days_ahead, FREE_TRIAL_MAX_DAYS_AHEAD);
+        return res.status(400).json({
+          error: `Free trials can only be rescheduled up to ${trialWindowDays} day${trialWindowDays !== 1 ? 's' : ''} in advance. Please choose an earlier date.`
+        });
+      }
       return res.status(400).json({ error: advanceWindowError(targetInstructor.max_booking_days_ahead, 'reschedule') });
     }
 
@@ -7803,6 +8086,8 @@ async function handleReschedule(req, res) {
       startTime: new_start_time,
       endTime: new_end_time,
       transmissionType: booking.transmission_type,
+      bookingWindowBaseDate: trialRescheduleClock?.date || null,
+      operationalTimezone: trialRescheduleClock?.timezone || null,
     });
     if (!stillAvailable) {
       return res.status(409).json({ error: 'That slot is no longer available. Please choose another.' });
@@ -8282,7 +8567,7 @@ async function handleMyBookings(req, res) {
           ELSE NULL
         END AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
-        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour, lt.slug AS lesson_type_slug,
         COALESCE(
           CASE
             WHEN lb.end_time > lb.start_time
@@ -8332,7 +8617,7 @@ async function handleMyBookings(req, res) {
         NULL::boolean AS reserved_move_policy_open,
         NULL::text AS reserved_move_policy_mode,
         i.id AS instructor_id, i.name AS instructor_name, i.photo_url AS instructor_photo,
-        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour,
+        lt.name AS lesson_type_name, lt.colour AS lesson_type_colour, lt.slug AS lesson_type_slug,
         COALESCE(
           CASE
             WHEN lb.end_time > lb.start_time
@@ -8645,10 +8930,20 @@ function formatDateDisplay(str) {
 
 module.exports._bookCreditFundedSlotsTransaction = bookCreditFundedSlotsTransaction;
 module.exports._createRecurringBlockBankHoldTransaction = createRecurringBlockBankHoldTransaction;
+module.exports._allocateRecurringBlockPence = allocateRecurringBlockPence;
 module.exports._expireStaleRecurringBlockBankHoldForLearner = expireStaleRecurringBlockBankHoldForLearner;
 module.exports._buildRecurringBlockPreview = buildRecurringBlockPreview;
+module.exports._handleRecurringBlockCommit = handleRecurringBlockCommit;
+module.exports._handleAvailable = handleAvailable;
+module.exports._handleTrialWindowContext = handleTrialWindowContext;
 module.exports._parseRecurringBlockLessons = parseRecurringBlockLessons;
 module.exports._CREDIT_BOOKING_SOURCE_TYPES = CREDIT_BOOKING_SOURCE_TYPES;
 module.exports._hasBufferedSlotConflict = hasBufferedSlotConflict;
 module.exports._findAdjacentTravelSpacingConflict = findAdjacentTravelSpacingConflict;
 module.exports._testDateSlotOverlapConflictsPg = testDateSlotOverlapConflictsPg;
+module.exports._effectiveBookingWindowDays = effectiveBookingWindowDays;
+module.exports._isDateWithinBookingWindow = isDateWithinBookingWindow;
+module.exports._meetsMinimumBookingNotice = meetsMinimumBookingNotice;
+module.exports._operationalDateAt = operationalDateAt;
+module.exports._slotStartInstant = slotStartInstant;
+module.exports._FREE_TRIAL_MAX_DAYS_AHEAD = FREE_TRIAL_MAX_DAYS_AHEAD;

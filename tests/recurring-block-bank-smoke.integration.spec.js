@@ -16,12 +16,18 @@ process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy'
 const {
   _createRecurringBlockBankHoldTransaction: createRecurringBlockBankHoldTransaction,
   _expireStaleRecurringBlockBankHoldForLearner: expireStaleRecurringBlockBankHoldForLearner,
+  _allocateRecurringBlockPence: allocateRecurringBlockPence,
 } = require('../api/slots');
 
 const { SCHEDULED } = require('../api/_booking-status');
 
 const ENABLED = process.env.CC_TEST_DB === '1' && !!process.env.POSTGRES_URL_TEST;
 const SCHOOL_ID = 1;
+
+test('discounted recurring-block cash allocation conserves every penny', () => {
+  expect(allocateRecurringBlockPence(1001, 4)).toEqual([251, 250, 250, 250]);
+  expect(allocateRecurringBlockPence(1001, 4).reduce((sum, value) => sum + value, 0)).toBe(1001);
+});
 
 test.describe.configure({ mode: 'serial' });
 

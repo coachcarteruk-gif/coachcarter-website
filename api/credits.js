@@ -6,6 +6,8 @@ const { decodeToken, requireAuth, SESSION_COOKIE_NAMES } = require('./_auth');
 const { calcBulkTotal, getBulkPricing, MAX_HOURS_PER_PURCHASE } = require('./_pricing-helpers');
 const { grantCredits } = require('./_credit-grant');
 const { CHECKOUT_EXCLUDED_PAYMENT_METHOD_TYPES } = require('./_stripe-payment-methods');
+const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
+const { getPostTrialDiscount } = require('./_post-trial-discount');
 
 const STANDARD_LESSON_MINUTES = 90;
 const MIN_HOURS_PER_PURCHASE = 1;
@@ -104,9 +106,28 @@ module.exports = async (req, res) => {
   if (action === 'create-payment-intent') return handleCreatePaymentIntent(req, res);
   if (action === 'verify') return handleVerify(req, res);
   if (action === 'bulk-pricing') return handleBulkPricing(req, res);
+  if (action === 'post-trial-discount') return handlePostTrialDiscount(req, res);
 
   return res.status(400).json({ error: 'Unknown action. Use ?action=balance, ?action=checkout, ?action=create-payment-intent, ?action=verify, or ?action=bulk-pricing' });
 };
+
+async function handlePostTrialDiscount(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const user = verifyLearnerAuth(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const discount = await getPostTrialDiscount(sql, {
+      schoolId: user.school_id || 1,
+      learnerId: user.id,
+    });
+    return res.json(discount);
+  } catch (err) {
+    console.error('post-trial discount status error:', err);
+    reportError('/api/credits?action=post-trial-discount', err);
+    return res.status(500).json({ error: 'Failed to load discount status' });
+  }
+}
 
 // ── GET /api/credits?action=bulk-pricing ─────────────────────────────────────
 // Returns the school's current bulk-credit hourly rate and discount tiers.
@@ -368,16 +389,23 @@ async function handleCheckout(req, res) {
       ? `${hours} hours at £${(pricePerHourPence / 100).toFixed(2)}/hr. You save £${(discountAmt / 100).toFixed(2)} with the ${discountPct}% package discount.`
       : `${hours} hours of driving lessons. Book online at any time.`;
 
-    const metadata = buildCreditPurchaseMetadata({
+    const postTrialQuote = await quotePostTrialPrice(sql, {
+      schoolId, learnerId: user.id, amountPence: totalPence,
+    });
+    const finalTotalPence = postTrialQuote.pricePence;
+    const metadata = {
+      ...buildCreditPurchaseMetadata({
       user,
       schoolId,
       instructorId,
       hours,
       minutes,
-      totalPence,
+      totalPence: finalTotalPence,
       discountPct,
       emailValid,
-    });
+      }),
+      ...postTrialQuote.metadata,
+    };
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -385,7 +413,7 @@ async function handleCheckout(req, res) {
         {
           price_data: {
             currency: 'gbp',
-            unit_amount: totalPence,
+            unit_amount: finalTotalPence,
             product_data: { name: productName, description }
           },
           quantity: 1
@@ -399,8 +427,13 @@ async function handleCheckout(req, res) {
       success_url: `${origin}/learner/?hours_added=${hours}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${origin}/learner/buy-credits.html?cancelled=true&instructor_id=${instructorId}`
     });
+    const quoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId, schoolId, learnerId: user.id,
+      paymentType: 'checkout_session', paymentIdentity: session.id,
+    });
+    if (!quoteBinding.ok) throw new Error(quoteBinding.code);
 
-    return res.json({ url: session.url });
+    return res.json({ url: session.url, post_trial_discount_pence: postTrialQuote.discountPence });
   } catch (err) {
     console.error('credits checkout error:', err);
     reportError('/api/credits', err);
@@ -455,25 +488,37 @@ async function handleCreatePaymentIntent(req, res) {
       learnerId: user.id
     });
     const { fullPence, discountPct, discountAmt, totalPence, pricePerHourPence } = pricing;
-    const metadata = buildCreditPurchaseMetadata({
+    const postTrialQuote = await quotePostTrialPrice(sql, {
+      schoolId, learnerId: user.id, amountPence: totalPence,
+    });
+    const finalTotalPence = postTrialQuote.pricePence;
+    const metadata = {
+      ...buildCreditPurchaseMetadata({
       user,
       schoolId,
       instructorId,
       hours,
       minutes,
-      totalPence,
+      totalPence: finalTotalPence,
       discountPct,
       emailValid,
-    });
+      }),
+      ...postTrialQuote.metadata,
+    };
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalPence,
+      amount: finalTotalPence,
       currency: 'gbp',
       automatic_payment_methods: { enabled: true },
       metadata,
       ...(emailValid ? { receipt_email: user.email } : {}),
       description: `${hours} hour${hours !== 1 ? 's' : ''} of driving lesson credit`,
     });
+    const quoteBinding = await bindPostTrialQuote(sql, {
+      quoteId: postTrialQuote.quoteId, schoolId, learnerId: user.id,
+      paymentType: 'payment_intent', paymentIdentity: paymentIntent.id,
+    });
+    if (!quoteBinding.ok) throw new Error(quoteBinding.code);
 
     return res.json({
       ok: true,
@@ -482,13 +527,15 @@ async function handleCreatePaymentIntent(req, res) {
       instructor_id: instructorId,
       hours,
       minutes,
-      amount_pence: totalPence,
-      total_pence: totalPence,
+      amount_pence: finalTotalPence,
+      total_pence: finalTotalPence,
       full_pence: fullPence,
       discount_pct: discountPct,
-      discount_amount_pence: discountAmt,
+      discount_amount_pence: discountAmt + postTrialQuote.discountPence,
+      post_trial_discount_pct: postTrialQuote.discountPct,
+      post_trial_discount_pence: postTrialQuote.discountPence,
       price_per_hour_pence: pricePerHourPence,
-      effective_rate_pence_per_minute: Math.round(totalPence / minutes),
+      effective_rate_pence_per_minute: Math.round(finalTotalPence / minutes),
       bulk_tiers_enabled: pricing.bulkTiersEnabled,
       rate_source: pricing.rateSource,
       _source: pricing._source,
