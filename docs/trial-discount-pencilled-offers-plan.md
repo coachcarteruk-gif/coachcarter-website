@@ -1,7 +1,42 @@
 # Trial window, post-trial discount and pencilled offers
 
-Status: implemented and locally verified, 16 September 2026. No deployment, production
-migration or live configuration change is authorised by this work.
+Status: reconciled with current main for the owner-requested restoration on
+19 September 2026. Fraser explicitly requested restoring pencilled offers to
+the site and including the trial-window and post-trial-discount changes.
+Migrations 066-068 are already installed and match the production ledger;
+this restoration requires no production migration or financial data repair.
+
+## Restoration verification — 19 September 2026
+
+- Integrated the existing feature branch into fresh main, retaining migration
+  069, payout summaries, fee backfill, deployment guard and security hardening.
+- Fixed the merged trial calendar's missing date-formatting helper and retained
+  the newer date-grid UX. Boundary tests now assert the visible day-28 slot.
+- Unknown Stripe fees remain NULL in pencilled booking/funding attribution;
+  real zero fees remain zero. Regression tests cover unknown, zero and known
+  fees, including the booking's evidence-source field.
+- Pencilled mode resets when reopening the offer dialog, is available only for
+  a specific existing learner, and disables flexible/repeating offers. Learner
+  cancellation updates the upcoming count.
+- Full local verification: 1,537 passed, 310 skipped. This includes the real
+  loopback PostgreSQL concurrency and package penny-conservation tests that
+  the 17 September review could not run. A subsequent focused run passed all
+  nine signed-dispatcher and real quote-ledger checks, including invalid
+  signature rejection, tenant/learner isolation and trial revocation timing.
+- The aggregate schema bootstrapped successfully in a disposable local
+  PostgreSQL database (with the historical neondb_owner role created locally).
+  Numbered 066-068 then repeat-applied successfully. No production SQL ran.
+- GitHub CI and Vercel preview passed for the integrated application revision.
+  The deployed preview's trial-window API returned the correct school-local
+  28-day range. Final test/documentation changes also require CI before merge.
+- Provider-side checkout, refund and asynchronous-settlement outcomes are
+  tested with controlled provider fixtures; webhook signatures are verified by
+  the real Stripe SDK. No real Stripe payment or provider-delivered test payment
+  was made during this restoration. Do not describe these tests as such.
+
+The sections below retain the original design and September 16-17 evidence.
+Their earlier rollout restrictions and pending-schema descriptions are
+historical; the current scope and migration receipts above take precedence.
 
 ## Confirmed scope
 

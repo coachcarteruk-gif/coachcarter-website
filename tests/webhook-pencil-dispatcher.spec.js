@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { Readable } = require('stream');
+const stripeWebhooks = new (require('stripe'))('sk_test_signature_fixture').webhooks;
+const fixtureSecret = 'whsec_pencilled_signature_fixture';
 
 process.env.STRIPE_SECRET_KEY ||= 'sk_test_webhook_pencil_dispatcher';
 process.env.STRIPE_WEBHOOK_SECRET ||= 'whsec_webhook_pencil_dispatcher';
@@ -15,10 +17,13 @@ function createResponse() {
   };
 }
 
-function createRequest() {
-  const req = Readable.from(['{}']);
+function createRequest(event, invalidSignature = false) {
+  const payload = JSON.stringify(event);
+  const req = Readable.from([payload]);
   req.method = 'POST';
-  req.headers = { 'stripe-signature': 'signed-test-event' };
+  req.headers = { 'stripe-signature': stripeWebhooks.generateTestHeaderString({
+    payload, secret: invalidSignature ? 'whsec_wrong_fixture' : fixtureSecret,
+  }) };
   return req;
 }
 
@@ -188,7 +193,7 @@ function loadDispatcherHarness({
   };
 
   const fakeStripe = {
-    webhooks: { constructEvent: () => currentEvent },
+    webhooks: { constructEvent: (body, signature) => stripeWebhooks.constructEvent(body, signature, fixtureSecret) },
     refunds: { create: async (_payload, options) => {
       state.refundCalls.push(options.idempotencyKey);
       if (failuresRemaining > 0) {
@@ -266,9 +271,9 @@ function loadDispatcherHarness({
   return {
     state,
     setEvent(event) { currentEvent = event; },
-    async dispatch() {
+    async dispatch(invalidSignature = false) {
       const res = createResponse();
-      await handler(createRequest(), res);
+      await handler(createRequest(currentEvent, invalidSignature), res);
       return res;
     },
     restore() {
@@ -281,6 +286,15 @@ function loadDispatcherHarness({
 }
 
 test.describe('actual webhook dispatcher pencilled compensation routing', () => {
+  test('rejects an invalid Stripe signature before any booking, receipt or refund action', async () => {
+    const harness = loadDispatcherHarness();
+    try {
+      expect((await harness.dispatch(true)).statusCode).toBe(400);
+      expect(harness.state.receiptClaims).toHaveLength(0);
+      expect(harness.state.refundCalls).toHaveLength(0);
+      expect(harness.state.bookings).toBe(0);
+    } finally { harness.restore(); }
+  });
   test('uses canonical scope, retains refund failure, retries idempotently, and no-ops duplicates', async () => {
     const harness = loadDispatcherHarness({ refundFails: 1, shadowEnabled: true });
     try {
