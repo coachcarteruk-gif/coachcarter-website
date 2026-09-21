@@ -41,7 +41,7 @@ test('shared optional form clears hidden fields and keeps draft on API validatio
   await page.route('**/api/slots?action=available**',route=>route.fulfill({json:{slots:{'2030-07-20':[{start_time:'10:00',end_time:'11:00',instructor_id:7,transmission_type:'manual'}]}}}));
   let payload;
   await page.route('**/api/slots?action=book-free-trial**',route=>{payload=route.request().postDataJSON();return route.fulfill({status:400,json:{error:'Correct the date or add it later.'}});});
-  await page.goto('/free-trial.html?campaign=test_booked_v1');
+  await page.goto('/free?campaign=test_booked_v1');
   await expect(page.locator('#trialTestDetails')).toBeVisible();
   await page.locator('#trialTestBooked').selectOption('yes');await page.locator('#trialTestDate').fill('2030-06-01');await page.locator('#trialTestCentre').fill('Centre canary');
   await page.getByRole('button',{name:/10:00/}).click();await expect(page.locator('#trialTestTiming')).toContainText('before this lesson');

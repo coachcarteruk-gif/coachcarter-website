@@ -39,7 +39,7 @@ test.describe('questionnaire browser behaviour',()=>{
     await page.addInitScript(()=>localStorage.setItem('cc_cookie_consent',JSON.stringify({analytics:false,marketing:false,version:2,timestamp:new Date().toISOString()})));
   });
   test('keyboard, Back, conditional details and stale answer clearing',async({page})=>{
-    await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/free-trial.html');
+    await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/free');
     await expect(page.locator('#trialBookingFlow')).toBeHidden();
     await page.getByLabel('Yes',{exact:true}).focus();await page.keyboard.press('Space');await page.getByRole('button',{name:'Continue',exact:true}).click();
     await expect(page.locator('.question-progress')).toHaveText('Question 2 of 3');
@@ -57,7 +57,7 @@ test.describe('questionnaire browser behaviour',()=>{
     expect(await page.evaluate(()=>ccTrialQuestionnaire.answers())).toMatchObject({practical_booked:false,practical_date:'',practical_time:'',centre_choice:'',other_centre:'',theory_booked:false,theory_date:'',theory_time:''});
   });
   test('supported centre at lowest budget uses request; retry and consent emit no booking',async({page})=>{
-    await page.goto('/free-trial.html');await page.getByLabel('Yes',{exact:true}).check();await page.getByRole('button',{name:'Continue',exact:true}).click();
+    await page.goto('/free');await page.getByLabel('Yes',{exact:true}).check();await page.getByRole('button',{name:'Continue',exact:true}).click();
     await page.getByLabel('Practical test date').fill('2027-06-20');await page.getByLabel('Practical test time').fill('11:20');await page.getByLabel('Test centre',{exact:true}).selectOption('Reading');
     await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('No, I would need lessons to be around £45/hr.').check();await page.getByRole('button',{name:'Continue',exact:true}).click();
     await expect(page.getByRole('heading',{name:'Request your free trial'})).toBeVisible();
@@ -70,7 +70,7 @@ test.describe('questionnaire browser behaviour',()=>{
     await expect(page.getByRole('heading',{name:/your trial request is received/})).toBeVisible();expect(bodies[0].submission_key).toBe(bodies[1].submission_key);expect(bodies[1].funnel_context.analytics_consent_at_booking).toBe(false);
   });
   test('eligible no-slots fallback preserves answers and contact details',async({page})=>{
-    await page.goto('/free-trial.html');await page.getByLabel('Yes',{exact:true}).check();await page.getByRole('button',{name:'Continue',exact:true}).click();
+    await page.goto('/free');await page.getByLabel('Yes',{exact:true}).check();await page.getByRole('button',{name:'Continue',exact:true}).click();
     await page.getByLabel('Practical test date').fill('2027-06-20');await page.getByLabel('Practical test time').fill('11:20');await page.getByLabel('Test centre',{exact:true}).selectOption('Reading');await page.getByRole('button',{name:'Continue',exact:true}).click();
     await page.getByLabel('No, I would need lessons to be around £50/hr.').check();await page.getByRole('button',{name:'Continue',exact:true}).click();
     await expect(page.locator('#slotPicker')).toContainText('No free trial slots');await page.locator('#guest_name').fill('Carried name');await page.locator('#guest_email').fill('carried@example.invalid');
@@ -79,7 +79,7 @@ test.describe('questionnaire browser behaviour',()=>{
   });
   test('new progress and request analytics require current consent and discard all personal fields',async({page})=>{
     await page.route('**/static/array.js',r=>r.fulfill({contentType:'application/javascript',body:"var c=posthog._i[0][1];window.events=[];posthog.__loaded=true;posthog.capture=function(event,properties){var e=c.before_send({event,properties});if(e)events.push(e);};posthog.opt_out_capturing=function(){};posthog.opt_in_capturing=function(){};posthog.reset=function(){};c.loaded();"}));
-    await page.goto('/free-trial.html');
+    await page.goto('/free');
     expect(await page.evaluate(()=>ccTrialFunnel.send('trial_questionnaire_step_1_completed'))).toBe(false);
     await page.evaluate(()=>{localStorage.setItem('cc_cookie_consent',JSON.stringify({analytics:true,marketing:false,version:2,timestamp:new Date().toISOString()}));document.dispatchEvent(new CustomEvent('cookie-consent-updated',{detail:{analytics:true}}));});
     await expect.poll(()=>page.evaluate(()=>window.events?.length||0)).toBe(1);

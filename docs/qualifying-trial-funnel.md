@@ -126,6 +126,8 @@ The PC shut down during work; repository edits survived, and the isolated databa
 
 `npm run check:syntax` passed for 269 JavaScript files; `npm run migrations:check` passed for all 72 manifest entries; `git diff --check` passed. No production connection or mutation was needed. Real provider delivery/sign-in, production-scale report performance and production rollout remain unverified, as described above.
 
+PR CI follow-up: the shared static test server had disabled clean URLs, causing existing offer and instructor-page tests to load 404s. Clean-URL serving is restored, and funnel browser tests use the canonical `/free` entry to avoid static-server HTML redirects changing campaign context. Existing migration inventory and learner/instructor profile assertions now match 070/071 and the canonical current-test-details contract. No production code changed for this correction. The complete CI-mode local suite (`CI=true npx playwright test --workers=2 --reporter=line`) passed **1,653 tests**, with 345 environment-gated tests skipped; the encoding scan also passed. The separately exercised isolated database and real-API preview results above remain distinct from this static/mock suite.
+
 Canonical LF SHA-256 migration checksums for review:
 
 - 070: `4f220073eff55ae3d6087b776912a24f3016508382a5e45981fb8eef822b7185`
