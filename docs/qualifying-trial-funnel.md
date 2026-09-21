@@ -135,6 +135,14 @@ Canonical LF SHA-256 migration checksums for review:
 
 ## Exact production rollout checklist — not executed
 
+### Returning-browser cache follow-up (21 September 2026)
+
+After PR #474 was merged, a fresh read-only browser loaded the live `/free` booking flow normally, and public-config reported both funnel flags inactive. Replaying the preceding `005f687` initializer against the new HTML reproduced the persistent “Loading your free trial…” screen: the old script never reveals `trialBookingFlow`. The existing one-hour browser cache for unversioned JavaScript permits this mixed-version state. `/free` now references the changed funnel scripts and questionnaire stylesheet using `?v=qualification-v1`, bypassing those old cached asset URLs. Bump that version when their HTML/initialisation contract changes again. This does not activate a school, alter API behaviour, or change global cache policy.
+
+Validation: 42 focused tests passed, including a real HTTP-cache regression for enabled and disabled school configuration, questionnaire behaviour and existing direct booking. The cache test confirms the old asset remains cached while the new page fetches the versioned initializer. This fix is prepared for review; no production deployment, schema mutation or feature activation was performed by the follow-up. A hard refresh is an immediate workaround for an affected browser. Enabling the questionnaire still requires the rollout below.
+
+### Rollout steps
+
 1. Review the branch, original-commit incorporation, routing table, privacy/retention purpose, staff capacity and manual workflow. Confirm that both flags target the verified CoachCarter school only. Obtain separate authorisation for schema, code and activation. Footage, messages, campaign traffic and automation each remain separate work.
 2. Fetch latest main, reconcile migration numbering without changing deployed history, and rerun `npm run migrations:check`, `npm run check:syntax`, the focused tests and real local journeys. Review representative large-range report performance before broad reporting use; the existing small loopback rehearsal is not a production load test.
 3. Under migration governance, record an approved recovery snapshot. Supply the approved direct URL through `POSTGRES_URL_NON_POOLING` or `DATABASE_URL_UNPOOLED` securely. Run `node scripts/migration-runner.js --status` read-only; verify the target fingerprint. Expected new pending entries are **070 and 071 only** (or just 071 if 070 has independently been applied with the exact manifest checksum). Stop on any other pending entry, mismatch or different school/project identity. Compare both canonical LF SHA-256 values with `db/migrations/manifest.json`.
