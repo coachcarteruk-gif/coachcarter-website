@@ -7,6 +7,8 @@
   var instructors = [];
   var currentLearner = null;
 
+  document.getElementById('field-test-booked').addEventListener('change', function () { if (this.value !== 'yes') ['field-test-date','field-test-time','field-test-centre'].forEach(function (id) { document.getElementById(id).value = ''; }); });
+  document.getElementById('field-test-date').addEventListener('change', function () { document.getElementById('field-test-time').value = ''; if (this.value) document.getElementById('field-test-booked').value = 'yes'; });
   function $(id) { return document.getElementById(id); }
 
   function esc(value) {
@@ -241,6 +243,7 @@
       ? (Number(currentLearner.custom_hourly_rate_pence) / 100).toFixed(2)
       : '';
     $('field-trial-allowed').checked = !!currentLearner.free_trial_allowed;
+    $('field-test-booked').value = currentLearner.test_booked === false ? 'no' : currentLearner.test_booked === true || currentLearner.test_date ? 'yes' : 'unknown';
     $('field-test-date').value = currentLearner.test_date || '';
     $('field-test-time').value = currentLearner.test_time || '';
     $('field-test-centre').value = currentLearner.test_centre || '';
@@ -275,14 +278,14 @@
           learner_category: $('field-category').value || null,
           custom_hourly_rate_pence: ratePence,
           free_trial_allowed: $('field-trial-allowed').checked,
-          test_date: $('field-test-date').value || null,
-          test_time: $('field-test-time').value || null,
-          test_centre: $('field-test-centre').value || null,
+          test_details_updated_at: currentLearner.test_details_updated_at || null,
+          test_details: { booked: $('field-test-booked').value === 'yes' ? true : $('field-test-booked').value === 'no' ? false : null, date: $('field-test-date').value || null, time: $('field-test-time').value || null, centre: $('field-test-centre').value || null },
           test_instructor_booked: $('field-test-instructor-booked').checked,
           admin_control_notes: $('field-notes').value || null
         })
       });
       var data = await res.json().catch(function () { return {}; });
+      if (res.status === 409 && data.profile) { Object.assign(currentLearner, data.profile); ['date','time','centre'].forEach(function (key) { $('field-test-'+key).value = data.profile['test_'+key] || ''; }); $('field-test-booked').value = data.profile.test_booked === true ? 'yes' : data.profile.test_booked === false ? 'no' : 'unknown'; }
       if (!res.ok) throw new Error(data.error || data.message || 'Save failed');
       toast('Learner controls saved');
       closeEditor();

@@ -24,6 +24,15 @@ module.exports = async (req, res) => {
   return withCronLock(req, res, 'cron-retention', 600, async (sql) => {
     const results = { soft_archived: 0, hard_deleted: 0, enquiries_archived: 0, enquiries_deleted: 0, requests_cleaned: 0, transactions_purged: 0, bookings_purged: 0, notifications_purged: 0 };
 
+    results.trial_intakes_purged = 0;
+    const intakeSchools = await sql`SELECT id FROM schools`;
+    for (const school of intakeSchools) {
+      // Weekly worker: seven-day margin keeps the intended ceiling at 24 months.
+      const expired = await sql`DELETE FROM trial_booking_intakes WHERE school_id = ${school.id}
+        AND booked_at < NOW() - INTERVAL '24 months' + INTERVAL '7 days' RETURNING id`;
+      results.trial_intakes_purged += expired.length;
+    }
+
     // 1. Refresh last_activity_at from most recent activity
     await sql`
       UPDATE learner_users lu SET last_activity_at = GREATEST(

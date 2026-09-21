@@ -29,33 +29,34 @@ const SKILL_LABELS = {
 const RATING_LABELS = { struggled: 'Needs work (weak)', ok: 'Getting there (developing)', nailed: 'Confident (strong)' };
 
 // ── Build personalised learner context for AI ────────────────────────────────
-async function buildLearnerContext(userId) {
+async function buildLearnerContext(userId, schoolId) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    const [onboarding] = await sql`SELECT * FROM learner_onboarding WHERE learner_id = ${userId}`;
+    if (!schoolId) return '';
+    const [onboarding] = await sql`SELECT * FROM learner_onboarding WHERE learner_id = ${userId} AND school_id = ${schoolId}`;
 
     const lessonData = await sql`
       SELECT DISTINCT ON (skill_key) skill_key, rating, driving_faults, serious_faults, dangerous_faults, created_at
-      FROM skill_ratings WHERE user_id = ${userId}
+      FROM skill_ratings WHERE user_id = ${userId} AND school_id = ${schoolId}
       ORDER BY skill_key, created_at DESC`;
 
     const quizData = await sql`
       SELECT skill_key, COUNT(*)::int AS attempts, COUNT(*) FILTER (WHERE correct)::int AS correct_count
-      FROM quiz_results WHERE learner_id = ${userId}
+      FROM quiz_results WHERE learner_id = ${userId} AND school_id = ${schoolId}
       GROUP BY skill_key`;
 
     const [mockData] = await sql`
       SELECT COUNT(*)::int AS total_tests, COUNT(*) FILTER (WHERE result = 'pass')::int AS passes
-      FROM mock_tests WHERE learner_id = ${userId} AND completed_at IS NOT NULL`;
+      FROM mock_tests WHERE learner_id = ${userId} AND school_id = ${schoolId} AND completed_at IS NOT NULL`;
 
     const [stats] = await sql`
       SELECT COUNT(*)::int AS total_sessions, COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
-      FROM driving_sessions WHERE user_id = ${userId} AND session_type != 'onboarding'`;
+      FROM driving_sessions WHERE user_id = ${userId} AND school_id = ${schoolId} AND session_type != 'onboarding'`;
 
-    const [learner] = await sql`SELECT name FROM learner_users WHERE id = ${userId}`;
+    const [learner] = await sql`SELECT name, test_booked, test_date, test_details_updated_at FROM learner_users WHERE id = ${userId} AND school_id = ${schoolId}`;
 
-    const hasData = (lessonData?.length > 0) || (quizData?.length > 0) || (mockData?.total_tests > 0) || onboarding;
+    const hasData = (lessonData?.length > 0) || (quizData?.length > 0) || (mockData?.total_tests > 0) || onboarding || learner?.test_date || learner?.test_booked != null;
 
     if (!hasData) {
       return learner?.name
@@ -66,6 +67,8 @@ async function buildLearnerContext(userId) {
     let ctx = `\n\nLEARNER CONTEXT (use this to personalise your responses — reference specific areas when relevant):\n`;
     if (learner?.name) ctx += `Name: ${learner.name}\n`;
 
+    const currentTest = require('./_learner-test-details').currentDetails(learner);
+    ctx += 'Current self-reported practical test: ' + (currentTest.booked === false ? 'not booked' : currentTest.date || 'date unknown') + '\n';
     if (onboarding) {
       const totalPrior = (onboarding.prior_hours_pro || 0) + (onboarding.prior_hours_private || 0);
       ctx += `Prior experience: ${onboarding.prior_hours_pro || 0} hours professional lessons, ${onboarding.prior_hours_private || 0} hours private practice (${totalPrior} total)\n`;
@@ -74,7 +77,7 @@ async function buildLearnerContext(userId) {
       if (onboarding.test_booked && onboarding.test_date) {
         const testDate = new Date(onboarding.test_date);
         const daysUntil = Math.ceil((testDate - new Date()) / (1000 * 60 * 60 * 24));
-        ctx += `Test booked: ${onboarding.test_date} (${daysUntil > 0 ? daysUntil + ' days away' : 'in the past'})\n`;
+        ctx += `Historical onboarding test answer (not current): ${onboarding.test_date} (${daysUntil > 0 ? daysUntil + ' days away' : 'in the past'})\n`;
       }
       if (onboarding.main_concerns) ctx += `Main concerns: "${onboarding.main_concerns}"\n`;
     }

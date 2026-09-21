@@ -31,7 +31,7 @@
   <script src="/sidebar.js"></script>
   <script src="/shared/learner-auth.js"></script>
   <script src="/auth-gate.js"></script>
-</head>
+<script src="/shared/branding.js" defer></script><script src="/cookie-consent.js" defer></script><script src="/posthog-loader.js" defer></script></head>
 <body>
   <main>
     <header class="page-header">
@@ -40,13 +40,15 @@
     </header>
     <section class="test-card" aria-labelledby="test-details-heading">
       <h2 id="test-details-heading">Test details</h2>
-      <p class="test-card-intro">These details help keep your lesson plan and test countdown accurate.</p>
+      <p class="test-card-intro">These are your self-reported current details. Updating them does not change lesson bookings, test-day arrangements, swap listings or package test records. Review those separately with your instructor.</p>
+      <div class="test-field"><label for="testBooked">Have you booked your practical test?</label><select id="testBooked"><option value="unknown">Prefer not to say / not provided</option><option value="yes">Yes</option><option value="no">No / cancelled</option></select></div>
       <div class="test-row">
         <div class="test-field"><label for="testDate">Date</label><input type="date" id="testDate"></div>
         <div class="test-field"><label for="testTime">Time</label><input type="time" id="testTime"></div>
       </div>
       <div class="test-field"><label for="testCentre">Test centre</label><input type="text" id="testCentre" maxlength="160" placeholder="e.g. Sidcup Driving Test Centre"></div>
       <div class="countdown" id="testCountdown">Loading your test details...</div>
+      <button id="useTrialAnswer" type="button" class="save-btn" hidden>Use my latest trial booking answer</button><p id="trialAnswerContext" class="muted"></p>
       <div class="save-row"><span class="status" id="saveStatus" role="status"></span><button type="button" class="save-btn" id="btnSaveTest">Save details</button></div>
     </section>
   </main>

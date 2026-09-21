@@ -189,6 +189,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasCurriculumProgress = await curriculumProgressTablesExist(sql);
 
   const txn = [
+    sql`DELETE FROM trial_booking_intakes WHERE learner_id = ${learnerId} AND school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId})`,
     sql`DELETE FROM enquiries e USING learner_users lu
         WHERE lu.id = ${learnerId} AND e.school_id = lu.school_id
           AND LOWER(e.email) = LOWER(lu.email)

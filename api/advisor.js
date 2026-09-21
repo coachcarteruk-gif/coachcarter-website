@@ -58,7 +58,7 @@ module.exports = async (req, res) => {
     // Build personalised context if we have an authenticated learner
     let learnerContext = '';
     if (user) {
-      learnerContext = await buildLearnerContext(user.id);
+      learnerContext = await buildLearnerContext(user.id, user.school_id || 1);
     }
     const personalizedPrompt = SYSTEM_PROMPT + learnerContext;
 

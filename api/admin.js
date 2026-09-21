@@ -1,3 +1,4 @@
+const testDetails = require('./_learner-test-details');
 // Admin authentication & dashboard data
 //
 // Routes:
@@ -377,6 +378,23 @@ module.exports = async (req, res) => {
   setCors(res);
   const action = req.query.action;
   if (await handleInterimV1Payout(req, res)) return;
+  if (action === 'trial-funnel-report') {
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+    const admin = require('./_auth').requireAuth(req, { roles: ['admin'] });
+    if (!admin) return res.status(401).json({ error: 'Unauthorised' });
+    try {
+      const schoolId = require('./_auth').getSchoolId(admin, req);
+      if (!Number.isSafeInteger(schoolId) || schoolId <= 0) return res.status(400).json({ error: 'Select a school for this report.' });
+      const report = await require('./_trial-funnel-report').loadReport(neon(process.env.POSTGRES_URL), {
+        schoolId, from: req.query.from, to: req.query.to,
+        instructorId: req.query.instructor_id ? Number(req.query.instructor_id) : null
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(report);
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.status === 400 ? error.message : 'Unable to load trial report.' });
+    }
+  }
   if (action === 'login')           return handleLogin(req, res);
   if (action === 'logout')          return handleLogout(req, res);
   if (action === 'request-reset')   return handleRequestReset(req, res);
@@ -2999,7 +3017,7 @@ async function handleAllLearners(req, res) {
         lu.learner_category,
         lu.primary_instructor_id,
         pi.name AS primary_instructor_name,
-        lu.test_date::text AS test_date,
+        lu.test_booked, lu.test_details_updated_at, lu.test_date::text AS test_date,
         lu.created_at,
         (SELECT COUNT(*)::int FROM lesson_bookings lb
          WHERE lb.learner_id = lu.id AND lb.school_id = ${schoolId}) AS total_bookings,
@@ -3117,7 +3135,7 @@ async function handleLearnerControls(req, res) {
         lu.learner_category,
         lu.primary_instructor_id,
         pi.name AS primary_instructor_name,
-        lu.test_date::text AS test_date,
+        lu.test_booked, lu.test_details_updated_at, lu.test_date::text AS test_date,
         lu.test_time,
         lu.test_centre,
         COALESCE(lu.free_trial_allowed, TRUE) AS free_trial_allowed,
@@ -3198,7 +3216,7 @@ async function handleLearnerDetail(req, res) {
         lu.learner_category,
         lu.primary_instructor_id,
         pi.name AS primary_instructor_name,
-        lu.test_date::text AS test_date,
+        lu.test_booked, lu.test_details_updated_at, lu.test_date::text AS test_date,
         lu.created_at
       FROM learner_users lu
       LEFT JOIN instructors pi
@@ -3346,11 +3364,6 @@ async function handleUpdateLearnerControls(req, res) {
     return res.status(400).json({ error: 'Invalid assigned instructor' });
   }
 
-  const testDate = normaliseAdminControlDate(body.test_date, 'test_date');
-  if (!testDate.ok) return res.status(400).json({ error: testDate.error });
-  const testTime = normaliseAdminControlTime(body.test_time, 'test_time');
-  if (!testTime.ok) return res.status(400).json({ error: testTime.error });
-
   const freeTrialAllowed = normaliseAdminControlBool(body.free_trial_allowed);
   if (freeTrialAllowed == null && body.free_trial_allowed != null && body.free_trial_allowed !== '') {
     return res.status(400).json({ error: 'free_trial_allowed must be true or false' });
@@ -3368,9 +3381,6 @@ async function handleUpdateLearnerControls(req, res) {
     }
   }
 
-  const testCentre = body.test_centre != null
-    ? String(body.test_centre).trim().replace(/\s+/g, ' ').slice(0, 160) || null
-    : null;
   const adminNotes = body.admin_control_notes != null
     ? String(body.admin_control_notes).trim().slice(0, 2000) || null
     : null;
@@ -3385,7 +3395,7 @@ async function handleUpdateLearnerControls(req, res) {
         lu.email,
         lu.learner_category,
         lu.primary_instructor_id,
-        lu.test_date::text AS test_date,
+        lu.test_booked, lu.test_details_updated_at, lu.test_date::text AS test_date,
         lu.test_time,
         lu.test_centre,
         COALESCE(lu.free_trial_allowed, TRUE) AS free_trial_allowed,
@@ -3401,6 +3411,10 @@ async function handleUpdateLearnerControls(req, res) {
         AND lu.school_id = ${schoolId}
     `;
     if (!existing) return res.status(404).json({ error: 'Learner not found' });
+    let patch;
+    try { patch = testDetails.profilePatch(body, existing); }
+    catch (error) { return res.status(400).json({ error: error.message }); }
+    const expected = Object.prototype.hasOwnProperty.call(body, 'test_details') ? body.test_details_updated_at : existing.test_details_updated_at;
 
     if (primaryInstructorId) {
       const [instructor] = await sql`
@@ -3420,19 +3434,27 @@ async function handleUpdateLearnerControls(req, res) {
       UPDATE learner_users
       SET learner_category = ${category},
           primary_instructor_id = ${primaryInstructorId},
-          test_date = ${testDate.value},
-          test_time = ${testTime.value},
-          test_centre = ${testCentre},
+          test_date = CASE WHEN ${patch.touched} THEN ${patch.date} ELSE test_date END,
+          test_time = CASE WHEN ${patch.touched} THEN ${patch.time} ELSE test_time END,
+          test_centre = CASE WHEN ${patch.touched} THEN ${patch.centre} ELSE test_centre END,
+          test_booked = CASE WHEN ${patch.touched} THEN ${patch.booked} ELSE test_booked END,
+          test_details_updated_at = CASE WHEN ${patch.touched} THEN GREATEST(date_trunc('milliseconds', clock_timestamp()), COALESCE(test_details_updated_at, '-infinity'::timestamptz) + interval '1 millisecond') ELSE test_details_updated_at END,
           free_trial_allowed = ${freeTrialAllowed},
           test_instructor_booked = ${testInstructorBooked},
           admin_control_notes = ${adminNotes}
       WHERE id = ${learnerId}
         AND school_id = ${schoolId}
-      RETURNING id, learner_category, primary_instructor_id, test_date::text AS test_date,
+        AND (NOT ${patch.touched} OR test_details_updated_at IS NOT DISTINCT FROM ${expected ?? null}::timestamptz)
+      RETURNING test_booked, test_details_updated_at, id, learner_category, primary_instructor_id, test_date::text AS test_date,
                 test_time, test_centre, free_trial_allowed, test_instructor_booked,
                 admin_control_notes
     `;
 
+    if (!updated) {
+      const [fresh] = await sql`SELECT test_booked, test_date, test_time, test_centre, test_details_updated_at
+        FROM learner_users WHERE id = ${learnerId} AND school_id = ${schoolId}`;
+      return res.status(409).json({ error: 'Test details changed. Reload before saving.', code: 'TEST_DETAILS_CONFLICT', profile: fresh });
+    }
     let relationship = null;
     if (primaryInstructorId) {
       const [row] = await sql`
@@ -3460,6 +3482,8 @@ async function handleUpdateLearnerControls(req, res) {
         before: {
           learner_category: existing.learner_category,
           primary_instructor_id: existing.primary_instructor_id,
+          test_booked: existing.test_booked,
+          test_details_updated_at: existing.test_details_updated_at,
           test_date: existing.test_date,
           test_time: existing.test_time,
           test_centre: existing.test_centre,
@@ -3471,6 +3495,8 @@ async function handleUpdateLearnerControls(req, res) {
         after: {
           learner_category: updated.learner_category,
           primary_instructor_id: updated.primary_instructor_id,
+          test_booked: updated.test_booked,
+          test_details_updated_at: updated.test_details_updated_at,
           test_date: updated.test_date,
           test_time: updated.test_time,
           test_centre: updated.test_centre,
@@ -3518,7 +3544,7 @@ async function handleUpdateLearner(req, res) {
 
     // Fetch current values for audit before/after
     const [existing] = await sql`
-      SELECT id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_date::text AS test_date
+      SELECT id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_booked, test_time, test_centre, test_details_updated_at, test_date::text AS test_date
       FROM learner_users WHERE id = ${id} AND school_id = ${schoolId}
     `;
     if (!existing) return res.status(404).json({ error: 'Learner not found' });
@@ -3530,7 +3556,10 @@ async function handleUpdateLearner(req, res) {
     const newPickup  = pickup_address !== undefined ? pickup_address.trim() || null : existing.pickup_address;
     const newCategory = learner_category !== undefined ? category : existing.learner_category;
     const newPrimaryInstructorId = primary_instructor_id !== undefined ? primaryInstructorId : existing.primary_instructor_id;
-    const newTestDate = test_date !== undefined ? (test_date || null) : existing.test_date;
+    let patch;
+    try { patch = testDetails.profilePatch(req.body || {}, existing); }
+    catch (error) { return res.status(400).json({ error: error.message }); }
+    const expected = Object.prototype.hasOwnProperty.call(req.body, 'test_details') ? req.body.test_details_updated_at : existing.test_details_updated_at;
 
     // Check email uniqueness within school (if changed)
     if (newEmail !== existing.email) {
@@ -3566,11 +3595,20 @@ async function handleUpdateLearner(req, res) {
           pickup_address = ${newPickup},
           learner_category = ${newCategory},
           primary_instructor_id = ${newPrimaryInstructorId},
-          test_date = ${newTestDate}
+          test_date = CASE WHEN ${patch.touched} THEN ${patch.date} ELSE test_date END,
+          test_time = CASE WHEN ${patch.touched} THEN ${patch.time} ELSE test_time END,
+          test_centre = CASE WHEN ${patch.touched} THEN ${patch.centre} ELSE test_centre END,
+          test_booked = CASE WHEN ${patch.touched} THEN ${patch.booked} ELSE test_booked END,
+          test_details_updated_at = CASE WHEN ${patch.touched} THEN GREATEST(date_trunc('milliseconds', clock_timestamp()), COALESCE(test_details_updated_at, '-infinity'::timestamptz) + interval '1 millisecond') ELSE test_details_updated_at END
       WHERE id = ${id} AND school_id = ${schoolId}
-      RETURNING id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_date::text AS test_date
+        AND (NOT ${patch.touched} OR test_details_updated_at IS NOT DISTINCT FROM ${expected ?? null}::timestamptz)
+      RETURNING id, name, email, phone, pickup_address, learner_category, primary_instructor_id, test_booked, test_time, test_centre, test_details_updated_at, test_date::text AS test_date
     `;
 
+    if (!rows.length) {
+      const [fresh] = await sql`SELECT test_booked,test_date,test_time,test_centre,test_details_updated_at FROM learner_users WHERE id=${id} AND school_id=${schoolId}`;
+      return res.status(409).json({ error: 'Test details changed. Reload before saving.', code: 'TEST_DETAILS_CONFLICT', profile: fresh });
+    }
     const after = rows[0];
     let assignmentLink = null;
     if (newPrimaryInstructorId) {
@@ -3592,6 +3630,7 @@ async function handleUpdateLearner(req, res) {
           pickup_address: existing.pickup_address,
           learner_category: existing.learner_category,
           primary_instructor_id: existing.primary_instructor_id,
+          test_booked: existing.test_booked, test_time: existing.test_time, test_centre: existing.test_centre, test_details_updated_at: existing.test_details_updated_at,
           test_date: existing.test_date
         },
         after: {
@@ -3601,6 +3640,7 @@ async function handleUpdateLearner(req, res) {
           pickup_address: after.pickup_address,
           learner_category: after.learner_category,
           primary_instructor_id: after.primary_instructor_id,
+          test_booked: after.test_booked, test_time: after.test_time, test_centre: after.test_centre, test_details_updated_at: after.test_details_updated_at,
           test_date: after.test_date
         },
         assignment_link_created: !!assignmentLink

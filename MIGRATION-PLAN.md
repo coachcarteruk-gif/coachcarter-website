@@ -1,5 +1,9 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+## Test-date trial context (implemented; pending production approval)
+
+Native clients should reuse `profile.current_test_details` and its version timestamp. Submit `test_details` plus `test_details_updated_at` to learner `update-profile`; handle 409 by showing refreshed data for review. No/unknown clears dependants, omitted fields preserve state, and date changes invalidate an omitted time. Historical `trial_intake` is separate and must only be applied through an explicit learner action. Public `/free` accepts optional practical-test answers and never overwrites an existing account. Reuse `_learner-test-details.js`, `_trial-preparation.js` and `_trial-funnel-report.js`; do not duplicate segmentation or funding rules in a native client. No new test-day booking or payment flow is introduced. See [implementation contract](docs/test-date-free-trial-funnel-implementation.md).
+
 ## Shared API additions — September 2026 (pending rollout)
 
 Native clients should consume the authenticated `credits?action=post-trial-discount`

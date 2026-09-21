@@ -1,6 +1,9 @@
 (function () {
   'use strict';
 
+  var submitting = false;
+  var testDetailsEnabled = false;
+  function schoolScope() { var school = new URLSearchParams(location.search).get('school'); return school && /^[a-z0-9-]+$/.test(school) ? '&school=' + encodeURIComponent(school) : ''; }
   var DAYS_AHEAD = 28;
   var META_LEAD_PENDING_KEY = 'cc_meta_lead_pending';
 
@@ -34,6 +37,8 @@
     document.getElementById('trialForm').addEventListener('submit', handleSubmit);
     setupFieldValidation();
     setupCoursePreferences();
+    setupTestDetails();
+    document.getElementById('trialForm').addEventListener('input', function () { if (window.ccTrialFunnel) ccTrialFunnel.start(); });
 
     loadSlots();
   });
@@ -68,12 +73,30 @@
   }
 
   // ── PostHog helper (no-op if posthog not loaded yet) ────────────────────
-  function posthogCapture(event, props) {
-    try {
-      if (window.posthog && typeof posthog.capture === 'function') {
-        posthog.capture(event, props || {});
-      }
-    } catch (e) { /* swallow */ }
+  function posthogCapture(event) {
+    if (!window.ccTrialFunnel) return;
+    if (event === 'free_trial_slot_selected') { ccTrialFunnel.start(); return; }
+    if (['free_trial_submitted','free_trial_confirmed'].includes(event)) ccTrialFunnel.send(event);
+  }
+  function setupTestDetails() {
+    var section = document.getElementById('trialTestDetails');
+    var choice = document.getElementById('trialTestBooked');
+    var date = document.getElementById('trialTestDate');
+    choice.addEventListener('change', function () {
+      var yes = choice.value === 'yes'; document.getElementById('trialTestMore').hidden = !yes;
+      if (!yes) { date.value = ''; document.getElementById('trialTestCentre').value = ''; }
+      testTiming();
+    });
+    date.addEventListener('change', testTiming);
+    document.getElementById('trialTestLater').addEventListener('click', function () { date.value = ''; testTiming(); });
+    fetch('/api/schools?action=public-config' + schoolScope()).then(function (r) { return r.json(); }).then(function (c) {
+      testDetailsEnabled = c.test_date_trial_funnel_enabled === true;
+      section.hidden = section.disabled = !testDetailsEnabled;
+    }).catch(function () { /* old booking route stays available */ });
+  }
+  function testTiming() {
+    var date = document.getElementById('trialTestDate').value;
+    document.getElementById('trialTestTiming').textContent = date && selectedSlot && date < selectedSlot.date ? 'Your test is before this lesson. Check the timing; this booking does not guarantee pre-test capacity.' : '';
   }
 
   function queueMetaLeadForSuccessPage() {
@@ -96,7 +119,7 @@
       var url = '/api/slots?action=available&from=' + encodeURIComponent(context.from)
         + '&to=' + encodeURIComponent(context.to) + '&lesson_type_slug=trial';
       if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
-      return fetch(url);
+      return fetch(url + schoolScope());
     })
       .then(function (r) { return r.json(); })
       .then(function (slotsResp) {
@@ -116,7 +139,7 @@
   function getTrialWindowContext() {
     var url = '/api/slots?action=trial-window-context';
     if (prefInstructorId) url += '&instructor_id=' + encodeURIComponent(prefInstructorId);
-    return fetch(url)
+    return fetch(url + schoolScope())
       .then(function (response) {
         if (!response.ok) throw new Error('Trial window request failed');
         return response.json();
@@ -305,12 +328,10 @@
       instructor_id: parseInt(btn.dataset.instructorId, 10)
     };
 
-    posthogCapture('free_trial_slot_selected', {
-      date: selectedSlot.date,
-      instructor_id: selectedSlot.instructor_id
-    });
+    posthogCapture('free_trial_slot_selected');
 
     updateSummary();
+    testTiming();
 
     clearSlotSelectionError();
     setSubmitState();
@@ -336,6 +357,7 @@
   // ── Form submit ──────────────────────────────────────────────────────────
   function handleSubmit(e) {
     e.preventDefault();
+    if (submitting) return;
     var errEl = document.getElementById('formError');
     errEl.classList.remove('visible');
     errEl.textContent = '';
@@ -360,16 +382,23 @@
       intensive_months: document.getElementById('intensive_interest').checked
         ? Array.from(document.querySelectorAll('#monthOptions input:checked')).map(function (input) { return input.value; }) : []
     };
+    if (testDetailsEnabled) {
+      var choice = val('trialTestBooked');
+      payload.test_details = { booked: choice === 'yes' ? true : choice === 'no' ? false : null,
+        date: choice === 'yes' ? val('trialTestDate') || null : null, centre: choice === 'yes' ? val('trialTestCentre') || null : null };
+      payload.funnel_context = window.ccTrialFunnel ? ccTrialFunnel.context() : {};
+    }
     if (referralCode) payload.referral_code = referralCode;
 
     // Client-side validation (server does authoritative checks).
     if (!validateForm()) return;
 
+    submitting = true;
     setSubmitState(true);
 
-    posthogCapture('free_trial_submitted', { instructor_id: payload.instructor_id });
+    posthogCapture('free_trial_submitted');
 
-    fetch('/api/slots?action=book-free-trial', {
+    fetch('/api/slots?action=book-free-trial' + schoolScope(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -377,10 +406,7 @@
       return res.json().then(function (body) { return { status: res.status, body: body }; });
     }).then(function (r) {
       if (r.status === 200 && r.body.ok) {
-        posthogCapture('free_trial_confirmed', {
-          booking_id: r.body.booking_id,
-          instructor_id: payload.instructor_id
-        });
+        posthogCapture('free_trial_confirmed');
         queueMetaLeadForSuccessPage();
         window.location.href = r.body.redirect_url || '/free-trial-success.html';
         return;
@@ -401,8 +427,10 @@
         showError(r.body.error || r.body.message || 'Could not book - please try again.');
       }
 
+      submitting = false;
       setSubmitState();
     }).catch(function (err) {
+      submitting = false;
       console.error('Submit failed:', err);
       showError('Connection failed. Please try again.');
       setSubmitState();

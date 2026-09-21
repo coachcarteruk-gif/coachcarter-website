@@ -193,8 +193,8 @@ function renderLearners() {
 
     // Test date badge
     let testBadge = '';
-    if (l.test_date) {
-      const td = new Date(l.test_date + 'T00:00:00Z');
+    if (l.current_test_details?.date) {
+      const td = new Date(l.current_test_details.date + 'T00:00:00Z');
       const testLabel = td.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
       testBadge = '<span class="test-date-badge">Test: ' + testLabel + '</span>';
     }
@@ -604,7 +604,7 @@ function summarizeLearnerTeachingSignals(historyData, notesData, mockData) {
     latestMock: mockTestTeachingSummary(mocks[0] || null),
     focusAreas: collectTeachingFocusAreas(historyData, { mock_tests: mocks }),
     practice: summarizePracticeSignal(historyData),
-    testDate: notesData && notesData.test_date ? formatDate(notesData.test_date) : '',
+    testDate: notesData?.current_test_details?.date ? formatDate(notesData.current_test_details.date) : '',
     trend: summarizeLessonTrend(historyData)
   };
 }
@@ -742,7 +742,7 @@ function buildInstructorAlerts(historyData, notesData, mockData) {
     });
   }
 
-  const testDate = parseInstructorAlertDate(notesData && notesData.test_date);
+  const testDate = parseInstructorAlertDate(notesData?.current_test_details?.date);
   if (testDate) {
     const daysToTest = daysBetweenDates(now, testDate);
     const latestMock = latestFormalInstructorMock(mockData);
@@ -800,6 +800,20 @@ function renderInstructorAlerts(alerts) {
   return html;
 }
 
+function renderTrialPreparation(data) {
+  const current = data.current_test_details;
+  if (!current) return '';
+  const intake = data.trial_intake;
+  const describe = (booked, date, centre) => booked === false ? 'Not booked' : booked === true ? 'Booked: ' + (date || 'date to add later') + (centre ? ' · ' + centre : '') : 'Not provided';
+  let html = '<section class="detail-section"><h3>Practical test preparation</h3><p>Current self-reported details: ' + esc(describe(current.booked, current.date, current.centre)) + '</p><p>' + esc(current.updated_at ? 'Updated ' + formatDate(current.updated_at) : 'Legacy profile; not recently confirmed') + '</p>';
+  if (intake) {
+    html += '<p>Trial booking answer (self-reported): ' + esc(describe(intake.test_booked, String(intake.test_date_snapshot || '').slice(0,10), intake.test_centre_snapshot)) + '</p>';
+    if (current.booked !== intake.test_booked || current.date !== (intake.test_date_snapshot ? String(intake.test_date_snapshot).slice(0,10) : null) || current.centre !== intake.test_centre_snapshot) html += '<p><strong>Account details differ / booking answer unconfirmed. Check with the learner.</strong></p>';
+    html += '<a href="/instructor/?date=' + encodeURIComponent(intake.current_booking_date) + '">View trial day in calendar</a>';
+  }
+  return html + '<p>This does not confirm test-day instructor or car availability. Discuss strengths, priorities and realistic next steps; record the agreed next step in learner notes.</p></section>';
+}
+
 function renderDetail(data, notesData, mockData) {
   const l = data.learner;
   const tierLabels = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3' };
@@ -838,6 +852,7 @@ function renderDetail(data, notesData, mockData) {
   if (lastDate) html += '<div class="detail-stat"><div class="detail-stat-value">' + formatDate(lastDate) + '</div><div class="detail-stat-label">Last Lesson</div></div>';
   html += '</div>';
 
+  html += renderTrialPreparation(notesData);
   html += renderTeachingSummary(summarizeLearnerTeachingSignals(data, notesData, mockData));
   html += renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData));
   html += '<div id="curriculum-progress-instructor" hidden aria-live="polite"></div>';
@@ -865,8 +880,8 @@ function renderDetail(data, notesData, mockData) {
             </select>
           </div>
           <div class="detail-form-group">
-            <label for="detail-test-date">Test date</label>
-            <input type="date" id="detail-test-date" value="${notesData.test_date || ''}">
+            <span>Test date</span>
+            <p>Ask the learner to update Driving Test in their account.</p><p>Earlier instructor note: ${esc(notesData.test_date || 'Not recorded')}</p>
           </div>
           <div class="detail-form-group">
             <label for="detail-hourly-rate">Custom hourly rate</label>
@@ -973,7 +988,6 @@ async function saveLearnerNotes() {
   if (!currentDetailLearnerId) return;
   const btn = document.getElementById('save-notes-btn');
   const notes = document.getElementById('detail-notes-text').value.trim();
-  const testDate = document.getElementById('detail-test-date').value || null;
   const learnerCategory = document.getElementById('detail-learner-category').value || null;
   const rateInput = document.getElementById('detail-hourly-rate').value;
   const customHourlyRatePence = rateInput !== '' ? Math.round(parseFloat(rateInput) * 100) : null;
@@ -984,7 +998,7 @@ async function saveLearnerNotes() {
     const res = await ccAuth.fetchAuthed('/api/instructor?action=update-learner-notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, test_date: testDate, custom_hourly_rate_pence: customHourlyRatePence, learner_category: learnerCategory })
+      body: JSON.stringify({ learner_id: currentDetailLearnerId, notes: notes || null, custom_hourly_rate_pence: customHourlyRatePence, learner_category: learnerCategory })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -993,7 +1007,6 @@ async function saveLearnerNotes() {
     const cached = allLearners.find(l => l.id === currentDetailLearnerId);
     if (cached) {
       cached.instructor_notes = notes || null;
-      cached.test_date = testDate;
       cached.custom_hourly_rate_pence = customHourlyRatePence;
       cached.learner_category = learnerCategory;
     }

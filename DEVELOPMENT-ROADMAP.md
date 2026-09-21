@@ -1,5 +1,6 @@
 # Coach Carter — Website Development Roadmap
 
+<<<<<<< HEAD
 ## 2.138 - Show Post-Trial Savings Before Checkout (21 September 2026; pending deployment)
 
 Eligible learners see the discounted price, original price and percentage saving
@@ -13,6 +14,11 @@ starts or ends. No checkout mutation, ledger change or migration.
 **Validation:** 56 focused tests passed, including real browser mobile pricing,
 activation/expiry on an open picker, guests, credit use, request mode, filming and
 checkout retry; handler tests cover spoofed learner IDs and cross-school sessions.
+=======
+## 2.138 - Test-date Free-trial Funnel (21 September 2026; implemented, pending production approval)
+
+Adds `/test-booked` with a disabled video manifest, optional questions in `/free`, canonical current test details and immutable booking-time snapshots, assigned-instructor preparation, improved confirmation and a read-only existing-admin report. Migration 070 and a default-off strict school flag separate implementation from rollout. Public existing-account answers cannot replace profile data. Direct/Lesson Credit and Flexible Hours are measured; Full Curriculum and ambiguous funding remain explicitly unresolved. No money flows, offers, payouts or automation activation change. See [test evidence and exact production checklist](docs/test-date-free-trial-funnel-implementation.md).
+>>>>>>> cb68108 (Implement test-date free-trial funnel behind school flag)
 
 ## 2.137 - Preserve Post-Trial Discounts After Reschedules and Extensions (21 September 2026; pending deployment)
 

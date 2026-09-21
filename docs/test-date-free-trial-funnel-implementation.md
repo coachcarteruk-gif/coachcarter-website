@@ -1,0 +1,91 @@
+# Test-date free-trial funnel — implementation and rollout
+
+Status: implemented on `codex/test-date-free-trial-funnel`, awaiting review and production authorisation. Base: main `a3e658756732841ff3c864583c8e835c80ac8928`, fetched before implementation on 21 September 2026. The original [plan](test-date-free-trial-funnel-plan.md) was preserved without edits. No production migration, deployment, real notification, campaign or automation activation was performed.
+
+## Delivered slices
+
+1. **Booking context and preparation.** Optional Yes / No / Prefer not to say, date and centre in `/free`; omitted answers remain bookable. Strict server calendar validation, school-local date and database four-calendar-month classification. Migration 070 adds nullable current-profile state/version and immutable, school-bound `trial_booking_intakes`. Booking, intake and genuinely new-account profile initialisation share one SQL statement. Existing-account public answers never update current test details. One intake per original booking; no intake on a reschedule. Notification failure leaves the committed intake available in the portal.
+2. **Campaign page and measurement.** `/test-booked` enters the existing `/free` flow with allowlisted same-journey context. The video manifest is disabled and useful fallback content is present. No watch gate, booked-test eligibility rule, pass/readiness promise or test-day availability promise. PostHog events require current analytics consent, have no pre-consent queue, use static labels and strip personal fields, URLs and application IDs. Success-page reloads do not emit confirmation. Existing Meta consent/Lead behaviour is unchanged; the new campaign page adds no Meta coverage.
+3. **Read-only outcomes and next steps.** Existing admin learner controls contains an expandable Trial funnel report and aggregate CSV. Driving Test is the canonical learner editor, uses optimistic concurrency and can explicitly apply a reviewed historical booking answer. Profile/onboarding link there; historic onboarding and instructor notes remain distinct. Assigned instructors see current details plus the immutable answer and a link to the final trial day. The generic confirmation gives preparation and next-step guidance without exposing booking data.
+
+The feature flag is the strict Boolean `schools.config.test_date_trial_funnel_enabled`. Missing, false, string `"true"`, or another type is disabled. `/api/schools?action=public-config` exposes only this flag. The clean campaign route is served through the school handler, sends no-store, and redirects disabled schools to `/freetrial`. `vercel.json` explicitly includes the landing HTML in that function's deployment bundle. The static HTML entry also checks the flag. While disabled, `/free` keeps its prior contract and creates no intake. Authenticated profile edits and existing reports remain accessible after disabling.
+
+## Contracts and limits
+
+- `POST /api/slots?action=book-free-trial` accepts optional `test_details: {booked: true|false|null, date?: "YYYY-MM-DD"|null, centre?: string|null}` and `funnel_context`. Date/centre require Yes; Yes with no date is unknown. Past public dates are rejected; leaving the answer blank remains possible. A test before the selected lesson prompts a timing check, not a booking prohibition.
+- Source enums: `test_booked`, `freetrial`, `free_direct`, `unknown`; campaign `test_booked_v1`; content `text_v1` / `video_v1`. These are untrusted coarse source labels, not evidence of advertising exposure or marketing permission. Exact test details never belong in query strings or analytics.
+- `GET /api/learner?action=profile` returns `profile.current_test_details` and the learner's own latest `trial_intake`. `POST update-profile` accepts presence-aware `test_details` plus the last `test_details_updated_at` (including explicit null). A stale version returns 409 and refreshed details. No/unknown clears dependent fields; a date change clears an omitted time. Legacy partial test-field updates remain accepted and preserve omitted fields. Unrelated phone/notes/rate/category saves do not clear dates. No bulk rewrite of historical text dates occurs.
+- Instructor access to new preparation fields requires the same-school current primary assignment, or a valid related booking when no primary instructor is assigned. An upcoming/current booking also grants preparation access to its assigned instructor even when the learner has a different primary instructor; past bookings alone do not extend access after reassignment. A historical note alone grants no new preparation access. Reassignment transfers access; ambiguous reschedule chains return no intake. All preparation text is escaped.
+- Export includes current state/version and all retained snapshots. Learner deletion removes snapshots before financial records are anonymised. The existing weekly retention worker purges snapshots at the 24-month boundary with a seven-day margin; it can remove them during their final week. This is a retention ceiling, not a guarantee to retain for the full period. Operational monitoring must catch missed retention runs. No new job or schedule was added or enabled.
+
+### Report definitions
+
+`GET /api/admin?action=trial-funnel-report&from=YYYY-MM-DD&to=YYYY-MM-DD[&instructor_id=N]` uses existing admin authentication and JWT school context. From is inclusive and to exclusive, in the original booking's school-local calendar. Maximum 366 days, 10,000 intakes and 50,000 associated bookings; oversized requests fail with a shorter-range instruction. Use seven-day ranges for booking-week strata. CSV includes definition version, server as-of time, school timezone, range, scope, quality diagnostics and aggregate metrics; it contains no learner records.
+
+Groups retain original segment, source and content version, so a later video period is not silently pooled with text-only exposure. The primary cohort is the first recorded trial for a non-test learner, excluding prior evidenced paid customers. Repeats, prior paid customers, missing snapshots, invalid chains and unknown prior funding have explicit diagnostics. Reschedules resolve to a single root; original commitment time survives a move. Cycles, cross-learner chains, missing origins, multiple successors and chains beyond 100 links are unresolved. Duplicate accounts cannot be linked.
+
+Three labelled views are returned: all booked anchored to the original scheduled end; final valid trial-session continuation; and elapsed trials without a recorded exception. Follow-up is 56 **school-local calendar days**, not 1,344 fixed hours. Immature cohorts are not zeros. Mean/median funded hours include zeros among mature, resolved learners. Gross initial paid commitment, net surviving commitment, early commitments, paid hours booked before T0, test-day bookings and paid trial extensions are separate. Chargeable and elapsed-without-exception hours are not evidenced attendance. Ordinary unpaid offers/pencilled holds and purchases without bookings never create paid-booking conversion.
+
+**V1 funding scope is deliberately restricted:** evidenced direct/Lesson Credit and Flexible Hours. Ledger rows are pre-aggregated by booking; BCS returns and Flexible allocation returns reduce net attribution. Paid trial extensions are separate from continuation. Full Curriculum booking counts are shown as unresolved hours; offline legacy Flexible sources, sources with credit adjustments, absent evidence and contradictory allocations are also unresolved. There is no all-product paid-hours headline. Supporting Full Curriculum or interpreting adjustments less conservatively requires its own reconciled read-model fixtures; no money mutation is needed or authorised by this release.
+
+Purchase counts, gross recorded purchased minutes and value have their own selected **purchase-date** range and provider identity deduplication. They cover non-test accounts with selected intakes, including diagnostic cohorts. They are not 56-day booked hours or net revenue; later refunds are not subtracted from this purchase summary. Full Curriculum purchase value/count is separate, with minutes unavailable. Small groups receive no comparative conclusion; Wilson intervals accompany conversions. Confounding from instructor, source, availability, experience and existing promotions remains. The four-month observation is a hypothesis.
+
+## Isolated verification
+
+Tests use a dedicated local PostgreSQL database, `trial_funnel_test` on loopback port 55432. The fixture rejects remote hosts and any other database name, bootstraps the existing aggregate only in that database, then rehearses migration 070. It recreates the aggregate audit trigger's necessary local owner privileges. It never loads `.env.local` or production credentials. SMTP and WhatsApp are mocked; Stripe calls fail closed; server-side external fetches are blocked. Browser external HTTPS is intercepted in the full preview test.
+
+The local Vercel workspace is generated outside the repository under the OS temporary directory by `scripts/prepare-trial-funnel-preview.js`. It uses the real route modules, middleware and rewrite/header configuration with only database/provider adapters replaced. Cron entries are removed. It is **not deployable production code** and must never be published. The full test injects a fixture-only signed-in session after booking; real email-code delivery and a real sign-in exchange are not exercised.
+
+Reproduce with PostgreSQL running locally and this dedicated empty database created:
+
+```powershell
+$env:TRIAL_FUNNEL_DB_TEST = '1'
+$env:CC_TEST_BASE_URL = 'http://localhost:3108'
+npx playwright test tests/trial-test-details.spec.js tests/trial-funnel-report.spec.js tests/trial-test-details.integration.spec.js tests/trial-funnel-ledger.integration.spec.js --workers=1
+node scripts/prepare-trial-funnel-preview.js
+vercel dev --yes --listen 3107 --cwd "$env:TEMP/coachcarter-trial-funnel-preview"
+```
+
+In a second shell:
+
+```powershell
+$env:TRIAL_FUNNEL_PREVIEW = '1'
+$env:CC_TEST_BASE_URL = 'http://localhost:3107'
+npx playwright test tests/trial-funnel-preview.spec.js --workers=1
+```
+
+For static/browser regressions, run `npx --yes serve public -c ../tests/static-server.json -l 3108 --no-clipboard`, set `CC_TEST_BASE_URL=http://localhost:3108`, and run the suites listed in the verification record below. The test-only server preserves `.html` query strings and explicitly maps clean static pages. It does **not** execute API routes or prove production rewrites. Local Vercel verification is separate. Service workers are disabled in the full preview test so background PWA reloads cannot race browser assertions; offline/PWA behaviour is not claimed as verified.
+
+### Verification record
+
+Checks completed on 21 September 2026: **70/70** targeted browser/booking regressions plus **26/26** related admin, learner, instructor and XSS regressions; **22/22** focused helper/report and real PostgreSQL checks (16 database tests and 6 pure behavioural tests); **1/1** complete local Vercel journey including authenticated admin UI/CSV and mobile/desktop screenshots. `npm run migrations:check` passed with 71 entries; `npm run check:syntax` passed for 265 JavaScript files.
+
+The 70-test regression run covered `free-trial-passwordless-journey`, `free-trial-window-api`, `free-trial-scheduling-safeguards`, `trial-course-preferences`, `cookie-consent`, `meta-pixel-consent`, `free-consultation-landing`, `test-date-lesson-booking` and `test-booked-landing`. Browser assertions used Chromium. Desktop 1365×900 and mobile 375×812 screenshots were inspected. This is not a screen-reader audit or proof of every mobile browser.
+
+A local `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` rehearsal with one synthetic cohort learner and 1,001 associated bookings returned exactly 1,001 booking rows: planning 19.496 ms, execution 6.671 ms on this workstation. The plan used scoped Flexible allocation/return/source/purchase indexes, the adjustment index and the Full Curriculum booking key. The fixture transaction was rolled back. This demonstrates the query path on representative row shape, not the worst-case 50,000-row limit or production latency. Large-range production-derived rehearsal remains a rollout gate. Test suites cover calendar/leap/DST boundaries; optional and invalid answers; old clients; disabled flag; duplicate submissions; atomic rollback; public existing-account separation; stale edits; immutable reschedules and reassignment; direct/credit/Flexible ledger joins and returns; paid trial extensions; purchase-only accounts; excluded funding; immature/zero cohorts; export/deletion/retention; consent withdrawal and PII canaries; clean routes; real booking/profile/preparation/report APIs; admin aggregate CSV; desktop/mobile layout.
+
+## Exact production rollout checklist — not executed
+
+1. Review the branch and the explicit reporting scope. Confirm the service/reporting purpose and 24-month ceiling, instructor capacity, pickup/transmission coverage and campaign copy. No testimonial or learner footage is included; any later proof requires verified usage permission. Record the actual rollout time and applicable existing offers/promotions. Obtain separate production schema/code/flag authorisation. Traffic, messages and automation need their own instruction.
+2. Fetch/rebase current main and reconcile migration number 070 before merging if another migration took it. Do not renumber deployed history. Run `npm run migrations:check`, `npm run check:syntax`, the isolated PostgreSQL tests and the full local Vercel journey. Review large-range query plans against a representative, access-controlled rehearsal branch before broad reporting use. The small local fixture is not a production load test.
+3. Follow [migration governance](migration-governance.md). Take and record the approved recovery snapshot. Supply the approved **direct** database URL securely via `POSTGRES_URL_NON_POOLING` (or `DATABASE_URL_UNPOOLED`); never copy credentials into a document or command output. Run `node scripts/migration-runner.js --status` read-only. Verify the target fingerprint and that the only pending applicable entry is `070`; stop and reconcile any extra pending entry or checksum mismatch. Expected canonical LF SHA-256 for the current 070 file: `4f220073eff55ae3d6087b776912a24f3016508382a5e45981fb8eef822b7185`.
+4. **Only after explicit schema approval**, set `MIGRATION_RUNNER_APPLY=approved` and `MIGRATION_RUNNER_TARGET_FINGERPRINT` to the freshly reviewed fingerprint, then run `node scripts/migration-runner.js --apply-approved`. This runner applies all pending entries, which is why step 3 must show only 070. Unset both approval variables immediately afterwards. Never call `/api/migrate`. Record the successful execution receipt; run `--status` again. Verify columns, composite FKs, unique intake constraint, immutable guard, cohort indexes and runtime SELECT/INSERT/DELETE/sequence privileges. Do not enable the flag yet.
+5. **Only after code deployment approval**, deploy the reviewed code with all new files, schema already present, flag absent/false and media disabled. Confirm `/test-booked` redirects to `/freetrial`, the general `/free` route and its slot API respond, public-config leaks no private config, unauthenticated report returns 401, and an authorised report/profile read succeeds. These production checks are read-only: do not create a real booking or send notifications as a smoke test. Check CSP and function HTML packaging.
+6. **Only after CoachCarter activation approval**, enable the strict JSON Boolean for the verified school using the existing admin school-config mechanism, preserving all other config. If using an approved SQL operation, the exact scoped change is:
+
+   ```sql
+   UPDATE schools
+   SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{test_date_trial_funnel_enabled}', 'true'::jsonb)
+   WHERE id = 1 AND slug = 'coachcarter'
+   RETURNING id, slug, config->'test_date_trial_funnel_enabled' AS enabled;
+   ```
+
+   Verify the school identity first and exactly one returned row. Do not enable other schools. Verify the campaign renders, optional questions appear and no-test learners still have the same booking route. Record activation time; no campaign launch is implied.
+7. Owner-led observation after any separately authorised traffic launch: first week check missing intakes, booking errors, unknown share, consent coverage, mobile usability and instructor usefulness. Check the existing retention worker is healthy. Review immature counts weekly; wait for complete eight-week windows before interpreting outcomes. Do not compare all database bookings against only consented visitors or claim a causal lift.
+8. Footage is a later release: place approved video, poster, English WebVTT captions and transcript under `/public/media/test-booked/`; update all four manifest paths, set version `video_v1`, then enable only after asset/CSP/mobile/caption/failure testing and publication approval. Keep controls, no autoplay, `preload="none"`, fallback text and all booking links. A missing/slow manifest falls back after 2.5 seconds. Record the version change so exposure periods remain distinguishable.
+
+## Rollback
+
+Disable the strict school flag (the same scoped config operation with JSON `false`) and pause separately managed campaign traffic. `/test-booked` returns to `/freetrial`; questions/intake capture turn off and legacy booking stays available. For a privacy incident, also roll back the affected funnel tracking assets/loader through the normal approved deployment process; disabling the product flag alone does not turn off the existing consented general booking events. Leave current-profile data and valid historical intakes readable; do not drop the additive schema or rewrite stored segments or financial rows. Preserve the rollout/coverage gap in the report. Retention and GDPR deletion remain applicable.
+
+Awaiting authorisation: production schema apply, deployment, flag activation and any campaign/automation/message work. Awaiting assets: approved VSL footage, poster, captions and transcript. Unavailable by design: causal effectiveness claims, general attendance/delivered-hour rates and all-product paid-hours totals.

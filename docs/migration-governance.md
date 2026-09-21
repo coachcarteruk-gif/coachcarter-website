@@ -2,6 +2,8 @@
 
 Status: **production ledger installed; numbered history current through 069**
 
+Repository-only addition (21 September 2026): migration `070_trial_booking_intakes.sql` is pending and has **not** been applied to production by the funnel implementation task. The repository manifest now has 71 entries including deferred 041; the historical production receipt and inventory below remain the 19 September snapshot through 069. See [070 rollout checklist](test-date-free-trial-funnel-implementation.md).
+
 Audit date: 2026-09-13; last read-only verification and production receipt: 2026-09-19
 
 Production target inspected read-only: Neon project `neon-green-elephant`

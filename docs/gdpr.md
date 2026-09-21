@@ -9,6 +9,10 @@ remain immutable; do not delete quote rows or rewrite package purchase snapshots
 
 The platform is GDPR-compliant.
 
+## Test-date trial funnel (implemented, pending production authorisation)
+
+Optional self-reported current test state/date/time/centre remains in `learner_users`; `trial_booking_intakes` holds original answers and coarse same-journey source labels for preparation and observational reporting. Public existing-account booking cannot change the current profile. Both current state/version and snapshots are included in learner export. The shared deletion cascade deletes snapshots before anonymising retained bookings. The existing weekly retention worker deletes snapshots with a seven-day margin before the proposed 24-month ceiling; owner purpose/retention approval and monitoring remain rollout gates. Intakes are not seven-year financial records. Exact dates, centres, booking IDs, application identities and raw URLs are excluded from the consented funnel analytics allowlist. Operational reporting and analytics/marketing permission are separate; test answers do not enrol learners in marketing. See [implementation and rollout](test-date-free-trial-funnel-implementation.md).
+
 ## What's in place
 
 - **Learner broadcasts in export** (`broadcasts_received`) - learner data export includes admin broadcasts received, including campaign label/body, category, phone used, send status, and timestamps.

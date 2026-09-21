@@ -567,6 +567,14 @@
       "filename": "069_payout_summary_rates.sql",
       "checksum": "2ae9dffbbc1d3efbb366bcf923d906c53517b90424ee62eb6a44ad5e01c8af88",
       "execution": "numbered"
+    },
+    {
+      "id": "070",
+      "order": 71,
+      "prefix": "070",
+      "filename": "070_trial_booking_intakes.sql",
+      "checksum": "4f220073eff55ae3d6087b776912a24f3016508382a5e45981fb8eef822b7185",
+      "execution": "numbered"
     }
   ]
 }

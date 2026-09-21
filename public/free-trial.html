@@ -465,7 +465,7 @@ a:hover { color: var(--accent-text); }
     <section class="card" aria-labelledby="step-2-heading">
       <h2 id="step-2-heading"><span class="step-num">2</span>Your details</h2>
       <p class="helper">We'll email your booking confirmation. No password is needed—when you sign in later, we'll send a 6-digit code.</p>
-      <p class="required-note">Your contact details are required. Course preferences are optional.</p>
+      <p class="required-note">Your contact details are required. Practical test details and course preferences are optional.</p>
 
       <div id="summaryBar" class="summary-bar" style="display:none"></div>
       <div id="formError" class="form-error" role="alert"></div>
@@ -498,6 +498,19 @@ a:hover { color: var(--accent-text); }
           <div class="field-error" id="guest_pickup_address_error" aria-live="polite"></div>
         </div>
 
+        <fieldset id="trialTestDetails" class="course-preferences" hidden disabled>
+          <legend>Your practical test (optional)</legend>
+          <p class="field-help">This helps your instructor prepare. It won’t affect your ability to book this trial.</p>
+          <label for="trialTestBooked">Have you booked your practical driving test?</label>
+          <select id="trialTestBooked"><option value="">Choose if you wish</option><option value="yes">Yes</option><option value="no">No</option><option value="unknown">Prefer not to say</option></select>
+          <div id="trialTestMore" hidden>
+            <label for="trialTestDate">Test date, if known</label><input id="trialTestDate" type="date" aria-describedby="trialTestHint trialTestTiming">
+            <button id="trialTestLater" type="button">I’ll add it later</button>
+            <p id="trialTestHint" class="field-help">Leave the date blank if it is not to hand.</p>
+            <label for="trialTestCentre">Test centre, if known</label><input id="trialTestCentre" type="text" maxlength="160">
+            <p id="trialTestTiming" class="field-help" role="status"></p>
+          </div>
+        </fieldset>
         <fieldset class="course-preferences">
           <legend>Course preferences (optional)</legend>
           <label class="preference-option" for="email_course_opt_in">
@@ -529,6 +542,7 @@ a:hover { color: var(--accent-text); }
     </section>
   </main>
 
+  <script src="/trial-funnel-tracking.js"></script>
   <script src="/free-trial.js"></script>
   <script src="/free-trial-sticky.js"></script>
 </body>

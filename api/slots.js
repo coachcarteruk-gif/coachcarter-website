@@ -430,6 +430,8 @@ function isDateWithinBookingWindow(dateValue, maxBookingDaysAhead, absoluteMaxDa
   return !!dateObj && dateObj <= bookingWindowLimitDate(maxBookingDaysAhead, absoluteMaxDaysAhead, baseDate);
 }
 
+const trialDetails = require('./_learner-test-details');
+
 function operationalDateParts(now = new Date(), timezone = 'Europe/London') {
   const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone,
@@ -460,6 +462,7 @@ async function loadSchoolOperationalClock(sql, schoolId, now = new Date()) {
   const parts = operationalDateParts(now, timezone);
   return {
     timezone,
+    trialFunnelEnabled: school?.config?.test_date_trial_funnel_enabled === true,
     date: parseDate(`${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`),
     minutes: parts.hour * 60 + parts.minute,
   };
@@ -6234,6 +6237,16 @@ async function handleBookFreeTrial(req, res) {
     const bookingNow = new Date();
     const trialClock = await loadSchoolOperationalClock(sql, schoolId, bookingNow);
 
+    let intake = null;
+    if (trialClock.trialFunnelEnabled) {
+      try {
+        intake = trialDetails.normalise(req.body.test_details, {
+          today: trialDetails.localDate(bookingNow, trialClock.timezone)
+        });
+      } catch (error) { return res.status(400).json({ error: error.message, code: error.code }); }
+    }
+    const source = trialDetails.funnelContext(req.body.funnel_context);
+
     // ── Rate limiting: 10 per IP per hour, 3 per phone per hour ──
     // Tighter than paid checkout (which is 5/phone) — free is more abusable.
     const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
@@ -6497,7 +6510,7 @@ async function handleBookFreeTrial(req, res) {
             phone = COALESCE(phone, ${cleanPhone}),
             pickup_address = COALESCE(NULLIF(pickup_address, ''), ${cleanAddr}),
             last_activity_at = NOW()
-          WHERE id = ${learnerId}
+          WHERE id = ${learnerId} AND school_id = ${schoolId}
         `;
       }
     } else {
@@ -6552,6 +6565,26 @@ async function handleBookFreeTrial(req, res) {
                  ${coursePreferences.message}, FALSE, ${schoolId}
           FROM trial_booking
           WHERE ${coursePreferences.requested}
+          RETURNING id
+        ), trial_intake AS (
+          INSERT INTO trial_booking_intakes
+            (school_id, booking_id, learner_id, instructor_id, booked_at, booking_local_date,
+             school_timezone, test_booked, test_date_snapshot, test_centre_snapshot,
+             segment, segment_version, entry_page, campaign_key, content_version, analytics_consent_at_booking)
+          SELECT ${schoolId}, id, ${learnerId}, ${instructor_id}, ${bookingNow.toISOString()}::timestamptz,
+            (${bookingNow.toISOString()}::timestamptz AT TIME ZONE ${trialClock.timezone})::date,
+            ${trialClock.timezone}, ${intake?.booked ?? null}, ${intake?.date ?? null}::date,
+            ${intake?.centre ?? null}, 'unknown', 'test_date_v1', ${source.entry_page},
+            ${source.campaign_key}, ${source.content_version}, ${source.analytics_consent_at_booking}
+          FROM trial_booking WHERE ${trialClock.trialFunnelEnabled}
+          RETURNING id
+        ), initialise_test_profile AS (
+          UPDATE learner_users SET test_booked = ${intake?.booked ?? null},
+            test_date = ${intake?.date ?? null}, test_centre = ${intake?.centre ?? null},
+            test_details_updated_at = date_trunc('milliseconds', clock_timestamp())
+          WHERE id = ${learnerId} AND school_id = ${schoolId}
+            AND ${!existingLearner && trialClock.trialFunnelEnabled}
+            AND EXISTS (SELECT 1 FROM trial_intake)
           RETURNING id
         )
         SELECT * FROM trial_booking
@@ -6674,13 +6707,12 @@ async function handleBookFreeTrial(req, res) {
       // Booking already exists — don't fail the request on email failure.
     }
 
-    // ── WhatsApp notifications (non-blocking) ──
-    sendWhatsApp(cleanPhone,
+    // Await notification attempts; delivery failure must not undo a committed booking.
+    await Promise.allSettled([sendWhatsApp(cleanPhone,
       `✅ Free trial booked!\n\n📅 ${lessonDate}\n⏰ ${lessonTime}\n🚗 Instructor: ${instructor.name}\n\nCheck your email for confirmation. To manage your booking, use learner sign-in and request a 6-digit code.`
-    );
-    sendWhatsApp(instructor.phone,
+    ), sendWhatsApp(instructor.phone,
       `📋 New free trial!\n\n👤 ${cleanName}\n📅 ${lessonDate}\n⏰ ${lessonTime}\n📍 ${cleanAddr}\n\nView schedule: https://coachcarter.uk/instructor/`
-    );
+    )]);
 
     return res.json({
       ok: true,
@@ -6689,8 +6721,9 @@ async function handleBookFreeTrial(req, res) {
     });
 
   } catch (err) {
-    console.error('book-free-trial error:', err);
-    reportError('/api/slots?action=book-free-trial', err);
+    const failureCode = /^[A-Z0-9_]{1,40}$/.test(err.code || '') ? err.code : 'BOOKING_FAILED';
+    console.error('book-free-trial error:', failureCode);
+    reportError('/api/slots?action=book-free-trial', new Error('Free trial booking failed: ' + failureCode));
     return res.status(500).json({ error: 'Failed to book free trial', details: 'Internal server error' });
   }
 }
