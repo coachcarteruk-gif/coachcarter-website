@@ -530,15 +530,20 @@ function renderLessonLengthControls() {
       const locked = !!pendingReschedule && !selected;
       // Only show a price when it's the exact effective price checkout will
       // charge (instructor-scoped, per-learner rate applied when signed in).
-      const price = lessonTypePricesExact && lt.price_pence > 0 ? ` · ${formatMoneyShort(lt.price_pence)}` : '';
+      const price = lessonTypePricesExact && lt.price_pence > 0 ? ` · ${formatMoneyShort(lessonCashPrice(lt))}` : '';
       const label = `${lessonLengthLabel(lt)}${price}`;
-      const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}${price ? `, ${formatMoneyShort(lt.price_pence)}` : ''}`;
+      const discounted = !!price && hasPostTrialPrice(lt);
+      const saving = discounted ? `, was ${formatMoneyShort(lt.price_pence)}, ${lt.post_trial_discount_pct}% post-trial discount` : '';
+      const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}${price ? `, ${formatMoneyShort(lessonCashPrice(lt))}` : ''}${saving}`;
+      const content = discounted
+        ? `${esc(lessonLengthLabel(lt))} · <s>${esc(formatMoneyShort(lt.price_pence))}</s> <strong>${esc(formatMoneyShort(lessonCashPrice(lt)))}</strong><span class="lesson-price-saving">${esc(lt.post_trial_discount_pct)}% post-trial discount</span>`
+        : esc(label);
       return `<button class="lesson-length-option" type="button"
         data-action="select-lesson-type"
         data-lesson-type-id="${esc(id)}"
         aria-pressed="${selected ? 'true' : 'false'}"
         ${locked ? 'disabled' : ''}
-        aria-label="${esc(fullLabel)}">${esc(label)}</button>`;
+        aria-label="${esc(fullLabel)}">${content}</button>`;
     })
     .join('');
 }
@@ -1737,7 +1742,16 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
   const chargeMins = lessonCreditMinutes(ltDuration);
   document.getElementById('mdDeductHours').textContent = formatHours(chargeMins);
   const ltPrice = lt.price_pence != null ? lt.price_pence : DEFAULT_PRICE_PENCE;
-  const ltPriceStr = formatMoney(socialVideoPrice(ltPrice));
+  const ltPriceStr = formatMoney(lessonCashPrice(lt, socialVideoSelected()));
+  const discountNote = document.getElementById('mdPostTrialSaving');
+  if (discountNote) {
+    discountNote.hidden = !hasPostTrialPrice(lt);
+    if (!discountNote.hidden) {
+      const before = socialVideoPrice(ltPrice);
+      const saving = before - lessonCashPrice(lt, socialVideoSelected());
+      discountNote.innerHTML = `<s>${esc(formatMoney(before))}</s> <strong>${esc(ltPriceStr)}</strong> — save ${esc(formatMoney(saving))} with your ${esc(lt.post_trial_discount_pct)}% post-trial discount.`;
+    }
+  }
   document.getElementById('mdPayAmount').textContent = ltPriceStr;
   document.getElementById('payBtnLabel').textContent = `Pay ${ltPriceStr} & book`;
   document.getElementById('paySpinner').style.display = 'none';
@@ -2057,7 +2071,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
 
     // Auto-collapse when there's only one option for the school AND only one fits.
     if (durations.length === 1 && fitting.length === 1) {
-      document.getElementById('mdSingleType').textContent = `${fitting[0].name} - ${formatHours(fitting[0].duration_minutes)} - £${(fitting[0].price_pence / 100).toFixed(2)}`;
+      document.getElementById('mdSingleType').textContent = `${fitting[0].name} - ${formatHours(fitting[0].duration_minutes)} - ${durationPriceLabel(fitting[0])}`;
       document.getElementById('mdSingleTypeRow').style.display = 'flex';
       applyLessonTypeToModal(fitting[0], isGuest, needsProfileFields);
       window.posthog && posthog.capture('duration_selected', {
@@ -2077,7 +2091,7 @@ async function loadDurationsForSlot(slot, isGuest, needsProfileFields) {
     for (const d of fitting) {
       const opt = document.createElement('option');
       opt.value = String(d.lesson_type_id);
-      opt.textContent = `${d.name} - ${formatHours(d.duration_minutes)} - £${(d.price_pence / 100).toFixed(2)}`;
+      opt.textContent = `${d.name} - ${formatHours(d.duration_minutes)} - ${durationPriceLabel(d)}`;
       select.appendChild(opt);
     }
     for (const d of durations.filter(d => !d.fits)) {
@@ -2173,6 +2187,46 @@ function formatMoneyShort(pence) {
   return p % 100 === 0 ? String.fromCharCode(163) + (p / 100) : formatMoney(p);
 }
 
+function hasPostTrialPrice(lt) {
+  return !!auth && !pendingReschedule && Number(lt?.post_trial_discount_pct) > 0
+    && lt.checkout_price_pence != null
+    && new Date(lt.post_trial_eligible_until).getTime() > Date.now();
+}
+
+// Display the server's exact rounded prices; checkout still prices independently.
+function lessonCashPrice(lt, filmed = false) {
+  const base = Number(lt?.price_pence ?? DEFAULT_PRICE_PENCE);
+  if (hasPostTrialPrice(lt)) {
+    return Number(filmed && lt.social_video_checkout_price_pence != null
+      ? lt.social_video_checkout_price_pence : lt.checkout_price_pence);
+  }
+  return filmed ? socialVideoPrice(base) : base;
+}
+
+function durationPriceLabel(lt) {
+  const price = formatMoney(lessonCashPrice(lt));
+  return hasPostTrialPrice(lt)
+    ? `${price} (was ${formatMoney(lt.price_pence)}, ${lt.post_trial_discount_pct}% off)` : price;
+}
+
+let discountPriceRefreshBusy = false;
+window.addEventListener('cc:post-trial-discount-changed', async function () {
+  if (!auth || pendingReschedule || !selectedLessonType || discountPriceRefreshBusy) return;
+  discountPriceRefreshBusy = true;
+  const slot = pendingSlot;
+  const modalType = selectedLessonType;
+  try {
+    await loadLessonTypes();
+    if (slot && pendingSlot === slot && document.getElementById('bookModal').classList.contains('open')
+        && document.getElementById('paySpinner').style.display !== 'block') {
+      selectedLessonType = modalType;
+      await loadDurationsForSlot(slot, false, !isProfileComplete());
+    }
+  } finally {
+    discountPriceRefreshBusy = false;
+  }
+});
+
 function socialVideoConsentChecked() {
   const cb = document.getElementById('mdSocialVideoConsent');
   return !!(socialVideoOption.available && cb && cb.checked);
@@ -2206,9 +2260,11 @@ function refreshSocialVideoOption() {
   if (!socialVideoOption.available) {
     cb.checked = false;
   }
-  const base = Number(selectedLessonType.price_pence || DEFAULT_PRICE_PENCE);
+  const base = lessonCashPrice(selectedLessonType);
   const pct = Number(socialVideoOption.discountPct || 5);
-  const discounted = Math.max(0, Math.round(base * (100 - pct) / 100));
+  const discounted = hasPostTrialPrice(selectedLessonType) && selectedLessonType.social_video_checkout_price_pence != null
+    ? Number(selectedLessonType.social_video_checkout_price_pence)
+    : Math.max(0, Math.round(base * (100 - pct) / 100));
   priceEl.textContent = socialVideoOption.available
     ? `Tick this box to make ${formatMoney(base)} become ${formatMoney(discounted)} for this booking.`
     : '';
@@ -2743,7 +2799,7 @@ async function confirmPayAndBook() {
     }
   } catch (err) {
     showToast(err.message || 'Could not start payment. Please try again.', 'error');
-    const priceStr = formatMoney(socialVideoPrice(ltPrice));
+    const priceStr = formatMoney(lessonCashPrice(selectedLessonType, socialVideoSelected()));
     btn.disabled = false;
     label.textContent = slotRequestMode ? `Request — hold ${priceStr}` : `Pay ${priceStr} & book`;
     spinner.style.display = 'none';

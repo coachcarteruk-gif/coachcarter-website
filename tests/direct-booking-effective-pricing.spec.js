@@ -38,8 +38,9 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
     expect(body).toContain('const direct = await calcDirectLessonPrice(sql, {');
     expect(body).toContain('schoolId,');
     expect(body).toContain('instructorId,');
-    expect(body).toContain('learnerId: parseInt(req.query.learner_id) || null,');
-    expect(body).toContain('price_pence: directPrices.get(lt.id) || lt.price_pence');
+    expect(body).toContain('const learner = verifyAuth(req);');
+    expect(body).toContain('learnerId,');
+    expect(body).toContain('price_pence: basePrice');
   });
 
   test('authenticated checkout-slot charges direct effective price and snapshots matching metadata', () => {
@@ -88,7 +89,7 @@ test.describe('direct pay-per-slot effective pricing alignment', () => {
     expect(durationsBody).toContain('instructor_id=${encodeURIComponent(slot.instructor_id)}');
     expect(durationsBody).toContain('&learner_id=${encodeURIComponent(auth.user.id)}');
     expect(durationsBody).toContain('opt.textContent = `${d.name}');
-    expect(durationsBody).toContain('d.price_pence');
+    expect(durationsBody).toContain('durationPriceLabel(d)');
     expect(checkoutBody).not.toContain('price_pence:');
     expect(checkoutBody).not.toContain('amount_pence:');
   });

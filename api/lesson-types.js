@@ -22,6 +22,7 @@ const { requireAuth } = require('./_auth');
 const { reportError } = require('./_error-alert');
 const { calcDirectLessonPrice } = require('./_pricing-helpers');
 const { isLessonTypeOffered } = require('./_lesson-type-helpers');
+const { getPostTrialDiscount, applyPostTrialDiscount } = require('./_post-trial-discount');
 
 function setCors(res) {
 }
@@ -43,9 +44,10 @@ module.exports = async (req, res) => {
 };
 
 // Public — active lesson types
-// Optional: ?learner_id=X&instructor_id=Y to apply per-learner custom hourly rate
+// Optional instructor_id scopes pricing. Learner rates/discounts use the session.
 async function handleList(req, res) {
   try {
+    res.setHeader('Cache-Control', 'private, no-store');
     const sql = neon(process.env.POSTGRES_URL);
     const schoolId = parseInt(req.query.school_id) || 1;
     const includeInactive = req.query.include_inactive === 'true';
@@ -69,7 +71,11 @@ async function handleList(req, res) {
     }
 
     // If an instructor is provided, show the same direct-pay price checkout will use.
-    const learnerId = parseInt(req.query.learner_id);
+    const learner = requireAuth(req, { roles: ['learner'] });
+    const learnerId = learner && Number(learner.school_id) === schoolId ? learner.id : null;
+    const discount = instructorId && learnerId
+      ? await getPostTrialDiscount(sql, { schoolId, learnerId })
+      : { eligible: false, discountPct: 0 };
     if (instructorId) {
       for (const lt of rows) {
         if (lt.slug === 'trial') continue;
@@ -80,6 +86,10 @@ async function handleList(req, res) {
           durationMinutes: lt.duration_minutes
         });
         lt.price_pence = direct.pricePence;
+        const displayed = applyPostTrialDiscount(direct.pricePence, discount.discountPct);
+        lt.checkout_price_pence = displayed.pricePence;
+        lt.post_trial_discount_pct = displayed.discountPct;
+        lt.post_trial_eligible_until = discount.eligibleUntil || null;
       }
     }
 
