@@ -89,7 +89,7 @@ const {
   unitsForDuration: flexibleUnitsForDuration,
 } = require('./_flexible-package-ledger');
 const { invalidatePendingBookingExtensions } = require('./_booking-extension-invalidation');
-const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
+const { quotePostTrialPrice, bindPostTrialQuote, getPostTrialDiscount, applyPostTrialDiscount } = require('./_post-trial-discount');
 const { operationalTimeZone, zonedDateTimeToDate } = require('./_full-curriculum');
 
 
@@ -1951,6 +1951,7 @@ async function handleAvailable(req, res, dependencies = {}) {
 // Returns: { instructor_id, date, start_time, durations: [{lesson_type_id,
 //   slug, name, duration_minutes, price_pence, colour, fits, reason}] }
 async function handleDurationsForSlot(req, res) {
+  res.setHeader('Cache-Control', 'private, no-store');
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { instructor_id, date, start_time, pickup_postcode, transmission_type } = req.query;
@@ -2211,12 +2212,17 @@ async function handleDurationsForSlot(req, res) {
     }
 
     // For each lesson type, decide fits + reason.
+    const learner = verifyAuth(req);
+    const learnerId = learner && Number(learner.school_id) === schoolId ? learner.id : null;
+    const discount = learnerId
+      ? await getPostTrialDiscount(sql, { schoolId, learnerId })
+      : { eligible: false, discountPct: 0 };
     const directPrices = new Map();
     for (const lt of lessonTypes) {
       const direct = await calcDirectLessonPrice(sql, {
         schoolId,
         instructorId,
-        learnerId: parseInt(req.query.learner_id) || null,
+        learnerId,
         durationMinutes: lt.duration_minutes
       });
       directPrices.set(lt.id, direct.pricePence);
@@ -2262,15 +2268,21 @@ async function handleDurationsForSlot(req, res) {
         }
       }
 
+      const basePrice = directPrices.get(lt.id) ?? lt.price_pence;
+      const filmedPrice = instructor.social_video_opt_in && !instructor.request_to_book
+        ? applySocialVideoDiscount(basePrice, true).pricePence : null;
       return {
         lesson_type_id: lt.id,
         slug: lt.slug,
         name: lt.name,
         duration_minutes: lt.duration_minutes,
-        price_pence: directPrices.get(lt.id) || lt.price_pence,
-        social_video_price_pence: instructor.social_video_opt_in
-          ? applySocialVideoDiscount(directPrices.get(lt.id) || lt.price_pence, true).pricePence
-          : null,
+        price_pence: basePrice,
+        checkout_price_pence: applyPostTrialDiscount(basePrice, discount.discountPct).pricePence,
+        post_trial_discount_pct: discount.discountPct,
+        post_trial_eligible_until: discount.eligibleUntil || null,
+        social_video_price_pence: filmedPrice,
+        social_video_checkout_price_pence: filmedPrice === null ? null
+          : applyPostTrialDiscount(filmedPrice, discount.discountPct).pricePence,
         colour: lt.colour,
         fits,
         reason

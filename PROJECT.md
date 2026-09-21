@@ -23,7 +23,15 @@ uses the current booking's scheduled end. Quote creation and settlement apply
 the same provenance and cancellation checks.
 
 `GET /api/credits?action=post-trial-discount` supplies the authenticated learner
-banner. Instructor `create-offer` accepts `pencilled: true` for a positive-price,
+banner. The booking picker now reads server-calculated `checkout_price_pence`,
+`post_trial_discount_pct` and `post_trial_eligible_until` from instructor-scoped
+`lesson-types?action=list` and `slots?action=durations-for-slot`. The latter also
+returns `social_video_checkout_price_pence` with filming applied before the trial
+discount. The original `price_pence` remains unchanged. Personalised display
+prices use the same-school authenticated learner, never a query-string learner
+ID, and responses are private/no-store. The banner checks again each minute while
+visible and on focus; eligibility changes refresh the open picker automatically.
+Instructor `create-offer` accepts `pencilled: true` for a positive-price,
 single fixed slot and existing learner. Learners use `GET /api/offers?action=my-pencilled-offers`
 and `POST /api/offers?action=cancel-pencilled-offer` with `offer_id`; the usual offer
 acceptance/payment URL confirms payment. Unpaid offers never create bookings or

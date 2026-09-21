@@ -1,5 +1,19 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.138 - Show Post-Trial Savings Before Checkout (21 September 2026; pending deployment)
+
+Eligible learners see the discounted price, original price and percentage saving
+in the booking length picker, with matching duration choices, modal savings and
+pay/request buttons. Read-only price APIs use authenticated school/learner scope
+and the shared server discount calculation, including exact filming-then-trial
+rounding. Existing credit use remains full-duration. The banner refreshes each
+minute while visible and on focus, refreshing picker prices when eligibility
+starts or ends. No checkout mutation, ledger change or migration.
+
+**Validation:** 56 focused tests passed, including real browser mobile pricing,
+activation/expiry on an open picker, guests, credit use, request mode, filming and
+checkout retry; handler tests cover spoofed learner IDs and cross-school sessions.
+
 ## 2.137 - Preserve Post-Trial Discounts After Reschedules and Extensions (21 September 2026; pending deployment)
 
 The 10% post-trial discount now recognises the booking's active zero-value

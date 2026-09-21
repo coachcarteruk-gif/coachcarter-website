@@ -100,6 +100,9 @@
       cursor: wait;
       opacity: 0.55;
     }
+    .lesson-length-option s { font-weight: 400; }
+    .lesson-price-saving { display: block; margin-top: 3px; font-size: 0.75rem; }
+    .post-trial-saving { padding: 12px; border: 1px solid var(--accent); border-radius: 8px; color: var(--primary); background: var(--accent-lt); font-size: 0.9rem; line-height: 1.5; }
 
     /* ── STATUS STRIP - banners collapse here as document rows ── */
     .banner, .next-lesson-card, .reschedule-banner {
@@ -1592,6 +1595,7 @@
         </p>
       </div>
       <div id="modalPayPath" style="display:none">
+        <p id="mdPostTrialSaving" class="post-trial-saving" role="status" hidden></p>
         <p class="modal-credit-note" id="mdPayNote" style="background:var(--accent-lt);border-color:var(--accent)">
           You have no lessons on your account. Pay <strong id="mdPayAmount"> - </strong> now and we'll book this slot instantly.
           Cancel 48+ hours before and it returns as a lesson credit.

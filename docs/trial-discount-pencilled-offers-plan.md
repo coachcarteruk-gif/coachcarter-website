@@ -8,6 +8,18 @@ this restoration requires no production migration or financial data repair.
 
 ## Eligibility verification — 21 September 2026 (fix pending deployment)
 
+Picker follow-up (21 September, pending deployment): length choices and the
+booking modal display server-calculated discounted prices before checkout,
+including the original price and saving. The signed-in learner's identity and
+school determine both their effective rate and discount; browser/query learner
+IDs are not price authority. Responses are private/no-store and reads create no
+discount quote. Filming is applied before the trial discount with the same penny
+rounding as checkout; request-to-book excludes filming. Existing-credit spending
+still uses the full lesson duration. The status banner polls every minute while
+visible and refreshes on focus, updating the picker on eligibility changes.
+Browser fixtures and real handler tests cover these contracts; no real payment
+was made for this display change.
+
 Read-only production inspection confirmed the discount table exists and School 1
 uses the default 10% / 48-hour settings. No discount quotes had been created at
 inspection. Two existing booking shapes incorrectly failed eligibility:
