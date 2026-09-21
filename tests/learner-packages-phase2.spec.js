@@ -867,6 +867,8 @@ test.describe('Learner Packages Phase 2 page states', () => {
   });
 
   test('shows the frozen discounted package total and shared offer expiry', async ({ page }) => {
+    // Keep the browser inside the fixture's offer window regardless of the run date.
+    await page.clock.setFixedTime(new Date('2026-09-18T16:30:00.000Z'));
     const eligibleUntil = '2026-09-18T17:30:00.000Z';
     await page.route('**/api/credits?action=post-trial-discount**', route => route.fulfill({
       status: 200, contentType: 'application/json',
