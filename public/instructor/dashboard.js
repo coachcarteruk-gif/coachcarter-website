@@ -529,10 +529,9 @@ async function confirmBook() {
         lesson_type_id: parseInt(document.getElementById('bookType').value)
       };
 
-      var offerResult = await BookingActions.postWithScheduleOverride(
+      var offerResult = await BookingActions.postWithScheduleCheck(
         '/api/instructor?action=create-offer',
-        offerBody,
-        'Send this payment-link offer anyway?'
+        offerBody
       );
       if (offerResult.cancelled) {
         btn.disabled = false;
@@ -561,10 +560,9 @@ async function confirmBook() {
       dropoff_address: document.getElementById('bookDropoff').value.trim() || null
     };
 
-    var bookingResult = await BookingActions.postWithScheduleOverride(
+    var bookingResult = await BookingActions.postWithScheduleCheck(
       '/api/instructor?action=create-booking',
-      body,
-      'Book this lesson anyway?'
+      body
     );
     if (bookingResult.cancelled) {
       btn.disabled = false;

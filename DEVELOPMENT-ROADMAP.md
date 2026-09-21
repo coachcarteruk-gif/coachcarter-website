@@ -1,5 +1,20 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.135 - Firm Instructor Availability (21 September 2026; pending deployment)
+
+Removes booking-time schedule overrides for cash, credit, Flexible Hours, free
+lessons and fixed/broadcast offers. Instructor edits, upcoming admin time edits
+and newly requested extensions also require full-slot availability. Exceptions
+use explicit one-off hours; busy blocks must be removed or adjusted first.
+Availability reductions show affected existing lessons before an acknowledged
+save. Adds atomic instructor edit/schedule history and correct Flexible Hours
+creator attribution. No schema migration or historical booking rewrite.
+
+**Files:** `api/instructor.js`, `api/admin.js`,
+`api/_instructor-schedule-warnings.js`, `api/_flexible-package-ledger.js`,
+instructor booking/availability UI and focused regression tests. See
+[policy and verification](docs/instructor-availability-policy.md).
+
 ## 2.134 - Trial Discounts and Pencilled Lessons (19 September 2026 restoration)
 
 Extends free trials to 28 days within instructor windows; adds an automatic,

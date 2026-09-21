@@ -177,12 +177,9 @@
     try {
       // Save availability windows if changed
       if (isDirty) {
-        const res  = await ccAuth.fetchAuthed('/api/instructor?action=set-availability', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ windows })
-        });
-        const data = await res.json();
+        const { res, data, cancelled } = await saveAvailabilityWithReview(
+          '/api/instructor?action=set-availability', { windows });
+        if (cancelled) return;
         if (!res.ok) throw new Error(data.error);
 
         windows = (data.windows || []).map(w => ({
@@ -321,12 +318,9 @@
 
   async function saveBlackoutDates() {
     try {
-      const res = await ccAuth.fetchAuthed('/api/instructor?action=set-blackout-dates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ranges: blackoutRanges })
-      });
-      const data = await res.json();
+      const { res, data, cancelled } = await saveAvailabilityWithReview(
+        '/api/instructor?action=set-blackout-dates', { ranges: blackoutRanges });
+      if (cancelled) return;
       if (!res.ok) throw new Error(data.error);
       blackoutRanges = (data.blackout_dates || []).map(d => ({
         start_date: d.start_date,

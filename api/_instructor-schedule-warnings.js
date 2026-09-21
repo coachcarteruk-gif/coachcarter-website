@@ -1,8 +1,10 @@
-const SCHEDULE_OVERRIDE_REQUIRED = 'SCHEDULE_OVERRIDE_REQUIRED';
+const { createHash } = require('crypto');
+const { BLOCKING_STATUSES } = require('./_booking-status');
+const SCHEDULE_UNAVAILABLE = 'SCHEDULE_UNAVAILABLE';
 
 function timeToMinutes(value) {
   const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return null;
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) return null;
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
@@ -31,7 +33,9 @@ function buildInstructorScheduleWarnings({
 }) {
   const startMinutes = timeToMinutes(startTime);
   const endMinutes = timeToMinutes(endTime);
-  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) return [];
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+    return [{ code: 'INVALID_TIME_RANGE', message: 'Choose a valid lesson time that finishes on the same day.' }];
+  }
 
   const oneOffCoverage = oneOffWindows.some(window => windowCoversSlot(window, startMinutes, endMinutes));
   const normalHoursCoverage = oneOffCoverage
@@ -128,9 +132,10 @@ async function loadInstructorScheduleWarnings(sql, {
         AND event_date = ${scheduledDate}::date
         AND (is_all_day = true OR (start_time < ${endTime}::time AND end_time > ${startTime}::time))
     `;
-  } catch (_) {
+  } catch (err) {
     // iCal integration is optional on older schemas; core availability checks
     // must still run when its table has not been deployed yet.
+    if (err.code !== '42P01') throw err;
   }
 
   return buildInstructorScheduleWarnings({
@@ -144,17 +149,89 @@ async function loadInstructorScheduleWarnings(sql, {
   });
 }
 
-function sendScheduleOverrideRequired(res, warnings) {
+function sendScheduleUnavailable(res, warnings) {
   return res.status(409).json({
-    error: 'Please review this time before continuing.',
-    code: SCHEDULE_OVERRIDE_REQUIRED,
+    error: warnings.map(warning => warning.message).join(' ') +
+      ' Update your availability or remove the conflicting block before booking this time.',
+    code: SCHEDULE_UNAVAILABLE,
     warnings,
   });
 }
 
+// Only newly uncovered bookings need acknowledgement. Existing exceptions must
+// not prevent an instructor adding hours or making an unrelated schedule change.
+function availabilityChangeConflicts({ bookings, weeklyWindows, oneOffWindows, blackoutRanges,
+  nextWeeklyWindows = weeklyWindows, nextOneOffWindows = oneOffWindows,
+  nextBlackoutRanges = blackoutRanges }) {
+  function covered(booking, weekly, oneOff, blackouts) {
+    const day = new Date(`${booking.scheduled_date}T00:00:00Z`).getUTCDay();
+    const start = timeToMinutes(booking.start_time);
+    const end = timeToMinutes(booking.end_time);
+    const matches = window => windowCoversSlot(window, start, end) &&
+      (!booking.transmission_type || !window.transmission_type || window.transmission_type === 'both' ||
+       window.transmission_type === booking.transmission_type);
+    if (oneOff.some(window => window.override_date === booking.scheduled_date && matches(window))) return true;
+    if (blackouts.some(range => booking.scheduled_date >= range.start_date && booking.scheduled_date <= range.end_date)) return false;
+    return weekly.some(window => Number(window.day_of_week) === day && matches(window));
+  }
+  return bookings.filter(booking => covered(booking, weeklyWindows, oneOffWindows, blackoutRanges) &&
+    !covered(booking, nextWeeklyWindows, nextOneOffWindows, nextBlackoutRanges));
+}
+
+async function loadAvailabilityChangeReview(sql, { instructorId, schoolId, windows, ranges, deleteOverrideId }) {
+  const [bookings, weeklyWindows, oneOffWindows, blackoutRanges] = await Promise.all([
+    sql`SELECT b.id, b.scheduled_date::text, b.start_time::text, b.end_time::text,
+               CASE WHEN i.transmission_type IN ('manual', 'automatic') THEN i.transmission_type
+                    ELSE b.transmission_type END AS transmission_type,
+               l.name AS learner_name
+          FROM lesson_bookings b
+          JOIN instructors i ON i.id = b.instructor_id AND i.school_id = b.school_id
+          LEFT JOIN learner_users l ON l.id = b.learner_id AND l.school_id = b.school_id
+         WHERE b.school_id = ${schoolId} AND b.instructor_id = ${instructorId}
+           AND b.status = ANY(${BLOCKING_STATUSES}::text[]) AND b.slot_released_at IS NULL
+           AND (b.scheduled_date + b.end_time) > (NOW() AT TIME ZONE 'Europe/London')
+         ORDER BY b.scheduled_date, b.start_time, b.id`,
+    sql`SELECT day_of_week, start_time::text, end_time::text,
+               COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
+          FROM instructor_availability
+         WHERE school_id = ${schoolId} AND instructor_id = ${instructorId} AND active = true`,
+    sql`SELECT id, override_date::text, start_time::text, end_time::text, transmission_type
+          FROM instructor_availability_overrides
+         WHERE school_id = ${schoolId} AND instructor_id = ${instructorId} AND active = true`,
+    sql`SELECT blackout_date::text AS start_date, COALESCE(end_date, blackout_date)::text AS end_date
+          FROM instructor_blackout_dates
+         WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}`,
+  ]);
+  const conflicts = availabilityChangeConflicts({
+    bookings, weeklyWindows, oneOffWindows, blackoutRanges,
+    nextWeeklyWindows: windows,
+    nextBlackoutRanges: ranges,
+    nextOneOffWindows: deleteOverrideId === undefined ? undefined :
+      oneOffWindows.filter(window => Number(window.id) !== Number(deleteOverrideId)),
+  });
+  const token = createHash('sha256').update(JSON.stringify({
+    schoolId, instructorId, windows, ranges, deleteOverrideId, conflicts,
+  })).digest('hex');
+  return { conflicts, token, weeklyWindows, blackoutRanges, oneOffWindows };
+}
+
+function requireAvailabilityChangeReview(req, res, review) {
+  if (!review.conflicts.length || req.body?.availability_conflict_token === review.token) return false;
+  res.status(409).json({
+    code: 'AVAILABILITY_BOOKING_CONFLICTS',
+    error: 'These changes leave existing lessons outside your availability. Review them before saving.',
+    conflicts: review.conflicts,
+    availability_conflict_token: review.token,
+  });
+  return true;
+}
+
 module.exports = {
-  SCHEDULE_OVERRIDE_REQUIRED,
+  SCHEDULE_UNAVAILABLE,
   buildInstructorScheduleWarnings,
   loadInstructorScheduleWarnings,
-  sendScheduleOverrideRequired,
+  sendScheduleUnavailable,
+  availabilityChangeConflicts,
+  loadAvailabilityChangeReview,
+  requireAvailabilityChangeReview,
 };
