@@ -1,5 +1,9 @@
 # Navigation design (app mode — March 2026)
 
+## Qualifying free-trial entry (pending activation)
+
+When the school's questionnaire is enabled, every `/free` entry (including the lesson-modal trial link, campaign CTA and instructor/date hints) starts with the same three questions. Eligible answers reveal the existing live picker; other answers reveal a general weekly-availability request. Staff review requests in the expandable panel above the learner list in `/admin/learner-controls.html` and use existing manual booking tools. This adds neither a waitlist nor a new calendar. Disabled schools preserve their former route. [Routing and configuration](qualifying-trial-funnel.md).
+
 > **The "Intentionally removed" list lives in `CLAUDE.md`** because Claude tends to violate it. This file is structural reference — load it when working on sidebar, bottom tabs, or page layout.
 
 The site is designed as an app experience.

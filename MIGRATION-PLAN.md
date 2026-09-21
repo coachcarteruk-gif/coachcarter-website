@@ -1,5 +1,9 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+## Qualifying questionnaire and trial requests (pending rollout)
+
+Native clients read `trial_questionnaire` from school public-config, collect the same three conditional questions and send raw answers in `questionnaire`. Server `_trial-qualification.js` is authoritative; clients cannot supply a route or offered price. Reuse existing live booking for eligible users and `trial-requests?action=submit` for others or a no-suitable-slot fallback. Requests are not appointments. Keep submission evidence separate from current profiles; authenticated historical-answer application now includes practical time. Migration 071 adds immutable school-scoped requests/booking associations and extends 070 intakes. Admin review/configuration/link/export/delete are action endpoints using existing auth. [Contract and rollout](docs/qualifying-trial-funnel.md).
+
 ## Test-date trial context (implemented; pending production approval)
 
 Native clients should reuse `profile.current_test_details` and its version timestamp. Submit `test_details` plus `test_details_updated_at` to learner `update-profile`; handle 409 by showing refreshed data for review. No/unknown clears dependants, omitted fields preserve state, and date changes invalidate an omitted time. Historical `trial_intake` is separate and must only be applied through an explicit learner action. Public `/free` accepts optional practical-test answers and never overwrites an existing account. Reuse `_learner-test-details.js`, `_trial-preparation.js` and `_trial-funnel-report.js`; do not duplicate segmentation or funding rules in a native client. No new test-day booking or payment flow is introduced. See [implementation contract](docs/test-date-free-trial-funnel-implementation.md).

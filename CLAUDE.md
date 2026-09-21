@@ -1,5 +1,9 @@
 # CoachCarter Platform
 
+## Qualifying trial questionnaire (implemented, pending rollout)
+
+Schools opt in through strict `config.trial_questionnaire.enabled`. When enabled, public free-trial booking requires server qualification; missing/invalid answers cannot fall back to old direct booking. General trial requests are enquiries, never slot holds, confirmed appointments, lesson requests or paid conversions. Store immutable submitted evidence separately from current profiles, and preserve original request attribution when linking a manual booking. Centres and displayed budget amounts are school configuration, never lesson-price mutations. Keep staff-authorised booking/offer and disabled-tenant behaviour. See [final contract and production gates](docs/qualifying-trial-funnel.md).
+
 Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel with serverless API routes and Neon Postgres. Originally built for CoachCarter (coachcarter.uk), now supports multiple driving schools. Being launched nationally as **InstructorBook** (instructorbook.co.uk) — one codebase, two front doors.
 
 > **This file contains hard rules only.** Reference material lives in `docs/` and the top-level plan files. Load those on demand when working in that area.

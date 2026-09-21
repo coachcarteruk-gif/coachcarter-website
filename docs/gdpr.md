@@ -1,5 +1,9 @@
 # GDPR Compliance (April 2026)
 
+## Qualifying trial requests (implemented, pending activation)
+
+Migration 071 stores submitted practical/theory details, budget preference and shown configuration, postcode area and weekly availability in immutable `trial_requests`, linked to existing enquiry contact data. Account export/deletion finds requests by same-school email or linked booking, including after an email change. Identity-verified non-account requests use school-admin export/delete controls. Request erasure also removes any linked intake copy, preserving financial booking records. Existing weekly retention deletes at the original submission's 24-month ceiling with a seven-day margin; linking a later booking does not restart it. Public answers never overwrite existing profile test details. Private admin review disables analytics; public funnel events allow static labels only. No automatic marketing or messages. The [final contract](qualifying-trial-funnel.md) supersedes the earlier optional-only description below for enabled schools.
+
 September 2026 branch note (pending rollout): `post_trial_discount_quotes` is
 retained financial evidence, included in learner export and anonymised by clearing
 its learner binding during deletion. Its cash, trial source and provider binding

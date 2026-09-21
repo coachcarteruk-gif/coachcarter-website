@@ -1,5 +1,11 @@
 # CoachCarter Website — Project Reference
 
+## Qualifying free-trial questionnaire (21 September 2026; pending production approval)
+
+For schools with strict `schools.config.trial_questionnaire.enabled=true`, `/free` begins with three questions. Practical booked + supported centre + saved/payg/lower budget goes to live booking; no practical test, Other centre, or lowest budget goes to a general trial request. There is no four-month cutoff. Displayed commercial values and centres are school-admin-editable and do not change lesson prices.
+
+Migration 071 adds immutable `trial_requests` (existing `enquiries` contact record), `trial_request_bookings` and questionnaire/time columns on 070 intakes. `/api/trial-requests?action=` provides public `submit` and authenticated `list/export/settings/configure/link-booking/delete`. Staff review above the learner list in Learner Controls and link an existing manually arranged trial. Requests create no account, booking, slot hold or message. GDPR export/deletion and existing retention include the evidence. The read-only report separates request counts, booking origins/form versions and paid outcomes. Server qualification uses `_trial-qualification.js`; staff and disabled-school contracts remain intact. See [final contract, verification and rollout/rollback](docs/qualifying-trial-funnel.md). This supersedes older optional-answer-only descriptions when enabled.
+
 ## Trial discount and pencilled offers (16 September 2026, pending rollout)
 
 Free-trial availability, booking and rescheduling use the smaller of 28 days and

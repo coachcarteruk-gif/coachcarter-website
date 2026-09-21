@@ -1,6 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
-<<<<<<< HEAD
+## 2.140 - Qualifying questionnaire and two-route free trial (21 September 2026; pending production approval)
+
+Three conditional questions lead to the existing live booking flow or a saved general trial request. School-admin-editable centres and budget preferences, server routing, immutable snapshots, accessible weekly availability, request review/manual-booking association, privacy handling and separate reporting are implemented. Migration 071 is additive and inactive; no lesson pricing, money mutation, production migration, message, campaign or automation activation is included. See [verification and rollout/rollback](docs/qualifying-trial-funnel.md).
+
+## 2.139 - Test-date Free-trial Funnel (21 September 2026; implemented, pending production approval)
+
+Adds `/test-booked` with a disabled video manifest, optional questions in `/free`, canonical current test details and immutable booking-time snapshots, assigned-instructor preparation, improved confirmation and a read-only existing-admin report. Migration 070 and a default-off strict school flag separate implementation from rollout. Public existing-account answers cannot replace profile data. Direct/Lesson Credit and Flexible Hours are measured; Full Curriculum and ambiguous funding remain explicitly unresolved. No money flows, offers, payouts or automation activation change. See [test evidence and exact production checklist](docs/test-date-free-trial-funnel-implementation.md).
+
 ## 2.138 - Show Post-Trial Savings Before Checkout (21 September 2026; pending deployment)
 
 Eligible learners see the discounted price, original price and percentage saving
@@ -14,11 +21,6 @@ starts or ends. No checkout mutation, ledger change or migration.
 **Validation:** 56 focused tests passed, including real browser mobile pricing,
 activation/expiry on an open picker, guests, credit use, request mode, filming and
 checkout retry; handler tests cover spoofed learner IDs and cross-school sessions.
-=======
-## 2.138 - Test-date Free-trial Funnel (21 September 2026; implemented, pending production approval)
-
-Adds `/test-booked` with a disabled video manifest, optional questions in `/free`, canonical current test details and immutable booking-time snapshots, assigned-instructor preparation, improved confirmation and a read-only existing-admin report. Migration 070 and a default-off strict school flag separate implementation from rollout. Public existing-account answers cannot replace profile data. Direct/Lesson Credit and Flexible Hours are measured; Full Curriculum and ambiguous funding remain explicitly unresolved. No money flows, offers, payouts or automation activation change. See [test evidence and exact production checklist](docs/test-date-free-trial-funnel-implementation.md).
->>>>>>> cb68108 (Implement test-date free-trial funnel behind school flag)
 
 ## 2.137 - Preserve Post-Trial Discounts After Reschedules and Extensions (21 September 2026; pending deployment)
 

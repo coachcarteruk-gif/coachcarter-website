@@ -1,5 +1,7 @@
 # Test-date free-trial funnel — implementation and rollout
 
+> **Superseded activation guidance:** the follow-up [qualifying questionnaire implementation](qualifying-trial-funnel.md) incorporates this work onto latest main and adds migration 071 plus a separate school flag. Its routing, privacy, configuration and combined 070/071 rollout/rollback checklist are authoritative. The optional-question behaviour below remains historical and applies only when the new questionnaire is disabled. The original plan remains unchanged.
+
 Status: implemented on `codex/test-date-free-trial-funnel`, awaiting review and production authorisation. Base: main `a3e658756732841ff3c864583c8e835c80ac8928`, fetched before implementation on 21 September 2026. The original [plan](test-date-free-trial-funnel-plan.md) was preserved without edits. No production migration, deployment, real notification, campaign or automation activation was performed.
 
 ## Delivered slices
