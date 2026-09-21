@@ -214,7 +214,9 @@ test.describe('Viba Flexible Hours prevention and repair', () => {
     }
     expect(adminHandler).toContain('requestedDurationDelta !== 0');
     expect(instructorHandler).toContain('requestedDurationDelta !== 0');
-    expect(instructor).toContain('Flexible Hours lesson duration cannot be extended in place.');
+    // Package-funded extensions now append exact units through the dedicated
+    // acceptance transaction (covered by flexible-booking-extension.spec.js).
+    // Ordinary edits and free/cash extensions must still reject duration changes.
     expect(offers).toContain("code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING'");
     expect(webhook).toContain("requireRefund('flexible_package_duration_change_requires_rebooking')");
   });

@@ -58,6 +58,7 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
     if (text.includes('SELECT status, scheduled_date')) return [savedBooking];
     if (text.startsWith('UPDATE lesson_bookings')) return [{ id: booking.id }];
     if (text.startsWith('INSERT INTO lesson_bookings')) return [{ id: booking.id }];
+    if (text.startsWith('INSERT INTO lesson_offers')) return [{ id: 901, expires_at: '2030-09-22T12:00:00Z' }];
     return [];
   };
   const sql = (strings, ...values) => query(strings.join(' ? '), values);
@@ -73,7 +74,7 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
     '@neondatabase/serverless': { neon: () => sql },
     './_auth': { requireAuth: () => auth ? { id: 6, school_id: 7, email: 'instructor@example.invalid' } : null },
     './_db-transaction': { withNeonTransaction: tx },
-    './_auth-helpers': { createTransporter: () => ({ sendMail: async () => notifications.push('email') }) },
+    './_auth-helpers': { generateToken: () => 'test-extension-token', createTransporter: () => ({ sendMail: async () => notifications.push('email') }) },
     './_whatsapp': { sendWhatsApp: async () => notifications.push('whatsapp') },
     './_error-alert': { reportError: () => {} },
     './_booking-extension-invalidation': {
@@ -158,6 +159,34 @@ test('extension requests validate the whole extended lesson before creating an o
   expect(res.body.code).toBe('SCHEDULE_UNAVAILABLE');
   expect(f.calls.some(call => call.text.startsWith('INSERT'))).toBe(false);
   expect(f.notifications).toEqual([]);
+});
+
+test('package-funded extension creates a zero-cash offer without drawing hours before acceptance', async () => {
+  const f = fixture();
+  f.setBooking({ payment_method: 'flexible_package', has_flexible_package_allocation: true, list_price_pence: 8100 });
+  const res = await f.run('create-extension-offer', { booking_id: 634, extension_minutes: 30 });
+  expect(res.statusCode).toBe(200);
+  expect(res.body).toMatchObject({ ok: true, price_pence: 0, new_end_time: '14:00' });
+  const insert = f.calls.find(call => call.text.startsWith('INSERT INTO lesson_offers'));
+  expect(insert.values).toContain(7);
+  expect(insert.values.slice(-3)).toEqual([634, 30, 8100]);
+  expect(f.funding).toEqual([]);
+  expect(f.calls.some(call => /INSERT INTO flexible_package_|UPDATE lesson_bookings/.test(call.text))).toBe(false);
+  expect(f.notifications).toEqual(['email']);
+});
+
+test('package extension refuses custom cash prices and missing funding evidence', async () => {
+  for (const price of [0, 2750]) {
+    const f = fixture();
+    f.setBooking({ payment_method: 'flexible_package', has_flexible_package_allocation: true, list_price_pence: 8100 });
+    const res = await f.run('create-extension-offer', { booking_id: 634, extension_minutes: 30, offer_price_pence: price });
+    expect(res.statusCode).toBe(400);
+    expect(f.calls.some(call => call.text.startsWith('INSERT'))).toBe(false);
+  }
+  const f = fixture();
+  f.setBooking({ payment_method: 'flexible_package', has_flexible_package_allocation: false });
+  const res = await f.run('create-extension-offer', { booking_id: 634, extension_minutes: 30 });
+  expect(res.body.code).toBe('FLEXIBLE_ALLOCATION_VALUE_CONTRADICTION');
 });
 
 test('manual and broadcast offers cannot bypass availability with the old override flag', async () => {

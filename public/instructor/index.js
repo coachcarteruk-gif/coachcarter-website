@@ -1773,6 +1773,8 @@ function openExtensionOfferModal(bookingId) {
   closeBookingModal();
   document.getElementById('extensionMinutes').value = '30';
   document.getElementById('extensionPrice').value = '';
+  document.getElementById('extensionPrice').parentElement.parentElement.hidden = booking.payment_method === 'flexible_package';
+  document.getElementById('extensionFlexibleNote').hidden = booking.payment_method !== 'flexible_package';
   document.getElementById('extensionOfferError').style.display = 'none';
   document.getElementById('extensionOfferSuccess').style.display = 'none';
   document.getElementById('extensionOfferSendBtn').disabled = false;
