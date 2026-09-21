@@ -86,9 +86,11 @@ const {
   moveFlexiblePackageBookingAllocations,
 } = require('./_flexible-package-ledger');
 const {
-  SCHEDULE_OVERRIDE_REQUIRED,
+  SCHEDULE_UNAVAILABLE,
   loadInstructorScheduleWarnings,
-  sendScheduleOverrideRequired,
+  sendScheduleUnavailable,
+  loadAvailabilityChangeReview,
+  requireAvailabilityChangeReview,
 } = require('./_instructor-schedule-warnings');
 const {
   expireExtensionCheckoutSessions,
@@ -215,40 +217,14 @@ function verifyInstructorAuth(req) {
   return requireAuth(req, { roles: ['instructor'] });
 }
 
-async function logInstructorScheduleOverride(sql, {
-  instructor,
-  schoolId,
-  req,
-  targetType,
-  targetId,
-  scheduledDate,
-  startTime,
-  endTime,
-  warnings,
-}) {
-  if (!Array.isArray(warnings) || warnings.length === 0) return;
-  const adminImpersonation = instructor.impersonation === true;
-  await logAudit(sql, {
-    adminId: adminImpersonation ? (instructor.impersonated_by_admin_id || null) : null,
-    adminEmail: adminImpersonation
-      ? (instructor.impersonated_by_admin_email || instructor.email || null)
-      : (instructor.email || null),
-    action: adminImpersonation
-      ? 'admin.instructor_schedule_override'
-      : 'instructor.schedule_override',
-    targetType,
-    targetId,
-    schoolId,
-    req,
-    details: {
-      instructor_id: instructor.id,
-      scheduled_date: scheduledDate,
-      start_time: startTime,
-      end_time: endTime,
-      warning_codes: warnings.map(warning => warning.code),
-      impersonation: adminImpersonation,
-    },
-  });
+function instructorChangeAudit(instructor, schoolId, req, action, targetType, targetId, details) {
+  return {
+    adminId: instructor.impersonation === true ? (instructor.impersonated_by_admin_id || null) : null,
+    adminEmail: instructor.impersonation === true
+      ? (instructor.impersonated_by_admin_email || instructor.email || null) : (instructor.email || null),
+    action, targetType, targetId, schoolId, req,
+    details: { ...details, instructor_id: instructor.id, impersonation: instructor.impersonation === true },
+  };
 }
 
 function lessonBookingTransmissionColumnMissing(err) {
@@ -986,9 +962,9 @@ async function handleSetAvailability(req, res) {
 
     // Validate each window
     for (const w of windows) {
-      if (w.day_of_week < 0 || w.day_of_week > 6)
+      if (!Number.isInteger(w.day_of_week) || w.day_of_week < 0 || w.day_of_week > 6)
         return res.status(400).json({ error: `Invalid day_of_week: ${w.day_of_week}` });
-      if (!/^\d{2}:\d{2}$/.test(w.start_time) || !/^\d{2}:\d{2}$/.test(w.end_time))
+      if (!isValidTimeHHMM(w.start_time) || !isValidTimeHHMM(w.end_time))
         return res.status(400).json({ error: 'Times must be HH:MM format' });
       if (w.start_time >= w.end_time)
         return res.status(400).json({ error: 'start_time must be before end_time' });
@@ -1015,34 +991,47 @@ async function handleSetAvailability(req, res) {
 
     const hasWeeklyTransmissionColumn = await instructorAvailabilityTransmissionColumnExists(sql);
 
-    // Delete existing windows
-    await sql`DELETE FROM instructor_availability WHERE instructor_id = ${instructor.id} AND school_id = ${schoolId}`;
+    const review = await loadAvailabilityChangeReview(sql, {
+      instructorId: instructor.id, schoolId, windows: cleanWindows,
+    });
+    if (requireAvailabilityChangeReview(req, res, review)) return;
+    const saved = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const sql = clientSqlTag(client);
+      // Delete existing windows
+      await sql`DELETE FROM instructor_availability WHERE instructor_id = ${instructor.id} AND school_id = ${schoolId}`;
 
-    // Insert new windows
-    if (cleanWindows.length > 0) {
-      for (const w of cleanWindows) {
-        if (hasWeeklyTransmissionColumn) {
-          await sql`
-            INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, transmission_type, school_id)
-            VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${w.transmission_type}, ${schoolId})
-          `;
-        } else {
-          await sql`
-            INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, school_id)
-            VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${schoolId})
-          `;
+      // Insert new windows
+      if (cleanWindows.length > 0) {
+        for (const w of cleanWindows) {
+          if (hasWeeklyTransmissionColumn) {
+            await sql`
+              INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, transmission_type, school_id)
+              VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${w.transmission_type}, ${schoolId})
+            `;
+          } else {
+            await sql`
+              INSERT INTO instructor_availability (instructor_id, day_of_week, start_time, end_time, school_id)
+              VALUES (${instructor.id}, ${w.day_of_week}, ${w.start_time}, ${w.end_time}, ${schoolId})
+            `;
+          }
         }
       }
-    }
 
-    const saved = await sql`
-      SELECT id, day_of_week, start_time::text, end_time::text, active,
-             COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
-      FROM instructor_availability
-      WHERE instructor_id = ${instructor.id}
-        AND school_id = ${schoolId}
-      ORDER BY day_of_week, start_time
-    `;
+      const saved = await sql`
+        SELECT id, day_of_week, start_time::text, end_time::text, active,
+               COALESCE(to_jsonb(instructor_availability)->>'transmission_type', 'both') AS transmission_type
+        FROM instructor_availability
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+        ORDER BY day_of_week, start_time
+      `;
+      await logAuditRequired(sql, instructorChangeAudit(instructor, schoolId, req,
+        'instructor.availability_changed', 'instructor', instructor.id, {
+          old: review.weeklyWindows, new: cleanWindows,
+          acknowledged_booking_ids: review.conflicts.map(booking => booking.id),
+        }));
+      return saved;
+    });
 
     return res.json({ success: true, windows: saved });
 
@@ -1225,13 +1214,26 @@ async function handleDeleteAvailabilityOverride(req, res) {
 
   try {
     const sql = neon(process.env.POSTGRES_URL);
-    const deleted = await sql`
-      DELETE FROM instructor_availability_overrides
-      WHERE id = ${id}
-        AND instructor_id = ${instructor.id}
-        AND school_id = ${schoolId}
-      RETURNING id
-    `;
+    const review = await loadAvailabilityChangeReview(sql, {
+      instructorId: instructor.id, schoolId, deleteOverrideId: id,
+    });
+    if (requireAvailabilityChangeReview(req, res, review)) return;
+    const deleted = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const sql = clientSqlTag(client);
+      const deleted = await sql`
+        DELETE FROM instructor_availability_overrides
+        WHERE id = ${id}
+          AND instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+        RETURNING id
+      `;
+      if (deleted.length) await logAuditRequired(sql, instructorChangeAudit(instructor, schoolId, req,
+        'instructor.one_off_availability_removed', 'instructor_availability_override', id, {
+          old: review.oneOffWindows.find(window => Number(window.id) === id),
+          acknowledged_booking_ids: review.conflicts.map(booking => booking.id),
+        }));
+      return deleted;
+    });
     if (deleted.length === 0) return res.status(404).json({ error: 'Availability slot not found' });
     return res.json({ ok: true, deleted_id: id });
   } catch (err) {
@@ -1845,30 +1847,43 @@ async function handleSetBlackoutDates(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Delete all future/active blackout ranges for this instructor
-    await sql`
-      DELETE FROM instructor_blackout_dates
-      WHERE instructor_id = ${instructor.id}
-        AND school_id = ${schoolId}
-        AND end_date >= CURRENT_DATE
-    `;
-
-    // Insert new ranges
-    for (const r of ranges) {
+    const review = await loadAvailabilityChangeReview(sql, {
+      instructorId: instructor.id, schoolId, ranges,
+    });
+    if (requireAvailabilityChangeReview(req, res, review)) return;
+    const saved = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const sql = clientSqlTag(client);
+      // Delete all future/active blackout ranges for this instructor
       await sql`
-        INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, end_date, reason, school_id)
-        VALUES (${instructor.id}, ${r.start_date}, ${r.end_date}, ${r.reason || null}, ${schoolId})
+        DELETE FROM instructor_blackout_dates
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND end_date >= CURRENT_DATE
       `;
-    }
 
-    const saved = await sql`
-      SELECT id, blackout_date::text AS start_date, end_date::text, reason
-      FROM instructor_blackout_dates
-      WHERE instructor_id = ${instructor.id}
-        AND school_id = ${schoolId}
-        AND end_date >= CURRENT_DATE
-      ORDER BY blackout_date ASC
-    `;
+      // Insert new ranges
+      for (const r of ranges) {
+        await sql`
+          INSERT INTO instructor_blackout_dates (instructor_id, blackout_date, end_date, reason, school_id)
+          VALUES (${instructor.id}, ${r.start_date}, ${r.end_date}, ${r.reason || null}, ${schoolId})
+        `;
+      }
+
+      const saved = await sql`
+        SELECT id, blackout_date::text AS start_date, end_date::text, reason
+        FROM instructor_blackout_dates
+        WHERE instructor_id = ${instructor.id}
+          AND school_id = ${schoolId}
+          AND end_date >= CURRENT_DATE
+        ORDER BY blackout_date ASC
+      `;
+      await logAuditRequired(sql, instructorChangeAudit(instructor, schoolId, req,
+        'instructor.blackouts_changed', 'instructor', instructor.id, {
+          old: review.blackoutRanges, new: ranges,
+          acknowledged_booking_ids: review.conflicts.map(booking => booking.id),
+        }));
+      return saved;
+    });
 
     return res.json({ success: true, blackout_dates: saved });
 
@@ -2880,6 +2895,12 @@ async function handleEditBooking(req, res) {
     const endMins = startMins + newDuration;
     const newEndTime = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
 
+    const scheduleWarnings = await loadInstructorScheduleWarnings(sql, {
+      instructorId: booking.instructor_id, schoolId, scheduledDate: newDate,
+      startTime: newStartTime, endTime: newEndTime,
+    });
+    if (scheduleWarnings.length) return sendScheduleUnavailable(res, scheduleWarnings);
+
     // Slot conflict check — return details for confirmation instead of blocking
     const buffer = parseInt(booking.buffer_minutes) || 30;
     const conflicts = await sql`
@@ -3021,21 +3042,35 @@ async function handleEditBooking(req, res) {
       balanceAdjusted = true;
     }
 
-    // Update the booking (keep setmore_key so sync can find and skip it via edited_at check)
-    await sql`
-      UPDATE lesson_bookings
-      SET scheduled_date = ${newDate},
-          start_time = ${newStartTime}::time,
-          end_time = ${newEndTime}::time,
-          lesson_type_id = ${newLessonTypeId},
-          transmission_type = ${newTransmissionType},
-          minutes_deducted = ${oldMinutes > 0 ? newMinutes : 0},
-          edited_at = NOW()
-      WHERE id = ${booking_id}
-        AND instructor_id = ${booking.instructor_id}
-        AND school_id = ${schoolId}
-        AND status = ${booking.status}
-    `;
+    await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const sql = clientSqlTag(client);
+      // Update the booking (keep setmore_key so sync can find and skip it via edited_at check)
+      const updated = await sql`
+        UPDATE lesson_bookings
+        SET scheduled_date = ${newDate},
+            start_time = ${newStartTime}::time,
+            end_time = ${newEndTime}::time,
+            lesson_type_id = ${newLessonTypeId},
+            transmission_type = ${newTransmissionType},
+            minutes_deducted = ${oldMinutes > 0 ? newMinutes : 0},
+            edited_at = NOW()
+        WHERE id = ${booking_id}
+          AND instructor_id = ${booking.instructor_id}
+          AND school_id = ${schoolId}
+          AND status = ${booking.status}
+          AND scheduled_date = ${booking.scheduled_date}::date
+          AND start_time = ${booking.start_time}::time AND end_time = ${booking.end_time}::time
+        RETURNING id
+      `;
+      if (!updated.length) throw new Error('Booking changed during edit');
+      await logAuditRequired(sql, instructorChangeAudit(instructor, schoolId, req,
+        'instructor.edit_booking', 'lesson_booking', booking_id, {
+          old: { scheduled_date: booking.scheduled_date, start_time: booking.start_time,
+            end_time: booking.end_time, lesson_type_id: booking.lesson_type_id, transmission_type: booking.transmission_type },
+          new: { scheduled_date: newDate, start_time: newStartTime, end_time: newEndTime,
+            lesson_type_id: newLessonTypeId, transmission_type: newTransmissionType },
+        }));
+    });
 
     // Email learner if date/time changed and notify is not explicitly false
     const timeChanged = newDate !== booking.scheduled_date ||
@@ -3110,7 +3145,6 @@ async function createInstructorCreditBookingTransaction({
   dropoffAddress,
   sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
   blockingStatuses = BLOCKING_STATUSES,
-  allowBusyBlockOverride = false,
 }) {
   try {
     return await withNeonTransaction(connectionString, async client => {
@@ -3168,29 +3202,27 @@ async function createInstructorCreditBookingTransaction({
         });
       }
 
-      if (!allowBusyBlockOverride) {
-        const busyBlockConflict = await client.query(
-          `SELECT id
-             FROM instructor_busy_blocks
-            WHERE instructor_id = $1
-              AND school_id = $2
-              AND block_date = $3::date
-              AND start_time < $5::time
-              AND end_time > $4::time
-            LIMIT 1`,
-          [instructorId, schoolId, scheduledDate, startTime, endTime]
-        );
-        if (busyBlockConflict.rowCount > 0) {
-          abortInstructorBookingTransaction({
-            ok: false,
-            code: SCHEDULE_OVERRIDE_REQUIRED,
-            message: 'Please review this time before continuing.',
-            warnings: [{
-              code: 'BUSY_BLOCK',
-              message: 'This time overlaps a busy block on the instructor calendar.',
-            }],
-          });
-        }
+      const busyBlockConflict = await client.query(
+        `SELECT id
+           FROM instructor_busy_blocks
+          WHERE instructor_id = $1
+            AND school_id = $2
+            AND block_date = $3::date
+            AND start_time < $5::time
+            AND end_time > $4::time
+          LIMIT 1`,
+        [instructorId, schoolId, scheduledDate, startTime, endTime]
+      );
+      if (busyBlockConflict.rowCount > 0) {
+        abortInstructorBookingTransaction({
+          ok: false,
+          code: SCHEDULE_UNAVAILABLE,
+          message: 'Remove the busy block or choose another time.',
+          warnings: [{
+            code: 'BUSY_BLOCK',
+            message: 'This time overlaps a busy block on the instructor calendar.',
+          }],
+        });
       }
 
       const sourcesResult = await client.query(
@@ -3371,7 +3403,6 @@ async function handleCreateBooking(req, res) {
     dropoff_address,
     transmission_type,
     client_request_id,
-    availability_override,
   } = req.body;
   if (!learner_id || !scheduled_date || !start_time)
     return res.status(400).json({ error: 'learner_id, scheduled_date and start_time are required' });
@@ -3473,13 +3504,13 @@ async function handleCreateBooking(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    const scheduleOverrideConfirmed = availability_override === true;
-    if (scheduleWarnings.length > 0 && !scheduleOverrideConfirmed) {
-      return sendScheduleOverrideRequired(res, scheduleWarnings);
+    if (scheduleWarnings.length > 0) {
+      return sendScheduleUnavailable(res, scheduleWarnings);
     }
 
     if (payMethod === 'flexible_package') {
       const booked = await bookFlexiblePackageSlotTransaction({
+        createdBy: 'instructor',
         connectionString: process.env.POSTGRES_URL,
         learnerId: learner_id,
         instructorId: instructor.id,
@@ -3542,7 +3573,6 @@ async function handleCreateBooking(req, res) {
         notes,
         pickupAddress: bookingPickup,
         dropoffAddress: bookingDropoff,
-        allowBusyBlockOverride: scheduleOverrideConfirmed,
       });
 
       if (!booked.ok) {
@@ -3553,8 +3583,8 @@ async function handleCreateBooking(req, res) {
         if (booked.code === 'SLOT_UNAVAILABLE') {
           return res.status(409).json({ error: booked.message || 'That slot is already booked. Please choose another time.' });
         }
-        if (booked.code === SCHEDULE_OVERRIDE_REQUIRED) {
-          return sendScheduleOverrideRequired(res, booked.warnings || []);
+        if (booked.code === SCHEDULE_UNAVAILABLE) {
+          return sendScheduleUnavailable(res, booked.warnings || []);
         }
         return res.status(500).json({ error: 'Failed to create credit booking' });
       }
@@ -3581,20 +3611,6 @@ async function handleCreateBooking(req, res) {
         }
         throw insertErr;
       }
-    }
-
-    if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
-      await logInstructorScheduleOverride(sql, {
-        instructor,
-        schoolId,
-        req,
-        targetType: 'lesson_booking',
-        targetId: booking.id,
-        scheduledDate: scheduled_date,
-        startTime: start_time,
-        endTime: end_time,
-        warnings: scheduleWarnings,
-      });
     }
 
     // Get updated balance
@@ -4972,7 +4988,6 @@ async function handleCreateOffer(req, res) {
 
   const { learner_id, learner_email, learner_name, scheduled_date, start_time, lesson_type_id, offer_price_pence, discount_pct, max_repeat_weeks } = req.body;
   const pencilled = req.body?.pencilled === true;
-  const { availability_override } = req.body;
   const learnerIdClean = learner_id != null && learner_id !== '' ? parseInt(learner_id, 10) : null;
   if (learnerIdClean != null && (!Number.isInteger(learnerIdClean) || learnerIdClean <= 0))
     return res.status(400).json({ error: 'learner_id must be a positive integer' });
@@ -5137,9 +5152,8 @@ async function handleCreateOffer(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    const scheduleOverrideConfirmed = availability_override === true;
-    if (scheduleWarnings.length > 0 && !scheduleOverrideConfirmed) {
-      return sendScheduleOverrideRequired(res, scheduleWarnings);
+    if (scheduleWarnings.length > 0) {
+      return sendScheduleUnavailable(res, scheduleWarnings);
     }
 
     let existingLearner = null;
@@ -5213,20 +5227,6 @@ async function handleCreateOffer(req, res) {
            ${lessonType.id}, ${discountPctClean}, ${offerPricing.pricePence}, ${maxRepeatWeeksClean}, 'pending', ${effectiveOfferExpiresAt}, ${schoolId})
         RETURNING id, expires_at
       `;
-    }
-
-    if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
-      await logInstructorScheduleOverride(sql, {
-        instructor,
-        schoolId,
-        req,
-        targetType: 'lesson_offer',
-        targetId: offer.id,
-        scheduledDate: scheduled_date,
-        startTime: start_time,
-        endTime: end_time,
-        warnings: scheduleWarnings,
-      });
     }
 
     // Determine final price for email
@@ -5376,8 +5376,7 @@ async function handleCreateOffer(req, res) {
 // ── POST /api/instructor?action=create-extension-offer ─────────────────────
 // Body: { booking_id, extension_minutes, offer_price_pence? }
 // Creates a paid request that extends an existing lesson after Stripe payment.
-// Availability windows and travel buffers deliberately do not apply because
-// this is a continuation of the same session. Actual calendar overlaps do.
+// The complete extended lesson must fit availability; actual calendar overlaps also block it.
 async function handleCreateExtensionOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
@@ -5460,6 +5459,12 @@ async function handleCreateExtensionOffer(req, res) {
       return res.status(400).json({ error: 'The extended lesson must finish before midnight.' });
     }
     const newEndTime = `${String(Math.floor(newEndMinutes / 60)).padStart(2, '0')}:${String(newEndMinutes % 60).padStart(2, '0')}`;
+
+    const scheduleWarnings = await loadInstructorScheduleWarnings(sql, {
+      instructorId: instructor.id, schoolId, scheduledDate: booking.scheduled_date,
+      startTime: String(booking.start_time).slice(0, 5), endTime: newEndTime,
+    });
+    if (scheduleWarnings.length) return sendScheduleUnavailable(res, scheduleWarnings);
 
     const [bookingConflict] = await sql`
       SELECT lb.id, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
@@ -5995,7 +6000,7 @@ async function handleCreateBroadcastOffer(req, res) {
   if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
   const schoolId = instructor.school_id || 1;
 
-  const { scheduled_date, start_time, lesson_type_id, discount_pct, learner_ids, availability_override } = req.body;
+  const { scheduled_date, start_time, lesson_type_id, discount_pct, learner_ids } = req.body;
 
   if (!scheduled_date || !/^\d{4}-\d{2}-\d{2}$/.test(scheduled_date))
     return res.status(400).json({ error: 'scheduled_date (YYYY-MM-DD) required' });
@@ -6092,9 +6097,8 @@ async function handleCreateBroadcastOffer(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    const scheduleOverrideConfirmed = availability_override === true;
-    if (scheduleWarnings.length > 0 && !scheduleOverrideConfirmed) {
-      return sendScheduleOverrideRequired(res, scheduleWarnings);
+    if (scheduleWarnings.length > 0) {
+      return sendScheduleUnavailable(res, scheduleWarnings);
     }
 
     // Verify each learner is in this school AND has availability covering the slot.
@@ -6167,20 +6171,6 @@ async function handleCreateBroadcastOffer(req, res) {
 
     if (offerRows.length === 0)
       return res.status(500).json({ error: 'Failed to create any offers' });
-
-    if (scheduleOverrideConfirmed && scheduleWarnings.length > 0) {
-      await logInstructorScheduleOverride(sql, {
-        instructor,
-        schoolId,
-        req,
-        targetType: 'lesson_offer_batch',
-        targetId: offerRows[0].id,
-        scheduledDate: scheduled_date,
-        startTime: start_time,
-        endTime: end_time,
-        warnings: scheduleWarnings,
-      });
-    }
 
     // Send notifications in parallel (fire-and-forget).
     const { sendWhatsApp } = require('./_whatsapp');

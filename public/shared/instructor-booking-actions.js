@@ -627,19 +627,7 @@
     }
   }
 
-  function _confirmScheduleOverride(data, actionLabel) {
-    var warnings = Array.isArray(data && data.warnings) ? data.warnings : [];
-    var warningText = warnings.length
-      ? warnings.map(function (warning) { return '• ' + warning.message; }).join('\n')
-      : '• This time conflicts with the instructor schedule.';
-    return window.confirm(
-      'Please check this time:\n\n' + warningText +
-      '\n\nThis warning can be overridden. Existing lesson, offer and request clashes will still be blocked.\n\n' +
-      (actionLabel || 'Continue anyway?')
-    );
-  }
-
-  async function postWithScheduleOverride(url, body, actionLabel) {
+  async function postWithScheduleCheck(url, body) {
     var payload = Object.assign({}, body || {});
     var res = await ccAuth.fetchAuthed(url, {
       method: 'POST',
@@ -647,20 +635,6 @@
       body: JSON.stringify(payload)
     });
     var data = await res.json();
-
-    if (res.status === 409 && data && data.code === 'SCHEDULE_OVERRIDE_REQUIRED'
-        && payload.availability_override !== true) {
-      if (!_confirmScheduleOverride(data, actionLabel)) {
-        return { cancelled: true, res: res, data: data };
-      }
-      payload.availability_override = true;
-      res = await ccAuth.fetchAuthed(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      data = await res.json();
-    }
 
     return { cancelled: false, res: res, data: data };
   }
@@ -691,10 +665,9 @@
       if (notes) body.notes = notes;
       if (dropoff) body.dropoff_address = dropoff;
 
-      const result = await postWithScheduleOverride(
+      const result = await postWithScheduleCheck(
         '/api/instructor?action=create-booking',
-        body,
-        'Book this lesson anyway?'
+        body
       );
       if (result.cancelled) {
         btn.disabled = false;
@@ -737,7 +710,7 @@
     openAdd: openAdd,
     closeAdd: closeAdd,
     confirmAdd: confirmAdd,
-    postWithScheduleOverride: postWithScheduleOverride,
+    postWithScheduleCheck: postWithScheduleCheck,
     _filterLearners: _filterLearners,
     _selectLearner: _selectLearner,
     _clearLearner: _clearLearner

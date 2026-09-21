@@ -1230,12 +1230,12 @@ async function deleteAvailabilityOverride(id, btnEl) {
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Removing...'; }
 
   try {
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=delete-availability-override', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    });
-    const data = await res.json();
+    const { res, data, cancelled } = await saveAvailabilityWithReview(
+      '/api/instructor?action=delete-availability-override', { id });
+    if (cancelled) {
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Remove'; }
+      return;
+    }
     if (!res.ok) throw new Error(data.error);
     loadedRanges = [];
     showToast('Available slot removed', 'success');
@@ -2376,15 +2376,14 @@ async function confirmCreateBooking() {
 
   try {
     if (isPaymentLink) {
-      const result = await BookingActions.postWithScheduleOverride(
+      const result = await BookingActions.postWithScheduleCheck(
         '/api/instructor?action=create-offer',
         {
           learner_id: selectedLearnerId,
           scheduled_date: newDate,
           start_time: newTime.slice(0, 5),
           lesson_type_id: parseInt(document.getElementById('addLessonType').value) || null
-        },
-        'Send this payment-link offer anyway?'
+        }
       );
       if (result.cancelled) return;
       const res = result.res;
@@ -2397,7 +2396,7 @@ async function confirmCreateBooking() {
       return;
     }
 
-    const result = await BookingActions.postWithScheduleOverride(
+    const result = await BookingActions.postWithScheduleCheck(
       '/api/instructor?action=create-booking',
       {
         learner_id: selectedLearnerId,
@@ -2408,8 +2407,7 @@ async function confirmCreateBooking() {
         payment_method: payMethod,
         notes: notes || null,
         dropoff_address: document.getElementById('addLessonDropoff').value.trim() || null
-      },
-      'Book this lesson anyway?'
+      }
     );
     if (result.cancelled) return;
     const res = result.res;
@@ -2896,7 +2894,7 @@ async function sendBroadcastOffer() {
   btn.disabled = true;
   btn.textContent = 'Sending…';
   try {
-    const result = await BookingActions.postWithScheduleOverride(
+    const result = await BookingActions.postWithScheduleCheck(
       '/api/instructor?action=create-broadcast-offer',
       {
         scheduled_date: date,
@@ -2904,8 +2902,7 @@ async function sendBroadcastOffer() {
         lesson_type_id: parseInt(lessonTypeId, 10),
         discount_pct: discount_pct,
         learner_ids: checked
-      },
-      'Send this broadcast offer anyway?'
+      }
     );
     if (result.cancelled) {
       btn.disabled = false;
@@ -2999,10 +2996,9 @@ async function sendOffer() {
       payload.offer_price_pence = offerPricePence;
     }
 
-    const result = await BookingActions.postWithScheduleOverride(
+    const result = await BookingActions.postWithScheduleCheck(
       '/api/instructor?action=create-offer',
-      payload,
-      'Send this offer anyway?'
+      payload
     );
     if (result.cancelled) {
       btn.disabled = false;

@@ -43,6 +43,7 @@
 //   POST /api/admin?action=adjust-credits
 //     → add or remove lesson credits for a learner (admin JWT required)
 
+const { loadInstructorScheduleWarnings, sendScheduleUnavailable } = require('./_instructor-schedule-warnings');
 const { neon }   = require('@neondatabase/serverless');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
@@ -1325,6 +1326,15 @@ async function handleEditBooking(req, res) {
           message: 'Completed lessons must still finish in the past.',
         });
       }
+    }
+
+    // Past corrections remain possible; future calendar changes must respect availability.
+    if (booking.status === SCHEDULED && timeChanged) {
+      const scheduleWarnings = await loadInstructorScheduleWarnings(sql, {
+        instructorId: booking.instructor_id, schoolId, scheduledDate: newDate,
+        startTime: newStartTime, endTime: newEndTime,
+      });
+      if (scheduleWarnings.length) return sendScheduleUnavailable(res, scheduleWarnings);
     }
 
     // Overlap check with buffer — warn with details, allow force override

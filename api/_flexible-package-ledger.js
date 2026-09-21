@@ -98,6 +98,7 @@ async function bookFlexiblePackageSlotTransaction({
   dropoffAddress,
   transmissionType = 'manual',
   clientRequestId,
+  createdBy = 'learner',
 }) {
   const unitsRequired = unitsForDuration(durationMinutes);
   if (!unitsRequired) {
@@ -203,17 +204,17 @@ async function bookFlexiblePackageSlotTransaction({
            pickup_address, dropoff_address, lesson_type_id, transmission_type,
            minutes_deducted, school_id, payment_method, stripe_fee_pence,
            stripe_fee_source, list_price_pence, list_price_source
-           , flexible_package_booking_request_id
+           , flexible_package_booking_request_id, created_by
          ) VALUES (
            $1, $2, $3::date, $4::time, $5::time, $6,
            $7, $8, $9, $10, $11, $12, 'flexible_package', 0,
-           'platform_absorbed_package_fee', $13, 'flexible_package_frozen_rate', $14::uuid
+           'platform_absorbed_package_fee', $13, 'flexible_package_frozen_rate', $14::uuid, $15
          )
          RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
         [
           learnerId, instructorId, date, startTime, endTime, SCHEDULED,
           pickupAddress || null, dropoffAddress || null, lessonTypeId || null,
-          transmissionType, Number(durationMinutes), schoolId, plan.contribution_pence, clientRequestId,
+          transmissionType, Number(durationMinutes), schoolId, plan.contribution_pence, clientRequestId, createdBy,
         ]
       );
       const booking = inserted.rows[0];
