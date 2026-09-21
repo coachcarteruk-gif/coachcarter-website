@@ -14,7 +14,7 @@ const {
   _fulfilPaidBookingExtension: fulfilPaidBookingExtension,
   _settleUnfulfilledBookingExtensionRefund: settleUnfulfilledBookingExtensionRefund,
 } = require('../api/webhook');
-const { _acceptFreeBookingExtension: acceptFreeBookingExtension } = require('../api/offers');
+const { _acceptBookingExtension: acceptBookingExtension } = require('../api/offers');
 
 function canonicalExtension({ lockedStatus = 'pending' } = {}) {
   const session = {
@@ -147,7 +147,7 @@ test.describe('booking extension offer contract', () => {
     expect(extensionPrice).toBeGreaterThan(-1);
     expect(trialPrice).toBeGreaterThan(extensionPrice);
     expect(source).toContain('pricePence === 0 && isExtension');
-    expect(source).toContain('await acceptFreeBookingExtension({');
+    expect(source).toContain('await acceptBookingExtension({');
     expect(source).toContain('pricePence === 0 && !isFlexible && !isExtension');
     expect(source).toContain('pricePence === 0 && isFlexible && !isExtension');
     expect(source).toContain('if (isExtension) {\n      finalPricePence = Number(offer.offer_price_pence);');
@@ -193,7 +193,7 @@ test.describe('booking extension offer contract', () => {
       },
     });
 
-    const result = await acceptFreeBookingExtension({
+    const result = await acceptBookingExtension({
       offer: { id: 901, school_id: 7, instructor_id: 12 },
       connectionString: 'test',
       transactionRunner,
@@ -240,7 +240,7 @@ test.describe('booking extension offer contract', () => {
       },
     });
 
-    const result = await acceptFreeBookingExtension({
+    const result = await acceptBookingExtension({
       offer: { id: 901, school_id: 7, instructor_id: 12 },
       connectionString: 'test',
       transactionRunner,

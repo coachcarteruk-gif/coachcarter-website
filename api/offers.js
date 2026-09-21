@@ -31,6 +31,8 @@ const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-ret
 const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
 const { expireExtensionCheckoutSessions } = require('./_booking-extension-invalidation');
 const { withNeonTransaction } = require('./_db-transaction');
+const { allocateFlexibleExtensionWithClient } = require('./_flexible-package-ledger');
+const { loadInstructorScheduleWarnings } = require('./_instructor-schedule-warnings');
 const { sendWhatsApp } = require('./_whatsapp');
 const { applyPostTrialDiscount, getPostTrialDiscount, quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
 
@@ -290,7 +292,7 @@ module.exports = async (req, res) => {
 
 // Exposed for api/webhook.js handleOfferBooking — see top of file for behaviour.
 module.exports.bookOfferSeries = bookOfferSeries;
-module.exports._acceptFreeBookingExtension = acceptFreeBookingExtension;
+module.exports._acceptBookingExtension = acceptBookingExtension;
 module.exports._handleAcceptOffer = handleAcceptOffer;
 
 // ── Shared: find or create a learner by email/phone ─────────────────────────
@@ -412,6 +414,7 @@ async function handleGetOffer(req, res) {
              o.start_time::text, o.end_time::text, o.status, o.expires_at,
              o.discount_pct, o.offer_price_pence, o.max_repeat_weeks,
              o.extension_booking_id, o.extension_minutes,
+             extension_booking.payment_method AS extension_payment_method,
              o.kind, o.trigger, COALESCE(o.pencilled, FALSE) AS pencilled,
              lt.name AS lesson_type_name, lt.slug AS lesson_type_slug, lt.duration_minutes, lt.price_pence,
              i.name AS instructor_name, i.school_id AS instructor_school_id,
@@ -427,6 +430,11 @@ async function handleGetOffer(req, res) {
       LEFT JOIN learner_users lu
         ON lu.id = o.learner_id
        AND lu.school_id = o.school_id
+      LEFT JOIN lesson_bookings extension_booking
+        ON extension_booking.id = o.extension_booking_id
+       AND extension_booking.school_id = o.school_id
+       AND extension_booking.learner_id = o.learner_id
+       AND extension_booking.instructor_id = o.instructor_id
       WHERE o.token = ${token}
     `;
 
@@ -455,6 +463,7 @@ async function handleGetOffer(req, res) {
           is_flexible: !offer.scheduled_date && !offer.start_time,
           is_extension: !!offer.extension_booking_id,
           extension_minutes: offer.extension_minutes || null,
+          extension_payment_method: offer.extension_payment_method || null,
           scheduled_date: offer.scheduled_date || null,
           start_time: offer.start_time || null,
           end_time: offer.end_time || null,
@@ -502,7 +511,8 @@ async function handleGetOffer(req, res) {
       finalPricePence = Math.round(originalPricePence * (100 - discountPct) / 100);
     }
 
-    const postTrialDiscount = offer.learner_id
+    const usesFlexibleHours = isExtension && offer.extension_payment_method === 'flexible_package';
+    const postTrialDiscount = offer.learner_id && !usesFlexibleHours
       ? await getPostTrialDiscount(sql, {
           schoolId: Number(offer.school_id), learnerId: Number(offer.learner_id), now: new Date(),
         })
@@ -530,6 +540,7 @@ async function handleGetOffer(req, res) {
         trigger: offer.trigger || null,
         max_repeat_weeks: offer.max_repeat_weeks || null,
         is_extension: isExtension,
+        extension_payment_method: usesFlexibleHours ? 'flexible_package' : null,
         extension_booking_id: offer.extension_booking_id || null,
         extension_minutes: offer.extension_minutes || null,
         is_flexible: isFlexible,
@@ -550,25 +561,36 @@ async function handleGetOffer(req, res) {
   }
 }
 
-async function acceptFreeBookingExtension({
+// Token-bound acceptance without a new Checkout: free time or existing package
+// entitlement. The request must explicitly choose Flexible Hours before spending.
+async function acceptBookingExtension({
   offer,
   connectionString,
   transactionRunner = withNeonTransaction,
+  useFlexibleHours = false,
 }) {
   const offerId = Number(offer?.id);
   const schoolId = Number(offer?.school_id);
   const instructorId = Number(offer?.instructor_id);
   if (![offerId, schoolId, instructorId].every(value => Number.isSafeInteger(value) && value > 0)) {
-    throw new Error('Free extension has invalid offer scope');
+    throw new Error('Extension has invalid offer scope');
   }
 
   return transactionRunner(connectionString, async client => {
+    if (useFlexibleHours) {
+      // Match the package booking writer's learner-first lock order.
+      const learner = await client.query(
+        'SELECT id FROM learner_users WHERE id = $1 AND school_id = $2 FOR UPDATE',
+        [offer.learner_id, schoolId]
+      );
+      if (!learner.rowCount) return { applied: false, code: 'LEARNER_SCOPE_MISMATCH' };
+    }
     await client.query('SELECT pg_advisory_xact_lock($1, $2)', [schoolId, instructorId]);
 
     const lockedOfferResult = await client.query(
       `SELECT id, status, expires_at <= NOW() AS expired, learner_id, instructor_id,
               school_id, extension_booking_id, extension_minutes,
-              offer_price_pence, scheduled_date::text AS scheduled_date,
+              offer_price_pence, stripe_session_id, checkout_attempt_id, scheduled_date::text AS scheduled_date,
               start_time::text AS start_time, end_time::text AS end_time
          FROM lesson_offers
         WHERE id = $1 AND school_id = $2
@@ -581,13 +603,17 @@ async function acceptFreeBookingExtension({
     }
 
     const learnerId = Number(lockedOffer.learner_id);
+    if (Number(lockedOffer.instructor_id) !== instructorId ||
+        (useFlexibleHours && (learnerId !== Number(offer.learner_id) || lockedOffer.stripe_session_id || lockedOffer.checkout_attempt_id))) {
+      return { applied: false, code: 'EXTENSION_FUNDING_CONFLICT' };
+    }
     const bookingId = Number(lockedOffer.extension_booking_id);
     const extensionMinutes = Number(lockedOffer.extension_minutes);
     if (!Number.isSafeInteger(learnerId) || learnerId <= 0 ||
         !Number.isSafeInteger(bookingId) || bookingId <= 0 ||
         !Number.isInteger(extensionMinutes) || extensionMinutes < 30 || extensionMinutes > 180 ||
-        extensionMinutes % 30 !== 0 || Number(lockedOffer.offer_price_pence) !== 0) {
-      return { applied: false, code: 'INVALID_FREE_EXTENSION' };
+        extensionMinutes % 30 !== 0 || (!useFlexibleHours && Number(lockedOffer.offer_price_pence) !== 0)) {
+      return { applied: false, code: 'INVALID_EXTENSION' };
     }
 
     const bookingResult = await client.query(
@@ -595,7 +621,8 @@ async function acceptFreeBookingExtension({
               lb.scheduled_date::text AS scheduled_date,
               lb.start_time::text AS start_time, lb.end_time::text AS end_time,
               (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
-              lb.payment_method,
+              lb.payment_method, lb.minutes_deducted, lb.list_price_pence, lb.cancelled_at,
+              i.active AS instructor_active,
               EXISTS (
                 SELECT 1 FROM flexible_package_booking_allocations allocation
                  WHERE allocation.booking_id = lb.id
@@ -613,7 +640,7 @@ async function acceptFreeBookingExtension({
          JOIN learner_users lu ON lu.id = lb.learner_id AND lu.school_id = lb.school_id
          JOIN instructors i ON i.id = lb.instructor_id AND i.school_id = lb.school_id
         WHERE lb.id = $1 AND lb.school_id = $2
-        FOR UPDATE OF lb`,
+        FOR UPDATE OF lb FOR SHARE OF i`,
       [bookingId, schoolId]
     );
     const booking = bookingResult.rows[0];
@@ -626,7 +653,7 @@ async function acceptFreeBookingExtension({
       ? `${String(Math.floor(expectedEndMinutes / 60)).padStart(2, '0')}:${String(expectedEndMinutes % 60).padStart(2, '0')}`
       : null;
 
-    if (!booking || booking.status !== SCHEDULED || booking.lesson_has_ended ||
+    if (!booking || booking.status !== SCHEDULED || booking.lesson_has_ended || booking.cancelled_at ||
         Number(booking.learner_id) !== learnerId || Number(booking.instructor_id) !== instructorId ||
         String(booking.scheduled_date).slice(0, 10) !== scheduledDate ||
         String(booking.end_time).slice(0, 5) !== oldEndTime || expectedEndTime !== newEndTime) {
@@ -641,7 +668,7 @@ async function acceptFreeBookingExtension({
         message: 'The lesson has changed, so this extension request is no longer valid. Ask your instructor to send a new one.',
       };
     }
-    if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
+    if (!useFlexibleHours && (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true)) {
       await client.query(
         `UPDATE lesson_offers SET status = 'cancelled'
           WHERE id = $1 AND school_id = $2 AND status = 'pending'`,
@@ -652,6 +679,19 @@ async function acceptFreeBookingExtension({
         code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
         message: 'Flexible Hours lessons cannot be extended in place. Cancel and rebook so the package units remain exact.',
       };
+    }
+
+    if (useFlexibleHours) {
+      if (booking.payment_method !== 'flexible_package' || booking.instructor_active !== true) {
+        return { applied: false, code: 'FLEXIBLE_EXTENSION_FUNDING_REQUIRED' };
+      }
+      const sql = async (strings, ...values) => (await client.query(
+        strings.reduce((text, part, index) => text + (index ? `$${index}` : '') + part, ''), values
+      )).rows;
+      const warnings = await loadInstructorScheduleWarnings(sql, {
+        schoolId, instructorId, scheduledDate, startTime: booking.start_time, endTime: newEndTime,
+      });
+      if (warnings.length) return { applied: false, code: 'SCHEDULE_UNAVAILABLE', message: warnings.map(row => row.message).join(' ') };
     }
 
     const bookingConflict = await client.query(
@@ -701,7 +741,22 @@ async function acceptFreeBookingExtension({
       };
     }
 
-    const updatedBooking = await client.query(
+    let flexibleAllocation = null;
+    if (useFlexibleHours) {
+      flexibleAllocation = await allocateFlexibleExtensionWithClient(client, { booking, extensionMinutes, offerId });
+      if (!flexibleAllocation.ok) return { applied: false, ...flexibleAllocation,
+        message: flexibleAllocation.code === 'INSUFFICIENT_FLEXIBLE_UNITS'
+          ? 'You do not have enough Flexible Hours for this extension. Your lesson has not changed.'
+          : 'The Flexible Hours funding could not be verified. Your lesson has not changed.' };
+    }
+    const updatedBooking = useFlexibleHours ? await client.query(
+      `UPDATE lesson_bookings
+          SET end_time = $1::time, edited_at = NOW(), minutes_deducted = minutes_deducted + $6,
+              list_price_pence = list_price_pence + $7
+        WHERE id = $2 AND school_id = $3 AND status = $4 AND end_time = $5::time
+        RETURNING id`,
+      [newEndTime, bookingId, schoolId, SCHEDULED, oldEndTime, extensionMinutes, flexibleAllocation.contributionPence]
+    ) : await client.query(
       `UPDATE lesson_bookings
           SET end_time = $1::time, edited_at = NOW()
         WHERE id = $2 AND school_id = $3 AND status = $4 AND end_time = $5::time
@@ -709,6 +764,7 @@ async function acceptFreeBookingExtension({
       [newEndTime, bookingId, schoolId, SCHEDULED, oldEndTime]
     );
     if (updatedBooking.rowCount !== 1) {
+      if (useFlexibleHours) throw new Error('Flexible extension lost its booking lock');
       return { applied: false, code: 'SOURCE_BOOKING_CHANGED' };
     }
 
@@ -720,7 +776,7 @@ async function acceptFreeBookingExtension({
       [bookingId, offerId, schoolId]
     );
     if (acceptedOffer.rowCount !== 1) {
-      throw new Error(`Free extension offer ${offerId} lost its acceptance lock`);
+      throw new Error(`Extension offer ${offerId} lost its acceptance lock`);
     }
 
     return {
@@ -739,11 +795,15 @@ async function acceptFreeBookingExtension({
       startTime: String(booking.start_time).slice(0, 5),
       newEndTime,
       extensionMinutes,
+      useFlexibleHours,
     };
   });
 }
 
-async function notifyFreeBookingExtension(result) {
+async function notifyBookingExtension(result) {
+  const fundingDescription = result.useFlexibleHours ? 'Flexible Hours' : 'free';
+  const paymentDescription = result.useFlexibleHours
+    ? `${result.extensionMinutes} minutes were used from your Flexible Hours.` : 'No payment was charged.';
   const dateStr = new Date(`${result.scheduledDate}T00:00:00Z`).toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
   });
@@ -756,14 +816,14 @@ async function notifyFreeBookingExtension(result) {
       from: 'CoachCarter <bookings@coachcarter.uk>',
       to: result.learnerEmail,
       subject: `Lesson extended — ${dateStr}`,
-      html: `<h2>Hi ${firstName},</h2><p>Your free lesson extension has been accepted.</p><p>Your lesson with ${result.instructorName} on ${dateStr} now runs from <strong>${result.startTime} to ${result.newEndTime}</strong> (+${result.extensionMinutes} minutes).</p>`,
+      html: `<h2>Hi ${firstName},</h2><p>Your ${fundingDescription} lesson extension has been accepted.</p><p>Your lesson with ${result.instructorName} on ${dateStr} now runs from <strong>${result.startTime} to ${result.newEndTime}</strong> (+${result.extensionMinutes} minutes).</p>`,
     }));
     if (result.instructorEmail) {
       tasks.push(transporter.sendMail({
         from: 'CoachCarter <system@coachcarter.uk>',
         to: result.instructorEmail,
-        subject: `${result.learnerName} accepted the free lesson extension`,
-        html: `<h2>Extension accepted</h2><p>${result.learnerName}'s lesson on ${dateStr} now ends at <strong>${result.newEndTime}</strong>. No payment was charged.</p>`,
+        subject: `${result.learnerName} accepted the ${fundingDescription} lesson extension`,
+        html: `<h2>Extension accepted</h2><p>${result.learnerName}'s lesson on ${dateStr} now ends at <strong>${result.newEndTime}</strong>. ${paymentDescription}</p>`,
       }));
     }
   } catch (error) {
@@ -772,14 +832,14 @@ async function notifyFreeBookingExtension(result) {
   if (result.learnerPhone) {
     tasks.push(sendWhatsApp(
       result.learnerPhone,
-      `✅ Lesson extended for free!\n\n📅 ${dateStr}\n⏰ ${result.startTime} – ${result.newEndTime}\n➕ ${result.extensionMinutes} minutes\n\nView bookings: https://coachcarter.uk/learner/`,
+      `✅ Lesson extended (${fundingDescription})!\n\n📅 ${dateStr}\n⏰ ${result.startTime} – ${result.newEndTime}\n➕ ${result.extensionMinutes} minutes\n\nView bookings: https://coachcarter.uk/learner/`,
       { purpose: 'offer.free_extension_confirmation_learner', learnerId: result.learnerId, instructorId: result.instructorId, schoolId: result.schoolId }
     ));
   }
   if (result.instructorPhone) {
     tasks.push(sendWhatsApp(
       result.instructorPhone,
-      `Free lesson extension accepted\n\n${result.learnerName}\n${dateStr}\n${result.startTime} – ${result.newEndTime}`,
+      `${fundingDescription} lesson extension accepted\n\n${result.learnerName}\n${dateStr}\n${result.startTime} – ${result.newEndTime}`,
       { purpose: 'offer.free_extension_confirmation_instructor', learnerId: result.learnerId, instructorId: result.instructorId, schoolId: result.schoolId }
     ));
   }
@@ -795,7 +855,8 @@ async function notifyFreeBookingExtension(result) {
 // ── POST /api/offers?action=accept-offer ──────────────────────────────────────
 // Body: { token, name, phone, pickup_address }
 // Creates a Stripe Checkout session for a paid offer. Free offers are accepted
-// directly; a free extension updates its existing booking without a Stripe or
+// directly; Flexible Hours extensions allocate existing units without Checkout.
+// A free extension updates its existing booking without a Stripe or
 // credit-ledger mutation.
 async function handleAcceptOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -848,6 +909,19 @@ async function handleAcceptOffer(req, res) {
     const schoolId = Number(offer.school_id);
     if (!Number.isSafeInteger(schoolId) || schoolId <= 0) {
       throw new Error(`Offer ${offer.id} has no valid school scope`);
+    }
+
+    if (offer.extension_booking_id && req.body.payment_method === 'flexible_package') {
+      const result = await acceptBookingExtension({
+        offer, connectionString: process.env.POSTGRES_URL, useFlexibleHours: true,
+      });
+      if (!result.applied) return res.status(409).json({
+        error: result.message || 'This extension cannot use Flexible Hours. Your lesson has not changed.', code: result.code,
+      });
+      await notifyBookingExtension(result);
+      const baseUrl = process.env.BASE_URL || 'https://coachcarter.uk';
+      return res.json({ ok: true, url: `${baseUrl}/offer-success.html?token=${encodeURIComponent(token)}`,
+        payment_method: 'flexible_package' });
     }
 
     // A pencil is a single payable hold. Reuse its still-open Checkout rather
@@ -938,13 +1012,16 @@ async function handleAcceptOffer(req, res) {
         return res.status(409).json({ error: 'This extension request is no longer valid.' });
       }
       const [extensionBooking] = await sql`
-        SELECT id, status, end_time::text AS end_time
+        SELECT id, status, payment_method, end_time::text AS end_time
         FROM lesson_bookings
         WHERE id = ${offer.extension_booking_id}
           AND learner_id = ${offer.learner_id}
           AND instructor_id = ${offer.instructor_id}
           AND school_id = ${schoolId}
       `;
+      if (extensionBooking?.payment_method === 'flexible_package') {
+        return res.status(409).json({ error: 'Accept this extension using Flexible Hours.', code: 'FLEXIBLE_EXTENSION_FUNDING_REQUIRED' });
+      }
       if (!extensionBooking || extensionBooking.status !== SCHEDULED ||
           String(extensionBooking.end_time).slice(0, 5) !== String(offer.start_time).slice(0, 5)) {
         const invalidated = await sql`
@@ -1056,7 +1133,7 @@ async function handleAcceptOffer(req, res) {
     }
 
     if (pricePence === 0 && isExtension) {
-      const result = await acceptFreeBookingExtension({
+      const result = await acceptBookingExtension({
         offer,
         connectionString: process.env.POSTGRES_URL,
       });
@@ -1078,7 +1155,7 @@ async function handleAcceptOffer(req, res) {
         appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
       }
 
-      await notifyFreeBookingExtension(result);
+      await notifyBookingExtension(result);
       return res.json({
         ok: true,
         url: `${baseUrl}/offer-success.html?token=${token}&free=1`,

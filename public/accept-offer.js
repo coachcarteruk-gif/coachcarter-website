@@ -125,7 +125,9 @@
     // Price display - build with DOM to avoid injecting HTML via innerHTML
     var priceEl = document.getElementById('offer-price');
     priceEl.textContent = '';
-    if (o.price_pence === 0) {
+    if (o.extension_payment_method === 'flexible_package') {
+      priceEl.textContent = durStr + ' of Flexible Hours';
+    } else if (o.price_pence === 0) {
       var free = document.createElement('span');
       free.style.color = '#22c55e';
       free.style.fontWeight = '800';
@@ -194,7 +196,9 @@
 
     // Update button text: extensions distinguish free acceptance from payment.
     var btn = document.getElementById('accept-btn');
-    if (o.pencilled && o.price_pence > 0) {
+    if (o.extension_payment_method === 'flexible_package') {
+      btn.textContent = 'Accept with Flexible Hours →';
+    } else if (o.pencilled && o.price_pence > 0) {
       btn.textContent = 'Pay for pencilled lesson →';
     } else if (isExtension && o.price_pence === 0) {
       btn.textContent = 'Accept free extension →';
@@ -282,6 +286,7 @@
     btn.textContent = 'Processing...';
 
     var payload = { token: token, name: name, phone: phone, pickup_address: pickup };
+    if (offerData.extension_payment_method === 'flexible_package') payload.payment_method = 'flexible_package';
     if (email) payload.email = email;
     var repeatSel = document.getElementById('repeat-weeks');
     if (repeatSel && repeatSel.options.length > 0) {
@@ -323,6 +328,7 @@
   }
 
   function acceptButtonLabel() {
+    if (offerData && offerData.extension_payment_method === 'flexible_package') return 'Accept with Flexible Hours →';
     if (offerData && offerData.pencilled) return 'Pay for pencilled lesson →';
     if (offerData && offerData.is_extension && offerData.price_pence === 0) return 'Accept free extension →';
     if (offerData && offerData.is_extension) return 'Add time & pay →';

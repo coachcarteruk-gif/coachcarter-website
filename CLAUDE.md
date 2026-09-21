@@ -201,6 +201,14 @@ Per-instructor `instructors.request_to_book` toggle: learners request slots inst
 
 ## Paid and free lesson extensions (September 2026)
 
+Flexible Hours extensions (21 September, pending deployment) use the same request
+and token acceptance surface, but the learner must explicitly choose
+`payment_method='flexible_package'`. Only an already fully package-funded booking
+is eligible. Its zero offer cash price is not a free extension: acceptance appends
+extra FIFO allocations and increases booking minutes and frozen value atomically,
+without LCB/CT/BCS or Stripe changes. Preserve the original allocation evidence,
+reject mixed funding or mismatches, and keep ordinary duration edits blocked.
+
 An extension offer is a `lesson_offers` row with `extension_booking_id` and `extension_minutes`; it must mutate the existing lesson rather than create a second adjacent booking. A positive price charges only the added time and fulfils after a verified paid webhook. An explicit zero price is a free extension: learner acceptance bypasses Stripe and atomically changes only the booking end time and offer status, leaving `minutes_deducted`, list price, BCS, credit balances, refunds and payout value unchanged. Extension checks deliberately ignore availability windows and travel buffers, but reject real overlaps with bookings, busy blocks, pending offers/requests, and reservations. Paid fulfilment must remain school/instructor/learner scoped, metadata checked, Stripe-session idempotent, and atomic across the `slot_purchase`, appended BCS attribution, booking end/minutes/list-price update, and offer acceptance. Editing/cancelling the source booking or cancelling/expiring the extension closes open Checkout sessions; if payment wins that race, the webhook records an idempotent `booking_extension_unfulfilled` refund intent and returns the full extension charge through Stripe, with failures retained as `manual_review`. Do not enable promotion codes or weekly repeats for extensions, and do not broaden refunds or payout engines beyond that race compensation.
 
 ## Multi-instructor franchise model

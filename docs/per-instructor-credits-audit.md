@@ -1,5 +1,20 @@
 # Per-Instructor Credits Audit
 
+21 September 2026 Flexible Hours extensions (pending deployment): the instructor's
+existing Request extension flow now supports lessons already funded entirely by
+Flexible Hours. The learner explicitly accepts package-minute use. Acceptance locks
+the learner, offer, booking and FIFO sources, verifies the original allocation
+minutes/value, appends only the added units, increases booking duration/deducted
+minutes/frozen value and accepts the offer in one transaction. Insufficient units,
+stale/cancelled lessons, mixed funding and availability conflicts leave funding
+unchanged. No LCB, CT, BCS or new Stripe charge is created. Ordinary duration edits
+remain blocked; this is the dedicated append-only extension path. Existing exact
+allocation returns and rescheduling include the added allocations automatically.
+Migration 063's already-applied removal of permanent source/booking uniqueness is
+required; no new migration is needed. Focused mocked-transaction and browser tests
+are in `tests/flexible-booking-extension.spec.js`; live database verification has
+not been performed for this change.
+
 21 September 2026 availability tightening (pending deployment): instructor creation
 and time edits reject slots outside availability before funding changes. Flexible
 Hours now explicitly records instructor-created bookings, while learner booking
@@ -106,7 +121,7 @@ Classification:
 | Credit checkout | `api/credits.js` `handleCheckout`, `handleCreatePaymentIntent` | Server-retired creation; historical instructor-aware helpers retained | Yes | Both self-serve creation actions return `410 CREDIT_PURCHASE_RETIRED` before SQL or Stripe. In-flight pre-retirement Checkout/PaymentIntent webhook and verify paths remain idempotent so paid learners are not stranded. |
 | Direct pay-and-book checkout | `api/slots.js` `checkout-slot`, `checkout-slot-guest`; `api/webhook.js`; `api/_paid-booking-orphan-recovery.js`; `api/lesson-types.js`; `durations-for-slot` | Server-side `calcDirectLessonPrice` using custom learner rate → instructor hourly rate → school default | Yes | Stripe amount and metadata come from the selected instructor's effective hourly rate × duration. A retry that finds a completed `slot_purchase` but no booking no longer acknowledges the orphan: one-off direct slots and slot-pinned offers enter a serializable, tenant-scoped recovery transaction. Recovery requires exact immutable payment/source identity, a free slot across every availability source, and a scoped ledger balance that reconciles either before or after a staged credit. It then creates one booking/BCS and consumes credit net-zero; conflicts or drift remain retryable/manual. Bulk-tier opt-in is ignored for direct single-slot payments, and trial lesson types remain excluded. |
 | Paid booking extension | `api/instructor.js` `create-extension-offer`; `api/offers.js`; `api/webhook.js` `fulfilPaidBookingExtension` | Added time uses the same learner/instructor/school fallback and a new `slot_purchase` + BCS row on the existing booking | Yes | LCB does not move because the paid source is immediately attributed. Atomic fulfilment increases booking minutes/list price/end time and accepts the offer. A frozen base fallback preserves legacy bookings without a list-price snapshot; cancellation logic therefore sees the full combined minutes and sources. Source edits/cancellations close pending offers and expire open Checkout sessions; a paid invalidation race writes an idempotent full-refund event/line without creating CT or BCS rows. |
-| Free booking extension | `api/instructor.js` `create-extension-offer`; `api/offers.js` `acceptFreeBookingExtension` | Explicit zero-price added time; no spendable credit source | Yes | Learner acceptance is tenant-scoped, lock-serialised and atomic. It updates only the existing booking end time and offer status. `minutes_deducted`, list price, BCS, LCB, refund value and payout value remain unchanged. |
+| Free booking extension | `api/instructor.js` `create-extension-offer`; `api/offers.js` `acceptBookingExtension` | Explicit zero-price added time; no spendable credit source | Yes | Learner acceptance is tenant-scoped, lock-serialised and atomic. It updates only the existing booking end time and offer status. `minutes_deducted`, list price, BCS, LCB, refund value and payout value remain unchanged. |
 | Social-video booking discount | `api/slots.js`, `api/webhook.js`, `api/_pricing-helpers.js` | Instructor opt-in + learner per-booking consent + 18+ confirmation | Yes | `social_video_consent` and `social_video_age_confirmed` are separate request booleans. The server validates `instructors.social_video_opt_in` and requires the 18+ confirmation before applying the 5% discount to the Stripe amount only. `charge_minutes`, `credit_transactions.minutes`, `lesson_bookings.minutes_deducted`, and BCS attribution retain the full lesson duration so eligible cancellation returns the complete lesson entitlement. Consent, age confirmation, and discount pct are snapshotted on `lesson_bookings`. |
 | Paid 1-hour lesson opt-in | `db/migration.sql`, `api/_lesson-type-helpers.js`, `api/lesson-types.js`, `api/slots.js`, `public/instructor/profile.js`, `public/learner/buy-credits.js` | Active `slug='1hr'` with explicit instructor opt-in | Yes | The paid 1-hour lesson type is active, but `offered_lesson_types = NULL` means the default active set and excludes opt-in-only `"1hr"`. Instructors can enable it in profile lesson-type toggles; booking and buy-credit single-lesson cards respect the selected instructor's offered list. |
 | Credit balance API | `api/credits.js` `handleBalance` | School-scoped LCB rows joined to same-school instructors | Yes | Preserves aggregate and per-instructor balances plus optional validated `instructor_id`. Slice 3 adds the strict school-scoped `incompatible_products_retired` display flag without blocking balance reads or spending. |

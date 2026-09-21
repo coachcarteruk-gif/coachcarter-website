@@ -1,5 +1,17 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.136 - Flexible Hours Lesson Extensions (21 September 2026; pending deployment)
+
+Request extension now lets learners spend remaining Flexible Hours on extra time
+for an existing package-funded lesson. Acceptance appends the added FIFO units and
+updates booking duration and frozen value atomically, with sufficient-balance,
+funding, tenant, replay and availability checks. Instructor and learner screens
+show minutes instead of a cash price. No new payment or migration is required.
+
+**Files:** `api/instructor.js`, `api/offers.js`, `api/_flexible-package-ledger.js`,
+instructor extension modal, offer acceptance/success UI, and
+`tests/flexible-booking-extension.spec.js`. See the Flexible Hours runbook.
+
 ## 2.135 - Firm Instructor Availability (21 September 2026; pending deployment)
 
 Removes booking-time schedule overrides for cash, credit, Flexible Hours, free

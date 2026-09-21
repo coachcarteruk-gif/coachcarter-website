@@ -84,6 +84,39 @@ function planFlexiblePackageFifo(sources, unitsRequired) {
   };
 }
 
+async function loadLockedFlexibleSources(client, { schoolId, learnerId }) {
+  return client.query(
+    `SELECT s.id, s.rate_pence_per_unit,
+            GREATEST(0, s.original_value_pence
+              - COALESCE((SELECT SUM(r.gross_refund_pence) FROM flexible_package_source_reductions r
+                           WHERE r.source_id = s.id AND r.school_id = $1), 0)
+              - COALESCE((SELECT SUM(a.contribution_pence)
+                            FROM flexible_package_booking_allocations a
+                           WHERE a.source_id = s.id AND a.school_id = $1
+                             AND NOT EXISTS (
+                               SELECT 1 FROM flexible_package_allocation_returns ar
+                                WHERE ar.allocation_id = a.id AND ar.school_id = a.school_id
+                             )), 0)
+            )::integer AS remaining_value_pence,
+            GREATEST(0, s.initial_units
+              - COALESCE((SELECT SUM(r.units_reduced) FROM flexible_package_source_reductions r
+                           WHERE r.source_id = s.id AND r.school_id = $1), 0)
+              - COALESCE((SELECT SUM(a.units_allocated)
+                            FROM flexible_package_booking_allocations a
+                           WHERE a.source_id = s.id AND a.school_id = $1
+                             AND NOT EXISTS (
+                               SELECT 1 FROM flexible_package_allocation_returns ar
+                                WHERE ar.allocation_id = a.id AND ar.school_id = a.school_id
+                             )), 0)
+            )::numeric AS remaining_units
+       FROM flexible_package_sources s
+      WHERE s.school_id = $1 AND s.learner_id = $2 AND s.available_at <= NOW()
+      ORDER BY s.available_at ASC, s.id ASC
+      FOR UPDATE OF s`,
+    [schoolId, learnerId]
+  );
+}
+
 async function bookFlexiblePackageSlotTransaction({
   connectionString,
   learnerId,
@@ -165,36 +198,7 @@ async function bookFlexiblePackageSlotTransaction({
       );
       if (conflicts.rowCount) abort({ code: 'SLOTS_UNAVAILABLE' });
 
-      const sources = await client.query(
-        `SELECT s.id, s.rate_pence_per_unit,
-                GREATEST(0, s.original_value_pence
-                  - COALESCE((SELECT SUM(r.gross_refund_pence) FROM flexible_package_source_reductions r
-                               WHERE r.source_id = s.id AND r.school_id = $1), 0)
-                  - COALESCE((SELECT SUM(a.contribution_pence)
-                                FROM flexible_package_booking_allocations a
-                               WHERE a.source_id = s.id AND a.school_id = $1
-                                 AND NOT EXISTS (
-                                   SELECT 1 FROM flexible_package_allocation_returns ar
-                                    WHERE ar.allocation_id = a.id AND ar.school_id = a.school_id
-                                 )), 0)
-                )::integer AS remaining_value_pence,
-                GREATEST(0, s.initial_units
-                  - COALESCE((SELECT SUM(r.units_reduced) FROM flexible_package_source_reductions r
-                               WHERE r.source_id = s.id AND r.school_id = $1), 0)
-                  - COALESCE((SELECT SUM(a.units_allocated)
-                                FROM flexible_package_booking_allocations a
-                               WHERE a.source_id = s.id AND a.school_id = $1
-                                 AND NOT EXISTS (
-                                   SELECT 1 FROM flexible_package_allocation_returns ar
-                                    WHERE ar.allocation_id = a.id AND ar.school_id = a.school_id
-                                 )), 0)
-                )::numeric AS remaining_units
-           FROM flexible_package_sources s
-          WHERE s.school_id = $1 AND s.learner_id = $2 AND s.available_at <= NOW()
-          ORDER BY s.available_at ASC, s.id ASC
-          FOR UPDATE OF s`,
-        [schoolId, learnerId]
-      );
+      const sources = await loadLockedFlexibleSources(client, { schoolId, learnerId });
       const plan = planFlexiblePackageFifo(sources.rows, unitsRequired);
       if (!plan.ok) abort(plan);
 
@@ -265,6 +269,63 @@ async function bookFlexiblePackageSlotTransaction({
     if (error?.code === '23505') return { ok: false, code: 'SLOTS_UNAVAILABLE' };
     throw error;
   }
+}
+
+// Caller holds the learner, offer and booking locks in one transaction. Append
+// only the extra units: historical allocations keep their original identities.
+async function allocateFlexibleExtensionWithClient(client, { booking, extensionMinutes, offerId }) {
+  const schoolId = Number(booking.school_id);
+  const learnerId = Number(booking.learner_id);
+  const instructorId = Number(booking.instructor_id);
+  const unitsRequired = unitsForDuration(extensionMinutes);
+  if (!unitsRequired || booking.payment_method !== 'flexible_package') {
+    return { ok: false, code: 'FLEXIBLE_EXTENSION_FUNDING_REQUIRED' };
+  }
+  const allocations = await client.query(
+    `SELECT a.id, a.learner_id, a.instructor_id, a.units_allocated, a.unit_minutes, a.contribution_pence
+       FROM flexible_package_booking_allocations a
+      WHERE a.booking_id = $1 AND a.school_id = $2
+        AND NOT EXISTS (SELECT 1 FROM flexible_package_allocation_returns r
+                         WHERE r.allocation_id = a.id AND r.school_id = a.school_id)
+      ORDER BY a.id FOR SHARE OF a`,
+    [booking.id, schoolId]
+  );
+  const mixed = await client.query(
+    `SELECT 1 FROM booking_credit_sources
+      WHERE booking_id = $1 AND school_id = $2 AND refunded_at IS NULL LIMIT 1`,
+    [booking.id, schoolId]
+  );
+  if (mixed.rowCount) return { ok: false, code: 'FLEXIBLE_MIXED_FUNDING_CONTRADICTION' };
+  const oldMinutes = allocations.rows.reduce((sum, row) => sum + Number(row.units_allocated) * Number(row.unit_minutes), 0);
+  const oldValue = allocations.rows.reduce((sum, row) => sum + Number(row.contribution_pence), 0);
+  const minutes = time => { const [h, m] = String(time).split(':').map(Number); return h * 60 + m; };
+  if (!allocations.rowCount || allocations.rows.some(row => Number(row.learner_id) !== learnerId
+      || Number(row.instructor_id) !== instructorId || Number(row.unit_minutes) !== FLEXIBLE_UNIT_MINUTES)
+      || oldMinutes !== Number(booking.minutes_deducted)
+      || oldMinutes !== minutes(booking.end_time) - minutes(booking.start_time)
+      || booking.list_price_pence == null || oldValue !== Number(booking.list_price_pence)) {
+    return { ok: false, code: 'FLEXIBLE_ALLOCATION_VALUE_CONTRADICTION' };
+  }
+  const sources = await loadLockedFlexibleSources(client, { schoolId, learnerId });
+  const plan = planFlexiblePackageFifo(sources.rows, unitsRequired);
+  if (!plan.ok) return plan;
+  for (const allocation of plan.allocations) {
+    await client.query(
+      `INSERT INTO flexible_package_booking_allocations (
+         school_id, learner_id, source_id, booking_id, instructor_id,
+         units_allocated, unit_minutes, rate_pence_per_unit, contribution_pence
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [schoolId, learnerId, allocation.source_id, booking.id, instructorId,
+        allocation.units, FLEXIBLE_UNIT_MINUTES, allocation.rate_pence_per_unit, allocation.contribution_pence]
+    );
+  }
+  await client.query(
+    `INSERT INTO flexible_package_state_events (school_id, learner_id, event_type, booking_id, detail)
+     VALUES ($1,$2,'booking_extended',$3,$4::jsonb)`,
+    [schoolId, learnerId, booking.id, JSON.stringify({ offer_id: offerId, instructor_id: instructorId,
+      minutes: extensionMinutes, contribution_pence: plan.contribution_pence, allocations: plan.allocations })]
+  );
+  return { ok: true, contributionPence: plan.contribution_pence };
 }
 
 const FLEXIBLE_RETURN_REASONS = new Set([
@@ -534,6 +595,7 @@ async function moveFlexiblePackageBookingAllocations(client, {
 }
 
 module.exports = {
+  allocateFlexibleExtensionWithClient,
   FLEXIBLE_UNIT_MINUTES,
   bookFlexiblePackageSlotTransaction,
   cancelFlexiblePackageBookingWithClient,

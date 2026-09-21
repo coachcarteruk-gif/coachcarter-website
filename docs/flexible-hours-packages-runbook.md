@@ -20,6 +20,20 @@ Each booking uses Flexible Hours, Lesson Credit or Pay As You Go, never a blend.
 
 Every learner receives access as soon as signed payment confirmation creates the entitlement. The checkout page presents the immediate-access request inside the single combined terms acceptance and records `terms_accepted = TRUE` plus `immediate_access_requested = TRUE`. The checkbox may use a concise customer-facing label only while the approved acknowledgement and immediate-access wording remain unchanged in the adjacent checkout disclosure and are programmatically associated with that checkbox; do not remove that wording or evidence when simplifying the UI.
 
+### Lesson extensions (21 September 2026, pending deployment)
+
+For a lesson already funded by Flexible Hours, **Request extension** sends an
+offer for 30–180 additional minutes. The learner sees the cost in package minutes
+and selects **Accept with Flexible Hours**. The server verifies availability and
+the original booking's allocation evidence, then atomically appends FIFO units,
+updates the existing booking's end time/minutes/frozen value and accepts the offer.
+Insufficient hours leave the lesson unchanged. A retry cannot consume units twice.
+Custom cash prices, cash top-ups and mixed Lesson Credit funding are not supported
+for these extensions. Existing duration editors still require cancellation and
+rebooking. The existing cancellation/rescheduling rules apply to every allocation,
+including the added time. No new schema or Stripe configuration is required;
+migration 063 must already be installed.
+
 ## Separate live Stripe prerequisites
 
 Create and verify, without enabling the application gate:

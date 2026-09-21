@@ -1420,6 +1420,19 @@ See [`docs/learner-packages-product-decision-record.md`](docs/learner-packages-p
 
 ## Flexible Hours package addendum (2026-08-16)
 
+**Lesson extensions (21 September 2026, pending deployment):**
+`create-extension-offer` supports an existing `payment_method='flexible_package'`
+lesson with no custom cash price. `get-offer` returns
+`extension_payment_method='flexible_package'`; the learner explicitly submits
+`payment_method: 'flexible_package'` to `accept-offer`. The offer's zero cash price
+does not mean free time: acceptance appends the extra FIFO package allocations,
+increases `minutes_deducted` and frozen `list_price_pence`, extends the existing
+booking and accepts the offer in one transaction. It checks original funding
+consistency, active same-school instructor, full-slot availability, real overlaps,
+offer expiry and sufficient remaining units. No new Stripe Checkout, ordinary
+credit mutation or schema migration is involved. Migration 063 is a prerequisite.
+All other duration editors continue to refuse package duration changes.
+
 This addendum supersedes earlier references to a lone 30-hour draft or to Flexible Hours fulfilment being wholly deferred. Migration 050 adds the approved stable 15-hour (£810) identity, a prospective approved 30-hour (£1,590) version, and a separate append-only school-wide attempt/payment, purchase/source, booking allocation, eligible return, manual source reduction and state-event ledger. It never writes `learner_credit_balances` or `learner_users.balance_minutes`.
 
 Migration 051 aligns the ledger with calendar-style credit use: one unresolved Checkout per learner, no new Checkout while spendable Flexible Hours remain, and append-only exact-value allocation movement for learner rescheduling at 48+ hours. Flexible Hours remain school-wide and can move to another active same-school instructor. A lesson has one funding method only; Flexible Hours, Lesson Credit and Pay As You Go are never blended.

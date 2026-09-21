@@ -503,6 +503,7 @@ async function handleSchedule(req, res) {
           lb.status,
           lb.notes,
           lb.lesson_type_id,
+          lb.payment_method,
           COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
           (
             (lb.status = ${CHARGEABLE}
@@ -565,6 +566,7 @@ async function handleSchedule(req, res) {
           lb.status,
           lb.notes,
           lb.lesson_type_id,
+          lb.payment_method,
           COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
           (
             (lb.status = ${CHARGEABLE}
@@ -691,6 +693,7 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
+          lb.payment_method,
           COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
           (
             (lb.status = ${CHARGEABLE}
@@ -753,6 +756,7 @@ async function handleScheduleRange(req, res) {
           lb.status,
           lb.notes,
           lb.instructor_notes,
+          lb.payment_method,
           COALESCE(lb.minutes_deducted, 0) AS minutes_deducted,
           (
             (lb.status = ${CHARGEABLE}
@@ -5375,7 +5379,7 @@ async function handleCreateOffer(req, res) {
 
 // ── POST /api/instructor?action=create-extension-offer ─────────────────────
 // Body: { booking_id, extension_minutes, offer_price_pence? }
-// Creates a paid request that extends an existing lesson after Stripe payment.
+// Requests added time, funded by Flexible Hours, a new payment, or a free offer.
 // The complete extended lesson must fit availability; actual calendar overlaps also block it.
 async function handleCreateExtensionOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -5414,7 +5418,7 @@ async function handleCreateExtensionOffer(req, res) {
              lb.scheduled_date::text AS scheduled_date,
              lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              (lb.scheduled_date + lb.end_time <= NOW()) AS lesson_has_ended,
-             lb.status, lb.lesson_type_id, lb.list_price_pence, lb.payment_method,
+             lb.status, lb.lesson_type_id, lb.list_price_pence, lb.payment_method, lb.cancelled_at,
              EXISTS (
                SELECT 1 FROM flexible_package_booking_allocations allocation
                 WHERE allocation.booking_id = lb.id
@@ -5436,17 +5440,22 @@ async function handleCreateExtensionOffer(req, res) {
         AND lb.school_id = ${schoolId}
     `;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    if (booking.status !== SCHEDULED) {
+    if (booking.status !== SCHEDULED || booking.cancelled_at) {
       return res.status(409).json({ error: 'Only a scheduled lesson can be extended.' });
     }
     if (booking.lesson_has_ended) {
       return res.status(409).json({ error: 'A lesson that has already ended cannot be extended.' });
     }
-    if (booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true) {
-      return res.status(409).json({
-        error: 'Flexible Hours lesson duration cannot be extended in place. Cancel and rebook so its package units remain exact.',
-        code: 'FLEXIBLE_DURATION_EDIT_REQUIRES_REBOOKING',
-      });
+    const usesFlexibleHours = booking.payment_method === 'flexible_package';
+    if (usesFlexibleHours !== (booking.has_flexible_package_allocation === true)) {
+      return res.status(409).json({ error: 'The Flexible Hours funding needs review before this lesson can be extended.',
+        code: 'FLEXIBLE_ALLOCATION_VALUE_CONTRADICTION' });
+    }
+    if (usesFlexibleHours && explicitPrice != null && explicitPrice !== '') {
+      return res.status(400).json({ error: 'Flexible Hours extensions use package minutes; leave the cash price blank.' });
+    }
+    if (usesFlexibleHours && (booking.list_price_pence == null || !Number.isSafeInteger(Number(booking.list_price_pence)))) {
+      return res.status(409).json({ error: 'The Flexible Hours value needs review before this lesson can be extended.' });
     }
     if (!booking.learner_email) {
       return res.status(409).json({ error: 'This learner needs an email address before you can send an extension request.' });
@@ -5531,7 +5540,7 @@ async function handleCreateExtensionOffer(req, res) {
     `;
     if (reservationConflict) return res.status(409).json({ error: 'Someone is currently booking time needed by this extension.' });
 
-    const pricing = await calcOfferLessonPrice(sql, {
+    const pricing = usesFlexibleHours ? { pricePence: 0 } : await calcOfferLessonPrice(sql, {
       schoolId,
       instructorId: instructor.id,
       learnerId: booking.learner_id,
@@ -5578,9 +5587,9 @@ async function handleCreateExtensionOffer(req, res) {
       weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
     });
     const firstName = String(booking.learner_name || '').split(' ')[0] || 'there';
-    const isFreeExtension = pricing.pricePence === 0;
-    const priceStr = isFreeExtension ? 'FREE' : `£${(pricing.pricePence / 100).toFixed(2)}`;
-    const acceptLabel = isFreeExtension ? 'Accept free extension →' : 'Accept &amp; pay →';
+    const isFreeExtension = !usesFlexibleHours && pricing.pricePence === 0;
+    const priceStr = usesFlexibleHours ? `${extensionMinutes} minutes of Flexible Hours` : isFreeExtension ? 'FREE' : `£${(pricing.pricePence / 100).toFixed(2)}`;
+    const acceptLabel = usesFlexibleHours ? 'Accept with Flexible Hours →' : isFreeExtension ? 'Accept free extension →' : 'Accept &amp; pay →';
 
     let emailSent = false;
     try {
@@ -5599,7 +5608,7 @@ async function handleCreateExtensionOffer(req, res) {
               <tr><td style="padding:6px 16px 6px 0;font-weight:bold">Price</td><td>${priceStr}</td></tr>
             </table>
             <p><a href="${acceptUrl}" style="background:#f58321;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold">${acceptLabel}</a></p>
-            <p style="font-size:0.85rem;color:#797879">This request expires in 24 hours. Your lesson changes only after you accept${isFreeExtension ? '' : ' and payment succeeds'}.</p>
+            <p style="font-size:0.85rem;color:#797879">This request expires in 24 hours. Your lesson changes only after you accept${usesFlexibleHours ? ' using Flexible Hours' : isFreeExtension ? '' : ' and payment succeeds'}.</p>
           </div>`,
       });
       emailSent = true;
@@ -5612,7 +5621,7 @@ async function handleCreateExtensionOffer(req, res) {
       try {
         const result = await sendWhatsApp(
           booking.learner_phone,
-          `Hi ${firstName}, ${booking.instructor_name} has invited you to extend your ${dateStr} lesson by ${extensionMinutes} minutes for ${priceStr}.\n\n${isFreeExtension ? 'Accept' : 'Accept and pay'} within 24 hours: ${acceptUrl}`,
+          `Hi ${firstName}, ${booking.instructor_name} has invited you to extend your ${dateStr} lesson by ${extensionMinutes} minutes for ${priceStr}.\n\n${usesFlexibleHours || isFreeExtension ? 'Accept' : 'Accept and pay'} within 24 hours: ${acceptUrl}`,
           { purpose: 'offer.extension_created_learner', learnerId: booking.learner_id, instructorId: instructor.id, schoolId }
         );
         messageSent = !!result?.ok;
