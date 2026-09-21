@@ -1,8 +1,8 @@
 # Migration governance audit and phased cleanup
 
-Repository follow-up (21 September 2026): `071_trial_questionnaire_requests.sql` is pending after 070. The manifest has 72 entries including deferred 041. Neither 070 nor 071 was applied to production by this task. The [combined rollout checklist](qualifying-trial-funnel.md) supersedes the 070-only funnel checklist. Historical production receipts below remain unchanged.
+Production follow-up (21 September 2026): 070 and 071 have successful governed execution receipts following Fraser's explicit request to make the questionnaire live. Status: 71 applied, no pending migrations; the manifest has 72 entries including deferred 041. Snapshot `snap-frosty-pond-abw4fetv` preserves the preceding state. See [production receipt](../db/rollouts/071-trial-questionnaire-production.md). The [combined rollout checklist](qualifying-trial-funnel.md) supersedes the 070-only funnel checklist. Earlier production receipts below remain unchanged.
 
-Status: **production ledger installed; numbered history current through 069**
+Status: **production ledger installed; numbered history current through 071**
 
 Repository-only addition (21 September 2026): migration `070_trial_booking_intakes.sql` is pending and has **not** been applied to production by the funnel implementation task. The repository manifest now has 71 entries including deferred 041; the historical production receipt and inventory below remain the 19 September snapshot through 069. See [070 rollout checklist](test-date-free-trial-funnel-implementation.md).
 

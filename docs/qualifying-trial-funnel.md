@@ -1,6 +1,8 @@
 # Qualifying questionnaire and two-route trial funnel
 
-Implemented on `codex/qualifying-trial-questionnaire`, 21 September 2026. Production migration, deployment, feature activation, messages, campaigns and automation are **not authorised or executed**. The existing VSL manifest remains disabled and requires approved footage, poster, captions and transcript.
+**Live for CoachCarter school 1 since 21 September 2026, 21:45:41 UTC.** Fraser subsequently requested “I want the questionnaire live”, authorising the production rollout. Migrations 070/071 were rehearsed on a production-derived branch and applied through the governed runner; the two school flags and agreed questionnaire configuration were activated in an audited transaction. Production serves commit `78cd063` (PRs #474 and #475). See [production receipt](../db/rollouts/071-trial-questionnaire-production.md).
+
+The original implementation stage authorised isolated testing only; its historical statements below describe that stage. No real messages, campaign traffic or new automation were launched. The existing VSL manifest remains disabled and requires approved footage, poster, captions and transcript.
 
 ## Baseline and changed decision
 
@@ -133,7 +135,7 @@ Canonical LF SHA-256 migration checksums for review:
 - 070: `4f220073eff55ae3d6087b776912a24f3016508382a5e45981fb8eef822b7185`
 - 071: `3d11006e3b7758aec8d3a016c8d3534d1958fd2bfc222bc7b235d2c6f7f5d0db`
 
-## Exact production rollout checklist — not executed
+## Production rollout checklist — completed 21 September 2026
 
 ### Returning-browser cache follow-up (21 September 2026)
 
@@ -141,7 +143,7 @@ After PR #474 was merged, a fresh read-only browser loaded the live `/free` book
 
 Validation: 42 focused tests passed, including a real HTTP-cache regression for enabled and disabled school configuration, questionnaire behaviour and existing direct booking. The cache test confirms the old asset remains cached while the new page fetches the versioned initializer. This fix is prepared for review; no production deployment, schema mutation or feature activation was performed by the follow-up. A hard refresh is an immediate workaround for an affected browser. Enabling the questionnaire still requires the rollout below.
 
-### Rollout steps
+### Rollout steps (retained as the operating procedure)
 
 1. Review the branch, original-commit incorporation, routing table, privacy/retention purpose, staff capacity and manual workflow. Confirm that both flags target the verified CoachCarter school only. Obtain separate authorisation for schema, code and activation. Footage, messages, campaign traffic and automation each remain separate work.
 2. Fetch latest main, reconcile migration numbering without changing deployed history, and rerun `npm run migrations:check`, `npm run check:syntax`, the focused tests and real local journeys. Review representative large-range report performance before broad reporting use; the existing small loopback rehearsal is not a production load test.
