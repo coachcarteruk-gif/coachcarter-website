@@ -6,6 +6,30 @@ the site and including the trial-window and post-trial-discount changes.
 Migrations 066-068 are already installed and match the production ledger;
 this restoration requires no production migration or financial data repair.
 
+## Eligibility verification — 21 September 2026 (fix pending deployment)
+
+Read-only production inspection confirmed the discount table exists and School 1
+uses the default 10% / 48-hour settings. No discount quotes had been created at
+inspection. Two existing booking shapes incorrectly failed eligibility:
+rescheduled free trials whose replacement defaults to `payment_method='credit'`,
+and free trials with paid extensions that add deducted minutes and list value.
+Their original zero-value free-trial source remains attached in both cases.
+
+Eligibility and quote settlement now also accept an active BCS row linked to a
+zero-value `free_trial` credit transaction for the same school and learner.
+The booking must still be a trial lesson, ended, neither cancelled nor forfeited,
+and scheduled/chargeable. Its current scheduled end anchors the window, including
+any accepted extension. Ordinary paid lessons cannot qualify from the lesson-type
+label alone. Historical booking, BCS and transaction rows are not rewritten.
+
+The new real PostgreSQL regressions cover both affected shapes, before/end/exact
+48-hour expiry, both UK clock changes, repeat purchase quotes, source ownership,
+retired source rows, cancellation/forfeiture, and successful quote validation.
+All fixture writes run in rolled-back transactions on a disposable loopback
+database. Production checks used read-only transactions; no real Stripe payment
+was made. The affected live records pass the corrected eligibility read without
+any data repair.
+
 ## Restoration verification — 19 September 2026
 
 - Integrated the existing feature branch into fresh main, retaining migration

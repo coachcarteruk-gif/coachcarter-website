@@ -47,6 +47,9 @@ async function getPostTrialDiscount(sql, { schoolId, learnerId, now = new Date()
   }
 
   const timezone = operationalTimeZone(school.config || {});
+  // Reschedules can inherit payment_method='credit', and paid extensions add
+  // minutes/value to a trial. Its active zero-value free-trial ledger source
+  // remains authoritative in both cases; do not rewrite historical funding.
   const rows = await sql`
     SELECT lb.id,
            ((lb.scheduled_date + lb.end_time) AT TIME ZONE ${timezone}) AS trial_ended_at
@@ -57,9 +60,20 @@ async function getPostTrialDiscount(sql, { schoolId, learnerId, now = new Date()
        AND lt.slug = 'trial'
      WHERE lb.school_id = ${sid}
        AND lb.learner_id = ${lid}
-       AND lb.payment_method = 'free'
-       AND COALESCE(lb.minutes_deducted, 0) = 0
-       AND COALESCE(lb.list_price_pence, 0) = 0
+       AND (
+         (lb.payment_method = 'free'
+          AND COALESCE(lb.minutes_deducted, 0) = 0
+          AND COALESCE(lb.list_price_pence, 0) = 0)
+         OR EXISTS (
+           SELECT 1 FROM booking_credit_sources bcs
+           JOIN credit_transactions ct
+             ON ct.id = bcs.credit_transaction_id AND ct.school_id = bcs.school_id
+           WHERE bcs.booking_id = lb.id AND bcs.school_id = lb.school_id
+             AND ct.learner_id = lb.learner_id AND ct.source = 'free_trial'
+             AND ct.amount_pence = 0 AND bcs.contribution_pence = 0
+             AND bcs.refunded_at IS NULL
+         )
+       )
        AND lb.status IN (${SCHEDULED}, ${CHARGEABLE})
        AND COALESCE(lb.booking_purpose, 'lesson') = 'lesson'
        AND lb.cancelled_at IS NULL
@@ -198,8 +212,22 @@ async function validatePostTrialQuote(sql, {
         JOIN lesson_types lt ON lt.id=lb.lesson_type_id AND lt.school_id=lb.school_id AND lt.slug='trial'
        WHERE lb.id=${Number(quote.trial_booking_id)} AND lb.school_id=${Number(schoolId)}
          AND lb.learner_id=${Number(learnerId)} AND lb.status IN (${SCHEDULED}, ${CHARGEABLE})
-         AND lb.payment_method='free' AND COALESCE(lb.minutes_deducted,0)=0
-         AND COALESCE(lb.list_price_pence,0)=0 AND lb.cancelled_at IS NULL
+         AND (
+           (lb.payment_method = 'free'
+            AND COALESCE(lb.minutes_deducted, 0) = 0
+            AND COALESCE(lb.list_price_pence, 0) = 0)
+           OR EXISTS (
+             SELECT 1 FROM booking_credit_sources bcs
+             JOIN credit_transactions ct
+               ON ct.id = bcs.credit_transaction_id AND ct.school_id = bcs.school_id
+             WHERE bcs.booking_id = lb.id AND bcs.school_id = lb.school_id
+               AND ct.learner_id = lb.learner_id AND ct.source = 'free_trial'
+               AND ct.amount_pence = 0 AND bcs.contribution_pence = 0
+               AND bcs.refunded_at IS NULL
+           )
+         )
+         AND COALESCE(lb.booking_purpose, 'lesson') = 'lesson'
+         AND lb.cancelled_at IS NULL
          AND COALESCE(lb.credit_forfeited,FALSE)=FALSE
        LIMIT 1
     `;

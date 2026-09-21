@@ -15,6 +15,13 @@ existing hold. Signed payment initiation, rather than Checkout creation, determi
 whether a later settlement qualifies. `_post-trial-webhook.js` validates immutable
 amounts, tenant/account/provider binding and initiation evidence.
 
+Eligibility also recognises an active zero-value `free_trial` credit source
+attached to the booking for the same school and learner. Rescheduling can leave
+the replacement labelled `credit`, and a paid extension can add minutes/value
+to the original trial; neither removes its free-trial entitlement. The window
+uses the current booking's scheduled end. Quote creation and settlement apply
+the same provenance and cancellation checks.
+
 `GET /api/credits?action=post-trial-discount` supplies the authenticated learner
 banner. Instructor `create-offer` accepts `pencilled: true` for a positive-price,
 single fixed slot and existing learner. Learners use `GET /api/offers?action=my-pencilled-offers`

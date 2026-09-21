@@ -1,5 +1,17 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.137 - Preserve Post-Trial Discounts After Reschedules and Extensions (21 September 2026; pending deployment)
+
+The 10% post-trial discount now recognises the booking's active zero-value
+free-trial ledger source when a reschedule changes its payment-method label or
+a paid extension adds value. Both eligibility and payment validation enforce
+the same school/learner source binding, cancellation exclusions and 48-hour
+window. No historical financial rows or settings are changed, and no migration
+is required. Real PostgreSQL regressions cover both cases, exact expiry, UK DST,
+repeat purchases, source revocation and settlement.
+
+**Files:** `api/_post-trial-discount.js`, `tests/post-trial-quote.integration.spec.js`.
+
 ## 2.136 - Flexible Hours Lesson Extensions (21 September 2026; pending deployment)
 
 Request extension now lets learners spend remaining Flexible Hours on extra time
