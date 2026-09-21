@@ -19,7 +19,7 @@ module.exports = defineConfig({
   // Auto-boot a static server so `npm test` works cold. If CC_TEST_BASE_URL is
   // set (e.g. pointing at `vercel dev` for the live-API tests), skip this.
   webServer: process.env.CC_TEST_BASE_URL ? undefined : {
-    command: 'npx --yes serve public -l 3000 --no-clipboard',
+    command: 'npx --yes serve public -c ../tests/static-server.json -l 3000 --no-clipboard',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

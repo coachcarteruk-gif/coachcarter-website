@@ -1,3 +1,4 @@
+const { resolveSchoolFromRequest } = require('./_tenant');
 // Multi-tenant school management
 //
 // Routes:
@@ -391,6 +392,24 @@ module.exports = async (req, res) => {
 
   try {
     switch (action) {
+      case 'test-booked-page':
+      case 'public-config': {
+        if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+        const sql = neon(process.env.POSTGRES_URL);
+        const tenant = await resolveSchoolFromRequest(req, { sql, allowLegacySchoolIdQuery: true });
+        if (!tenant) return res.status(404).json({ error: 'School not found' });
+        const [school] = await sql`SELECT config FROM schools WHERE id = ${tenant.schoolId}`;
+        if (req.query.action === 'test-booked-page') {
+          res.setHeader('Cache-Control', 'no-store');
+          if (school?.config?.test_date_trial_funnel_enabled !== true) return res.redirect(302, '/freetrial');
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          return res.send(require('fs').readFileSync(require('path').join(process.cwd(), 'public/test-booked.html'), 'utf8'));
+        }
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ ok: true, test_date_trial_funnel_enabled: school?.config?.test_date_trial_funnel_enabled === true,
+          trial_questionnaire: require('./_trial-qualification').configuration(school?.config || {}),
+          local_date: require('./_learner-test-details').localDate(new Date(), require('./_full-curriculum').operationalTimeZone(school?.config || {})) });
+      }
       case 'branding':        return handleBranding(req, res);
       case 'list':            return handleList(req, res);
       case 'get':             return handleGet(req, res);

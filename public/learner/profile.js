@@ -371,46 +371,8 @@ function updateTestCountdown() {
   }
 }
 
-async function saveTest() {
-  if (window.ccAuth && !window.ccAuth.requireAuth()) return;
-  const testDate = document.getElementById('testDate').value;
-  const testTime = document.getElementById('testTime').value;
-  const testCentre = (document.getElementById('testCentre').value || '').trim();
-  const btn = document.getElementById('btnSaveTest');
-  btn.disabled = true; btn.textContent = 'Saving\u2026';
-
-  try {
-    const res = await ccAuth.fetchAuthed('/api/learner?action=update-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ test_date: testDate, test_time: testTime, test_centre: testCentre })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    PROGRESS.test_date = testDate;
-    PROGRESS.test_time = testTime;
-    PROGRESS.test_centre = testCentre;
-    renderOfficialTestSummary();
-    updateTestCountdown();
-    hideTestEditForm();
-    btn.textContent = 'Saved \u2713';
-    setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000);
-  } catch (err) {
-    btn.textContent = 'Save'; btn.disabled = false;
-    console.error('save-test error:', err);
-  }
-}
-
-function showTestEditForm() {
-  var form = document.getElementById('officialTestEditForm');
-  if (!form) return;
-  form.style.display = 'block';
-  renderTestDate();
-  setTimeout(function () {
-    var el = document.getElementById('testDate');
-    if (el) el.focus();
-  }, 0);
-}
+function saveTest() { window.location.href = '/learner/driving-test.html'; }
+function showTestEditForm() { window.location.href = '/learner/driving-test.html'; }
 
 function hideTestEditForm() {
   var form = document.getElementById('officialTestEditForm');

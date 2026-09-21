@@ -189,10 +189,16 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasCurriculumProgress = await curriculumProgressTablesExist(sql);
 
   const txn = [
+    sql`DELETE FROM trial_booking_intakes WHERE learner_id = ${learnerId} AND school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId})`,
     sql`DELETE FROM enquiries e USING learner_users lu
         WHERE lu.id = ${learnerId} AND e.school_id = lu.school_id
-          AND LOWER(e.email) = LOWER(lu.email)
-          AND e.enquiry_type = 'free-trial-courses'`,
+          AND (LOWER(e.email) = LOWER(lu.email) OR EXISTS (
+            SELECT 1 FROM trial_requests r JOIN trial_request_bookings l ON l.school_id=lu.school_id AND l.request_id=r.id
+              JOIN lesson_bookings b ON b.school_id=lu.school_id AND b.id=l.booking_id AND b.learner_id=lu.id
+            WHERE r.school_id=lu.school_id AND r.enquiry_id=e.id))
+          AND e.enquiry_type IN ('free-trial-courses','trial-request')`,
+    sql`DELETE FROM trial_request_bookings WHERE school_id=(SELECT school_id FROM learner_users WHERE id=${learnerId})
+      AND booking_id IN (SELECT id FROM lesson_bookings WHERE learner_id=${learnerId} AND school_id=(SELECT school_id FROM learner_users WHERE id=${learnerId}))`,
     // 1. Anonymise financial records (7-year retention).
     sql`UPDATE credit_transactions SET learner_id = NULL, anonymized = true WHERE learner_id = ${learnerId}`,
     sql`UPDATE lesson_bookings SET learner_id = NULL, learner_anonymized = true WHERE learner_id = ${learnerId}`,

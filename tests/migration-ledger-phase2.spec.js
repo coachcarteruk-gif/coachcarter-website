@@ -41,7 +41,7 @@ test.describe('migration ledger Phase 2 packet and gates', () => {
     });
     expect(bundle.packet.entries.find(entry => entry.id === '062')).toBeUndefined();
     expect(bundle.manifest.migrations.filter(entry => entry.execution === 'numbered').map(entry => entry.id))
-      .toEqual(['061', '062', '063', '064', '065', '066', '067', '068', '069']);
+      .toEqual(['061', '062', '063', '064', '065', '066', '067', '068', '069', '070', '071']);
     expect(bundle.packet.entries.find(entry => entry.id === '026a').filename)
       .toBe('026_public_tenant_resolution.sql');
     expect(bundle.packet.entries.find(entry => entry.id === '026b').filename)

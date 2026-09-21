@@ -159,14 +159,12 @@
   }
 
   function getFormData() {
-    var testBooked = getSelectedValue('testBookedGroup') === 'yes';
     return {
       prior_hours_pro: parseInt(document.getElementById('hoursPro').value, 10) || 0,
       prior_hours_private: parseInt(document.getElementById('hoursPrivate').value, 10) || 0,
       previous_tests: parseInt(getSelectedValue('prevTestsGroup'), 10) || 0,
       transmission: getSelectedValue('transmissionGroup') || 'manual',
-      test_booked: testBooked,
-      test_date: testBooked ? (document.getElementById('testDate').value || null) : null,
+
       main_concerns: document.getElementById('mainConcerns').value.trim() || null
     };
   }
@@ -192,10 +190,7 @@
     html += '<div class="summary-row"><span class="label">Private practice</span><span class="value">' + fd.prior_hours_private + ' hours</span></div>';
     html += '<div class="summary-row"><span class="label">Previous tests</span><span class="value">' + fd.previous_tests + '</span></div>';
     html += '<div class="summary-row"><span class="label">Transmission</span><span class="value" style="text-transform:capitalize">' + fd.transmission + '</span></div>';
-    if (fd.test_booked) {
-      var dateStr = fd.test_date ? new Date(fd.test_date + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : 'Date not set';
-      html += '<div class="summary-row"><span class="label">Test date</span><span class="value">' + dateStr + '</span></div>';
-    }
+
     html += '</div>';
 
     if (fd.main_concerns) {
@@ -273,8 +268,7 @@
           prior_hours_pro: fd.prior_hours_pro,
           prior_hours_private: fd.prior_hours_private,
           previous_tests: fd.previous_tests,
-          transmission: fd.transmission,
-          test_booked: fd.test_booked
+          transmission: fd.transmission
         });
       }
       showSuccess();
@@ -297,6 +291,14 @@
 
   // ── Load existing data ────────────────────────────────────────────
   function loadExisting() {
+    ccAuth.fetchAuthed('/api/learner?action=profile').then(function (r) { return r.json(); }).then(function (data) {
+      var profile = data.profile || {};
+      var context = document.getElementById('currentTestContext');
+      var label = profile.test_booked === false ? 'No test currently booked.' : profile.test_date ? 'Current self-reported test date: ' + profile.test_date : profile.test_booked === true ? 'Test booked; date to add later.' : 'No current test details provided.';
+      context.firstChild.textContent = label + ' Add or update details in ';
+      document.getElementById('testBookedGroup').hidden = true;
+      document.getElementById('testDateWrap').hidden = true;
+    }).catch(function () {});
     var overlay = document.getElementById('loadingOverlay');
     overlay.classList.remove('hidden');
 

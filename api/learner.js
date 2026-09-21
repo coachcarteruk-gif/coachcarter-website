@@ -1,3 +1,4 @@
+const testDetails = require('./_learner-test-details');
 const { neon } = require('@neondatabase/serverless');
 const SUPERVISOR_NOTE_RATINGS = new Set(['good', 'needs_work', 'concern']);
 
@@ -271,7 +272,7 @@ async function handleProgress(req, res) {
 
     const userRow = await sql`
       SELECT current_tier, name, phone, pickup_address, prefer_contact_before,
-             test_date::text AS test_date, test_time, test_centre
+             test_booked, test_details_updated_at, test_date::text AS test_date, test_time, test_centre
       FROM learner_users
       WHERE id = ${user.id} AND school_id = ${schoolId}`;
     return res.json({
@@ -282,6 +283,9 @@ async function handleProgress(req, res) {
       phone: userRow[0]?.phone || '',
       pickup_address: userRow[0]?.pickup_address || '',
       prefer_contact_before: userRow[0]?.prefer_contact_before || false,
+      test_booked: userRow[0]?.test_booked ?? null,
+      test_details_updated_at: userRow[0]?.test_details_updated_at || null,
+      current_test_details: testDetails.currentDetails(userRow[0]),
       test_date: userRow[0]?.test_date || '',
       test_time: userRow[0]?.test_time || '',
       test_centre: userRow[0]?.test_centre || ''
@@ -344,14 +348,17 @@ async function handleProfile(req, res) {
   try {
     const sql = neon(process.env.POSTGRES_URL);
 
-    // Columns already exist in learner_users — no migrations needed
+    // Current details and the latest immutable answer are separate authenticated records.
     const [row] = await sql`
       SELECT name, email, phone, pickup_address, prefer_contact_before,
-             test_date::text AS test_date, test_time, test_centre, test_instructor_booked
+             test_booked, test_details_updated_at, test_date::text AS test_date, test_time, test_centre, test_instructor_booked
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!row) return res.status(404).json({ error: 'User not found' });
-    return res.json({ profile: row });
+    const [intake] = await sql`SELECT test_booked,test_date_snapshot::text,test_time_snapshot,test_centre_snapshot,booked_at
+      FROM trial_booking_intakes WHERE school_id=${schoolId} AND learner_id=${user.id} ORDER BY booked_at DESC,id DESC LIMIT 1`;
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ profile: { ...row, current_test_details: testDetails.currentDetails(row) }, trial_intake: intake || null });
   } catch (err) {
     console.error('profile error:', err);
     reportError('/api/learner', err);
@@ -403,44 +410,41 @@ async function handleUpdateProfile(req, res) {
     const has = (key) => Object.prototype.hasOwnProperty.call(req.body || {}, key);
 
     const [existing] = await sql`
-      SELECT phone, pickup_address, test_date::text AS test_date, test_time, test_centre
+      SELECT phone, pickup_address, test_booked, test_details_updated_at, test_date::text AS test_date, test_time, test_centre
       FROM learner_users
       WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!existing) return res.status(404).json({ error: 'User not found' });
 
-    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-    const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+    let testPatch;
+    try { testPatch = testDetails.profilePatch(req.body || {}, existing); }
+    catch (err) { return res.status(400).json({ error: err.message, code: err.code }); }
     const nextPhone = has('phone') ? String(phone || '').trim() || null : existing.phone;
     const nextPickup = has('pickup_address') ? String(pickup_address || '').trim() || null : existing.pickup_address;
-    const nextTestDate = has('test_date') ? String(test_date || '').trim() || null : existing.test_date;
-    const nextTestTime = has('test_time') ? String(test_time || '').trim() || null : existing.test_time;
-    const nextTestCentre = has('test_centre')
-      ? String(test_centre || '').trim().replace(/\s+/g, ' ') || null
-      : existing.test_centre;
-
-    if (nextTestDate && !dateRe.test(nextTestDate)) {
-      return res.status(400).json({ error: 'Test date must be YYYY-MM-DD' });
-    }
-    if (nextTestTime && !timeRe.test(nextTestTime)) {
-      return res.status(400).json({ error: 'Test time must be HH:MM' });
-    }
-    if (nextTestCentre && nextTestCentre.length > 160) {
-      return res.status(400).json({ error: 'Test centre is too long' });
-    }
-
+    const nextTestDate = testPatch.date;
+    const nextTestTime = testPatch.time;
+    const nextTestCentre = testPatch.centre;
+    const expectedVersion = has('test_details') ? req.body.test_details_updated_at : existing.test_details_updated_at;
     const [updated] = await sql`
       UPDATE learner_users SET
         phone          = ${nextPhone},
         pickup_address = ${nextPickup},
-        test_date      = ${nextTestDate},
-        test_time      = ${nextTestTime},
-        test_centre    = ${nextTestCentre}
+        test_date      = CASE WHEN ${testPatch.touched} THEN ${nextTestDate} ELSE test_date END,
+        test_time      = CASE WHEN ${testPatch.touched} THEN ${nextTestTime} ELSE test_time END,
+        test_centre    = CASE WHEN ${testPatch.touched} THEN ${nextTestCentre} ELSE test_centre END,
+        test_booked = CASE WHEN ${testPatch.touched} THEN ${testPatch.booked} ELSE test_booked END,
+        test_details_updated_at = CASE WHEN ${testPatch.touched} THEN GREATEST(date_trunc('milliseconds', clock_timestamp()), COALESCE(test_details_updated_at, '-infinity'::timestamptz) + interval '1 millisecond') ELSE test_details_updated_at END
       WHERE id = ${user.id} AND school_id = ${schoolId}
+        AND (NOT ${testPatch.touched} OR test_details_updated_at IS NOT DISTINCT FROM ${expectedVersion ?? null}::timestamptz)
       RETURNING name, email, phone, pickup_address,
-                test_date::text AS test_date, test_time, test_centre
+                test_booked, test_details_updated_at, test_date::text AS test_date, test_time, test_centre
     `;
-    return res.json({ success: true, profile: updated });
+    if (!updated) {
+      const [fresh] = await sql`SELECT test_booked, test_date, test_time, test_centre, test_details_updated_at
+        FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
+      return res.status(409).json({ error: 'Test details changed. Review the refreshed details before saving.', code: 'TEST_DETAILS_CONFLICT', profile: fresh });
+    }
+    return res.json({ success: true, profile: { ...updated, current_test_details: testDetails.currentDetails(updated) } });
   } catch (err) {
     console.error('update-profile error:', err.message);
     // Unique constraint on phone number
@@ -963,14 +967,14 @@ async function handleOnboarding(req, res) {
           previous_tests, transmission, test_booked, test_date, main_concerns, completed_at, school_id)
         VALUES (${user.id}, ${prior_hours_pro || 0}, ${prior_hours_private || 0},
           ${previous_tests || 0}, ${transmission || 'manual'},
-          ${test_booked || false}, ${test_date || null}, ${main_concerns || null}, NOW(), ${schoolId})
+          ${test_booked === undefined ? null : test_booked}, ${test_date || null}, ${main_concerns || null}, NOW(), ${schoolId})
         ON CONFLICT (learner_id) DO UPDATE SET
           prior_hours_pro = ${prior_hours_pro || 0},
           prior_hours_private = ${prior_hours_private || 0},
           previous_tests = ${previous_tests || 0},
           transmission = ${transmission || 'manual'},
-          test_booked = ${test_booked || false},
-          test_date = ${test_date || null},
+          test_booked = CASE WHEN ${Object.prototype.hasOwnProperty.call(req.body, 'test_booked')} THEN ${test_booked ?? null} ELSE learner_onboarding.test_booked END,
+          test_date = CASE WHEN ${Object.prototype.hasOwnProperty.call(req.body, 'test_date')} THEN ${test_date || null}::date ELSE learner_onboarding.test_date END,
           main_concerns = ${main_concerns || null},
           completed_at = NOW(),
           school_id = ${schoolId}`;
@@ -1446,7 +1450,7 @@ async function handleExportData(req, res) {
 
     const [profile] = await sql`
       SELECT name, email, phone, pickup_address, learner_category, primary_instructor_id,
-             test_date, test_time, test_centre, test_instructor_booked,
+             test_booked, test_details_updated_at, test_date, test_time, test_centre, test_instructor_booked,
              free_trial_allowed, free_trial_completed_at, admin_control_notes,
              prefer_contact_before, terms_accepted_at, created_at, last_activity_at
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}`;
@@ -2031,12 +2035,19 @@ async function handleExportData(req, res) {
         AND enquiry_type = 'free-trial-courses'
       ORDER BY submitted_at DESC`;
 
+    const trialIntakes = await sql`SELECT * FROM trial_booking_intakes
+      WHERE learner_id = ${user.id} AND school_id = ${schoolId} ORDER BY booked_at`;
+    const trialRequests = await sql`SELECT r.submitted_at,r.postcode_area,r.availability,r.questionnaire,r.funnel_context,r.reason,e.name,e.email,e.phone
+      FROM trial_requests r JOIN enquiries e ON e.id=r.enquiry_id AND e.school_id=${schoolId}
+      WHERE r.school_id=${schoolId} AND (lower(e.email)=lower(${profile.email}) OR EXISTS (
+        SELECT 1 FROM trial_request_bookings l JOIN lesson_bookings b ON b.school_id=${schoolId} AND b.id=l.booking_id
+        WHERE l.school_id=${schoolId} AND l.request_id=r.id AND b.learner_id=${user.id})) ORDER BY r.submitted_at`;
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
         data_categories: [
-          'profile', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences',
+          'profile', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences', 'trial_requests', 'trial_booking_intakes',
           'driving_sessions', 'skill_ratings', 'quiz_results',
           'mock_tests', 'mock_test_faults', 'focused_practice',
           'referral_code', 'referrals_made',
@@ -2057,6 +2068,8 @@ async function handleExportData(req, res) {
         ]
       },
       profile: profile || {},
+      trial_booking_intakes: trialIntakes,
+      trial_requests: trialRequests,
       trial_course_preferences: trialCoursePreferences,
       onboarding: onboarding[0] || null,
       bookings,

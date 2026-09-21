@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "functions": { "api/schools.js": { "includeFiles": "public/test-booked.html" } },
   "crons": [
     { "path": "/api/reminders?action=send-due", "schedule": "0 * * * *" },
     { "path": "/api/reminders?action=daily-schedule", "schedule": "0 19 * * *" },
@@ -54,6 +55,7 @@
     { "source": "/learner/rate-lesson", "destination": "/learner/rate-lesson.html" },
     { "source": "/check-my-driving", "destination": "/check-my-driving.html" },
     { "source": "/free-consultation", "destination": "/free-consultation.html" },
+    { "source": "/test-booked", "destination": "/api/schools?action=test-booked-page" },
     { "source": "/free", "destination": "/free-trial.html" },
     { "source": "/freetrial", "destination": "/free-lesson.html" },
     { "source": "/:path*", "destination": "/public/:path*" }

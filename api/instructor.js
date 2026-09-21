@@ -1,3 +1,4 @@
+const { loadPreparation } = require('./_trial-preparation');
 // Instructor portal API
 //
 // Routes:
@@ -3900,7 +3901,9 @@ async function handleMyLearners(req, res) {
         });
       }
     }
+    const preparation = await loadPreparation(sql, schoolId, instructor.id, learnerIds);
     for (const l of learners) {
+      Object.assign(l, preparation.get(l.id) || { current_test_details: null, trial_intake: null });
       l.availability = availabilityByLearner[l.id] || [];
     }
 
@@ -4110,7 +4113,9 @@ async function handleLearnerNotes(req, res) {
       ORDER BY created_at DESC, id DESC
       LIMIT 1
     `;
+    const preparation = await loadPreparation(sql, schoolId, instructor.id, [Number(learner_id)]);
     return res.json({
+      ...(preparation.get(Number(learner_id)) || { current_test_details: null, trial_intake: null }),
       notes: row?.notes || '',
       test_date: row?.test_date || null,
       custom_hourly_rate_pence: row?.custom_hourly_rate_pence || null,
@@ -4161,7 +4166,7 @@ async function handleUpdateLearnerNotes(req, res) {
       INSERT INTO instructor_learner_notes (instructor_id, learner_id, notes, test_date, custom_hourly_rate_pence, learner_category, school_id, updated_at)
       VALUES (${instructor.id}, ${learner_id}, ${notes || null}, ${test_date || null}, ${ratePence}, ${category}, ${schoolId}, NOW())
       ON CONFLICT (instructor_id, learner_id)
-      DO UPDATE SET notes = ${notes || null}, test_date = ${test_date || null}, custom_hourly_rate_pence = ${ratePence}, learner_category = ${category}, updated_at = NOW()
+      DO UPDATE SET notes = ${notes || null}, test_date = CASE WHEN ${Object.prototype.hasOwnProperty.call(req.body, 'test_date')} THEN ${test_date || null}::date ELSE instructor_learner_notes.test_date END, custom_hourly_rate_pence = ${ratePence}, learner_category = ${category}, updated_at = NOW()
     `;
     return res.json({ ok: true });
   } catch (err) {

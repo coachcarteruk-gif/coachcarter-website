@@ -10,6 +10,26 @@
     return /^\/free-consultation(?:\.html)?\/?$/.test(window.location.pathname);
   }
 
+  function isTrialFunnelPage() {
+    return /^\/(?:test-booked(?:\.html)?|freetrial|free-lesson\.html|free|free-trial(?:-success)?\.html)\/?$/.test(window.location.pathname);
+  }
+  function isPrivateTrialReviewPage() {
+    return /^\/admin\/learner-controls(?:\.html)?\/?$/.test(window.location.pathname);
+  }
+  function minimiseTrialEvent(event) {
+    if (!window.ccCookieConsent || !window.ccCookieConsent.analyticsAllowed()) return null;
+    if (!event || ['trial_landing_viewed','trial_booking_cta_clicked','free_trial_page_viewed','free_trial_booking_started','free_trial_submitted','free_trial_confirmed',
+      'trial_questionnaire_started','trial_questionnaire_step_1_completed','trial_questionnaire_step_2_completed','trial_questionnaire_step_3_completed',
+      'trial_questionnaire_booking_route','trial_questionnaire_request_route','trial_request_submitted'].indexOf(event.event) < 0) return null;
+    var enums = { entry_page: ['test_booked','freetrial','free_direct','unknown'], campaign_key: ['test_booked_v1'], content_version: ['text_v1','video_v1'], form_version: ['test_details_v1','qualification_v1'], placement: ['hero','no_test','after_intro','closing','sticky','general'] };
+    var props = {};
+    Object.keys(enums).forEach(function (key) { if (enums[key].includes((event.properties || {})[key])) props[key] = event.properties[key]; });
+    // Only SDK anonymous identity/session keys; never an application identity bridge.
+    ['distinct_id','$device_id','$session_id','$window_id','$insert_id','$lib','$lib_version'].forEach(function (key) { if (event.properties && event.properties[key]) props[key] = event.properties[key]; });
+    event.properties = props; delete event.$set; delete event.$set_once;
+    return event;
+  }
+
   function minimiseConsultationEvent(event) {
     var allowedEvents = [
       'free_consultation_page_viewed',
@@ -48,7 +68,7 @@
       person_profiles: 'identified_only'
     };
 
-    if (isFreeConsultationPage()) {
+    if (isFreeConsultationPage() || isTrialFunnelPage() || isPrivateTrialReviewPage()) {
       config.autocapture = false;
       config.capture_pageview = false;
       config.capture_pageleave = false;
@@ -58,7 +78,8 @@
       config.disable_session_recording = true;
       config.disable_surveys = true;
       config.person_profiles = 'never';
-      config.before_send = minimiseConsultationEvent;
+      config.before_send = isPrivateTrialReviewPage() ? function () { return null; } : isTrialFunnelPage() ? minimiseTrialEvent : minimiseConsultationEvent;
+      config.loaded = function () { document.dispatchEvent(new Event('cc-posthog-ready')); };
     }
 
     return config;
@@ -73,7 +94,7 @@
     posthog.init(PH_KEY, postHogConfig());
 
     /* The consultation page sends its own deliberately minimised funnel events. */
-    if (!isFreeConsultationPage()) {
+    if (!isFreeConsultationPage() && !isTrialFunnelPage() && !isPrivateTrialReviewPage()) {
       var s = document.createElement('script');
       s.src = '/posthog-tracking.js';
       s.defer = true;

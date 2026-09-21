@@ -43,13 +43,15 @@ test.describe('test swaps marketplace', () => {
 
     expect(learner).toContain('test_date::text AS test_date, test_time, test_centre');
     expect(update).toContain('const { phone, pickup_address, test_date, test_time, test_centre } = req.body || {};');
-    expect(update).toContain('test_centre    = ${nextTestCentre}');
+    expect(update).toContain('testDetails.profilePatch(req.body || {}, existing)');
+    expect(update).toContain('test_centre    = CASE WHEN ${testPatch.touched} THEN ${nextTestCentre} ELSE test_centre END');
     expect(drivingTest).toContain('id="testDate"');
     expect(drivingTest).toContain('id="testTime"');
     expect(drivingTest).toContain('id="testCentre"');
-    expect(drivingTestJs).toContain("ccAuth.fetchAuthed('/api/learner?action=progress')");
+    expect(drivingTestJs).toContain("ccAuth.fetchAuthed('/api/learner?action=profile')");
     expect(drivingTestJs).toContain("ccAuth.fetchAuthed('/api/learner?action=update-profile'");
-    expect(drivingTestJs).toContain("test_centre: document.getElementById('testCentre').value.trim()");
+    expect(drivingTestJs).toContain("centre: document.getElementById('testCentre').value.trim()");
+    expect(drivingTestJs).toContain('test_details_updated_at: progress.test_details_updated_at || null');
   });
 
   test('learner API hides other learner identity while admin queue exposes contacts', () => {

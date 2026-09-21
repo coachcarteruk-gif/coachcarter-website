@@ -162,7 +162,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const learnerContext = user ? await buildLearnerContext(user.id) : '';
+    const learnerContext = user ? await buildLearnerContext(user.id, user.school_id || 1) : '';
     const personalizedPrompt = SYSTEM_PROMPT + learnerContext;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {

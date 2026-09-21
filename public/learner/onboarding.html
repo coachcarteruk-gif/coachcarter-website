@@ -378,12 +378,12 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">Test booked?</label>
-      <div class="toggle-group" id="testBookedGroup">
+      <p id="currentTestContext">Your current practical test details are managed in <a href="/learner/driving-test.html">Driving Test</a>.</p>
+      <div class="toggle-group" id="testBookedGroup" hidden>
         <button type="button" class="toggle-btn" data-value="yes" data-toggle-group="testBookedGroup" data-test-date="true">Yes</button>
-        <button type="button" class="toggle-btn selected" data-value="no" data-toggle-group="testBookedGroup" data-test-date="false">No</button>
+        <button type="button" class="toggle-btn" data-value="no" data-toggle-group="testBookedGroup" data-test-date="false">No</button>
       </div>
-      <div id="testDateWrap" class="hidden">
+      <div id="testDateWrap" class="hidden" hidden>
         <input type="date" id="testDate" class="date-input" aria-label="Test date">
       </div>
     </div>

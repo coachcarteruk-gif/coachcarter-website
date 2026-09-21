@@ -49,7 +49,7 @@ test.describe('instructor learner teaching summary', () => {
     expect(summary).toContain('latestMock: mockTestTeachingSummary(mocks[0] || null)');
     expect(summary).toContain('focusAreas: collectTeachingFocusAreas(historyData, { mock_tests: mocks })');
     expect(summary).toContain('practice: summarizePracticeSignal(historyData)');
-    expect(summary).toContain("testDate: notesData && notesData.test_date ? formatDate(notesData.test_date) : ''");
+    expect(summary).toContain("testDate: notesData?.current_test_details?.date ? formatDate(notesData.current_test_details.date) : ''");
     expect(summary).toContain('trend: summarizeLessonTrend(historyData)');
 
     expect(render).toContain('Teaching summary');
@@ -108,7 +108,7 @@ test.describe('instructor learner teaching summary', () => {
     expect(detail.indexOf('renderInstructorAlerts(buildInstructorAlerts(data, notesData, mockData))')).toBeLessThan(detail.indexOf('renderPrivatePracticeSummaries(data.private_practice || [])'));
 
     expect(builder).toContain('historyData && historyData.private_practice');
-    expect(builder).toContain('notesData && notesData.test_date');
+    expect(builder).toContain('notesData?.current_test_details?.date');
     expect(source).toContain('function latestInstructorActivityDate(historyData)');
     expect(functionBody(source, 'latestInstructorActivityDate')).toContain('historyData && historyData.bookings');
     expect(builder).toContain('latestFormalInstructorMock(mockData)');

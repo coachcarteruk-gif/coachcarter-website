@@ -94,7 +94,7 @@ test.describe('learner categories', () => {
     expect(detail).toContain('FROM learner_availability');
     expect(save).toContain('normaliseLearnerCategory(learner_category)');
     expect(save).toContain('primary_instructor_id = ${newPrimaryInstructorId}');
-    expect(save).toContain('test_date = ${newTestDate}');
+    expect(save).toContain('test_date = CASE WHEN ${patch.touched} THEN ${patch.date} ELSE test_date END');
     expect(save).toContain('ensureInstructorLearnerLink(sql, {');
     expect(api).toContain('async function ensureInstructorLearnerLink');
     expect(saveRelationship).toContain('INSERT INTO instructor_learner_notes');

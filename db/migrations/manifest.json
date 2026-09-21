@@ -567,6 +567,22 @@
       "filename": "069_payout_summary_rates.sql",
       "checksum": "2ae9dffbbc1d3efbb366bcf923d906c53517b90424ee62eb6a44ad5e01c8af88",
       "execution": "numbered"
+    },
+    {
+      "id": "070",
+      "order": 71,
+      "prefix": "070",
+      "filename": "070_trial_booking_intakes.sql",
+      "checksum": "4f220073eff55ae3d6087b776912a24f3016508382a5e45981fb8eef822b7185",
+      "execution": "numbered"
+    },
+    {
+      "id": "071",
+      "order": 72,
+      "prefix": "071",
+      "filename": "071_trial_questionnaire_requests.sql",
+      "checksum": "3d11006e3b7758aec8d3a016c8d3534d1958fd2bfc222bc7b235d2c6f7f5d0db",
+      "execution": "numbered"
     }
   ]
 }
