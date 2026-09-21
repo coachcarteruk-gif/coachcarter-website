@@ -37,10 +37,11 @@
     document.getElementById('trialForm').addEventListener('submit', handleSubmit);
     setupFieldValidation();
     setupCoursePreferences();
-    setupTestDetails();
     document.getElementById('trialForm').addEventListener('input', function () { if (window.ccTrialFunnel) ccTrialFunnel.start(); });
-
-    loadSlots();
+    window.ccTrialQuestionnaire.init(schoolScope(), function (config) {
+      if (!config.trial_questionnaire) setupTestDetails(config);
+      loadSlots();
+    });
   });
 
   function setupCoursePreferences() {
@@ -78,7 +79,7 @@
     if (event === 'free_trial_slot_selected') { ccTrialFunnel.start(); return; }
     if (['free_trial_submitted','free_trial_confirmed'].includes(event)) ccTrialFunnel.send(event);
   }
-  function setupTestDetails() {
+  function setupTestDetails(config) {
     var section = document.getElementById('trialTestDetails');
     var choice = document.getElementById('trialTestBooked');
     var date = document.getElementById('trialTestDate');
@@ -89,10 +90,8 @@
     });
     date.addEventListener('change', testTiming);
     document.getElementById('trialTestLater').addEventListener('click', function () { date.value = ''; testTiming(); });
-    fetch('/api/schools?action=public-config' + schoolScope()).then(function (r) { return r.json(); }).then(function (c) {
-      testDetailsEnabled = c.test_date_trial_funnel_enabled === true;
-      section.hidden = section.disabled = !testDetailsEnabled;
-    }).catch(function () { /* old booking route stays available */ });
+    testDetailsEnabled = config.test_date_trial_funnel_enabled === true;
+    section.hidden = section.disabled = !testDetailsEnabled;
   }
   function testTiming() {
     var date = document.getElementById('trialTestDate').value;
@@ -389,6 +388,10 @@
       payload.funnel_context = window.ccTrialFunnel ? ccTrialFunnel.context() : {};
     }
     if (referralCode) payload.referral_code = referralCode;
+    if (window.ccTrialQuestionnaire.answers()) {
+      payload.questionnaire = window.ccTrialQuestionnaire.answers();
+      payload.funnel_context = window.ccTrialFunnel ? ccTrialFunnel.context() : {};
+    }
 
     // Client-side validation (server does authoritative checks).
     if (!validateForm()) return;
@@ -412,7 +415,9 @@
         return;
       }
 
-      if (r.status === 409 && r.body.error === 'already_used') {
+      if (r.body.error === 'TRIAL_UNAVAILABLE') {
+        showError(r.body.message);
+      } else if (r.status === 409 && r.body.error === 'already_used') {
         posthogCapture('free_trial_blocked_existing');
         showError(r.body.message || "You've already booked a free trial. Check your email or log in.");
       } else if (r.status === 409) {

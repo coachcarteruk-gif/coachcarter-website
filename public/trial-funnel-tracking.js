@@ -12,9 +12,12 @@
     var campaign = campaignPage || qs.get('campaign') === 'test_booked_v1';
     return { entry_page: campaign ? 'test_booked' : generalPage || qs.get('entry') === 'freetrial' ? 'freetrial' : qs.has('campaign') || qs.has('entry') ? 'unknown' : 'free_direct',
       campaign_key: campaign ? 'test_booked_v1' : null, content_version: (campaignPage ? window.ccTrialMediaVersion === 'video_v1' : qs.get('content') === 'video_v1') ? 'video_v1' : 'text_v1',
-      form_version: 'test_details_v1', analytics_consent_at_booking: allowed() };
+      form_version: window.ccTrialQuestionnaireEnabled ? 'qualification_v1' : 'test_details_v1', analytics_consent_at_booking: allowed() };
   }
   function send(event, placement) {
+    if (!['trial_landing_viewed','free_trial_page_viewed','free_trial_booking_started','free_trial_submitted','free_trial_confirmed','trial_booking_cta_clicked',
+      'trial_questionnaire_started','trial_questionnaire_step_1_completed','trial_questionnaire_step_2_completed','trial_questionnaire_step_3_completed',
+      'trial_questionnaire_booking_route','trial_questionnaire_request_route','trial_request_submitted'].includes(event)) return false;
     if (!allowed() || !window.posthog || !window.posthog.__loaded) return false;
     var props = context(); delete props.analytics_consent_at_booking;
     if (['hero','no_test','after_intro','closing','sticky','general'].includes(placement)) props.placement = placement;

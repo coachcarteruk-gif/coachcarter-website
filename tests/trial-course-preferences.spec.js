@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+test.beforeEach(async ({ page }) => { await page.route('**/api/schools?action=public-config**', route => route.fulfill({ json: { ok: true, trial_questionnaire: null, test_date_trial_funnel_enabled: false } })); });
 const { parseTrialPreferences } = require('../api/_trial-preferences');
 
 test('validates explicit opt-ins and upcoming month boundaries', () => {

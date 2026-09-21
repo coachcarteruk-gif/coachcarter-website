@@ -440,6 +440,7 @@ a:hover { color: var(--accent-text); }
   .sticky-summary:not(:empty) { display: block; }
 }
 </style>
+<link rel="stylesheet" href="/trial-questionnaire.css">
 </head>
 <body>
   <main class="page">
@@ -453,6 +454,8 @@ a:hover { color: var(--accent-text); }
       <p>No card needed. Pick a time that works, give us a few details, and we'll see you at your front door.</p>
     </div>
 
+    <section id="trialQuestionnaire" class="card" aria-label="Find your trial route"><p role="status">Loading your free trial…</p></section>
+    <div id="trialBookingFlow" hidden>
     <section class="card" aria-labelledby="step-1-heading">
       <h2 id="step-1-heading"><span class="step-num">1</span>Pick a time</h2>
       <p class="helper">Choose a date to see its available free-trial times.</p>
@@ -540,9 +543,11 @@ a:hover { color: var(--accent-text); }
         Need to cancel? Please give 48 hours notice.
       </div>
     </section>
+    </div>
   </main>
 
   <script src="/trial-funnel-tracking.js"></script>
+  <script src="/trial-questionnaire.js"></script>
   <script src="/free-trial.js"></script>
   <script src="/free-trial-sticky.js"></script>
 </body>

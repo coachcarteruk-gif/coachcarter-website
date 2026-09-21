@@ -804,10 +804,10 @@ function renderTrialPreparation(data) {
   const current = data.current_test_details;
   if (!current) return '';
   const intake = data.trial_intake;
-  const describe = (booked, date, centre) => booked === false ? 'Not booked' : booked === true ? 'Booked: ' + (date || 'date to add later') + (centre ? ' · ' + centre : '') : 'Not provided';
-  let html = '<section class="detail-section"><h3>Practical test preparation</h3><p>Current self-reported details: ' + esc(describe(current.booked, current.date, current.centre)) + '</p><p>' + esc(current.updated_at ? 'Updated ' + formatDate(current.updated_at) : 'Legacy profile; not recently confirmed') + '</p>';
+  const describe = (booked, date, centre, time) => booked === false ? 'Not booked' : booked === true ? 'Booked: ' + (date || 'date to add later') + (time ? ' at ' + time : '') + (centre ? ' · ' + centre : '') : 'Not provided';
+  let html = '<section class="detail-section"><h3>Practical test preparation</h3><p>Current self-reported details: ' + esc(describe(current.booked, current.date, current.centre, current.time)) + '</p><p>' + esc(current.updated_at ? 'Updated ' + formatDate(current.updated_at) : 'Legacy profile; not recently confirmed') + '</p>';
   if (intake) {
-    html += '<p>Trial booking answer (self-reported): ' + esc(describe(intake.test_booked, String(intake.test_date_snapshot || '').slice(0,10), intake.test_centre_snapshot)) + '</p>';
+    html += '<p>Original trial intake answer (self-reported): ' + esc(describe(intake.test_booked, String(intake.test_date_snapshot || '').slice(0,10), intake.test_centre_snapshot, intake.test_time_snapshot)) + '</p>';
     if (current.booked !== intake.test_booked || current.date !== (intake.test_date_snapshot ? String(intake.test_date_snapshot).slice(0,10) : null) || current.centre !== intake.test_centre_snapshot) html += '<p><strong>Account details differ / booking answer unconfirmed. Check with the learner.</strong></p>';
     html += '<a href="/instructor/?date=' + encodeURIComponent(intake.current_booking_date) + '">View trial day in calendar</a>';
   }

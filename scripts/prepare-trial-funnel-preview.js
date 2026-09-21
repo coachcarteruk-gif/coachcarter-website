@@ -7,7 +7,7 @@ const preview=path.join(os.tmpdir(),'coachcarter-trial-funnel-preview');
 async function main(){
   const helper=require('../tests/helpers/trial-funnel-fixture');
   await helper.bootstrap();const {sql,pool}=helper.database();
-  let fixture;try{fixture=await helper.seed(sql,'preview-'+Date.now());await sql`DELETE FROM rate_limits`;}finally{await pool.end();}
+  let fixture;try{fixture=await helper.seed(sql,'preview-'+Date.now());await helper.enableQuestionnaire(sql);await sql`DELETE FROM rate_limits`;}finally{await pool.end();}
   fs.mkdirSync(path.join(preview,'api'),{recursive:true});
   fs.mkdirSync(path.join(preview,'.vercel'),{recursive:true});
   for(const dir of ['public','node_modules'])if(!fs.existsSync(path.join(preview,dir)))fs.symlinkSync(path.join(root,dir),path.join(preview,dir),'junction');
@@ -18,7 +18,7 @@ async function main(){
   config.buildCommand='';config.devCommand='';config.framework=null;config.outputDirectory='public';
   fs.writeFileSync(path.join(preview,'vercel.json'),JSON.stringify(config,null,2));
   fs.writeFileSync(path.join(preview,'package.json'),JSON.stringify({name:'isolated-trial-funnel-preview',private:true,engines:{node:'22.x'}}));
-  for(const name of ['slots','learner','instructor','admin','schools'])fs.writeFileSync(path.join(preview,'api',name+'.js'),
+  for(const name of ['slots','learner','instructor','admin','schools','trial-requests'])fs.writeFileSync(path.join(preview,'api',name+'.js'),
     `require(${JSON.stringify(path.join(root,'tests/helpers/trial-funnel-fixture'))}).installMocks();\nmodule.exports = require(${JSON.stringify(path.join(root,'api',name+'.js'))});\n`);
   // Never call a real consent collector, notification/payment or auth-code service.
   fs.writeFileSync(path.join(preview,'api/config.js'),"module.exports=(req,res)=>res.json({ok:true});\n");

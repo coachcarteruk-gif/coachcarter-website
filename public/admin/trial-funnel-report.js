@@ -12,7 +12,7 @@
       (d.instructors || []).forEach(function (i) { var o=document.createElement('option'); o.value=i.id;o.textContent=i.name;$('trial-report-instructor').appendChild(o); });
     } catch (e) { /* All instructors remains a usable report. */ }
   });
-  var columns = ['segment','source','content_version','view','booking_count','consented_bookings','unknown_date_share','exceptions','count','matured','immature','unresolved_learners','denominator','net_conversions','gross_conversions','mean_paid_hours','median_paid_hours','early_commitments','paid_hours_booked_before_t0','cancelled_commitments','chargeable_hours','elapsed_hours_without_recorded_exception','paid_trial_extension_hours','first_booking_mean_days','test_day_bookings','conversion_interval_95'];
+  var columns = ['segment','source','content_version','form_version','route','view','booking_count','consented_bookings','unknown_date_share','exceptions','count','matured','immature','unresolved_learners','denominator','net_conversions','gross_conversions','mean_paid_hours','median_paid_hours','early_commitments','paid_hours_booked_before_t0','cancelled_commitments','chargeable_hours','elapsed_hours_without_recorded_exception','paid_trial_extension_hours','first_booking_mean_days','test_day_bookings','conversion_interval_95'];
   function rows() {
     return report.groups.flatMap(function(g){return ['all_booked_original_end','final_session_continuation','elapsed_without_recorded_exception'].map(function(view){return Object.assign({},g,g[view],{view:view});});});
   }
@@ -27,7 +27,8 @@
       [d.scope,d.attendance,d.retention,d.purchase_scope,'Definition '+d.definition_version+'; as of '+d.as_of+'; timezone '+d.school_timezone,
         'Each range selects original booking dates; use a seven-day range for a booking-week stratum. Purchases below use this date range, not the 56-day continuation window.',
         'Existing offers and promotions may confound these outcomes. Record activation dates in the rollout log. No fabricated baseline or lift estimate.',
-        'Data quality: '+JSON.stringify(d.data_quality),'Separate purchase counts: '+JSON.stringify(d.purchases)].forEach(function(text){var p=document.createElement('p');p.textContent=text;out.appendChild(p);});
+        'Data quality: '+JSON.stringify(d.data_quality),'Separate purchase counts: '+JSON.stringify(d.purchases),
+        'Separate trial requests: '+JSON.stringify(d.trial_requests),d.questionnaire_progress].forEach(function(text){var p=document.createElement('p');p.textContent=text;out.appendChild(p);});
       var wrapper=document.createElement('div');wrapper.style.overflowX='auto';var table=document.createElement('table');
       var head=document.createElement('tr');columns.forEach(function(c){var th=document.createElement('th');th.scope='col';th.textContent=c.replaceAll('_',' ');head.appendChild(th);});table.appendChild(head);
       rows().forEach(function(row){var tr=document.createElement('tr');columns.forEach(function(c){var td=document.createElement('td');td.textContent=display(row[c]);tr.appendChild(td);});table.appendChild(tr);});
@@ -38,9 +39,9 @@
   });
   $('trial-report-csv').addEventListener('click',function(){
     if(!report)return;
-    var fields=['definition_version','as_of','school_timezone','from_inclusive','to_exclusive','scope','attendance','data_quality','purchases'].concat(columns);
+    var fields=['definition_version','as_of','school_timezone','from_inclusive','to_exclusive','scope','attendance','data_quality','purchases','trial_requests'].concat(columns);
     function cell(v){var s=display(v);if(/^[=+@-]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
-    var csv=[fields.map(cell).join(',')].concat((rows().length ? rows() : [{view:'no_cohorts'}]).map(function(row){return [report.definition_version,report.as_of,report.school_timezone,report.cohort_bounds.from,report.cohort_bounds.to,report.scope,report.attendance,JSON.stringify(report.data_quality),JSON.stringify(report.purchases)].concat(columns.map(function(c){return row[c];})).map(cell).join(',');})).join('\r\n');
+    var csv=[fields.map(cell).join(',')].concat((rows().length ? rows() : [{view:'no_cohorts'}]).map(function(row){return [report.definition_version,report.as_of,report.school_timezone,report.cohort_bounds.from,report.cohort_bounds.to,report.scope,report.attendance,JSON.stringify(report.data_quality),JSON.stringify(report.purchases),JSON.stringify(report.trial_requests)].concat(columns.map(function(c){return row[c];})).map(cell).join(',');})).join('\r\n');
     var url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));var a=document.createElement('a');a.href=url;a.download='trial-funnel-'+report.cohort_bounds.from+'.csv';a.click();URL.revokeObjectURL(url);
   });
 }());

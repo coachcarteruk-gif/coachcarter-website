@@ -1,5 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+test.beforeEach(async ({ page }) => { await page.route('**/api/schools?action=public-config**', route => route.fulfill({ json: { ok: true, trial_questionnaire: null, test_date_trial_funnel_enabled: false } })); });
 const path = require('path');
 
 process.env.POSTGRES_URL = process.env.POSTGRES_URL || 'postgres://free-trial-window.test';

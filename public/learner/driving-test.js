@@ -86,7 +86,7 @@
     document.getElementById('testBooked').value = latestIntake.test_booked === true ? 'yes' : latestIntake.test_booked === false ? 'no' : 'unknown';
     document.getElementById('testDate').value = latestIntake.test_date_snapshot || '';
     document.getElementById('testCentre').value = latestIntake.test_centre_snapshot || '';
-    document.getElementById('testTime').value = '';
+    document.getElementById('testTime').value = latestIntake.test_time_snapshot || '';
     updateCountdown(); setStatus('Review this booking answer, then Save details to apply it.', false);
   });
   document.getElementById('testBooked').addEventListener('change', function () {
