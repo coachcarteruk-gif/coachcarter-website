@@ -406,7 +406,9 @@ module.exports = async (req, res) => {
           return res.send(require('fs').readFileSync(require('path').join(process.cwd(), 'public/test-booked.html'), 'utf8'));
         }
         res.setHeader('Cache-Control', 'no-store');
-        return res.json({ ok: true, test_date_trial_funnel_enabled: school?.config?.test_date_trial_funnel_enabled === true });
+        return res.json({ ok: true, test_date_trial_funnel_enabled: school?.config?.test_date_trial_funnel_enabled === true,
+          trial_questionnaire: require('./_trial-qualification').configuration(school?.config || {}),
+          local_date: require('./_learner-test-details').localDate(new Date(), require('./_full-curriculum').operationalTimeZone(school?.config || {})) });
       }
       case 'branding':        return handleBranding(req, res);
       case 'list':            return handleList(req, res);

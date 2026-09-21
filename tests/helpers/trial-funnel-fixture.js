@@ -58,12 +58,14 @@ async function bootstrap() {
     const present=await pool.query("SELECT to_regclass('public.trial_booking_intakes') AS t");
     if(!present.rows[0].t)await pool.query(fs.readFileSync(path.join(__dirname,'../../db/migration.sql'),'utf8'));
     else await pool.query(fs.readFileSync(path.join(__dirname,'../../db/migrations/070_trial_booking_intakes.sql'),'utf8'));
+    await pool.query(fs.readFileSync(path.join(__dirname,'../../db/migrations/071_trial_questionnaire_requests.sql'),'utf8'));
     await pool.query('GRANT INSERT ON balance_audit TO neondb_owner');
     await pool.query('GRANT USAGE ON SEQUENCE balance_audit_id_seq TO neondb_owner');
   } finally {await pool.end();}
 }
 async function seed(sql, suffix = Date.now().toString()) {
   await sql`UPDATE schools SET config=jsonb_set(COALESCE(config,'{}'),'{test_date_trial_funnel_enabled}','true') WHERE id=1`;
+  await sql`UPDATE schools SET config=config-'trial_questionnaire' WHERE id=1`;
   const [instructor]=await sql`INSERT INTO instructors(name,email,school_id,active,min_booking_notice_hours,buffer_minutes,offered_lesson_types)
     VALUES ('Trial fixture instructor',${'instructor-'+suffix+'@example.invalid'},1,true,0,0,'["trial","standard"]'::jsonb) RETURNING id`;
   for(let day=0;day<7;day++)await sql`INSERT INTO instructor_availability(instructor_id,school_id,day_of_week,start_time,end_time,transmission_type)
@@ -81,4 +83,8 @@ function request(handler,{action,body={},query={},role=null,id=null,schoolId=1,m
   const res={statusCode:200,headers:{},status(n){this.statusCode=n;return this;},json(b){this.body=b;return this;},setHeader(k,v){this.headers[k]=v;},on(){},send(b){this.body=b;return this;},redirect(n,v){this.statusCode=n;this.headers.Location=v;return this;}};
   return Promise.resolve(handler(req,res)).then(()=>res);
 }
-module.exports={database,installMocks,closeMocks,bootstrap,seed,request};
+const questionnaireConfig={enabled:true,supported_centres:['Reading','Greenham','Farnborough','Basingstoke'],maximum_hourly_pence:5500,lower_budget_pence:5000,lowest_budget_pence:4500};
+async function enableQuestionnaire(sql) {
+  await sql`UPDATE schools SET config=jsonb_set(config,'{trial_questionnaire}',${JSON.stringify(questionnaireConfig)}::jsonb) WHERE id=1`;
+}
+module.exports={database,installMocks,closeMocks,bootstrap,seed,request,questionnaireConfig,enableQuestionnaire};

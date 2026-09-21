@@ -2,7 +2,7 @@
 const { dateOnly } = require('./_learner-test-details');
 const { operationalTimeZone, zonedDateTimeToDate } = require('./_full-curriculum');
 const { REFUNDED, CHARGEABLE } = require('./_booking-status');
-const DEFINITION_VERSION = 'trial_funnel_v1_credit_flexible';
+const DEFINITION_VERSION = 'trial_funnel_v2_qualification_credit_flexible';
 function bounds(from, to) {
   if (!dateOnly(from) || !dateOnly(to) || from >= to || (new Date(to) - new Date(from)) / 86400000 > 366) {
     throw Object.assign(new Error('Choose a valid from/to range of at most one year (to is exclusive).'), { status: 400 });
@@ -142,8 +142,10 @@ function buildReport({ intakes, bookings, asOf, timezone, cohortBounds, missingI
     const prior = learnerChains.filter(c=>c.root.id!==trial.root.id && timestamp(c.root.created_at)<timestamp(intake.booked_at));
     if (prior.some(c=>c.path.some(b=>funding(b).gross>0))) { quality.existing_paid_customer++; continue; }
     if (prior.some(c=>c.error || c.path.some(b=>funding(b).unresolved))) { quality.unresolved_prior_funding++; continue; }
-    const key = [intake.segment,intake.entry_page,intake.content_version || 'unknown'].join('|');
-    if (!groups.has(key)) groups.set(key,{ segment:intake.segment, source:intake.entry_page, content_version:intake.content_version || 'unknown', booking_count:0, consented_bookings:0, unknown_date:0, exceptions:0, all:[], elapsed:[], final:[] });
+    const formVersion = intake.questionnaire?.version || 'test_details_v1';
+    const route = intake.from_request ? 'request_to_booking' : intake.questionnaire ? 'direct_qualified' : 'legacy_direct';
+    const key = [intake.segment,intake.entry_page,intake.content_version || 'unknown',formVersion,route].join('|');
+    if (!groups.has(key)) groups.set(key,{ segment:intake.segment, source:intake.entry_page, content_version:intake.content_version || 'unknown', form_version:formVersion, route, booking_count:0, consented_bookings:0, unknown_date:0, exceptions:0, all:[], elapsed:[], final:[] });
     const g=groups.get(key); g.booking_count++; if(intake.analytics_consent_at_booking)g.consented_bookings++;
     if(intake.segment==='unknown'){g.unknown_date++;quality.unknown_date++;}
     const exception=trial.leaf.status===REFUNDED || !!trial.leaf.cancelled_at || !!trial.leaf.credit_forfeited;
@@ -157,7 +159,7 @@ function buildReport({ intakes, bookings, asOf, timezone, cohortBounds, missingI
     attendance:'Not reliably measurable. Elapsed without a recorded exception is not evidenced attendance; chargeable hours may include late cancellations.',
     retention:'Intakes retained for at most 24 months. Missing/erased snapshots are unknown coverage, never No. Duplicate accounts cannot be linked.',
     purchase_scope:'Successful purchase records for non-test accounts with selected intakes, including diagnostic cohorts; selected purchase-date range, gross recorded value/minutes before later refunds. Not net revenue or booked hours.',
-    purchases, groups:[...groups.values()].map(g=>({segment:g.segment,source:g.source,content_version:g.content_version,booking_count:g.booking_count,
+    purchases, groups:[...groups.values()].map(g=>({segment:g.segment,source:g.source,content_version:g.content_version,form_version:g.form_version,route:g.route,booking_count:g.booking_count,
       consented_bookings:g.consented_bookings,consent_coverage:g.consented_bookings/g.booking_count,unknown_date_share:g.unknown_date/g.booking_count,
       exceptions:g.exceptions, all_booked_original_end:summarise(g.all), final_session_continuation:summarise(g.final), elapsed_without_recorded_exception:summarise(g.elapsed)})),data_quality:quality };
 }
@@ -167,7 +169,8 @@ async function loadReport(sql, { schoolId, from, to, instructorId = null, asOf =
   if (instructorId !== null && (!Number.isSafeInteger(instructorId) || instructorId<=0)) throw Object.assign(new Error('Invalid instructor filter.'),{status:400});
   const [school]=await sql`SELECT config FROM schools WHERE id=${schoolId}`;
   const timezone=operationalTimeZone(school?.config || {});
-  const intakes=await sql`SELECT t.*, lu.is_test_account FROM trial_booking_intakes t
+  const intakes=await sql`SELECT t.*, lu.is_test_account,
+    EXISTS(SELECT 1 FROM trial_request_bookings l WHERE l.school_id=${schoolId} AND l.booking_id=t.booking_id) AS from_request FROM trial_booking_intakes t
     JOIN learner_users lu ON lu.id=t.learner_id AND lu.school_id=${schoolId}
     WHERE t.school_id=${schoolId} AND t.booking_local_date>=${from}::date AND t.booking_local_date<${to}::date
       AND t.booked_at<=${asOf.toISOString()}::timestamptz AND (${instructorId}::int IS NULL OR t.instructor_id=${instructorId})
@@ -243,6 +246,15 @@ async function loadReport(sql, { schoolId, from, to, instructorId = null, asOf =
     SELECT 'direct_or_credit' AS family,count(*)::int AS purchase_count,COALESCE(sum(value),0)::bigint AS purchased_value_pence,COALESCE(sum(minutes),0)::bigint AS purchased_minutes FROM credit
     UNION ALL SELECT 'flexible',count(*)::int,COALESCE(sum(value),0)::bigint,COALESCE(sum(minutes),0)::bigint FROM flexible
     UNION ALL SELECT 'full_curriculum_unresolved_hours',count(*)::int,COALESCE(sum(value),0)::bigint,NULL::bigint FROM curriculum`;
-  return buildReport({intakes,bookings,asOf,timezone,cohortBounds,missingIntakes:coverage?.missing,purchases});
+  const requests = await sql`SELECT r.reason,r.questionnaire->>'route' AS qualified_route,
+    count(*)::int AS submitted_requests,count(l.booking_id)::int AS linked_confirmed_bookings
+    FROM trial_requests r LEFT JOIN trial_request_bookings l ON l.request_id=r.id AND l.school_id=${schoolId}
+    LEFT JOIN lesson_bookings b ON b.id=l.booking_id AND b.school_id=${schoolId}
+    WHERE r.school_id=${schoolId} AND (r.submitted_at AT TIME ZONE ${timezone})::date>=${from}::date
+      AND (r.submitted_at AT TIME ZONE ${timezone})::date<${to}::date AND r.submitted_at<=${asOf.toISOString()}::timestamptz
+      AND (${instructorId}::int IS NULL OR b.instructor_id=${instructorId})
+    GROUP BY r.reason,r.questionnaire->>'route'`;
+  return { ...buildReport({intakes,bookings,asOf,timezone,cohortBounds,missingIntakes:coverage?.missing,purchases}),
+    trial_requests: requests, questionnaire_progress: 'Consented browser events only; no unconsented progress is collected. Requests are not bookings or paid conversions. Instructor filters exclude unassigned requests.' };
 }
 module.exports={bounds,resolveChains,funding,sessionAt,wilson,buildReport,loadReport};

@@ -49,7 +49,7 @@ test.describe('trial snapshots and report joins on isolated PostgreSQL', () => {
     }
     const b=await booking({day:'2028-04-01'});
     await expect(snapshot(b,{school:2})).rejects.toThrow(/association|foreign key/);
-    await expect(snapshot(b,{date:'2025-12-31'})).rejects.toThrow(/check constraint/);
+    await expect(snapshot(b,{date:'2025-12-31'})).rejects.toThrow(/check constraint|Invalid intake date/);
   });
   test('rescheduling preserves one original snapshot and transfers preparation access', async () => {
     const root=await booking({trial:true,status:'refunded'});const intake=await snapshot(root);

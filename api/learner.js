@@ -355,7 +355,7 @@ async function handleProfile(req, res) {
       FROM learner_users WHERE id = ${user.id} AND school_id = ${schoolId}
     `;
     if (!row) return res.status(404).json({ error: 'User not found' });
-    const [intake] = await sql`SELECT test_booked,test_date_snapshot::text,test_centre_snapshot,booked_at
+    const [intake] = await sql`SELECT test_booked,test_date_snapshot::text,test_time_snapshot,test_centre_snapshot,booked_at
       FROM trial_booking_intakes WHERE school_id=${schoolId} AND learner_id=${user.id} ORDER BY booked_at DESC,id DESC LIMIT 1`;
     res.setHeader('Cache-Control', 'no-store');
     return res.json({ profile: { ...row, current_test_details: testDetails.currentDetails(row) }, trial_intake: intake || null });
@@ -2037,12 +2037,17 @@ async function handleExportData(req, res) {
 
     const trialIntakes = await sql`SELECT * FROM trial_booking_intakes
       WHERE learner_id = ${user.id} AND school_id = ${schoolId} ORDER BY booked_at`;
+    const trialRequests = await sql`SELECT r.submitted_at,r.postcode_area,r.availability,r.questionnaire,r.funnel_context,r.reason,e.name,e.email,e.phone
+      FROM trial_requests r JOIN enquiries e ON e.id=r.enquiry_id AND e.school_id=${schoolId}
+      WHERE r.school_id=${schoolId} AND (lower(e.email)=lower(${profile.email}) OR EXISTS (
+        SELECT 1 FROM trial_request_bookings l JOIN lesson_bookings b ON b.school_id=${schoolId} AND b.id=l.booking_id
+        WHERE l.school_id=${schoolId} AND l.request_id=r.id AND b.learner_id=${user.id})) ORDER BY r.submitted_at`;
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
         data_categories: [
-          'profile', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences',
+          'profile', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences', 'trial_requests', 'trial_booking_intakes',
           'driving_sessions', 'skill_ratings', 'quiz_results',
           'mock_tests', 'mock_test_faults', 'focused_practice',
           'referral_code', 'referrals_made',
@@ -2064,6 +2069,7 @@ async function handleExportData(req, res) {
       },
       profile: profile || {},
       trial_booking_intakes: trialIntakes,
+      trial_requests: trialRequests,
       trial_course_preferences: trialCoursePreferences,
       onboarding: onboarding[0] || null,
       bookings,

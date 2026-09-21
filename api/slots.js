@@ -30,6 +30,7 @@
 
 const { neon }    = require('@neondatabase/serverless');
 const { parseTrialPreferences } = require('./_trial-preferences');
+const { qualify: qualifyTrial } = require('./_trial-qualification');
 const jwt         = require('jsonwebtoken');
 const crypto      = require('crypto');
 const { createPlatformStripeClient, STRIPE_CLIENT_PURPOSES } = require('./_stripe-clients');
@@ -463,6 +464,7 @@ async function loadSchoolOperationalClock(sql, schoolId, now = new Date()) {
   return {
     timezone,
     trialFunnelEnabled: school?.config?.test_date_trial_funnel_enabled === true,
+    schoolConfig: school?.config || {},
     date: parseDate(`${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`),
     minutes: parts.hour * 60 + parts.minute,
   };
@@ -6238,7 +6240,14 @@ async function handleBookFreeTrial(req, res) {
     const trialClock = await loadSchoolOperationalClock(sql, schoolId, bookingNow);
 
     let intake = null;
-    if (trialClock.trialFunnelEnabled) {
+    let qualification = null;
+    try {
+      qualification = qualifyTrial(req.body.questionnaire, trialClock.schoolConfig, bookingNow);
+      if (qualification?.route === 'request') return res.status(400).json({ error: 'Please submit a trial request so our team can arrange a time.', code: 'TRIAL_REQUEST_REQUIRED' });
+    } catch (error) { return res.status(error.status || 400).json({ error: error.message, code: error.code }); }
+    const captureIntake = trialClock.trialFunnelEnabled || !!qualification;
+    if (qualification) intake = qualification.practical;
+    else if (trialClock.trialFunnelEnabled) {
       try {
         intake = trialDetails.normalise(req.body.test_details, {
           today: trialDetails.localDate(bookingNow, trialClock.timezone)
@@ -6312,9 +6321,10 @@ async function handleBookFreeTrial(req, res) {
       WHERE LOWER(email) = ${cleanEmail} AND school_id = ${schoolId}
     `;
     if (existingLearner && !existingLearner.free_trial_allowed) {
+      if (qualification) return res.status(409).json({ error: 'TRIAL_UNAVAILABLE', message: 'We could not complete this trial booking. Please contact the team to arrange your next step.' });
       return res.status(403).json({
         error: 'trial_not_allowed',
-        message: 'This account is not currently allowed to book a free trial.'
+        message: 'We could not complete this trial booking. Please contact the team to arrange your next step.'
       });
     }
 
@@ -6335,9 +6345,10 @@ async function handleBookFreeTrial(req, res) {
       && existingLearner.free_trial_allowed
       && String(priorTrial?.learner_id || '') === String(existingLearner.id);
     if (priorTrial && !learnerTrialOverrideOn) {
+      if (qualification) return res.status(409).json({ error: 'TRIAL_UNAVAILABLE', message: 'We could not complete this trial booking. Please contact the team to arrange your next step.' });
       return res.status(409).json({
         error: 'already_used',
-        message: "Looks like you've already booked a free trial. Check your email or log in to manage it."
+        message: 'We could not complete this trial booking. Please contact the team to arrange your next step.'
       });
     }
 
@@ -6570,20 +6581,22 @@ async function handleBookFreeTrial(req, res) {
           INSERT INTO trial_booking_intakes
             (school_id, booking_id, learner_id, instructor_id, booked_at, booking_local_date,
              school_timezone, test_booked, test_date_snapshot, test_centre_snapshot,
-             segment, segment_version, entry_page, campaign_key, content_version, analytics_consent_at_booking)
+             segment, segment_version, entry_page, campaign_key, content_version, analytics_consent_at_booking,
+             questionnaire, test_time_snapshot)
           SELECT ${schoolId}, id, ${learnerId}, ${instructor_id}, ${bookingNow.toISOString()}::timestamptz,
             (${bookingNow.toISOString()}::timestamptz AT TIME ZONE ${trialClock.timezone})::date,
             ${trialClock.timezone}, ${intake?.booked ?? null}, ${intake?.date ?? null}::date,
             ${intake?.centre ?? null}, 'unknown', 'test_date_v1', ${source.entry_page},
-            ${source.campaign_key}, ${source.content_version}, ${source.analytics_consent_at_booking}
-          FROM trial_booking WHERE ${trialClock.trialFunnelEnabled}
+            ${source.campaign_key}, ${source.content_version}, ${source.analytics_consent_at_booking},
+            ${qualification ? JSON.stringify(qualification) : null}::jsonb, ${intake?.time ?? null}
+          FROM trial_booking WHERE ${captureIntake}
           RETURNING id
         ), initialise_test_profile AS (
           UPDATE learner_users SET test_booked = ${intake?.booked ?? null},
-            test_date = ${intake?.date ?? null}, test_centre = ${intake?.centre ?? null},
+            test_date = ${intake?.date ?? null}, test_centre = ${intake?.centre ?? null}, test_time = ${intake?.time ?? null},
             test_details_updated_at = date_trunc('milliseconds', clock_timestamp())
           WHERE id = ${learnerId} AND school_id = ${schoolId}
-            AND ${!existingLearner && trialClock.trialFunnelEnabled}
+            AND ${!existingLearner && captureIntake}
             AND EXISTS (SELECT 1 FROM trial_intake)
           RETURNING id
         )
