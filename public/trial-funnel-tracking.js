@@ -11,7 +11,7 @@
   function context() {
     var campaign = campaignPage || qs.get('campaign') === 'test_booked_v1';
     return { entry_page: campaign ? 'test_booked' : generalPage || qs.get('entry') === 'freetrial' ? 'freetrial' : qs.has('campaign') || qs.has('entry') ? 'unknown' : 'free_direct',
-      campaign_key: campaign ? 'test_booked_v1' : null, content_version: (campaignPage ? window.ccTrialMediaVersion === 'video_v1' : qs.get('content') === 'video_v1') ? 'video_v1' : 'text_v1',
+      campaign_key: campaign ? 'test_booked_v1' : null, content_version: (campaignPage ? window.ccTrialMediaVersion === 'video_v1' : (bookingPage && window.ccTrialMediaVersion === 'video_v1') || qs.get('content') === 'video_v1') ? 'video_v1' : 'text_v1',
       form_version: window.ccTrialQuestionnaireEnabled ? 'qualification_v1' : 'test_details_v1', analytics_consent_at_booking: allowed() };
   }
   function send(event, placement) {
@@ -26,6 +26,7 @@
   }
   function exposure() {
     if (campaignPage && !window.ccTrialMediaReady) return;
+    if (bookingPage && window.ccTrialMediaPending) return;
     if (viewed || document.visibilityState === 'hidden') return;
     if (campaignPage || generalPage) viewed = send('trial_landing_viewed');
     else if (bookingPage) viewed = send('free_trial_page_viewed');

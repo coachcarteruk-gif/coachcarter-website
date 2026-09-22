@@ -88,12 +88,12 @@ test.describe('free trial passwordless journey', () => {
     await expect(page.getByRole('group', { name: 'Choose a date' })).toBeVisible();
     await expect(page.getByRole('button', { name: /10:00/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /15:00/ })).toHaveCount(0);
-    await expect(page.getByText(/Fraser|Simon/)).toHaveCount(0);
+    await expect(page.locator('#trialBookingFlow').getByText(/Fraser|Simon/)).toHaveCount(0);
 
     await page.getByRole('button', { name: /21 July/ }).click();
     await expect(page.getByRole('button', { name: /15:00/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /10:00/ })).toHaveCount(0);
-    await expect(page.getByText(/Fraser|Simon/)).toHaveCount(0);
+    await expect(page.locator('#trialBookingFlow').getByText(/Fraser|Simon/)).toHaveCount(0);
   });
 
   test('shows inline field errors and submits the selected trial without auth friction', async ({ page }) => {
@@ -109,7 +109,7 @@ test.describe('free trial passwordless journey', () => {
 
     await page.goto('/free-trial.html');
     await expect(page.getByRole('group', { name: 'Choose a date' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Fraser/i })).toHaveCount(0);
+    await expect(page.locator('#trialBookingFlow').getByRole('button', { name: /Fraser/i })).toHaveCount(0);
     await expect(page.getByText('Fraser Carter')).toHaveCount(0);
     await page.getByRole('button', { name: /10:00/ }).click();
 
