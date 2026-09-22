@@ -441,6 +441,7 @@ a:hover { color: var(--accent-text); }
 }
 </style>
 <link rel="stylesheet" href="/trial-questionnaire.css?v=qualification-v1">
+<link rel="stylesheet" href="/free-trial-video.css?v=video-v1">
 </head>
 <body>
   <main class="page">
@@ -454,6 +455,8 @@ a:hover { color: var(--accent-text); }
       <p>No card needed. Pick a time that works, give us a few details, and we'll see you at your front door.</p>
     </div>
 
+    <section id="freeTrialVideo" class="trial-video" aria-labelledby="trialVideoHeading" hidden></section>
+    <div id="trial-start" tabindex="-1"></div>
     <section id="trialQuestionnaire" class="card" aria-label="Find your trial route"><p role="status">Loading your free trial…</p></section>
     <div id="trialBookingFlow" hidden>
     <section class="card" aria-labelledby="step-1-heading">
@@ -546,7 +549,8 @@ a:hover { color: var(--accent-text); }
     </div>
   </main>
 
-  <script src="/trial-funnel-tracking.js?v=qualification-v1"></script>
+  <script src="/free-trial-video.js?v=video-v1"></script>
+  <script src="/trial-funnel-tracking.js?v=video-v1"></script>
   <script src="/trial-questionnaire.js?v=qualification-v1"></script>
   <script src="/free-trial.js?v=qualification-v1"></script>
   <script src="/free-trial-sticky.js"></script>
