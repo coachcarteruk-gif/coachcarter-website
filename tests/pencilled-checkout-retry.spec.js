@@ -7,10 +7,11 @@ function response() {
   return { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
 }
 
-function loadHandler({ sql, stripe, quote }) {
+function loadHandler({ sql, stripe, quote, reportError }) {
   const cacheKeysBefore = new Set(Object.keys(require.cache));
   const apiRoot = path.join(root, 'api') + path.sep;
   const replacements = [
+    [path.join(root, 'api', '_error-alert.js'), { reportError }],
     ['@neondatabase/serverless', { neon: () => sql }],
     [path.join(root, 'api', '_stripe-clients.js'), {
       STRIPE_CLIENT_PURPOSES: { PAYMENTS: 'payments' }, createPlatformStripeClient: () => stripe,
@@ -99,9 +100,10 @@ function harness({ failFirstSave = false } = {}) {
     quoteCalls += 1;
     return { pricePence: 9000, discountPence: amountPence - 9000, discountPct: 10, quoteId: 'quote-1', metadata: { post_trial_quote_id: 'quote-1' } };
   };
-  const handler = loadHandler({ sql, stripe, quote });
+  const alerts = [];
+  const handler = loadHandler({ sql, stripe, quote, reportError: (endpoint, error) => alerts.push({ endpoint, message: error.message }) });
   const accept = async (body = {}) => { const res = response(); await handler({ method: 'POST', query: { action: 'accept-offer' }, body: { token: offer.token, ...body } }, res); return res; };
-  return { accept, offer, makeStale: () => { stale = true; }, stats: () => ({ quoteCalls, createCalls, createKeys }) };
+  return { accept, offer, alerts, makeStale: () => { stale = true; }, stats: () => ({ quoteCalls, createCalls, createKeys }) };
 }
 
 test('simultaneous pencilled accepts create only one payable Checkout', async () => {
@@ -118,6 +120,7 @@ test('provider-created/session-save-failed retry reuses frozen payload and Strip
   const h = harness({ failFirstSave: true });
   const failed = await h.accept({ phone: '07000000001', pickup_address: 'First address' });
   expect(failed.statusCode).toBe(500);
+  expect(h.alerts).toEqual([{ endpoint: '/api/offers', message: 'synthetic session save failure' }]);
   h.makeStale();
   const retried = await h.accept({ phone: '07000000002', pickup_address: 'Changed address' });
   expect(retried.statusCode).toBe(200);

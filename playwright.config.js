@@ -1,6 +1,12 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+// Test discovery loads .env.local in some integration specs. Reserve an empty
+// alert recipient before discovery (and in workers), even if the shell already
+// has production credentials. Deliberate test failures must not email operators.
+// Keep the key defined so the specs' "existing env wins" loaders cannot restore it.
+process.env.ERROR_ALERT_EMAIL = '';
+
 // Smoke tests run against a local static server (npx serve public) so they
 // don't require Postgres or Vercel functions. Pure Node API checks hit
 // vercel dev when CC_TEST_BASE_URL points at it. Keep these tests fast and
