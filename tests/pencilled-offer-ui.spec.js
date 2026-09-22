@@ -4,6 +4,9 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
+// These mocked API interactions must not race the PWA's first-install reload.
+test.use({ serviceWorkers: 'block' });
+
 const shots = path.join(os.tmpdir(), 'coachcarter-pencil-review');
 fs.mkdirSync(shots, { recursive: true });
 
@@ -18,7 +21,9 @@ async function dismissCookies(page) {
   if (await reject.isVisible().catch(() => false)) await reject.click();
 }
 
-test('instructor can select pencil and sends the explicit payload', async ({ page }) => {
+for (const hours of [12, 24, 48]) {
+test(`instructor can select a ${hours}-hour pencil deadline and sends the explicit payload`, async ({ page }) => {
+  if (hours === 12) await page.setViewportSize({ width: 390, height: 844 });
   let submitted = null;
   await page.addInitScript(() => {
     localStorage.setItem('cc_instructor', JSON.stringify({ instructor: { id: 7, school_id: 3, name: 'Alex' } }));
@@ -28,7 +33,7 @@ test('instructor can select pencil and sends the explicit payload', async ({ pag
     const action = url.searchParams.get('action');
     if (route.request().method() === 'POST' && action === 'create-offer') {
       submitted = JSON.parse(route.request().postData() || '{}');
-      return route.fulfill({ json: { ok: true, accept_url: '/accept-offer.html?token=pencil', pencilled: true } });
+      return route.fulfill({ json: { ok: true, accept_url: '/accept-offer.html?token=pencil', pencilled: true, email_available: true, email_sent: true } });
     }
     if (action === 'profile') return route.fulfill({ json: { instructor: { id: 7, slug: 'alex', transmission_type: 'manual' } } });
     if (action === 'school-learners') return route.fulfill({ json: { learners: [{ id: 42, name: 'Jamie Learner', email: 'jamie@example.test', is_your_learner: true }] } });
@@ -37,10 +42,10 @@ test('instructor can select pencil and sends the explicit payload', async ({ pag
   });
   await page.route('**/api/lesson-types**', route => route.fulfill({ json: { lesson_types: [{ id: 9, name: 'Standard lesson', duration_minutes: 60, price_pence: 5000 }] } }));
 
-  await page.goto('/instructor/?add=offer');
+  await page.goto('/instructor/');
   await dismissCookies(page);
   await page.waitForFunction(() => !!window.__ccOfferUi);
-  await page.evaluate(() => { window.__ccOfferUi.open(); });
+  await page.evaluate(() => window.__ccOfferUi.open());
   await expect(page.locator('#offerLessonModal')).toHaveClass(/open/);
   await page.locator('#offerModeExisting').check();
   await page.locator('#offerModeExisting').dispatchEvent('change');
@@ -50,19 +55,34 @@ test('instructor can select pencil and sends the explicit payload', async ({ pag
   await page.locator('[data-action="offer-select-learner"]').click();
   await page.locator('#offerLessonType').selectOption('9');
   await page.locator('#offerCustomPrice').fill('50');
+  const deadline = page.getByLabel('Payment deadline before lesson');
+  await expect(deadline).toBeHidden();
   await page.locator('#offerPencilled').check();
+  await expect(deadline).toBeVisible();
+  await expect(deadline).toHaveValue('48');
+  await expect(deadline.locator('option')).toHaveText(['12 hours before', '24 hours before', '48 hours before']);
+  await deadline.selectOption(String(hours));
+  await page.locator('#offerPencilled').uncheck();
+  await expect(deadline).toBeHidden();
+  await expect(deadline).toBeDisabled();
+  await page.locator('#offerPencilled').check();
+  await expect(deadline).toHaveValue(String(hours));
   await expect(page.locator('#offerFlexible')).toBeDisabled();
   await expect(page.locator('#offerMaxRepeatWeeks')).toBeDisabled();
   await expect(page.getByText('Pencil this slot in')).toBeVisible();
-  await page.screenshot({ path: path.join(shots, 'pencilled-instructor.png'), fullPage: true });
+  await page.screenshot({ path: path.join(shots, `pencilled-instructor-${hours}.png`), fullPage: true });
   await page.locator('#offerSendBtn').click();
   await expect.poll(() => submitted).not.toBeNull();
-  expect(submitted).toMatchObject({ learner_id: 42, pencilled: true, scheduled_date: '2026-11-20', start_time: '10:00', offer_price_pence: 5000 });
-  await page.evaluate(() => { window.__ccOfferUi.open(); });
+  expect(submitted).toMatchObject({ learner_id: 42, pencilled: true, pencilled_expiry_hours: hours, scheduled_date: '2026-11-20', start_time: '10:00', offer_price_pence: 5000 });
+  await expect(page.locator('#offerSuccess')).toContainText(`until ${hours} hours before it starts`);
+  await page.evaluate(() => window.__ccOfferUi.open());
   await expect(page.locator('#offerPencilled')).not.toBeChecked();
+  await expect(deadline).toBeHidden();
+  await expect(deadline).toHaveValue('48');
   await page.locator('#offerModeNew').check();
   await expect(page.locator('#offerPencilledRow')).toBeHidden();
 });
+}
 
 test('learner sees, can pay, and can cancel an unpaid pencil', async ({ page }) => {
   let cancelled = null;

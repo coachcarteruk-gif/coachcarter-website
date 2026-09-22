@@ -85,8 +85,9 @@ historical; the current scope and migration receipts above take precedence.
   cash allocations/refund caps, with exact penny conservation. Existing product
   availability, immutable historical records and test/live gates remain intact.
 - Optional pencilled manual offers: fixed lesson, existing learner account,
-  84-day platform ceiling, unpaid slot reservation, payment due 48 hours before
-  start, cancellation by either party while unpaid. Payment creates an ordinary
+  84-day platform ceiling, unpaid slot reservation, payment due an instructor-selected
+  12, 24 or 48 elapsed hours before start (default 48; updated 22 September 2026),
+  cancellation by either party while unpaid. Payment creates an ordinary
   booking subject to the existing cancellation policy.
 
 ## Commercial decisions approved
@@ -103,7 +104,7 @@ historical; the current scope and migration receipts above take precedence.
    A new checkout after eligibility ends has no discount. Manual-capture request
    authorisation and delayed settlement preserve the price when payment was
    initiated in the valid checkout window. Pencilled offers still require payment
-   success strictly before their separate start-minus-48-hours deadline.
+   success strictly before their separate start-minus-selected-hours deadline.
 5. Where Stripe promotion-code entry already exists, apply that code last:
    a £100 price becomes £90 after the automatic discount, then £80 with a £10
    Stripe code. Flows which already disable promotion codes keep that restriction.
@@ -124,6 +125,10 @@ historical; the current scope and migration receipts above take precedence.
 - At the pencilled deadline, unpaid holds expire. Delayed webhooks must distinguish
   payment time from receipt time. Cancellation/expiry races must yield at most
   one fulfilled booking or one retained compensation outcome.
+- Creation accepts numeric `pencilled_expiry_hours` of 12, 24 or 48, defaulting to
+  48 only when omitted. Reject unsupported values and deadlines already reached.
+  Store the calculated deadline in existing `expires_at`; existing offers retain
+  their original deadline. No new migration or settlement policy is required.
 - Keep ordinary offer behaviour and all product retirement/pilot gates intact.
 
 Concurrency review: existing unique indexes protect exact start times, not

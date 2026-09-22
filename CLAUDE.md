@@ -289,7 +289,8 @@ from a Stripe object's creation timestamp. The configured repeatable discount
 stacks after local pricing; existing Stripe promotion entry applies last. Earnings
 and new package cash/refund values follow the reduced actual payment. Preserve
 existing product gates. An unpaid pencilled offer is only a calendar hold; its
-84-day horizon and start-minus-48-hour payment deadline are separate from ordinary
+84-day horizon and instructor-selected start-minus-12/24/48-hour payment deadline
+(default 48 hours) are separate from ordinary
 learner booking windows. See `docs/trial-discount-pencilled-offers-plan.md`.
 
 - Small fixes: commit directly to main

@@ -11,7 +11,8 @@ Migration 071 adds immutable `trial_requests` (existing `enquiries` contact reco
 Free-trial availability, booking and rescheduling use the smaller of 28 days and
 the instructor's booking window. Ordinary paid windows are unchanged. Pencilled
 manual offers use the separate 84-day platform ceiling, reserve a specific slot,
-and must be paid strictly before lesson start minus 48 elapsed hours.
+and must be paid strictly before lesson start minus the instructor-selected
+12, 24 or 48 elapsed hours (default 48). Existing offers retain their saved deadline.
 
 `api/_post-trial-discount.js` resolves account eligibility from the scheduled end
 of a free trial and cancellation/not-delivered exceptions. Admin pricing settings
@@ -38,7 +39,11 @@ prices use the same-school authenticated learner, never a query-string learner
 ID, and responses are private/no-store. The banner checks again each minute while
 visible and on focus; eligibility changes refresh the open picker automatically.
 Instructor `create-offer` accepts `pencilled: true` for a positive-price,
-single fixed slot and existing learner. Learners use `GET /api/offers?action=my-pencilled-offers`
+single fixed slot and existing learner. Optional numeric `pencilled_expiry_hours`
+accepts only 12, 24 or 48; omission defaults to 48. The server calculates and stores
+`expires_at` in the school timezone and rejects deadlines already reached. The
+instructor dropdown appears only when pencilling in; learner email/SMS use the
+selected hours, and payment/lesson pages use the saved deadline. Learners use `GET /api/offers?action=my-pencilled-offers`
 and `POST /api/offers?action=cancel-pencilled-offer` with `offer_id`; the usual offer
 acceptance/payment URL confirms payment. Unpaid offers never create bookings or
 earnings. Both parties can cancel while pending.

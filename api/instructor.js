@@ -5206,15 +5206,25 @@ async function handleCreateOffer(req, res) {
     const offerName = existingLearner?.name || learner_name || null;
     const offerExpiresAt = new Date(Date.now() + (isFlexible ? 7 : 1) * 24 * 60 * 60 * 1000).toISOString();
     let effectiveOfferExpiresAt = offerExpiresAt;
+    let pencilledExpiryHours;
     let offer;
     if (pencilled) {
       const [school] = await sql`SELECT config FROM schools WHERE id = ${schoolId} AND active = TRUE`;
       const policy = validatePencilledOfferCreation({
         pencilled: true, learner_id: existingLearner?.id, kind: 'manual',
+        pencilled_expiry_hours: req.body?.pencilled_expiry_hours,
         scheduled_date, start_time, end_time, offer_price_pence: offerPricing.pricePence,
         max_repeat_weeks: maxRepeatWeeksClean || 1, lesson_type_slug: lessonType.slug,
       }, { schoolId, learnerSchoolId: existingLearner ? schoolId : null, schoolConfig: school?.config });
-      if (!policy.ok) return res.status(400).json({ error: 'This pencilled offer is not valid.', code: policy.code });
+      if (!policy.ok) {
+        const error = policy.code === 'INVALID_PENCILLED_EXPIRY_HOURS'
+          ? 'Choose 12, 24 or 48 hours before the lesson for the payment deadline.'
+          : policy.code === 'PAYMENT_DEADLINE_REACHED'
+            ? 'The selected payment deadline has already passed. Choose a shorter deadline or a later lesson.'
+            : 'This pencilled offer is not valid.';
+        return res.status(400).json({ error, code: policy.code });
+      }
+      pencilledExpiryHours = policy.expiryHours;
       effectiveOfferExpiresAt = policy.expiresAt.toISOString();
       offer = await createPencilledOfferTransaction({
         connectionString: process.env.POSTGRES_URL,
@@ -5254,13 +5264,13 @@ async function handleCreateOffer(req, res) {
       ? `Choose a time here: ${acceptUrl}`
       : `Accept within 24 hours: ${acceptUrl}`;
     const finalMessageAcceptLine = pencilled
-      ? `Pay for your pencilled lesson before the 48-hour deadline: ${acceptUrl}`
+      ? `Pay for your pencilled lesson before the deadline, ${pencilledExpiryHours} hours before the lesson starts: ${acceptUrl}`
       : messageAcceptLine;
     const emailExpiryText = isFlexible
       ? 'This flexible offer is valid for 7 days.'
       : 'This offer expires in 24 hours. If you don\'t accept by then, the slot will become available again.';
     const finalEmailExpiryText = pencilled
-      ? 'This slot is held for you unpaid until 48 hours before the lesson starts. Pay before then or it will be released.'
+      ? `This slot is held for you unpaid until ${pencilledExpiryHours} hours before the lesson starts. Pay before then or it will be released.`
       : emailExpiryText;
     // Ordinary-offer template contract: ${emailExpiryText}
 
