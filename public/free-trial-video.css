@@ -1,17 +1,11 @@
 .trial-video { margin: 0 0 32px; }
 .trial-video[hidden] { display: none; }
-.trial-video h2 { font-family: var(--font-head); font-size: 21px; line-height: 1.25; margin-bottom: 6px; }
-.trial-video p { color: var(--muted); font-size: 14.5px; }
-.trial-video-frame { position: relative; width: 100%; max-width: 480px; aspect-ratio: 1; margin: 16px auto 12px; overflow: hidden; border-radius: var(--radius); background: #1a1a1a; }
+.trial-video-frame { position: relative; width: 100%; max-width: 480px; aspect-ratio: 1; margin: 0 auto; overflow: hidden; border-radius: var(--radius); background: #1a1a1a; }
 .trial-video-frame img, .trial-video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 .trial-video-play { display: block; width: 100%; height: 100%; border: 0; cursor: pointer; background: transparent; color: #fff; font: inherit; }
 .trial-video-play img { object-fit: cover; }
-.trial-video-play span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 10px; white-space: nowrap; padding: 14px 20px; border-radius: 999px; background: rgba(26,26,26,.9); font-weight: 700; font-size: 16px; }
-.trial-video-play span::before { content: ''; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 12px solid #fff; }
+.trial-video-play span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(26,26,26,.9); }
+.trial-video-play span::before { content: ''; margin-left: 4px; border-top: 10px solid transparent; border-bottom: 10px solid transparent; border-left: 15px solid #fff; }
 .trial-video-play:hover span { background: #1a1a1a; }
 .trial-video-play:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
-.trial-video-links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 10px 0; }
-.trial-video-links a { padding: 4px 0; color: var(--accent-under); font-weight: 600; }
-.trial-video .trial-video-note { margin-top: 12px; padding-left: 12px; border-left: 3px solid var(--border); }
-.trial-video-help { margin-top: 10px; }
 #trial-start { scroll-margin-top: 20px; }

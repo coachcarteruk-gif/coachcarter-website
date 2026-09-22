@@ -5,11 +5,11 @@
 - Source supplied by Fraser: `VSL Attemp 1 SubSeq.mp4`, 133.03 seconds, square 1920 × 1920.
 - Hosted in the existing Cloudflare Stream account, UID `a477463e8f44255aeca4c1cc0e203b11`.
 - Customer playback domain: `customer-qn21p6ogmlqlhcv4.cloudflarestream.com` (already allowed by the site's frame CSP).
-- Stream's player selects playback quality. The local poster loads first; Stream is contacted only when the visitor clicks Play. English auto-generated captions are enabled by default. The local text transcript remains available independently of Stream.
+- Stream's player selects playback quality. The local poster loads first; Stream is contacted only when the visitor clicks Play. English auto-generated captions are enabled by default. The section shows only the video and an accessible play button, without surrounding headings, links or explanatory text. The local text transcript remains available at `/media/free-trial/intro-v1-transcript.txt`.
 - `public/content/free-trial-vsl.json` controls the video, poster and transcript. The player accepts only a Stream UID and local media paths; it cannot embed an arbitrary URL.
 - CoachCarter domains, project preview domains and localhost only. Explicit other-school query parameters hide the introduction.
 - Video exposures use the existing `video_v1` funnel content version. Existing analytics consent requirements remain unchanged. A failed or disabled manifest falls back to `text_v1` unless the entry URL already carries video attribution.
-- The video mentions a test within four months. The displayed clarification and transcript explain that later/no-test visitors can continue. The agreed questionnaire deliberately has no four-month cutoff.
+- The video mentions a test within four months. The standalone transcript clarifies that later/no-test visitors can continue. The agreed questionnaire deliberately has no four-month cutoff; simplifying the surrounding copy does not change eligibility.
 
 ## Updating or rolling back
 

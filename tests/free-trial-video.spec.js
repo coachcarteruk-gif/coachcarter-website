@@ -26,8 +26,9 @@ for (const width of [375, 1365]) test('optional player and request route at widt
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => ccTrialFunnel.context())).toMatchObject({ content_version: 'video_v1', analytics_consent_at_booking: false });
   expect(await page.evaluate(() => ccTrialFunnel.send('free_trial_page_viewed'))).toBe(false);
-  await expect(page.getByRole('link', { name: 'Read the transcript' })).toHaveAttribute('href', manifest.transcript_src);
-  await page.getByRole('link', { name: 'Go straight to the questions' }).click();
+  await expect(page.locator('.hero h1')).toHaveText('Free Taster Lesson');
+  await expect(page.locator('.hero p')).toHaveText('Help you understand where you are and what you need to do before your test');
+  await expect(page.locator('#freeTrialVideo')).toHaveText('');
   await page.getByLabel('No', { exact: true }).check();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByLabel('No', { exact: true }).check();
@@ -43,7 +44,6 @@ test('click loads only the approved player; unavailable playback does not block 
   await page.goto('/free');
   await page.getByRole('button', { name: 'Play free trial introduction from Fraser' }).click();
   await expect(page.locator('#freeTrialVideo iframe')).toHaveAttribute('src', 'https://customer-qn21p6ogmlqlhcv4.cloudflarestream.com/' + manifest.stream_id + '/iframe?autoplay=true&defaultTextTrack=en');
-  await expect(page.locator('.trial-video-help')).toBeVisible();
   await page.getByLabel('Yes', { exact: true }).check();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByLabel('Practical test date').fill('2027-06-20');
