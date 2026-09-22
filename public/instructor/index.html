@@ -1157,8 +1157,17 @@
         </div>
         <label id="offerPencilledRow" style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer;font-size:0.86rem;line-height:1.4">
           <input type="checkbox" id="offerPencilled" style="width:18px;height:18px;accent-color:var(--accent);margin-top:1px">
-          <span><strong>Pencil this slot in</strong><br><span style="color:var(--muted)">For an existing learner. Holds this exact time unpaid until 48 hours before the lesson.</span></span>
+          <span><strong>Pencil this slot in</strong><br><span style="color:var(--muted)">For an existing learner. Holds this exact time unpaid until the payment deadline.</span></span>
         </label>
+        <div id="offerPencilledExpiryRow" style="display:none;margin-top:10px;">
+          <label class="notes-label" for="offerPencilledExpiryHours">Payment deadline before lesson</label>
+          <select id="offerPencilledExpiryHours" aria-describedby="offerPencilledExpiryHint" disabled style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;box-sizing:border-box;">
+            <option value="12">12 hours before</option>
+            <option value="24">24 hours before</option>
+            <option value="48" selected>48 hours before</option>
+          </select>
+          <div id="offerPencilledExpiryHint" style="font-size:0.78rem;color:var(--muted);margin-top:6px;">Choose 12 or 24 hours to give the learner longer to pay. If unpaid at the deadline, the offer expires and the slot is released.</div>
+        </div>
       </div>
       <div>
         <div class="notes-label">Price</div>

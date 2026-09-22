@@ -75,6 +75,35 @@ test.describe('pencilled offer policy', () => {
     ).code).toBe('LESSON_BEYOND_84_LOCAL_DAYS');
   });
 
+  test('rejects unsupported or malformed deadlines rather than silently defaulting', () => {
+    for (const value of [null, '', '12', '24', '48', 0, -12, 6, 36, 72, 12.5, true, [], {}]) {
+      expect(validatePencilledOfferCreation(validInput({ pencilled_expiry_hours: value }), options).code)
+        .toBe('INVALID_PENCILLED_EXPIRY_HOURS');
+    }
+    expect(validatePencilledOfferCreation(validInput(), options).expiryHours).toBe(48);
+  });
+
+  for (const hours of [12, 24, 48]) {
+    test(`${hours}-hour deadline uses elapsed time across both clock changes and exact boundaries`, () => {
+      for (const [date, start] of [
+        ['2027-03-28', '2027-03-28T09:00:00.000Z'],
+        ['2026-10-25', '2026-10-25T10:00:00.000Z'],
+      ]) {
+        const input = validInput({ scheduled_date: date, pencilled_expiry_hours: hours });
+        const deadline = new Date(new Date(start).getTime() - hours * 3600000);
+        const before = new Date(deadline.getTime() - 1);
+        const result = validatePencilledOfferCreation(input, { ...options, now: before });
+        expect(result.ok).toBe(true);
+        expect(result.expiresAt.toISOString()).toBe(deadline.toISOString());
+        expect(validatePencilledOfferCreation(input, { ...options, now: deadline }).code).toBe('PAYMENT_DEADLINE_REACHED');
+        expect(validatePencilledOfferCreation(input, { ...options, now: new Date(deadline.getTime() + 1) }).code).toBe('PAYMENT_DEADLINE_REACHED');
+        const offer = { pencilled: true, expires_at: result.expiresAt };
+        expect(pencilledPaymentWasOnTime({ offer, paymentSucceededAt: before })).toBe(true);
+        expect(pencilledPaymentWasOnTime({ offer, paymentSucceededAt: deadline })).toBe(false);
+      }
+    });
+  }
+
   test('expires exactly 48 elapsed hours before the school-local lesson across DST', () => {
     const spring = pencilledOfferTimes({
       scheduledDate: '2027-03-29',

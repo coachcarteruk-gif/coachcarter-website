@@ -1,5 +1,18 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.141 - Instructor-selected pencilled payment deadline (22 September 2026; pending deployment)
+
+Pencilling in a lesson reveals a 12/24/48-hour payment deadline dropdown, defaulting
+to 48 hours before the lesson. The API validates the choice and saves the calculated
+expiry; email, SMS and instructor confirmation use the chosen hours. Existing
+offers retain their saved expiry. No migration or payment-settlement change.
+Files: `public/instructor/index.html`, `public/instructor/index.js`,
+`api/instructor.js`, `api/_pencilled-offers.js`; focused policy, handler and browser
+tests cover all choices, invalid/elapsed deadlines, clock changes and reset state.
+Validation: all 49 focused policy, handler, checkout, settlement and browser tests
+passed (browser tests rerun after isolating service-worker reloads); syntax and
+migration governance checks passed. Desktop and mobile dropdowns verified.
+
 ## 2.140 - Qualifying questionnaire and two-route free trial (21 September 2026; pending production approval)
 
 Three conditional questions lead to the existing live booking flow or a saved general trial request. School-admin-editable centres and budget preferences, server routing, immutable snapshots, accessible weekly availability, request review/manual-booking association, privacy handling and separate reporting are implemented. Migration 071 is additive and inactive; no lesson pricing, money mutation, production migration, message, campaign or automation activation is included. See [verification and rollout/rollback](docs/qualifying-trial-funnel.md).

@@ -6,6 +6,7 @@ const {
 } = require('./_full-curriculum');
 
 const PENCILLED_OFFER_HOLD_HOURS = 48;
+const PENCILLED_OFFER_EXPIRY_HOURS = Object.freeze([12, 24, 48]);
 const PENCILLED_OFFER_MAX_LOCAL_DAYS_AHEAD = 84;
 
 function isPencilledOffer(value) {
@@ -41,15 +42,17 @@ function localCalendarDayDifference(fromDate, toDate) {
   return Math.round((to - from) / (24 * 60 * 60 * 1000));
 }
 
-function pencilledOfferTimes({ scheduledDate, startTime, schoolConfig, timezone }) {
+function pencilledOfferTimes({ scheduledDate, startTime, schoolConfig, timezone, expiryHours = PENCILLED_OFFER_HOLD_HOURS }) {
+  if (!PENCILLED_OFFER_EXPIRY_HOURS.includes(expiryHours)) return null;
   const resolvedTimezone = timezone || operationalTimeZone(schoolConfig);
   const lessonStartsAt = zonedDateTimeToDate(scheduledDate, startTime, resolvedTimezone);
   if (!lessonStartsAt) return null;
   const expiresAt = new Date(
-    lessonStartsAt.getTime() - PENCILLED_OFFER_HOLD_HOURS * 60 * 60 * 1000
+    lessonStartsAt.getTime() - expiryHours * 60 * 60 * 1000
   );
   return {
     timezone: resolvedTimezone,
+    expiryHours,
     lessonStartsAt,
     expiresAt,
     payBy: expiresAt,
@@ -95,11 +98,15 @@ function validatePencilledOfferCreation(input, options = {}) {
 
   const now = new Date(options.now ?? Date.now());
   if (Number.isNaN(now.getTime())) return invalid('INVALID_NOW');
+  const expiryHours = input.pencilled_expiry_hours === undefined
+    ? PENCILLED_OFFER_HOLD_HOURS : input.pencilled_expiry_hours;
+  if (!PENCILLED_OFFER_EXPIRY_HOURS.includes(expiryHours)) return invalid('INVALID_PENCILLED_EXPIRY_HOURS');
   const times = pencilledOfferTimes({
     scheduledDate: input.scheduled_date,
     startTime,
     schoolConfig: options.schoolConfig,
     timezone: options.timezone,
+    expiryHours,
   });
   if (!times) return invalid('INVALID_LESSON_START');
 

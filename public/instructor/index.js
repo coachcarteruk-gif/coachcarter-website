@@ -2488,6 +2488,8 @@ function updatePencilledOfferUi() {
     && !document.getElementById('offerAudienceBroadcast')?.checked;
   row.style.display = allowed ? 'flex' : 'none';
   if (!allowed) checkbox.checked = false;
+  document.getElementById('offerPencilledExpiryRow').style.display = checkbox.checked ? '' : 'none';
+  document.getElementById('offerPencilledExpiryHours').disabled = !checkbox.checked;
   const flexible = document.getElementById('offerFlexible');
   const repeats = document.getElementById('offerMaxRepeatWeeks');
   if (checkbox.checked) {
@@ -2501,6 +2503,7 @@ function updatePencilledOfferUi() {
 
 async function openOfferModal(prefillEmail, prefillName) {
   document.getElementById('offerPencilled').checked = false;
+  document.getElementById('offerPencilledExpiryHours').value = '48';
   document.getElementById('offerPencilled').onchange = updatePencilledOfferUi;
   selectedOfferLearnerId = null;
   document.getElementById('offerName').value = prefillName || '';
@@ -2944,6 +2947,7 @@ async function sendOffer() {
   const email = document.getElementById('offerEmail').value.trim();
   const flexible = !incompatibleProductsRetired && document.getElementById('offerFlexible').checked;
   const pencilled = document.getElementById('offerPencilled')?.checked === true;
+  const pencilledExpiryHours = Number(document.getElementById('offerPencilledExpiryHours').value);
   const date = document.getElementById('offerDate').value;
   const time = document.getElementById('offerTime').value;
   const lessonTypeId = document.getElementById('offerLessonType').value;
@@ -2983,6 +2987,7 @@ async function sendOffer() {
       lesson_type_id: lessonTypeId ? parseInt(lessonTypeId) : undefined,
       pencilled: pencilled
     };
+    if (pencilled) payload.pencilled_expiry_hours = pencilledExpiryHours;
     if (existingMode) {
       payload.learner_id = selectedOfferLearnerId;
     } else {
@@ -3041,7 +3046,7 @@ async function sendOffer() {
         ? ` ${failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0]} delivery did not complete.`
         : '';
       const acceptWindowText = flexible ? 'They have 7 days to choose a time and accept.' : 'They have 24 hours to accept.';
-      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! ${pencilled ? 'The slot is pencilled in unpaid until 48 hours before it starts.' : acceptWindowText}${missingText}${failedText} Copy link is still available below.`;
+      statusLine = `Offer sent to ${safeName} by ${deliveryText}${priceMsg}${flexMsg}! ${pencilled ? `The slot is pencilled in unpaid until ${pencilledExpiryHours} hours before it starts.` : acceptWindowText}${missingText}${failedText} Copy link is still available below.`;
     } else if (failedParts.length > 0) {
       const failedText = failedParts.length === 2 ? `${failedParts[0]} and ${failedParts[1]}` : failedParts[0];
       statusLine = `Offer created for ${safeName}${priceMsg}${flexMsg}, but ${failedText} delivery did not complete. Use Copy link below.`;
