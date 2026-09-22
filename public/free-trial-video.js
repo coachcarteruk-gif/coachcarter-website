@@ -24,12 +24,8 @@
   }
   function mount(media) {
     if (!media || media.enabled !== true || media.version !== 'video_v1' ||
-        !/^[a-f0-9]{32}$/.test(media.stream_id) || !localAsset(media.poster, 'jpg') ||
-        !localAsset(media.transcript_src, 'txt')) return;
+        !/^[a-f0-9]{32}$/.test(media.stream_id) || !localAsset(media.poster, 'jpg')) return;
 
-    var heading = element('h2', 'A quick introduction from Fraser');
-    heading.id = 'trialVideoHeading';
-    var intro = element('p', '2 min 13 sec · Watch when you’re ready, or go straight to the questions.');
     var frame = element('div', '', 'trial-video-frame');
     var play = element('button', '', 'trial-video-play');
     play.type = 'button';
@@ -39,19 +35,10 @@
     poster.alt = '';
     poster.width = 800;
     poster.height = 800;
-    play.append(poster, element('span', 'Watch introduction'));
+    var playIcon = element('span');
+    playIcon.setAttribute('aria-hidden', 'true');
+    play.append(poster, playIcon);
     frame.appendChild(play);
-    var links = element('div', '', 'trial-video-links');
-    var skip = element('a', 'Go straight to the questions');
-    skip.href = '#trial-start';
-    var transcript = element('a', 'Read the transcript');
-    transcript.href = media.transcript_src;
-    transcript.target = '_blank';
-    transcript.rel = 'noopener';
-    links.append(skip, transcript);
-    var note = element('p', 'Your test is more than four months away, or not booked yet? You can still complete the questions below — we’ll show you the right trial route.', 'trial-video-note');
-    var help = element('p', 'If the player doesn’t start, you can read the transcript or continue with the questions.', 'trial-video-help');
-    help.hidden = true;
     play.addEventListener('click', function () {
       var player = element('iframe');
       player.title = 'Free trial introduction from Fraser';
@@ -62,9 +49,8 @@
       player.allowFullscreen = true;
       frame.replaceChildren(player);
       player.focus();
-      help.hidden = false;
     });
-    root.append(heading, intro, frame, links, note, help);
+    root.appendChild(frame);
     root.hidden = false;
     window.ccTrialMediaVersion = 'video_v1';
   }

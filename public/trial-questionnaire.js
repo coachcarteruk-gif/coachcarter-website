@@ -75,7 +75,6 @@
     try {var response=await fetch('/api/schools?action=public-config'+scope);if(!response.ok)throw new Error('config');config=await response.json();
       if(!config.trial_questionnaire){root.hidden=true;flow.hidden=false;callback(config);return;}
       window.ccTrialQuestionnaireEnabled=true;
-      document.querySelector('.hero p').textContent='Answer three short questions to find your next step. No card needed.';
       show();event('trial_questionnaire_started');
     }catch(e){root.textContent='We could not load your trial options. ';var retry=document.createElement('button');retry.textContent='Try again';retry.onclick=function(){init(s,callback);};root.appendChild(retry);}
   }
