@@ -63,30 +63,18 @@ a:hover { color: var(--accent-text); }
   padding: 28px 20px 80px;
 }
 
-.brand {
+.trial-cover {
   display: block;
-  width: fit-content;
-  margin-bottom: 28px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
   text-decoration: none;
 }
 
-.brand img { height: 76px; display: block; }
+.trial-cover img { display: block; width: 100%; height: auto; }
 
 .hero {
   margin-bottom: 36px;
-}
-
-.hero-eyebrow {
-  display: inline-block;
-  background: var(--accent-lt);
-  color: var(--accent-text);
-  font-weight: 700;
-  font-size: 12.5px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-bottom: 14px;
 }
 
 .hero h1 {
@@ -414,8 +402,6 @@ a:hover { color: var(--accent-text); }
 
 @media (max-width: 767px) {
   .page { padding: 20px 16px 140px; }
-  .brand { margin: 0 auto 24px; }
-  .brand img { height: 64px; }
   .hero { margin-bottom: 28px; text-align: center; }
   .hero h1 { font-size: 32px; }
   .hero p { font-size: 15.5px; margin: 0 auto; }
@@ -444,13 +430,11 @@ a:hover { color: var(--accent-text); }
 <link rel="stylesheet" href="/free-trial-video.css?v=video-v2">
 </head>
 <body>
+  <a class="trial-cover" href="/" aria-label="CoachCarter home">
+    <img src="/media/free-trial/passes-cover-v1.png" width="1640" height="624" alt="CoachCarter Driving School and learners celebrating their driving test passes" fetchpriority="high">
+  </a>
   <main class="page">
-    <a class="brand" href="/">
-      <img src="/Logo.png" alt="CoachCarter">
-    </a>
-
     <div class="hero">
-      <span class="hero-eyebrow">Free first lesson</span>
       <h1>Free Taster Lesson</h1>
       <p>Help you understand where you are and what you need to do before your test</p>
     </div>
