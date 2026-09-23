@@ -23,8 +23,8 @@ const DEFAULT_SCHOOL_ID = 1; // CoachCarter — backwards compat for old tokens
 // Three session cookies, one per role, so a browser can be logged in as
 // multiple roles at once (matching the old localStorage behaviour):
 //
-//   cc_learner     — 30d  (matches magic-link JWT expiry)
-//   cc_instructor  —  7d
+//   cc_learner     — 180d
+//   cc_instructor  — 180d
 //   cc_admin       —  7d
 //
 // Attributes: HttpOnly; Secure; SameSite=Lax; Path=/; no Domain.
@@ -43,6 +43,25 @@ const SESSION_MAX_AGE_SEC = {
   instructor: 60 * 60 * 24 * 180, // 180 days
   admin:      60 * 60 * 24 * 7,  //  7 days
 };
+
+// Only the explicit support-exit route may restore this original session.
+// Keep it out of SESSION_COOKIE_NAMES so normal requests cannot use it and
+// silently switch identity when a support session expires.
+const INSTRUCTOR_RETURN_COOKIE = 'cc_instructor_return';
+
+function getPersistentInstructorSession(req, cookieName = INSTRUCTOR_RETURN_COOKIE) {
+  if (!verifyCsrf(req)) return null;
+  const token = parseCookies(req)[cookieName];
+  if (!token || !process.env.JWT_SECRET) return null;
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.role !== 'instructor' || payload.impersonation || !payload.school_id ||
+        !payload.id || !Number.isFinite(payload.exp)) return null;
+    return { token, payload };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Build a Set-Cookie string for a session JWT.
@@ -318,6 +337,8 @@ function isSuperAdmin(payload) {
 }
 
 module.exports = {
+  INSTRUCTOR_RETURN_COOKIE,
+  getPersistentInstructorSession,
   decodeToken,
   requireAuth,
   getSchoolId,

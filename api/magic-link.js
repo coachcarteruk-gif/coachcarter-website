@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const twilio = require('twilio');
 const { createTransporter, generateToken, sanitizeEmail } = require('./_auth-helpers');
-const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+const { SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, INSTRUCTOR_RETURN_COOKIE,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
@@ -571,6 +571,7 @@ async function handleVerifyEmailCode(req, res) {
       await sql`UPDATE magic_link_tokens SET used = true WHERE id = ${linkRecord.id}`;
 
       appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
+      appendSetCookie(res, buildSessionClearCookie(INSTRUCTOR_RETURN_COOKIE));
       appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
       return res.json({

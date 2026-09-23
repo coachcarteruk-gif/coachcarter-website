@@ -19,6 +19,7 @@ Multi-tenant driving school SaaS platform. Vanilla HTML/JS frontend on Vercel wi
 - API routes use `?action=` routing (e.g. `/api/slots?action=book`)
 - Auth: JWT in httpOnly cookies (`cc_learner`, `cc_instructor`, `cc_admin`); display-only blob in localStorage at the same key. Never put auth material in localStorage — it's untrusted.
 - Frontend auth via `window.ccAuth` from shared auth JS files
+- Support access preserves the original instructor login in httpOnly `cc_instructor_return`. Never include this in ordinary auth-cookie selection: only the CSRF-protected support-exit route may restore it, without extending its expiry. Temporary verification failures must not log users out. See `docs/security.md`.
 - All new pages must include `sidebar.js` and `branding.js`
 - Phone numbers stored as UK format (07xxx), converted to +447xxx at send time
 - Always `await` async operations before `res.json()` — Vercel kills functions after response

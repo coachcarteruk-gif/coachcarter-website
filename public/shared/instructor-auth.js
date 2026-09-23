@@ -11,6 +11,7 @@
   var STORAGE_KEY = 'cc_instructor';
   var LOGIN_URL   = '/instructor/login.html';
   var LOGOUT_URL  = '/api/instructor?action=logout';
+  var supportExitPromise = null;
 
   /** Parse the stored instructor session, or return null */
   function getAuth() {
@@ -43,6 +44,7 @@
    */
   function fetchAuthed(url, options) {
     options = options || {};
+    var supportRequest = isImpersonating();
     var method = (options.method || 'GET').toUpperCase();
     var headers = new Headers(options.headers || {});
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
@@ -55,7 +57,18 @@
     for (var k in options) if (Object.prototype.hasOwnProperty.call(options, k)) merged[k] = options[k];
     merged.credentials = 'include';
     merged.headers = headers;
-    return fetch(url, merged);
+    return fetch(url, merged).then(function (res) {
+      // Read failures during support trigger explicit restoration on every
+      // instructor page, including Dashboard. Do not replay the request under
+      // the restored identity, or let a page's 401 handler log that identity out.
+      if (res.status === 401 && method === 'GET' && supportRequest) {
+        var recovery = isImpersonating() ? logout() : Promise.resolve();
+        return Promise.resolve(recovery).then(function () {
+          throw new Error('Support session ended. Return to your account to continue.');
+        });
+      }
+      return res;
+    });
   }
 
   /** Redirect to login if not authenticated. Returns the auth object if valid. */
@@ -80,24 +93,29 @@
   /** Log out: clear server cookies, clear localStorage blob, redirect to login. */
   function logout() {
     if (isImpersonating()) {
-      var auth = getAuth();
-      var returnInstructorAdmin = auth && auth.impersonation ? auth.impersonation.return_instructor_admin : null;
-      var finishSupportExit = function () {
-        if (returnInstructorAdmin) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ instructor: returnInstructorAdmin }));
-        } else {
-          localStorage.removeItem(STORAGE_KEY);
-        }
-        window.location.href = '/admin/portal.html';
-      };
-      try {
-        fetchAuthed('/api/admin?action=stop-instructor-access', { method: 'POST' })
-          .then(finishSupportExit)
-          .catch(finishSupportExit);
-      } catch (e) {
-        finishSupportExit();
-      }
-      return;
+      if (supportExitPromise) return supportExitPromise;
+      supportExitPromise = fetchAuthed('/api/admin?action=stop-instructor-access', { method: 'POST' })
+        .then(function (res) {
+          if (res.status === 401) {
+            localStorage.removeItem(STORAGE_KEY);
+            window.location.href = LOGIN_URL;
+            return;
+          }
+          if (!res.ok) throw new Error('Session recovery unavailable');
+          return res.json().then(function (data) {
+            if (data.instructor) {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify({ instructor: data.instructor }));
+            } else {
+              localStorage.removeItem(STORAGE_KEY);
+            }
+            window.location.href = '/admin/portal.html';
+          });
+        })
+        .catch(function () {
+          window.alert('Could not return to your account. Check your connection and try Back to Admin again.');
+        })
+        .finally(function () { supportExitPromise = null; });
+      return supportExitPromise;
     }
 
     try {

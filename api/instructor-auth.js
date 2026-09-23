@@ -24,7 +24,7 @@ const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const { sanitizeEmail } = require('./_auth-helpers');
 const {
-  SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+  SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, INSTRUCTOR_RETURN_COOKIE,
   buildSessionCookie, buildSessionClearCookie, requireAuth,
 } = require('./_auth');
 const {
@@ -62,6 +62,7 @@ function issueSession(res, instructor) {
   if (instructor.is_admin) payload.isAdmin = true;
   const token = jwt.sign(payload, secret, { expiresIn: '180d' });
   appendSetCookie(res, buildSessionCookie(COOKIE_NAME, token, COOKIE_MAX_AGE));
+  appendSetCookie(res, buildSessionClearCookie(INSTRUCTOR_RETURN_COOKIE));
   appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 }
 
@@ -224,6 +225,7 @@ async function handleChangePassword(req, res) {
 async function handleLogout(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   appendSetCookie(res, buildSessionClearCookie(COOKIE_NAME));
+  appendSetCookie(res, buildSessionClearCookie(INSTRUCTOR_RETURN_COOKIE));
   appendSetCookie(res, buildCsrfClearCookie());
   return res.json({ ok: true });
 }

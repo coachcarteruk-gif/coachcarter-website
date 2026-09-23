@@ -27,7 +27,7 @@ test.describe('admin instructor account access', () => {
     expect(access).toContain('impersonation: true');
     expect(access).toContain('impersonated_by_admin_id: admin.id || null');
     expect(access).toContain('impersonated_by_admin_email: admin.email || null');
-    expect(access).toContain('tokenPayload.return_instructor_admin');
+    expect(access).toContain('support_session_version: 2');
     expect(access).toContain('jwt.sign(tokenPayload, secret, { expiresIn: INSTRUCTOR_ACCESS_MAX_AGE_SEC })');
     expect(access).toContain('buildSessionCookie(');
     expect(access).toContain('SESSION_COOKIE_NAMES.instructor');
@@ -45,7 +45,7 @@ test.describe('admin instructor account access', () => {
     expect(stop).toContain('decoded.impersonation === true');
     expect(stop).toContain('if (cookies[SESSION_COOKIE_NAMES.admin] || !instructorPayload)');
     expect(stop).toContain('admin = verifyAdminJWT(req)');
-    expect(stop).toContain('if (!admin && !instructorPayload)');
+    expect(stop).toContain('if (!admin && !instructorPayload && !originalSession)');
     expect(stop).toContain('return_instructor_admin');
     expect(stop).toContain('restoredToken');
     expect(stop).toContain('buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor)');
@@ -75,8 +75,8 @@ test.describe('admin instructor account access', () => {
     const sidebar = read('public/sidebar.js');
 
     expect(auth).toContain('function isImpersonating(auth)');
-    expect(auth).toContain('returnInstructorAdmin');
-    expect(auth).toContain("localStorage.setItem(STORAGE_KEY, JSON.stringify({ instructor: returnInstructorAdmin }));");
+    expect(auth).toContain('supportExitPromise');
+    expect(auth).toContain("localStorage.setItem(STORAGE_KEY, JSON.stringify({ instructor: data.instructor }));");
     expect(auth).toContain("fetchAuthed('/api/admin?action=stop-instructor-access', { method: 'POST' })");
     expect(auth).toContain("window.location.href = '/admin/portal.html';");
     expect(sidebar).toContain('Viewing as admin');

@@ -26,6 +26,28 @@ function esc(str) {
 // live in the httpOnly cc_admin / cc_instructor cookies.
 const adminData = JSON.parse(localStorage.getItem('cc_admin') || 'null');
 const instrData = JSON.parse(localStorage.getItem('cc_instructor') || 'null');
+
+// Support may have expired while this tab was closed. Restore the original
+// cookie before verifying admin access or starting any page data requests.
+if (instrData && instrData.impersonation && instrData.impersonation.active) {
+  window.ccAdminAuth.fetchAuthed('/api/admin?action=stop-instructor-access', { method: 'POST' })
+    .then(async function (res) {
+      if (res.status === 401) {
+        localStorage.removeItem('cc_instructor');
+        window.location.href = '/instructor/login.html';
+        return;
+      }
+      if (!res.ok) throw new Error('Session recovery unavailable');
+      const data = await res.json();
+      if (data.instructor) localStorage.setItem('cc_instructor', JSON.stringify({ instructor: data.instructor }));
+      else localStorage.removeItem('cc_instructor');
+      window.location.reload();
+    })
+    .catch(function () {
+      document.getElementById('admin-name').textContent = 'Could not reconnect. Reload to try again.';
+    });
+  return;
+}
 const isInstructorAdmin = !adminData && instrData && instrData.instructor && instrData.instructor.is_admin;
 const isPlatformOwner = !!(adminData && adminData.admin && adminData.admin.role === 'superadmin');
 
@@ -43,20 +65,14 @@ const fetchAdmin = window.ccAdminAuth.fetchAuthed;
 if (isInstructorAdmin) {
   document.getElementById('admin-name').textContent = instrData.instructor?.name || 'Admin';
   document.getElementById('admin-email').textContent = instrData.instructor?.email || '';
-} else if (adminData.admin) {
+} else if (adminData && adminData.admin) {
   document.getElementById('admin-name').textContent = adminData.admin.name || 'Admin';
   document.getElementById('admin-email').textContent = adminData.admin.email || '';
 }
 
 function logout() {
   if (isInstructorAdmin) {
-    // Instructor-admins: clear the instructor session on the server
-    // (not the admin one - they authenticated via cc_instructor).
-    try {
-      fetchAdmin('/api/instructor?action=logout', { method: 'POST', keepalive: true })
-        .catch(function () {});
-    } catch (e) { /* ignore */ }
-    localStorage.removeItem('cc_instructor');
+    // This button is labelled Back to Portal, not Sign Out.
     window.location.href = '/instructor/';
   } else {
     window.ccAdminAuth.logout();
@@ -65,8 +81,19 @@ function logout() {
 
 // Verify session on load (cookie rides automatically)
 fetchAdmin('/api/admin?action=verify')
-  .then(r => { if (!r.ok) logout(); })
-  .catch(() => logout());
+  .then(r => {
+    if (r.status === 401) {
+      // Leave cookies intact: another tab may already have refreshed them.
+      // Remove only the stale display state to avoid a login redirect loop.
+      localStorage.removeItem(isInstructorAdmin ? 'cc_instructor' : 'cc_admin');
+      window.location.href = isInstructorAdmin ? '/instructor/login.html' : '/admin/login.html';
+    } else if (!r.ok) {
+      document.getElementById('admin-name').textContent = 'Could not reconnect. Reload to try again.';
+    }
+  })
+  .catch(() => {
+    document.getElementById('admin-name').textContent = 'Could not reconnect. Reload to try again.';
+  });
 
 // Instructor-admins see "Back to Portal" instead of "Sign Out"
 if (isInstructorAdmin) {

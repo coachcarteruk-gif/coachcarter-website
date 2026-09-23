@@ -1,5 +1,22 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.142 - Preserve instructor sessions through admin support (23 September 2026; pending deployment)
+
+Support access now preserves the original instructor JWT in an httpOnly return
+cookie and restores its existing expiry, even after the two-hour support session
+expires. Nested support retains the original identity. Recovery validates CSRF,
+signature, school and active account, returns canonical display data, and is
+audited. Admin Back to Portal navigates without logout; temporary verification
+and support-exit failures preserve session state. Fresh instructor login and
+explicit logout clear saved return cookies. Existing live legacy support sessions
+can still exit during rollout. No database migration or payment change.
+
+Files: `api/_auth.js`, `api/admin.js`, instructor login/logout issuers,
+`public/admin/portal.js`, `public/shared/instructor-auth.js`, and focused tests.
+Validation: 27 focused checks passed, including a real Chromium cookie recovery
+test, nested/repeated exit, expired/tampered tokens, tenant scope and connection
+failure handling. Syntax checks passed across all 270 production JavaScript files.
+
 ## 2.141 - Instructor-selected pencilled payment deadline (22 September 2026; pending deployment)
 
 Pencilling in a lesson reveals a 12/24/48-hour payment deadline dropdown, defaulting
