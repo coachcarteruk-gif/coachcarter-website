@@ -90,6 +90,7 @@ const {
   SCHEDULE_UNAVAILABLE,
   loadInstructorScheduleWarnings,
   sendScheduleUnavailable,
+  requireFlexibleBookingHoursReview,
   loadAvailabilityChangeReview,
   requireAvailabilityChangeReview,
 } = require('./_instructor-schedule-warnings');
@@ -3511,7 +3512,13 @@ async function handleCreateBooking(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    if (scheduleWarnings.length > 0) {
+    if (payMethod === 'flexible_package') {
+      if (requireFlexibleBookingHoursReview(req, res, scheduleWarnings, {
+        schoolId, instructorId: instructor.id, learnerId: learner_id,
+        scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+        lessonTypeId: lessonType.id, transmissionType: bookingTransmissionType,
+      })) return;
+    } else if (scheduleWarnings.length > 0) {
       return sendScheduleUnavailable(res, scheduleWarnings);
     }
 

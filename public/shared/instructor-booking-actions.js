@@ -636,6 +636,20 @@
     });
     var data = await res.json();
 
+    if (res.status === 409 && data.code === 'NORMAL_HOURS_OVERRIDE_REQUIRED'
+        && payload.payment_method === 'flexible_package' && data.normal_hours_override_token) {
+      var confirmed = window.confirm(data.error + '\n\nLesson: ' + payload.scheduled_date
+        + ' at ' + payload.start_time + '\n\nOverride normal availability and book this lesson?');
+      if (!confirmed) return { cancelled: true, res: res, data: data };
+      payload.normal_hours_override_token = data.normal_hours_override_token;
+      res = await ccAuth.fetchAuthed(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      data = await res.json();
+    }
+
     return { cancelled: false, res: res, data: data };
   }
 

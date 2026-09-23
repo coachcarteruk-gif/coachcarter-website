@@ -6,6 +6,7 @@ const { createRequire } = require('module');
 const {
   availabilityChangeConflicts, buildInstructorScheduleWarnings,
   loadAvailabilityChangeReview, requireAvailabilityChangeReview,
+  requireFlexibleBookingHoursReview,
 } = require('../api/_instructor-schedule-warnings');
 
 process.env.STRIPE_SECRET_KEY ||= 'sk_test_availability_unit_only';
@@ -37,7 +38,7 @@ function loadModule(file, mocks) {
   return module.exports;
 }
 
-function fixture({ windows = [window], overrides = [], busy = [], blackouts = [], events = [], auth = true, failAudit = false } = {}) {
+function fixture({ windows = [window], overrides = [], busy = [], blackouts = [], events = [], pendingRequests = [], fundingResult, auth = true, failAudit = false } = {}) {
   const calls = [], funding = [], notifications = [], transactions = [];
   let savedBooking = { ...booking };
   const query = async (text, values = []) => {
@@ -50,6 +51,7 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
     if (text.includes('FROM instructor_busy_blocks')) return busy;
     if (text.includes('FROM instructor_blackout_dates')) return blackouts;
     if (text.includes('FROM instructor_external_events')) return events;
+    if (text.includes('FROM lesson_requests')) return pendingRequests;
     if (text.includes('FROM lesson_types')) return [{ id: 1, slug: 'standard', duration_minutes: 90, name: 'Lesson' }];
     if (text.includes('FROM learner_users')) return [{ id: 22, name: 'Test learner', balance_minutes: 300, credit_balance: 4 }];
     if (text.includes('FROM instructors')) return [{ id: 6, name: 'Test instructor', transmission_type: 'automatic' }];
@@ -82,7 +84,7 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
       expireExtensionCheckoutSessions: async () => {},
     },
     './_flexible-package-ledger': { bookFlexiblePackageSlotTransaction: async args => {
-      funding.push(args); return { ok: true, booking: { id: booking.id } };
+      funding.push(args); return fundingResult || { ok: true, booking: { id: booking.id } };
     } },
   });
   return { calls, funding, notifications, transactions, sql,
@@ -95,17 +97,85 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
   };
 }
 
-test('outside-hours creation is refused for every payment type despite old override fields', async () => {
+test('outside-hours creation requires review for packages and stays blocked for other payments despite old override fields', async () => {
   for (const payment of ['flexible_package', 'credit', 'cash', 'free']) {
     const f = fixture({ windows: [{ ...window, end_time: '11:30' }] });
     const res = await f.run('create-booking', { learner_id: 22, scheduled_date: date, start_time: '12:00',
       payment_method: payment, availability_override: true, force: true });
     expect(res.statusCode, payment).toBe(409);
-    expect(res.body.code).toBe('SCHEDULE_UNAVAILABLE');
+    expect(res.body.code).toBe(payment === 'flexible_package' ? 'NORMAL_HOURS_OVERRIDE_REQUIRED' : 'SCHEDULE_UNAVAILABLE');
     expect(f.funding).toEqual([]);
     expect(f.notifications).toEqual([]);
     expect(f.calls.filter(call => /^(INSERT|UPDATE|DELETE)/.test(call.text))).toEqual([]);
   }
+});
+
+const outsideHoursBooking = { learner_id: 22, scheduled_date: date, start_time: '18:00',
+  payment_method: 'flexible_package', client_request_id: 'cfca77ec-1d30-4a34-8cf9-49c08b212c1b' };
+
+test('confirmed normal-hours exception books once through the unchanged package transaction', async () => {
+  const f = fixture();
+  const warning = await f.run('create-booking', outsideHoursBooking);
+  expect(warning.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+  expect(f.funding).toEqual([]);
+  expect(f.notifications).toEqual([]);
+  const result = await f.run('create-booking', { ...outsideHoursBooking,
+    normal_hours_override_token: warning.body.normal_hours_override_token });
+  expect(result.statusCode).toBe(200);
+  expect(f.funding).toHaveLength(1);
+  expect(f.funding[0]).toMatchObject({ createdBy: 'instructor', schoolId: 7, instructorId: 6,
+    learnerId: 22, durationMinutes: 90, startTime: '18:00', endTime: '19:30',
+    clientRequestId: outsideHoursBooking.client_request_id });
+});
+
+test('changed lesson details or an invalid review token require fresh confirmation', async () => {
+  const f = fixture();
+  const warning = await f.run('create-booking', outsideHoursBooking);
+  for (const changes of [{ start_time: '19:00' }, { learner_id: 23 }, { scheduled_date: '2030-09-24' },
+    { normal_hours_override_token: true }, { normal_hours_override_token: 'invalid' }]) {
+    const result = await f.run('create-booking', { ...outsideHoursBooking,
+      normal_hours_override_token: warning.body.normal_hours_override_token, ...changes });
+    expect(result.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+  }
+  expect(f.funding).toEqual([]);
+});
+
+test('normal-hours acknowledgement cannot cross school or instructor scope', () => {
+  const warnings = buildInstructorScheduleWarnings({ startTime: '18:00', endTime: '19:30' });
+  const original = response();
+  const proposal = { schoolId: 7, instructorId: 6, learnerId: 22, scheduledDate: date,
+    startTime: '18:00', endTime: '19:30' };
+  requireFlexibleBookingHoursReview({ body: {} }, original, warnings, proposal);
+  for (const changes of [{ schoolId: 8 }, { instructorId: 9 }]) {
+    const res = response();
+    expect(requireFlexibleBookingHoursReview({ body: {
+      normal_hours_override_token: original.body.normal_hours_override_token,
+    } }, res, warnings, { ...proposal, ...changes })).toBe(true);
+    expect(res.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+  }
+});
+
+test('confirmed normal-hours exception cannot bypass new blocks or pending requests', async () => {
+  const warning = await fixture().run('create-booking', outsideHoursBooking);
+  for (const block of ['busy', 'blackouts', 'events', 'pendingRequests']) {
+    const f = fixture({ [block]: [{ id: 9, start_time: '18:00', end_time: '20:00' }] });
+    const result = await f.run('create-booking', { ...outsideHoursBooking,
+      normal_hours_override_token: warning.body.normal_hours_override_token });
+    expect(result.statusCode).toBe(409);
+    expect(result.body.normal_hours_override_token).toBeUndefined();
+    expect(f.funding).toEqual([]);
+    expect(f.notifications).toEqual([]);
+  }
+});
+
+test('confirmed exception still reports a booking conflict from the package transaction', async () => {
+  const f = fixture({ fundingResult: { ok: false, code: 'SLOTS_UNAVAILABLE' } });
+  const warning = await f.run('create-booking', outsideHoursBooking);
+  const result = await f.run('create-booking', { ...outsideHoursBooking,
+    normal_hours_override_token: warning.body.normal_hours_override_token });
+  expect(result.statusCode).toBe(409);
+  expect(result.body.error).toContain('already booked');
+  expect(f.notifications).toEqual([]);
 });
 
 test('one-off availability permits a valid Flexible Hours booking with instructor attribution', async () => {
