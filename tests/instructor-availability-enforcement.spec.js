@@ -6,7 +6,7 @@ const { createRequire } = require('module');
 const {
   availabilityChangeConflicts, buildInstructorScheduleWarnings,
   loadAvailabilityChangeReview, requireAvailabilityChangeReview,
-  requireFlexibleBookingHoursReview,
+  requireNormalHoursReview,
 } = require('../api/_instructor-schedule-warnings');
 
 process.env.STRIPE_SECRET_KEY ||= 'sk_test_availability_unit_only';
@@ -38,7 +38,7 @@ function loadModule(file, mocks) {
   return module.exports;
 }
 
-function fixture({ windows = [window], overrides = [], busy = [], blackouts = [], events = [], pendingRequests = [], fundingResult, auth = true, failAudit = false } = {}) {
+function fixture({ windows = [window], overrides = [], busy = [], blackouts = [], events = [], pendingRequests = [], extensionConflict, fundingResult, auth = true, failAudit = false } = {}) {
   const calls = [], funding = [], notifications = [], transactions = [];
   let savedBooking = { ...booking };
   const query = async (text, values = []) => {
@@ -46,6 +46,8 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
     calls.push({ text, values });
     if (failAudit && text.startsWith('INSERT INTO audit_log')) throw new Error('Audit write failed');
     if (text.includes('information_schema.columns')) return [{ exists: true }];
+    if (extensionConflict && text.includes('FROM ' + extensionConflict) && text.startsWith('SELECT')
+        && !text.includes('WHERE lb.id =')) return [{ id: 999, learner_name: 'Another learner', start_time: '19:30', end_time: '20:30' }];
     if (text.includes('FROM instructor_availability_overrides')) return overrides;
     if (text.includes('FROM instructor_availability')) return windows;
     if (text.includes('FROM instructor_busy_blocks')) return busy;
@@ -145,10 +147,10 @@ test('normal-hours acknowledgement cannot cross school or instructor scope', () 
   const original = response();
   const proposal = { schoolId: 7, instructorId: 6, learnerId: 22, scheduledDate: date,
     startTime: '18:00', endTime: '19:30' };
-  requireFlexibleBookingHoursReview({ body: {} }, original, warnings, proposal);
+  requireNormalHoursReview({ body: {} }, original, warnings, proposal);
   for (const changes of [{ schoolId: 8 }, { instructorId: 9 }]) {
     const res = response();
-    expect(requireFlexibleBookingHoursReview({ body: {
+    expect(requireNormalHoursReview({ body: {
       normal_hours_override_token: original.body.normal_hours_override_token,
     } }, res, warnings, { ...proposal, ...changes })).toBe(true);
     expect(res.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
@@ -223,12 +225,68 @@ test('valid Edit commits the booking and old/new audit together before respondin
   expect(update.values).toContain(7);
 });
 
-test('extension requests validate the whole extended lesson before creating an offer', async () => {
+test('extension requests require normal-hours confirmation before creating an offer', async () => {
   const f = fixture({ windows: [{ ...window, end_time: '13:30' }] });
   const res = await f.run('create-extension-offer', { booking_id: 634, extension_minutes: 30 });
-  expect(res.body.code).toBe('SCHEDULE_UNAVAILABLE');
+  expect(res.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
   expect(f.calls.some(call => call.text.startsWith('INSERT'))).toBe(false);
   expect(f.notifications).toEqual([]);
+});
+
+for (const payment of ['flexible_package', 'cash', 'free']) {
+  test(`${payment} extension from 19:30 to 20:00 can be confirmed outside normal hours`, async () => {
+    const f = fixture();
+    f.setBooking({ scheduled_date: '2030-09-30', start_time: '18:30', end_time: '19:30',
+      payment_method: payment, has_flexible_package_allocation: payment === 'flexible_package', list_price_pence: 5400 });
+    const body = { booking_id: 634, extension_minutes: 30,
+      ...(payment === 'flexible_package' ? {} : { offer_price_pence: payment === 'free' ? 0 : 2700 }) };
+    const first = await f.run('create-extension-offer', body);
+    expect(first.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+    expect(first.body.error).toContain('20:00');
+    expect(f.calls.some(call => call.text.startsWith('INSERT INTO lesson_offers'))).toBe(false);
+    expect(f.notifications).toEqual([]);
+    const result = await f.run('create-extension-offer', { ...body,
+      normal_hours_override_token: first.body.normal_hours_override_token });
+    expect(result.statusCode).toBe(200);
+    expect(result.body.new_end_time).toBe('20:00');
+    expect(f.calls.filter(call => call.text.startsWith('INSERT INTO lesson_offers'))).toHaveLength(1);
+    expect(f.funding).toEqual([]);
+    expect(f.calls.some(call => call.text.startsWith('UPDATE lesson_bookings'))).toBe(false);
+  });
+}
+
+test('changed extension duration, price or original finish requires new confirmation', async () => {
+  const f = fixture({ windows: [] });
+  const body = { booking_id: 634, extension_minutes: 30, offer_price_pence: 0 };
+  const first = await f.run('create-extension-offer', body);
+  for (const changes of [{ extension_minutes: 60 }, { offer_price_pence: 2750 }]) {
+    const res = await f.run('create-extension-offer', { ...body,
+      normal_hours_override_token: first.body.normal_hours_override_token, ...changes });
+    expect(res.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+  }
+  f.setBooking({ end_time: '14:00' });
+  const res = await f.run('create-extension-offer', { ...body,
+    normal_hours_override_token: first.body.normal_hours_override_token });
+  expect(res.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+  expect(f.notifications).toEqual([]);
+});
+
+test('extension confirmation cannot bypass calendar blocks or occupied added time', async () => {
+  const body = { booking_id: 634, extension_minutes: 30 };
+  const first = await fixture({ windows: [] }).run('create-extension-offer', body);
+  for (const options of [
+    { busy: [{ start_time: '13:30', end_time: '14:30' }] }, { blackouts: [{ id: 1 }] },
+    { events: [{ start_time: '13:30', end_time: '14:30' }] },
+    ...['lesson_bookings lb', 'lesson_offers', 'lesson_requests', 'slot_reservations'].map(extensionConflict => ({ extensionConflict })),
+  ]) {
+    const f = fixture({ windows: [], ...options });
+    const res = await f.run('create-extension-offer', { ...body,
+      normal_hours_override_token: first.body.normal_hours_override_token });
+    expect(res.statusCode, JSON.stringify(options)).toBe(409);
+    expect(res.body.code).not.toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+    expect(f.calls.some(call => call.text.startsWith('INSERT INTO lesson_offers'))).toBe(false);
+    expect(f.notifications).toEqual([]);
+  }
 });
 
 test('package-funded extension creates a zero-cash offer without drawing hours before acceptance', async () => {

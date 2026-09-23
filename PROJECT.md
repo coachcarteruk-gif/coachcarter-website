@@ -579,7 +579,7 @@ Two-mode travel time checking between pickup postcodes. **Slot filtering** (pre-
 | Action | Method | Auth | Description |
 |---|---|---|---|
 | `create-offer` | POST | Instructor JWT | Creates a fixed one-lesson offer. A fixed slot outside recurring/one-off availability or overlapping a schedule block returns `409 SCHEDULE_UNAVAILABLE`. There is no booking-time override; update availability or remove the block first. Real lesson, offer, request, and reservation conflicts remain blocked. With retirement active, flexible input or `max_repeat_weeks > 1` returns `410 PRODUCT_CREATION_RETIRED` before insert or notification. One-off offers keep their existing price snapshot rules. |
-| `create-extension-offer` | POST | Instructor JWT | Creates a 24-hour request for 30–180 additional minutes on an existing scheduled same-school lesson. Body: `{ booking_id, extension_minutes, offer_price_pence? }`. Server-priced when omitted, accepts a positive custom price, or accepts explicit `0` for a free extension. Requires the entire extended lesson to fit recurring/one-off availability and respect blackouts, busy blocks and external events. Travel buffers do not apply to the continuation; actual overlaps with bookings, pending offers/requests and reservations remain blocked. Existing paid settlement contracts are unchanged. |
+| `create-extension-offer` | POST | Instructor JWT | Creates a 24-hour request for 30–180 additional minutes on an existing scheduled same-school lesson. Body: `{ booking_id, extension_minutes, offer_price_pence? }`. Server-priced when omitted, accepts a positive custom price, or accepts explicit `0` for a free extension. Outside recurring/one-off availability returns `409 NORMAL_HOURS_OVERRIDE_REQUIRED`; explicit confirmation resubmits a lesson-specific `normal_hours_override_token`. Blackouts, busy blocks and external events remain blocking. Travel buffers do not apply to the continuation; actual overlaps with bookings, pending offers/requests and reservations remain blocked. Existing paid settlement contracts are unchanged. |
 | `list-offers` | GET | Instructor JWT | Lists instructor's offers with status filter |
 | `cancel-offer` | POST | Instructor JWT | Cancels a pending offer |
 
@@ -1458,7 +1458,7 @@ lesson with no custom cash price. `get-offer` returns
 does not mean free time: acceptance appends the extra FIFO package allocations,
 increases `minutes_deducted` and frozen `list_price_pence`, extends the existing
 booking and accepts the offer in one transaction. It checks original funding
-consistency, active same-school instructor, full-slot availability, real overlaps,
+consistency, active same-school instructor, hard schedule blocks, real overlaps,
 offer expiry and sufficient remaining units. No new Stripe Checkout, ordinary
 credit mutation or schema migration is involved. Migration 063 is a prerequisite.
 All other duration editors continue to refuse package duration changes.

@@ -160,7 +160,7 @@ function sendScheduleUnavailable(res, warnings) {
 
 // Acknowledgement is specific to this instructor, school and proposed lesson.
 // It only relaxes normal hours; all other schedule conflicts remain hard stops.
-function requireFlexibleBookingHoursReview(req, res, warnings, booking) {
+function requireNormalHoursReview(req, res, warnings, booking, error) {
   if (!warnings.length) return false;
   if (warnings.some(warning => warning.code !== 'OUTSIDE_NORMAL_HOURS')) {
     sendScheduleUnavailable(res, warnings);
@@ -170,7 +170,7 @@ function requireFlexibleBookingHoursReview(req, res, warnings, booking) {
   if (req.body?.normal_hours_override_token === token) return false;
   res.status(409).json({
     code: 'NORMAL_HOURS_OVERRIDE_REQUIRED',
-    error: 'This lesson is outside your normal or one-off availability. You can override your normal hours for this flexible-package lesson.',
+    error,
     warnings,
     normal_hours_override_token: token,
   });
@@ -250,7 +250,7 @@ module.exports = {
   buildInstructorScheduleWarnings,
   loadInstructorScheduleWarnings,
   sendScheduleUnavailable,
-  requireFlexibleBookingHoursReview,
+  requireNormalHoursReview,
   availabilityChangeConflicts,
   loadAvailabilityChangeReview,
   requireAvailabilityChangeReview,

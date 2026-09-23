@@ -32,8 +32,10 @@ function fixture(options = {}) {
     }
     if (/FROM lesson_bookings[\s\S]*FOR UPDATE/.test(text)) return rows([booking]);
     if (/FROM instructor_availability\s/.test(text)) return rows(options.outsideHours ? [] : [{ start_time: '08:00', end_time: '18:00' }]);
-    if (/FROM instructor_(availability_overrides|blackout_dates|external_events)/.test(text)) return rows([]);
-    if (/SELECT (id|start_time::text AS start_time).*FROM instructor_busy_blocks/s.test(text)) return rows([]);
+    if (/FROM instructor_blackout_dates/.test(text)) return rows(options.blackout ? [{ id: 1 }] : []);
+    if (/FROM instructor_external_events/.test(text)) return rows(options.externalEvent ? [{ is_all_day: true }] : []);
+    if (/FROM instructor_availability_overrides/.test(text)) return rows([]);
+    if (/SELECT (id|start_time::text AS start_time).*FROM instructor_busy_blocks/s.test(text)) return rows(options.busy ? [{ id: 1, start_time: '10:30', end_time: '11:30' }] : []);
     if (/SELECT id FROM (lesson_bookings|lesson_offers|lesson_requests|slot_reservations)/.test(text)) return rows(options.conflict ? [{ id: 999 }] : []);
     if (/SELECT a.id, a.learner_id/.test(text)) {
       expect(values).toEqual([501, 7]); return rows(allocations);
@@ -157,7 +159,9 @@ for (const [label, options, code] of [
   ['changed end time', { booking: { end_time: '10:00' } }, 'SOURCE_BOOKING_CHANGED'],
   ['expired offer', { offer: { expired: true } }, 'EXTENSION_NOT_AVAILABLE'],
   ['Checkout in progress', { offer: { checkout_attempt_id: 'attempt' } }, 'EXTENSION_FUNDING_CONFLICT'],
-  ['outside availability', { outsideHours: true }, 'SCHEDULE_UNAVAILABLE'],
+  ['blackout despite agreed hours', { outsideHours: true, blackout: true }, 'SCHEDULE_UNAVAILABLE'],
+  ['external event despite agreed hours', { outsideHours: true, externalEvent: true }, 'SCHEDULE_UNAVAILABLE'],
+  ['busy block despite agreed hours', { outsideHours: true, busy: true }, 'SCHEDULE_UNAVAILABLE'],
   ['occupied added time', { conflict: true }, 'EXTENSION_TIME_UNAVAILABLE'],
 ]) {
   test(`rejects ${label} without allocating or extending`, async () => {
@@ -166,6 +170,14 @@ for (const [label, options, code] of [
     expect(f.calls.some(call => /INSERT INTO flexible_package_|UPDATE lesson_bookings/.test(call.text))).toBe(false);
   });
 }
+
+test('acceptance honours instructor-agreed extension hours outside normal availability', async () => {
+  const f = fixture({ outsideHours: true });
+  expect(await f.accept()).toMatchObject({ applied: true, extensionMinutes: 30 });
+  expect(f.booking).toMatchObject({ end_time: '11:00', minutes_deducted: 120, list_price_pence: 10800 });
+  expect(f.allocations).toHaveLength(2);
+  expect(await f.accept()).toMatchObject({ applied: false, code: 'EXTENSION_NOT_AVAILABLE' });
+});
 
 test('a write failure propagates for transaction rollback after allocation', async () => {
   const f = fixture({ failBookingWrite: true });

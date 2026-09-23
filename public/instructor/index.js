@@ -1811,12 +1811,14 @@ async function sendExtensionOffer() {
   button.disabled = true;
   button.textContent = 'Sending…';
   try {
-    const response = await ccAuth.fetchAuthed('/api/instructor?action=create-extension-offer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json();
+    const result = await BookingActions.postWithScheduleCheck('/api/instructor?action=create-extension-offer', payload);
+    if (result.cancelled) {
+      button.disabled = false;
+      button.textContent = 'Send request';
+      return;
+    }
+    const response = result.res;
+    const data = result.data;
     if (!response.ok) throw new Error(data.error || 'Failed to create extension request');
 
     const deliveries = [];
