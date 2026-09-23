@@ -329,7 +329,7 @@
     }
 
     if (canAct) {
-      html += '<div class="lesson-actions">';
+      html += '<details class="lesson-management"><summary>Manage lesson</summary><div class="lesson-actions">';
       html += '<button class="btn-lesson calendar" data-action="download-calendar" data-booking-id="' + b.id + '">Add to Calendar</button>';
       var rCount = b.reschedule_count || 0;
       if (canReservedMove || canReschedule) {
@@ -358,7 +358,7 @@
         ' data-hours-until="' + hoursUntil.toFixed(1) + '"' +
         (b.series_id ? ' data-series-id="' + b.series_id + '"' : '') +
         '>Cancel</button>';
-      html += '</div>';
+      html += '</div></details>';
     }
 
     if (isPast && isCompleted && b.instructor_id) {

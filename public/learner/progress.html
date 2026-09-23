@@ -862,6 +862,15 @@
       font-family: var(--font-mono); font-size: 0.72rem;
       color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
     }
+    .plan-disclosure { margin: 12px 0 24px; border-bottom: 1px solid var(--border); }
+    .plan-disclosure > summary { cursor: pointer; padding: 14px 0; font: 700 .95rem var(--font-body); color: var(--primary); }
+    .plan-disclosure .plan-action-card { margin-bottom: 12px; }
+    .section-title, .page-eyebrow, .plan-action-link, .weekly-summary-label, .source-badge { font-family: var(--font-body); text-transform: none; letter-spacing: 0; }
+    .section-title { font-size: 1rem; }
+    .source-badge { font-size: .75rem; border: 0; padding: 0; background: transparent; color: var(--muted); }
+    .plan-action-link { font-size: .9rem; }
+    .weekly-summary-brief { font-size: .95rem; color: var(--muted); line-height: 1.5; }
+
   </style>
 </head>
 <body>
@@ -913,9 +922,10 @@
     <div id="weekly-summary-section"></div>
 
     <!-- Section 2: Recent activity -->
-    <h2 class="section-title">Recent activity</h2>
+    <details class="plan-disclosure"><summary>Recent activity</summary>
     <div class="stats-grid" id="stats-grid"></div>
     <div id="recent-practice-section"></div>
+    </details>
 
     <!-- Section 3: What is going well -->
     <div class="improve-section" id="going-well-section"></div>

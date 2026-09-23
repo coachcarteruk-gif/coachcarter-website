@@ -58,7 +58,7 @@
       transition: border-color 0.2s, box-shadow 0.2s;
       overflow: hidden;
     }
-    .acc-section[open] { border-color: var(--accent); box-shadow: 0 4px 16px rgba(245,131,33,0.08); }
+    .acc-section[open] { border-color: var(--border); box-shadow: none; }
     .acc-section > summary {
       list-style: none;
       cursor: pointer;
@@ -455,6 +455,12 @@
       .acc-section > summary .acc-status { font-size: 0.65rem; padding: 2px 8px; }
       .acc-body { padding: 0 16px 16px; }
     }
+    .profile-destination { display: flex; justify-content: space-between; gap: 16px; padding: 18px 20px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--primary); background: var(--white); text-decoration: none; font-weight: 700; }
+    .profile-destination:hover { color: var(--accent); }
+    .credit-balance-total-label { text-transform: none; letter-spacing: 0; }
+    #installAppHint { color: var(--muted); font-size: .9rem; line-height: 1.5; margin-bottom: 12px; }
+    #btnInstallApp[hidden] { display: none; }
+
   </style>
   <script src="/sidebar.js"></script>
   <script src="/shared/learner-auth.js"></script>
@@ -555,7 +561,7 @@
   </details>
 
   <!-- FLEXIBLE HOURS BALANCE -->
-  <details class="acc-section" id="flexible-hours-card" open>
+  <details class="acc-section" id="flexible-hours-card">
     <summary>
       <span class="acc-summary-left">
         <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
@@ -577,7 +583,7 @@
   </details>
 
   <!-- LESSON CREDIT BALANCES -->
-  <details class="acc-section" id="credit-balances-card" open>
+  <details class="acc-section" id="credit-balances-card">
     <summary>
       <span class="acc-summary-left">
         <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
@@ -598,7 +604,11 @@
     </div>
   </details>
 
-  <section class="test-card"><h2>Your practical test</h2><p>Keep your current self-reported details in one place.</p><a href="/learner/driving-test.html">Add or update your practical test details</a></section>
+  <a class="profile-destination" href="/learner/driving-test.html">Your practical test <span aria-hidden="true">&rarr;</span></a>
+  <details class="acc-section" id="install-app">
+    <summary><span class="acc-summary-left"><svg class="acc-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>Add to home screen</span></summary>
+    <div class="acc-body"><p id="installAppHint">Use your browser menu and choose Install app or Add to Home Screen. On iPhone, open this page in Safari, tap Share, then Add to Home Screen.</p><button type="button" class="btn-save-profile" id="btnInstallApp" hidden>Install app</button></div>
+  </details>
   <!-- STATS -->
   <details class="acc-section">
     <summary>

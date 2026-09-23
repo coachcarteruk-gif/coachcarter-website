@@ -452,6 +452,22 @@
       .lesson-body { padding: 12px 14px; }
       .lesson-time { font-size: 1.05rem; }
     }
+    .lessons-hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .page-title { margin: 0; }
+    .packages-cross-link { display: inline-flex; margin: 0; padding: 10px 0; border: 0; border-radius: 0; background: none; box-shadow: none; font-size: .88rem; color: var(--accent); text-decoration: underline; }
+    .packages-cross-link:hover { transform: none; }
+    .tab-bar { border-bottom-style: solid; margin-bottom: 16px; }
+    .tab-btn, .date-header, .lesson-meta, .lesson-type-badge, .btn-lesson { font-family: var(--font-body); letter-spacing: 0; text-transform: none; }
+    .tab-btn { font-size: .95rem; }
+    .date-header { font-size: .82rem; }
+    .lesson-meta { font-size: .85rem; }
+    .lesson-type-badge { font-size: .78rem; }
+    .lesson-accent { display: none; }
+    .lesson-card { border-width: 1px; background: var(--white); }
+    .lesson-management > summary { cursor: pointer; color: var(--primary); font-size: .88rem; font-weight: 700; padding: 12px 0 6px; }
+    .lesson-management .lesson-actions { margin-top: 6px; }
+    .btn-lesson { min-height: 44px; font-size: .85rem; }
+
   </style>
   <script src="/sidebar.js"></script>
   <script src="/shared/learner-auth.js"></script>
@@ -461,12 +477,9 @@
 
 <div class="page">
   <section class="lessons-hero">
-    <div class="hero-eyebrow">Your schedule</div>
-    <h1 class="page-title">My <em>lessons</em>.</h1>
-    <p class="lessons-subtitle">Everything you've booked with us. Switch tabs to see what's coming up or look back at past lessons - cancel or reschedule from any upcoming row.</p>
+    <h1 class="page-title">My lessons</h1>
     <a class="packages-cross-link" href="/learner/packages.html" data-cc-package-link hidden>
-      <span><strong>Looking for more than one lesson?</strong><span>Compare flexible hours, Full Curriculum and focused Manoeuvres packages.</span></span>
-      <b>Explore Packages</b>
+      Explore Packages &rarr;
     </a>
   </section>
 

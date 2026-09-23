@@ -1,5 +1,19 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.143 - Learner visual clutter cleanup (23 September 2026; pending deployment)
+
+The dashboard puts the next lesson first, booking starts with seven dates and
+uses a compact phone length selector, and upcoming lessons reveal management
+actions on demand. Profile balances and driving-plan detail start collapsed.
+Learner installation moves into Profile and cookie categories open on request.
+The empty reflection box and referral badge on the test shortcut are removed.
+Existing booking, consent, pricing and credit contracts are retained.
+
+Files: learner dashboard/booking/lessons/profile/progress/driving-test frontend,
+shared curriculum visibility CSS, PWA and consent UI, and focused browser tests.
+See [display contract and validation](docs/learner-interface-simplification.md).
+
+
 ## 2.142 - Preserve instructor sessions through admin support (23 September 2026; pending deployment)
 
 Support access now preserves the original instructor JWT in an httpOnly return

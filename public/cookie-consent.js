@@ -60,7 +60,10 @@
   }
 
   /* ── Banner HTML ── */
-  function createBanner() {
+  function createBanner(showDetails) {
+    var compact = window.location.pathname.indexOf('/learner/') === 0
+      || !!document.querySelector('script[src="/learner/book.js"]');
+    var previousFocus = document.activeElement;
     var overlay = document.createElement('div');
     overlay.id = 'cc-consent-overlay';
     overlay.setAttribute('role', 'dialog');
@@ -70,9 +73,10 @@
       '<div id="cc-consent-banner">' +
         '<div class="cc-consent-header">' +
           '<h3>Cookie Preferences</h3>' +
-          '<p>We use cookies to improve your experience. Select your preferences below.</p>' +
+          '<p>' + (compact ? 'Necessary cookies keep you signed in. Optional analytics and marketing cookies help us understand visits and advertising.' : 'We use cookies to improve your experience. Select your preferences below.') + '</p>' +
         '</div>' +
-        '<div class="cc-consent-categories">' +
+        (compact ? '<button type="button" id="cc-customise" class="cc-customise" aria-controls="cc-consent-categories" aria-expanded="false">Choose preferences</button>' : '') +
+        '<div class="cc-consent-categories" id="cc-consent-categories">' +
           '<label class="cc-consent-row">' +
             '<span class="cc-consent-info">' +
               '<strong>Necessary</strong>' +
@@ -110,6 +114,9 @@
     style.textContent =
       '#cc-consent-overlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 12px 12px}' +
       '#cc-consent-banner{background:#fff;border-radius:16px;max-width:520px;width:100%;padding:24px;font-family:"Lato",sans-serif;color:#262626;box-shadow:0 8px 32px rgba(0,0,0,.18)}' +
+      '#cc-consent-banner{max-height:calc(100dvh - 24px);overflow-y:auto}' +
+      '#cc-consent-banner [hidden]{display:none!important}' +
+      '.cc-customise{display:block;background:none;border:0;padding:10px 0;margin-bottom:10px;color:#262626;text-decoration:underline;font:600 14px "Lato",sans-serif;cursor:pointer;min-height:44px}' +
       '.cc-consent-header h3{font-family:"Bricolage Grotesque",sans-serif;font-size:18px;margin-bottom:6px}' +
       '.cc-consent-header p{font-size:13px;color:#797879;margin-bottom:16px;line-height:1.4}' +
       '.cc-consent-categories{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}' +
@@ -133,6 +140,21 @@
     /* ── Event handlers ── */
     var analyticsToggle = overlay.querySelector('#cc-analytics-toggle');
     var marketingToggle = overlay.querySelector('#cc-marketing-toggle');
+    var categories = overlay.querySelector('#cc-consent-categories');
+    var saveButton = overlay.querySelector('#cc-save-prefs');
+    var customise = overlay.querySelector('#cc-customise');
+    if (compact) {
+      var expanded = showDetails === true;
+      categories.hidden = !expanded;
+      saveButton.hidden = !expanded;
+      customise.setAttribute('aria-expanded', String(expanded));
+      customise.addEventListener('click', function() {
+        var open = categories.hidden;
+        categories.hidden = !open;
+        saveButton.hidden = !open;
+        customise.setAttribute('aria-expanded', String(open));
+      });
+    }
     var existing = getConsent();
     if (existing) {
       analyticsToggle.checked = existing.analytics;
@@ -155,8 +177,14 @@
     });
 
     /* Focus trap */
-    var focusable = overlay.querySelectorAll('button, input:not([disabled]), a');
+    function visibleControls() {
+      return Array.from(overlay.querySelectorAll('button, input:not([disabled]), a')).filter(function(el) {
+        return el.getClientRects().length > 0;
+      });
+    }
+    var focusable = visibleControls();
     if (focusable.length) focusable[0].focus();
+    overlay._previousFocus = previousFocus;
 
     overlay.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
@@ -166,6 +194,7 @@
         return;
       }
       if (e.key !== 'Tab') return;
+      focusable = visibleControls();
       var first = focusable[0], last = focusable[focusable.length - 1];
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault(); last.focus();
@@ -177,6 +206,7 @@
 
   function closeBanner(overlay) {
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    if (overlay && overlay._previousFocus && overlay._previousFocus.isConnected) overlay._previousFocus.focus();
   }
 
   /* ── Public API ── */
@@ -187,7 +217,7 @@
     show: function () {
       var existing = document.getElementById('cc-consent-overlay');
       if (existing) existing.parentNode.removeChild(existing);
-      createBanner();
+      createBanner(true);
     }
   };
 

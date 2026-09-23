@@ -39,7 +39,11 @@ async function fixture(page, { active = true, guest = false, request = false, si
     return route.fulfill({ json: body });
   });
   await page.goto('/learner/book.html');
-  await expect(page.locator('#lessonLengthControls [data-lesson-type-id="1"]')).toBeVisible();
+  if (page.viewportSize().width < 600) {
+    await expect(page.locator('#lessonLengthSelect')).toBeEnabled();
+  } else {
+    await expect(page.locator('#lessonLengthControls [data-lesson-type-id="1"]')).toBeVisible();
+  }
   await page.locator('[data-action="select-slot"]').first().click();
   await page.locator('[data-action="continue-selected-slot"]').click();
   await expect(page.locator('#mdLoadingRow')).toBeHidden();
@@ -49,10 +53,10 @@ async function fixture(page, { active = true, guest = false, request = false, si
 test('discount is visible in length choices, modal, filming price and payment button on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const state = await fixture(page);
-  const choice = page.locator('#lessonLengthControls [data-lesson-type-id="1"]');
-  await expect(choice.locator('s')).toHaveText('£82.50');
+  const choice = page.locator('#lessonLengthSelect option:checked');
+  await expect(choice).toContainText('was £82.50');
   await expect(choice).toContainText('£74.25');
-  await expect(choice).toContainText('10% post-trial discount');
+  await expect(choice).toContainText('10% off');
   await expect(page.locator('#mdLessonTypeSelect option:checked')).toContainText('£74.25 (was £82.50, 10% off)');
   await expect(page.locator('#mdPostTrialSaving')).toContainText('save £8.25');
   await expect(page.locator('#payBtnLabel')).toHaveText('Pay £74.25 & book');

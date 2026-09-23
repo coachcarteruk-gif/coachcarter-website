@@ -41,7 +41,7 @@ let feedFrom      = null; // Date: start of loaded window (always today)
 let feedTo        = null; // Date: end of currently loaded window
 const PLATFORM_MAX_DAYS = 84; // ceiling on instructors.max_booking_days_ahead
 const FEED_DEFAULT_DAYS = 28; // fallback when instructor windows are unknown
-let dateGridExpanded = false; // date grid shows 6 weeks until expanded
+let dateGridExpanded = false; // date grid shows 1 week until expanded
 
 // Learner-facing booking window (July 2026): each instructor's
 // max_booking_days_ahead IS the window; 84 days is the platform ceiling.
@@ -516,10 +516,26 @@ function lessonLengthLabel(lt) {
 
 function renderLessonLengthControls() {
   const container = document.getElementById('lessonLengthControls');
+  const select = document.getElementById('lessonLengthSelect');
   if (!container) return;
   if (!availableLessonTypes.length) {
     container.innerHTML = '<button class="lesson-length-option" type="button" disabled>No lesson lengths available</button>';
+    if (select) {
+      select.innerHTML = '<option>No lesson lengths available</option>';
+      select.disabled = true;
+    }
     return;
+  }
+  if (select) {
+    select.disabled = !!pendingReschedule;
+    select.innerHTML = availableLessonTypes.slice().sort((a, b) => a.duration_minutes - b.duration_minutes).map(lt => {
+      const id = lt.id || lt.lesson_type_id;
+      const selected = selectedLessonType && String(selectedLessonType.id) === String(id);
+      const price = lessonTypePricesExact && lt.price_pence > 0 ? ` · ${formatMoneyShort(lessonCashPrice(lt))}` : '';
+      const saving = price && hasPostTrialPrice(lt) ? ` (${lt.post_trial_discount_pct}% off, was ${formatMoneyShort(lt.price_pence)})` : '';
+      return `<option value="${esc(id)}" ${selected ? 'selected' : ''}>${esc(lt.name || 'Lesson')} · ${esc(lessonLengthLabel(lt))}${esc(price + saving)}</option>`;
+    }).join('');
+    select.onchange = () => selectLessonType(select.value);
   }
   container.innerHTML = availableLessonTypes
     .slice()
@@ -535,6 +551,8 @@ function renderLessonLengthControls() {
       const discounted = !!price && hasPostTrialPrice(lt);
       const saving = discounted ? `, was ${formatMoneyShort(lt.price_pence)}, ${lt.post_trial_discount_pct}% post-trial discount` : '';
       const fullLabel = `${lt.name || label}, ${formatHours(lt.duration_minutes)}${price ? `, ${formatMoneyShort(lessonCashPrice(lt))}` : ''}${saving}`;
+      const sameLength = availableLessonTypes.filter(other => Number(other.duration_minutes) === Number(lt.duration_minutes)).length > 1;
+      const typeName = sameLength ? `<span class="lesson-length-name">${esc(lt.name || lt.slug || 'Lesson option')}</span>` : '';
       const content = discounted
         ? `${esc(lessonLengthLabel(lt))} · <s>${esc(formatMoneyShort(lt.price_pence))}</s> <strong>${esc(formatMoneyShort(lessonCashPrice(lt)))}</strong><span class="lesson-price-saving">${esc(lt.post_trial_discount_pct)}% post-trial discount</span>`
         : esc(label);
@@ -543,7 +561,7 @@ function renderLessonLengthControls() {
         data-lesson-type-id="${esc(id)}"
         aria-pressed="${selected ? 'true' : 'false'}"
         ${locked ? 'disabled' : ''}
-        aria-label="${esc(fullLabel)}">${content}</button>`;
+        aria-label="${esc(fullLabel)}">${typeName}<span>${content}</span></button>`;
     })
     .join('');
 }
@@ -1366,8 +1384,8 @@ function renderDateGrid(cache) {
   }
 
   // Long windows (up to 12 weeks) would render a wall of rows that pushes
-  // the time slots below the fold — collapse to 6 weeks until expanded.
-  const COLLAPSED_DATES = 6 * 7;
+  // the time slots below the fold — start with 1 week until expanded.
+  const COLLAPSED_DATES = 7;
   if (!dateGridExpanded && selectedDate && dates.indexOf(selectedDate) >= COLLAPSED_DATES) {
     dateGridExpanded = true;
   }
@@ -1521,7 +1539,7 @@ function renderBookingCalendar(cache, opts) {
   if (live && selectedDate) {
     live.textContent = `Showing ${slotCount} time${slotCount === 1 ? '' : 's'} for ${selectedParts.full}`;
   }
-  return `<div class="booking-calendar">${dateGrid}${selectedDateHeading}${timeGroups}</div>`;
+  return `<div class="booking-calendar"><div class="booking-dates">${dateGrid}</div><div class="booking-times">${selectedDateHeading}${timeGroups}</div></div>`;
 }
 
 function selectDate(dateStr) {

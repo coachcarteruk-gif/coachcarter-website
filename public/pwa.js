@@ -100,10 +100,47 @@
 
   // ── Install prompt ──────────────────────────────────────────────────────────
   var deferredPrompt = null;
+  var learnerPage = window.location.pathname.indexOf('/learner/') === 0
+    || !!document.querySelector('script[src="/learner/book.js"]');
+
+  // Learners choose installation from Profile instead of being interrupted
+  // while booking or signing in. Other portal install prompts are unchanged.
+  function updateLearnerInstall() {
+    var button = document.getElementById('btnInstallApp');
+    var hint = document.getElementById('installAppHint');
+    if (!button) return;
+    var installed = window.matchMedia('(display-mode: standalone)').matches;
+    button.hidden = installed || !deferredPrompt;
+    if (hint && installed) hint.textContent = 'You are already using the installed app.';
+  }
+
+  document.addEventListener('DOMContentLoaded', updateLearnerInstall);
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#btnInstallApp') || !deferredPrompt) return;
+    var button = document.getElementById('btnInstallApp');
+    button.disabled = true;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function(result) {
+      if (result.outcome === 'accepted' && typeof posthog !== 'undefined') {
+        posthog.capture('pwa_installed');
+      }
+      deferredPrompt = null;
+      updateLearnerInstall();
+    }).finally(function() { button.disabled = false; });
+  });
+  window.addEventListener('appinstalled', function() {
+    deferredPrompt = null;
+    updateLearnerInstall();
+    dismissBanner();
+  });
 
   window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
     deferredPrompt = e;
+    if (learnerPage) {
+      updateLearnerInstall();
+      return;
+    }
 
     // Don't show if dismissed recently
     var dismissed = localStorage.getItem('cc_pwa_dismissed');

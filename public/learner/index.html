@@ -24,17 +24,7 @@
   <script src="/shared/dark-mode.js"></script>
   <script src="/shared/font-swap.js"></script>
   <style>
-    /* ── LEARNER DASHBOARD - overview document ───
-       Same DL25 vocabulary as the rest of the Lessons tab. Greeting replaces
-       eyebrow/title. Balance + readiness as twin stat panels at the top.
-       One orange hero (next-lesson) - referral demoted to a ledger row.
-       JS hooks preserved: welcome-msg, greeting-sub, credit-balance-line,
-       dashboard-skeleton, next-lesson-card / .show / nl-when / nl-time /
-       nl-instructor, next-lesson-empty / .show, readiness-ring / ring-fill /
-       readiness-value, profile-card / .show / profile-bar-fill / profile-pct /
-       profile-steps / profile-cta / btn-dismiss-profile, referral-card / .show
-       / ref-count / ref-earned, unlogged-banner / .show / unlogged-title /
-       unlogged-sub / unlogged-btn, credit-toast / .show. */
+    /* Learner overview: next lesson, follow-ups, balances and secondary links. */
 
     :root {
       --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -77,7 +67,7 @@
       max-width: 52ch;
     }
 
-    /* ── TWIN STAT PANELS - Balance + Readiness ── */
+    /* ── BALANCE SUMMARY ── */
     .stat-row {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 0;
@@ -199,7 +189,7 @@
     .guest-gate-btn.primary:hover { background: var(--accent-dk); }
     .guest-gate-btn.secondary:hover { border-color: var(--accent); background: var(--accent-mid); }
 
-    /* ── NEXT LESSON HERO CARD (the one allowed gradient) ── */
+    /* ── NEXT LESSON CARD ── */
     .next-lesson-card {
       background: linear-gradient(135deg, #f58321 0%, #e07518 100%);
       border-radius: 16px;
@@ -262,35 +252,6 @@
       backdrop-filter: blur(4px);
     }
     .nl-btn:hover { background: rgba(255,255,255,0.28); }
-
-    /* Readiness ring - kept inside hero for now, smaller + cleaner */
-    .readiness-ring {
-      position: absolute;
-      top: 18px; right: 18px;
-      width: 58px; height: 58px;
-      cursor: pointer;
-      text-decoration: none;
-      display: none !important; /* hidden - duplicate exists in stat row above */
-    }
-    .readiness-ring svg { width: 58px; height: 58px; transform: rotate(-90deg); }
-    .readiness-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 4; }
-    .readiness-ring .ring-fill { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.3s; }
-    .readiness-pct {
-      position: absolute; inset: 0; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      font-family: var(--font-head); font-weight: 800;
-      color: #fff; line-height: 1;
-    }
-    .readiness-pct #readiness-value {
-      font-size: 0.92rem;
-      font-variant-numeric: tabular-nums;
-    }
-    .readiness-label {
-      font-family: var(--font-mono); font-size: 0.5rem; font-weight: 700;
-      color: rgba(255,255,255,0.75);
-      letter-spacing: 0.08em; text-transform: uppercase;
-      margin-top: 2px;
-    }
 
     /* Next lesson empty state */
     .next-lesson-empty {
@@ -636,6 +597,37 @@
       .action-btn:hover::after { transform: translateY(-50%) translateX(2px); }
       .nl-info { padding-right: 0; }
     }
+    /* Task-first dashboard: one lesson, then supporting information. */
+    .greeting-block { margin-bottom: 20px; }
+    .next-lesson-card { background: var(--surface); color: var(--primary); border: 1px solid var(--border); box-shadow: none; padding: 22px; gap: 0; }
+    .next-lesson-card::before { content: 'Your next lesson'; position: static; color: var(--muted); font: 600 .85rem var(--font-body); letter-spacing: 0; text-transform: none; margin-bottom: 10px; }
+    .nl-when { color: var(--muted); background: none; padding: 0; font: 600 .85rem var(--font-body); letter-spacing: 0; text-transform: none; }
+    .nl-time { color: var(--primary); font-size: clamp(1.15rem, 4vw, 1.5rem); }
+    .nl-instructor { color: var(--muted); font: 400 .95rem var(--font-body); }
+    .nl-info { padding-right: 0; }
+    .nl-filming { color: var(--primary); }
+    .nl-btn { background: var(--accent); color: #fff; padding: 12px 18px; font: 700 .9rem var(--font-body); letter-spacing: 0; text-transform: none; }
+    .nl-btn:hover { background: var(--accent-dk); }
+    .stat-row { grid-template-columns: 1fr; margin: 20px 0; }
+    .stat-cell { padding: 18px; border: 0; }
+    .stat-cell-label { font: 700 .95rem var(--font-body); letter-spacing: 0; text-transform: none; }
+    .balance-total { color: var(--muted); font-size: .9rem; margin: 6px 0; }
+    .stat-cell-value { display: inline; font-size: 1.1rem; color: var(--primary); }
+    .stat-cell-sub, .greeting-sub { font: 400 .85rem/1.5 var(--font-body); letter-spacing: 0; color: var(--muted); margin: 4px 0 0; }
+    .profile-card { padding: 0; box-shadow: none; border: 1px solid var(--border); }
+    .profile-card > summary { padding: 16px 18px; cursor: pointer; font-weight: 700; }
+    .profile-card-content { padding: 0 18px 18px; }
+    .unlogged-banner { grid-template-columns: minmax(0, 1fr) auto; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; padding: 16px 0; box-shadow: none; }
+    .unlogged-banner-icon { display: none; }
+    .btn-log-now { font: 700 .85rem var(--font-body); letter-spacing: 0; text-transform: none; background: none; color: var(--accent); min-height: 44px; }
+    .btn-log-now:hover { background: var(--accent-lt); }
+    .referral-card, .referral-card.show { grid-template-columns: 1fr auto; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; box-shadow: none; background: transparent; padding: 16px 0; }
+    .referral-card::before { content: none; }
+    .dashboard-link { display: flex; justify-content: space-between; padding: 18px 0; color: var(--primary); text-decoration: none; font-weight: 700; border-bottom: 1px solid var(--border); }
+    .dashboard-link:hover { color: var(--accent); }
+    .section-label, .profile-card-title, .profile-card-dismiss, .ref-cta, .referral-stat { font-family: var(--font-body); letter-spacing: 0; text-transform: none; }
+    .action-btn { border: 0; box-shadow: none; }
+
   </style>
 <script src="/sidebar.js"></script>
 <script src="/competency-config.js"></script>
@@ -647,14 +639,9 @@
 <main class="page">
   <!-- GREETING -->
   <section class="greeting-block">
-    <div class="greeting-eyebrow">Today</div>
     <h1 class="greeting" id="welcome-msg"><span class="skeleton skeleton-text w-40" style="display:inline-block;height:1.1em">&nbsp;</span></h1>
-    <div class="greeting-sub" id="greeting-sub" style="display:none">
-      <span id="credit-balance-line"></span>
-    </div>
   </section>
 
-  <section class="cp-card cp-banner" id="curriculum-reflection-prompt" hidden aria-live="polite"></section>
 
   <section class="guest-dashboard-gate" id="guest-dashboard-gate">
     <div class="guest-gate-kicker">Learner hub</div>
@@ -666,29 +653,6 @@
     </div>
   </section>
 
-  <!-- TWIN STAT PANELS - Balance + Readiness -->
-  <div class="stat-row">
-    <a href="/learner/profile.html" class="stat-cell" id="stat-balance">
-      <div class="stat-cell-label">Available hours</div>
-      <div class="stat-cell-value" id="stat-balance-value"> - </div>
-      <div class="stat-cell-sub" id="stat-balance-sub">Flexible Hours + Lesson Credit</div>
-      <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
-    </a>
-    <a href="/learner/progress.html" class="stat-cell" id="stat-readiness">
-      <div class="stat-cell-label">Practice level</div>
-      <div class="stat-cell-value" id="stat-readiness-value"> - </div>
-      <div class="stat-cell-sub" id="stat-readiness-sub">across all skills</div>
-      <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
-    </a>
-  </div>
-
-  <a href="/learner/driving-test.html" class="referral-card referral-teaser" style="display:flex;margin-bottom:16px">
-    <div>
-      <h3>Driving test</h3>
-      <div class="ref-sub">View or update your test date, time and test centre.</div>
-    </div>
-    <span class="stat-cell-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
-  </a>
   <!-- SKELETON -->
   <div id="dashboard-skeleton">
     <div class="skeleton skeleton-hero" style="margin-bottom:16px"></div>
@@ -706,18 +670,6 @@
         <a href="/learner/lessons.html" class="nl-btn">View lessons</a>
       </div>
     </div>
-    <!-- Legacy readiness ring (hidden - replaced by stat-readiness above) -->
-    <a href="/learner/progress.html" class="readiness-ring" id="readiness-ring" style="display:none" title="View full progress">
-      <svg viewBox="0 0 52 52">
-        <circle class="ring-bg" cx="26" cy="26" r="21"/>
-        <circle class="ring-fill" cx="26" cy="26" r="21" id="ring-fill"
-          stroke-dasharray="131.95" stroke-dashoffset="131.95"/>
-      </svg>
-      <div class="readiness-pct">
-        <span id="readiness-value">0%</span>
-        <span class="readiness-label">Ready</span>
-      </div>
-    </a>
   </div>
 
   <!-- NEXT LESSON EMPTY STATE -->
@@ -727,18 +679,35 @@
     <a href="/learner/book.html" class="nle-btn">Book a lesson</a>
   </div>
 
+  <section class="cp-card cp-banner" id="curriculum-reflection-prompt" hidden aria-live="polite"></section>
+
   <!-- UNLOGGED BOOKING BANNER -->
   <div class="unlogged-banner" id="unlogged-banner">
     <div class="unlogged-banner-icon">&#x1F4DD;</div>
     <div class="unlogged-banner-text">
       <div class="unlogged-banner-title" id="unlogged-title"></div>
-      <div class="unlogged-banner-sub" id="unlogged-sub">Your instructor marked it complete - take 30 seconds to log how it went.</div>
+      <div class="unlogged-banner-sub" id="unlogged-sub">Add a quick note about how it went.</div>
     </div>
     <a class="btn-log-now" id="unlogged-btn" href="#">Log now</a>
   </div>
 
+  <!-- Compact balance summary; spending scope remains explicit. -->
+  <div class="stat-row">
+    <a href="/learner/profile.html" class="stat-cell" id="stat-balance">
+      <div class="stat-cell-label">Available hours</div>
+      <div class="balance-total"><span class="stat-cell-value" id="stat-balance-value"> - </span> total hours</div>
+      <div class="stat-cell-sub" id="stat-balance-sub">Flexible Hours + Lesson Credit</div>
+    <div class="greeting-sub" id="greeting-sub" style="display:none">
+      <span id="credit-balance-line"></span>
+    </div>
+      <span class="stat-cell-arrow"><svg viewBox="0 0 24 24"><path d="M5 19L19 5M19 5H8M19 5v11"/></svg></span>
+    </a>
+  </div>
+
   <!-- PROFILE COMPLETION -->
-  <div class="profile-card" id="profile-card">
+  <details class="profile-card" id="profile-card">
+    <summary>Finish your driving profile</summary>
+    <div class="profile-card-content">
     <div class="profile-card-header">
       <div class="profile-card-title">Build your driving profile</div>
       <button class="profile-card-dismiss" id="btn-dismiss-profile">Dismiss</button>
@@ -747,7 +716,10 @@
     <div class="profile-pct" id="profile-pct">0% complete</div>
     <div class="profile-steps" id="profile-steps"></div>
     <a href="/learner/onboarding.html" class="btn-complete" id="profile-cta">Complete next step</a>
-  </div>
+    </div>
+  </details>
+
+  <a class="dashboard-link" href="/learner/progress.html">My driving plan <span aria-hidden="true">&rarr;</span></a>
 
   <!-- REFERRAL TEASER - demoted to a ledger row -->
   <a class="referral-card referral-teaser" id="referral-card" href="/learner/refer.html">
