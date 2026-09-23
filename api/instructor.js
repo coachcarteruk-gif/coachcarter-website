@@ -39,7 +39,7 @@ const { neon }   = require('@neondatabase/serverless');
 const jwt        = require('jsonwebtoken');
 const { sendWhatsApp } = require('./_whatsapp');
 const { createTransporter, generateToken } = require('./_auth-helpers');
-const { requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+const { requireAuth, SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, INSTRUCTOR_RETURN_COOKIE,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
 const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie } = require('./_csrf');
 const { reportError } = require('./_error-alert');
@@ -459,6 +459,7 @@ async function handleVerifyToken(req, res) {
 
     // Set httpOnly session cookie + CSRF double-submit cookie.
     appendSetCookie(res, buildSessionCookie(SESSION_COOKIE_NAMES.instructor, jwtToken, SESSION_MAX_AGE_SEC.instructor));
+    appendSetCookie(res, buildSessionClearCookie(INSTRUCTOR_RETURN_COOKIE));
     appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
 
     return res.json({
@@ -477,6 +478,7 @@ async function handleVerifyToken(req, res) {
 async function handleLogout(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor));
+  appendSetCookie(res, buildSessionClearCookie(INSTRUCTOR_RETURN_COOKIE));
   appendSetCookie(res, buildCsrfClearCookie());
   return res.json({ ok: true });
 }

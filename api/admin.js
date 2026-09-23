@@ -54,9 +54,9 @@ const { processAllPayouts, getEligibleBookings, simulatePayoutForInstructor } = 
 const { computePlatformBalance } = require('./_platform-balance');
 const { sendPayoutSummary } = require('./_payout-email');
 const { requireAuth, getSchoolId, verifyAdminSecret, isSuperAdmin,
-        SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC,
+        SESSION_COOKIE_NAMES, SESSION_MAX_AGE_SEC, INSTRUCTOR_RETURN_COOKIE, getPersistentInstructorSession,
         buildSessionCookie, buildSessionClearCookie } = require('./_auth');
-const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie, parseCookies } = require('./_csrf');
+const { buildCsrfCookie, buildCsrfClearCookie, mintCsrfToken, appendSetCookie, parseCookies, verifyCsrf } = require('./_csrf');
 const { createTransporter, generateToken } = require('./_auth-helpers');
 const { sendWhatsApp } = require('./_whatsapp');
 const { lockBalanceAndMutate } = require('./_credit-grant');
@@ -2845,23 +2845,26 @@ async function handleAccessInstructorAccount(req, res) {
     if (!instructor) return res.status(404).json({ error: 'Instructor not found' });
     if (!instructor.active) return res.status(409).json({ error: 'Instructor account is inactive' });
 
+    // Preserve the original token without extending its expiry. Nested support
+    // access must never replace it with an impersonation token.
+    const originalSession = getPersistentInstructorSession(req, SESSION_COOKIE_NAMES.instructor);
+    if (originalSession && originalSession.payload.school_id === schoolId) {
+      appendSetCookie(res, buildSessionCookie(
+        INSTRUCTOR_RETURN_COOKIE, originalSession.token,
+        originalSession.payload.exp - Math.floor(Date.now() / 1000)
+      ));
+    }
+
     const tokenPayload = {
       id: instructor.id,
       email: instructor.email,
       role: 'instructor',
       school_id: instructor.school_id || schoolId,
       impersonation: true,
+      support_session_version: 2,
       impersonated_by_admin_id: admin.id || null,
       impersonated_by_admin_email: admin.email || null,
     };
-    if (admin.role === 'instructor') {
-      tokenPayload.return_instructor_admin = {
-        id: admin.id,
-        email: admin.email,
-        school_id: admin.school_id || schoolId,
-        isAdmin: true,
-      };
-    }
     if (instructor.is_admin) tokenPayload.isAdmin = true;
 
     const sessionToken = jwt.sign(tokenPayload, secret, { expiresIn: INSTRUCTOR_ACCESS_MAX_AGE_SEC });
@@ -2918,6 +2921,7 @@ async function handleAccessInstructorAccount(req, res) {
 // left alone so the operator returns to the admin portal still signed in.
 async function handleStopInstructorAccess(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!verifyCsrf(req)) return res.status(401).json({ error: 'Unauthorised' });
 
   const cookies = parseCookies(req);
   let instructorPayload = null;
@@ -2938,35 +2942,59 @@ async function handleStopInstructorAccess(req, res) {
     admin = verifyAdminJWT(req);
   }
 
-  if (!admin && !instructorPayload) return res.status(401).json({ error: 'Unauthorised' });
-
-  appendSetCookie(res, buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor));
-  appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
-
-  const returnInstructorAdmin = instructorPayload?.return_instructor_admin;
-  if (returnInstructorAdmin && process.env.JWT_SECRET) {
-    const restoredToken = jwt.sign(
-      {
-        id: returnInstructorAdmin.id,
-        email: returnInstructorAdmin.email,
-        role: 'instructor',
-        school_id: returnInstructorAdmin.school_id,
-        isAdmin: true,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '180d' }
-    );
-    appendSetCookie(res, buildSessionCookie(
-      SESSION_COOKIE_NAMES.instructor,
-      restoredToken,
-      SESSION_MAX_AGE_SEC.instructor
-    ));
+  const originalSession = getPersistentInstructorSession(req) ||
+    getPersistentInstructorSession(req, SESSION_COOKIE_NAMES.instructor);
+  if (!admin && !instructorPayload && !originalSession) return res.status(401).json({ error: 'Unauthorised' });
+  if (!admin && !originalSession && instructorPayload?.support_session_version === 2) {
+    return res.status(401).json({ error: 'Unauthorised' });
+  }
+  if (originalSession && instructorPayload && originalSession.payload.school_id !== instructorPayload.school_id) {
+    return res.status(403).json({ error: 'Unauthorised' });
   }
 
-  const operatorId = admin?.id || returnInstructorAdmin?.id || null;
-  const operatorEmail = admin?.email || returnInstructorAdmin?.email || null;
-  const schoolId = admin ? getAdminSchoolId(admin, req) : (instructorPayload?.school_id || returnInstructorAdmin?.school_id || 1);
-  if (instructorPayload) {
+  // Resolve display data server-side. Retain exit for live legacy support
+  // sessions during rollout; never trust the localStorage return identity.
+  const returnInstructorAdmin = instructorPayload?.support_session_version === 2
+    ? null : instructorPayload?.return_instructor_admin;
+  const restoreIdentity = originalSession?.payload || returnInstructorAdmin;
+  let restoredInstructor = null;
+  let restoredToken = null;
+  let restoredMaxAge = null;
+  if (restoreIdentity) {
+    try {
+      const sql = neon(process.env.POSTGRES_URL);
+      const [row] = await sql`
+        SELECT id, name, email, photo_url, school_id, onboarding_complete,
+               COALESCE(is_admin, FALSE) AS is_admin
+        FROM instructors
+        WHERE id = ${restoreIdentity.id} AND school_id = ${restoreIdentity.school_id}
+          AND active = TRUE`;
+      if (!row) return res.status(401).json({ error: 'Unauthorised' });
+      restoredInstructor = row;
+      restoredToken = originalSession?.token || jwt.sign({
+        id: row.id, email: row.email, role: 'instructor', school_id: row.school_id,
+        ...(row.is_admin ? { isAdmin: true } : {}),
+      }, process.env.JWT_SECRET, { expiresIn: '180d' });
+      restoredMaxAge = originalSession
+        ? originalSession.payload.exp - Math.floor(Date.now() / 1000)
+        : SESSION_MAX_AGE_SEC.instructor;
+      if (restoredMaxAge <= 0) return res.status(401).json({ error: 'Unauthorised' });
+    } catch (err) {
+      reportError('/api/admin?action=stop-instructor-access', err);
+      return res.status(500).json({ error: 'Could not restore instructor session' });
+    }
+  }
+
+  appendSetCookie(res, restoredToken
+    ? buildSessionCookie(SESSION_COOKIE_NAMES.instructor, restoredToken, restoredMaxAge)
+    : buildSessionClearCookie(SESSION_COOKIE_NAMES.instructor));
+  appendSetCookie(res, buildSessionClearCookie(INSTRUCTOR_RETURN_COOKIE));
+  appendSetCookie(res, buildCsrfCookie(mintCsrfToken()));
+
+  const operatorId = admin?.id || restoreIdentity?.id || null;
+  const operatorEmail = admin?.email || restoreIdentity?.email || null;
+  const schoolId = admin ? getAdminSchoolId(admin, req) : (instructorPayload?.school_id || restoreIdentity?.school_id || 1);
+  if (instructorPayload || originalSession) {
     try {
       const sql = neon(process.env.POSTGRES_URL);
       await logAudit(sql, {
@@ -2974,13 +3002,15 @@ async function handleStopInstructorAccess(req, res) {
         adminEmail: operatorEmail,
         action: 'admin.instructor_access_stop',
         targetType: 'instructor',
-        targetId: instructorPayload.id,
+        targetId: instructorPayload?.id || restoreIdentity.id,
         details: {
-          instructor_email: instructorPayload.email || null,
-          started_by_admin_id: instructorPayload.impersonated_by_admin_id || null,
-          started_by_admin_email: instructorPayload.impersonated_by_admin_email || null,
+          instructor_email: instructorPayload?.email || null,
+          started_by_admin_id: instructorPayload?.impersonated_by_admin_id || null,
+          started_by_admin_email: instructorPayload?.impersonated_by_admin_email || null,
+          restored_original_session: !!originalSession,
+          support_session_missing_or_expired: !instructorPayload,
         },
-        schoolId: instructorPayload.school_id || schoolId,
+        schoolId: instructorPayload?.school_id || restoreIdentity?.school_id || schoolId,
         req,
       });
     } catch (auditErr) {
@@ -2988,7 +3018,7 @@ async function handleStopInstructorAccess(req, res) {
     }
   }
 
-  return res.json({ success: true });
+  return res.json({ success: true, instructor: restoredInstructor });
 }
 
 // ── GET /api/admin?action=all-learners ──────────────────────────────────────

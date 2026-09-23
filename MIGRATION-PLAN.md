@@ -10,6 +10,12 @@ Native clients should reuse `profile.current_test_details` and its version times
 
 ## Shared API additions — September 2026 (pending rollout)
 
+Instructor support exit now returns `{ success: true, instructor }`, where the
+instructor is the restored server-verified display identity (null for admin-only
+return). Retain the original session securely during temporary support access;
+support expiry must not expire the operator's login. Update local display state
+only after successful restoration and keep it on network/server failures.
+
 Native clients should consume the authenticated `credits?action=post-trial-discount`
 read model and the offer `my-pencilled-offers` / `cancel-pencilled-offer` actions.
 Display both discount eligibility expiry and a pencilled offer's separate payment

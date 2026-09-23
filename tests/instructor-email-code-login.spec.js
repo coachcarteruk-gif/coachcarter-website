@@ -195,6 +195,7 @@ test.describe('instructor email-code login', () => {
       });
 
       const cookies = res.getHeader('Set-Cookie');
+      expect(cookies.some(cookie => cookie.startsWith('cc_instructor_return=; Max-Age=0;'))).toBe(true);
       expect(cookies.some((cookie) => cookie.startsWith('cc_instructor=') && cookie.includes('HttpOnly'))).toBe(true);
       expect(cookies.some((cookie) => cookie.startsWith('cc_csrf='))).toBe(true);
 
