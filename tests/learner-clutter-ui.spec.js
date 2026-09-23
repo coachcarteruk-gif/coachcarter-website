@@ -113,15 +113,25 @@ test('booking shortcuts suppress automatic installation and keep compact cookie 
   await expect(page.locator('#cc-install-banner')).toHaveCount(0);
 });
 
-test('driving-test Save can scroll clear of the fixed phone navigation', async ({ page }) => {
-  await setupLearner(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/learner/driving-test.html');
-  await page.locator('#btnSaveTest').scrollIntoViewIfNeeded();
-  const save = await page.locator('#btnSaveTest').boundingBox();
-  const nav = await page.locator('.cc-bottom-bar').boundingBox();
-  expect(save.y + save.height).toBeLessThanOrEqual(nav.y);
-});
+for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+  test(`driving-test Save can scroll clear of phone navigation at ${viewport.width}px`, async ({ page }) => {
+    const requests = await setupLearner(page);
+    await page.setViewportSize(viewport);
+    await page.goto('/learner/driving-test.html');
+    await expect(page.locator('#testCentre')).toHaveValue('Sidcup');
+    await page.evaluate(() => document.fonts.ready);
+    // scrollIntoViewIfNeeded only considers the viewport, not the fixed nav.
+    // Exercise the end-of-form scroll and retain the actual no-overlap check.
+    await page.locator('main').evaluate(el => el.scrollTo(0, el.scrollHeight));
+    await expect.poll(async () => {
+      const save = await page.locator('#btnSaveTest').boundingBox();
+      const nav = await page.locator('.cc-bottom-bar').boundingBox();
+      return nav.y - (save.y + save.height);
+    }).toBeGreaterThanOrEqual(0);
+    await page.locator('#btnSaveTest').click({ trial: true });
+    expect(requests.filter(r => r.method !== 'GET')).toEqual([]);
+  });
+}
 
 test('profile exposes separate balances on demand and installation requires a click', async ({ page }) => {
   await setupLearner(page);
