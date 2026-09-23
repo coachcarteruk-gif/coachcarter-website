@@ -418,6 +418,7 @@ module.exports = async (req, res) => {
   if (action === 'access-instructor-account') return handleAccessInstructorAccount(req, res);
   if (action === 'stop-instructor-access')    return handleStopInstructorAccess(req, res);
   if (action === 'all-learners')      return handleAllLearners(req, res);
+  if (action === 'export-contacts') return require('./_contacts-export').handleExportContacts(req, res);
   if (action === 'learner-controls')  return handleLearnerControls(req, res);
   if (action === 'learner-detail')    return handleLearnerDetail(req, res);
   if (action === 'update-learner')    return handleUpdateLearner(req, res);

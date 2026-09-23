@@ -441,6 +441,22 @@ body {
       <button class="btn" id="btn-refresh-dashboard">Refresh</button>
     </div>
 
+    <div class="panel-card" style="padding:20px;margin-bottom:24px;">
+      <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+        <div>
+          <div class="panel-card-title">Export contacts</div>
+          <p class="page-subtitle" id="contacts-export-description">Download all school contacts for GoHighLevel: learners, enquiries, guests, instructors and admins. Matching email addresses are combined.</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label id="contacts-export-school-label" hidden>School
+            <select id="contacts-export-school" class="btn"><option value="">Choose a school</option></select>
+          </label>
+          <button type="button" class="btn" id="btn-export-contacts" aria-describedby="contacts-export-description">Export GoHighLevel CSV</button>
+        </div>
+      </div>
+      <p class="page-subtitle" id="contacts-export-status" role="status" aria-live="polite"></p>
+    </div>
+
     <div class="stats-grid" id="dash-stats">
       <div class="stat-card"><div class="stat-value" id="stat-upcoming">-</div><div class="stat-label">Upcoming Lessons</div></div>
       <div class="stat-card"><div class="stat-value" id="stat-today">-</div><div class="stat-label">Today</div></div>
@@ -1571,5 +1587,6 @@ body {
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 <script src="/admin/portal.js?v=20260912-simon-payment-observation-replay"></script>
+<script src="/admin/contacts-export.js?v=20260923"></script>
 </body>
 </html>
