@@ -691,7 +691,10 @@ async function acceptBookingExtension({
       const warnings = await loadInstructorScheduleWarnings(sql, {
         schoolId, instructorId, scheduledDate, startTime: booking.start_time, endTime: newEndTime,
       });
-      if (warnings.length) return { applied: false, code: 'SCHEDULE_UNAVAILABLE', message: warnings.map(row => row.message).join(' ') };
+      // The instructor agreed this extension's hours when creating the offer.
+      // Honour that agreement on acceptance, while rechecking hard schedule blocks.
+      const blockingWarnings = warnings.filter(row => row.code !== 'OUTSIDE_NORMAL_HOURS');
+      if (blockingWarnings.length) return { applied: false, code: 'SCHEDULE_UNAVAILABLE', message: blockingWarnings.map(row => row.message).join(' ') };
     }
 
     const bookingConflict = await client.query(

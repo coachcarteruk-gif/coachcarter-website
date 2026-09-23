@@ -636,10 +636,14 @@
     });
     var data = await res.json();
 
+    var isExtension = url === '/api/instructor?action=create-extension-offer';
     if (res.status === 409 && data.code === 'NORMAL_HOURS_OVERRIDE_REQUIRED'
-        && payload.payment_method === 'flexible_package' && data.normal_hours_override_token) {
-      var confirmed = window.confirm(data.error + '\n\nLesson: ' + payload.scheduled_date
-        + ' at ' + payload.start_time + '\n\nOverride normal availability and book this lesson?');
+        && (isExtension || payload.payment_method === 'flexible_package') && data.normal_hours_override_token) {
+      var prompt = isExtension
+        ? data.error + '\n\nOverride normal availability and send this extension request?'
+        : data.error + '\n\nLesson: ' + payload.scheduled_date
+          + ' at ' + payload.start_time + '\n\nOverride normal availability and book this lesson?';
+      var confirmed = window.confirm(prompt);
       if (!confirmed) return { cancelled: true, res: res, data: data };
       payload.normal_hours_override_token = data.normal_hours_override_token;
       res = await ccAuth.fetchAuthed(url, {

@@ -10,7 +10,7 @@ may open a blackout date, matching the existing learner booking policy. Busy
 blocks and connected-calendar events still block that time.
 
 Instructor-created cash, credit and free bookings, fixed offers,
-broadcast offers, instructor edits and newly requested extensions return
+broadcast offers and instructor edits return
 `409 SCHEDULE_UNAVAILABLE` for schedule conflicts. Legacy `availability_override`
 and `force` inputs do not bypass these checks. Upcoming admin time edits use the
 same guard; retrospective corrections retain their existing policy.
@@ -24,6 +24,15 @@ learner, date, full time range, lesson type and transmission. A changed proposal
 requires fresh confirmation. All schedule checks run again on the retry; busy
 blocks, blackouts and external events cannot be bypassed. Normal availability is
 not edited, and package funding still uses the existing transaction.
+
+Lesson extension requests use the same warning and confirmation for normal-hours
+exceptions, including paid, free and Flexible Hours extensions. The acknowledgement
+binds the original booking, date, old/new finish, added minutes, funding method and
+explicit price to the authenticated school/instructor. Real clashes are checked
+before offering confirmation and again on retry. Cancelling sends no request.
+The learner must still accept the extension; Flexible Hours acceptance honours the
+instructor-agreed hours while rechecking busy blocks, blackouts, external events
+and occupied time. Funding, pricing and payment settlement are unchanged.
 
 For other intentional exceptions, the instructor first adds one-off availability
 from their calendar or changes weekly hours. A conflicting busy block must be

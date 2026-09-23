@@ -1,5 +1,11 @@
 # Per-Instructor Credits Audit
 
+23 September 2026 extension availability exception: instructors can confirm a
+normal-hours warning before sending an extension request. Flexible Hours learner
+acceptance honours those agreed hours, while still refusing real schedule blocks
+and funding contradictions. FIFO allocation, minutes, frozen value and atomic
+acceptance are unchanged. No new migration is required.
+
 21 September 2026 Flexible Hours extensions (pending deployment): the instructor's
 existing Request extension flow now supports lessons already funded entirely by
 Flexible Hours. The learner explicitly accepts package-minute use. Acceptance locks
