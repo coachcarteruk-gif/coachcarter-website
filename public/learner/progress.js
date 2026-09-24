@@ -575,12 +575,13 @@ function renderWeeklySummary() {
     : 'They can help turn the next practice session into a focused plan.';
 
   var html = '<h2 class="section-title">Weekly progress summary</h2>';
-  html += '<div class="weekly-summary-card"><div class="weekly-summary-grid">';
+  html += '<p class="weekly-summary-brief">' + escHtml(practiceValue) + '</p>';
+  html += '<details class="plan-disclosure"><summary>See weekly detail</summary><div class="weekly-summary-card"><div class="weekly-summary-grid">';
   html += renderWeeklyCardItem('Practice this week', practiceValue, practiceCopy, sessionSourceKeys);
   html += renderWeeklyCardItem('Strongest area', strongestValue, strongestCopy, strongest ? sourceKeys(strongest) : ['learner-reflection', 'quiz-practice']);
   html += renderWeeklyCardItem('Next week', focusValue, focusCopy, focus ? sourceKeys(focus) : ['practice-drive']);
   html += renderWeeklyCardItem('Ask about', askValue, askCopy, ask ? sourceKeys(ask) : ['instructor-assessment']);
-  html += '</div></div>';
+  html += '</div></div></details>';
 
   container.innerHTML = html;
 }
@@ -1070,6 +1071,7 @@ function renderNextActions() {
   var html = '<h2 class="section-title">Practise next</h2>';
   html += '<div class="plan-actions">';
   for (var a = 0; a < actions.length && a < 3; a++) {
+    if (a === 1) html += '<details class="plan-disclosure"><summary>See other suggestions</summary>';
     html += '<div class="plan-action-card">';
     html += renderSignalSourceBadge(actions[a].source || 'mixed-signal');
     html += '<div class="plan-action-title">' + actions[a].title + '</div>';
@@ -1077,6 +1079,7 @@ function renderNextActions() {
     html += '<a class="plan-action-link" href="' + actions[a].href + '">' + actions[a].cta + ' &rarr;</a>';
     html += '</div>';
   }
+  if (actions.length > 1) html += '</details>';
   html += '</div>';
 
   container.innerHTML = html;

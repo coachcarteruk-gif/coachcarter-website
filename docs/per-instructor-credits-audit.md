@@ -1,5 +1,12 @@
 # Per-Instructor Credits Audit
 
+23 September 2026 learner UI cleanup (pending deployment): dashboard balances
+move below the next lesson into one compact summary. The combined display total
+still comes from the existing two balance reads; copy explicitly distinguishes
+school-wide Flexible Hours from instructor-scoped Lesson Credit. Profile balance
+sections start collapsed and retain their instructor breakdowns. No funding,
+pricing or credit eligibility logic changes.
+
 23 September 2026 extension availability exception: instructors can confirm a
 normal-hours warning before sending an extension request. Flexible Hours learner
 acceptance honours those agreed hours, while still refusing real schedule blocks

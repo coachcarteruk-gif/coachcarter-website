@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  await Promise.all([loadBookings(), loadUnlogged(), loadReadiness(), loadBalance(), loadFlexibleBalance()]);
+  await Promise.all([loadBookings(), loadUnlogged(), loadBalance(), loadFlexibleBalance()]);
   render();
   loadProfileCompleteness();
   loadReferralCard();
@@ -34,6 +34,8 @@ function renderGuestGate() {
   if (empty) empty.classList.remove('show');
   var shortcuts = document.getElementById('shortcuts-label');
   if (shortcuts) shortcuts.style.display = 'none';
+  var drivingPlan = document.querySelector('.dashboard-link');
+  if (drivingPlan) drivingPlan.style.display = 'none';
   var actionStrip = document.querySelector('.action-strip');
   if (actionStrip) actionStrip.style.display = 'none';
 }
@@ -92,58 +94,6 @@ async function loadUnlogged() {
     const res = await ccAuth.fetchAuthed('/api/learner?action=unlogged-bookings');
     if (res.ok) UNLOGGED_DATA = await res.json();
   } catch (e) { console.error(e); }
-}
-
-async function loadReadiness() {
-  try {
-    const res = await ccAuth.fetchAuthed('/api/learner?action=competency');
-    if (!res.ok) return;
-    const data = await res.json();
-    const CC = window.CC_COMPETENCY;
-    if (!CC) return;
-
-    const lessonMap = {};
-    (data.lesson_ratings || []).forEach(lr => {
-      const key = CC.mapLegacySkill(lr.skill_key);
-      const rObj = CC.RATINGS.find(r => r.key === lr.rating);
-      if (!rObj) return;
-      if (!lessonMap[key]) lessonMap[key] = [];
-      lessonMap[key].push({ score: rObj.score, date: lr.created_at, rating: lr.rating });
-    });
-    Object.keys(lessonMap).forEach(k => {
-      lessonMap[k].sort((a, b) => new Date(b.date) - new Date(a.date));
-    });
-
-    const quizMap = {};
-    (data.quiz_accuracy || []).forEach(qa => {
-      quizMap[qa.skill_key] = { attempts: qa.attempts, correct: qa.correct_count };
-    });
-
-    let sum = 0;
-    CC.SKILLS.forEach(sk => {
-      const lessonRatings = lessonMap[sk.key] || [];
-      const quiz = quizMap[sk.key];
-      const quizResults = [];
-      if (quiz && quiz.attempts > 0) {
-        for (let i = 0; i < quiz.attempts; i++) quizResults.push({ correct: i < quiz.correct });
-      }
-      const lastPractised = lessonRatings.length > 0 ? lessonRatings[0].date : null;
-      sum += CC.readinessScore({ lessonRatings, quizResults, lastPractised });
-    });
-    const pct = Math.round(sum / CC.SKILLS.length);
-
-    const ring = document.getElementById('readiness-ring');
-    const fill = document.getElementById('ring-fill');
-    const val = document.getElementById('readiness-value');
-    if (!ring || !fill || !val) return;
-
-    ring.style.display = '';
-    val.textContent = pct + '%';
-    const circumference = 2 * Math.PI * 21;
-    const offset = circumference * (1 - pct / 100);
-    fill.style.strokeDashoffset = offset;
-    fill.style.stroke = '#fff';
-  } catch (e) { console.error('Readiness load failed:', e); }
 }
 
 async function loadBalance() {
@@ -226,7 +176,7 @@ function renderBalanceStat() {
   const lessonMinutes = lessonCreditMinutes();
   const flexibleMinutes = flexibleHoursMinutes();
   val.textContent = formatHours(lessonMinutes + flexibleMinutes);
-  if (flexibleMinutes > 0 && lessonMinutes > 0) sub.textContent = 'Flexible Hours + Lesson Credit';
+  if (flexibleMinutes > 0 && lessonMinutes > 0) sub.textContent = 'Flexible Hours are school-wide; Lesson Credit stays with its instructor.';
   else if (flexibleMinutes > 0) sub.textContent = 'Flexible Hours, school-wide';
   else if (lessonMinutes > 0) sub.textContent = 'Lesson Credit across instructors';
   else sub.textContent = 'No available hours';

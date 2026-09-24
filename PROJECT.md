@@ -1,5 +1,14 @@
 # CoachCarter Website — Project Reference
 
+## Learner interface simplification (23 September 2026; pending deployment)
+
+Learner screens now prioritise the next task and disclose secondary detail on
+request. Booking initially displays seven dates without changing the instructor's
+booking window; phone lesson selection retains exact price/discount labels and
+server validation. Balance scope and all mutation contracts remain unchanged.
+See [display contract and validation](docs/learner-interface-simplification.md).
+
+
 ## Qualifying free-trial questionnaire (21 September 2026; pending production approval)
 
 For schools with strict `schools.config.trial_questionnaire.enabled=true`, `/free` begins with three questions. Practical booked + supported centre + saved/payg/lower budget goes to live booking; no practical test, Other centre, or lowest budget goes to a general trial request. There is no four-month cutoff. Displayed commercial values and centres are school-admin-editable and do not change lesson prices.

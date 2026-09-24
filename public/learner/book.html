@@ -257,7 +257,10 @@
       border-radius: 12px;
       background: var(--surface);
     }
-    .test-date-panel.is-visible { display: grid; gap: 12px; }
+    .test-date-panel.is-visible { display: block; }
+    .test-date-panel > summary { cursor: pointer; }
+    .test-date-panel > summary h2 { display: inline; }
+    .test-date-panel-body { display: grid; gap: 12px; padding-top: 16px; }
     .test-date-panel h2 {
       margin: 0;
       font-family: var(--font-head);
@@ -349,8 +352,7 @@
       margin-bottom: 8px;
       flex-wrap: wrap;
     }
-    .cal-toolbar::before {
-      content: 'Filter';
+    .instructor-label {
       font-family: var(--font-body); font-size: 0.76rem; font-weight: 800;
       color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
     }
@@ -426,7 +428,7 @@
       gap: 18px;
     }
     /* Week-by-week Mon–Sun grid covering the instructor's booking window
-       (up to 12 weeks; collapsed to 6 weeks until "Show later dates").
+       (up to 12 weeks; collapsed to 1 week until "Show later dates").
        Phone-first: 7 equal columns fit a 375px viewport with ~44px cells. */
     .date-grid {
       display: grid;
@@ -1305,6 +1307,29 @@
       .selected-slot-title { font-size: 0.92rem; }
       .selected-slot-continue { padding: 11px 14px; font-size: 0.9rem; }
     }
+    .banner::before, .next-lesson-card::before { content: none; }
+    .banner { border-bottom-style: solid; }
+    .banner[style*="display:flex"], .banner[style*="display: flex"],
+    .next-lesson-card[style*="display:flex"], .next-lesson-card[style*="display: flex"] { grid-template-columns: 1fr auto; }
+    .control-label, .instructor-label, .date-grid-head, .date-grid-month, .date-grid-more, .selected-date-heading span { letter-spacing: 0; text-transform: none; }
+    .instructor-label { font-size: .85rem; }
+    .cal-toolbar { border-bottom-style: solid; }
+    .lesson-length-segmented { align-items: stretch; }
+    .lesson-length-option { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 44px; }
+    .lesson-length-name { display: block; max-width: 13ch; font-size: .72rem; line-height: 1.3; font-weight: 600; }
+    .lesson-length-select { display: none; }
+    .date-grid-more { border-style: solid; min-height: 44px; }
+    .booking-times { min-width: 0; }
+    .booking-times .selected-date-heading { margin-bottom: 16px; }
+    @media (min-width: 1100px) {
+      main.page { max-width: 1080px; }
+      .booking-calendar { grid-template-columns: minmax(340px, .9fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+    }
+    @media (max-width: 599px) {
+      .lesson-length-segmented { display: none; }
+      .lesson-length-select { display: block; width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--primary); font: 600 .9rem var(--font-body); }
+    }
+
   </style>
 <script src="/sidebar.js"></script>
 <script src="/shared/learner-auth.js"></script>
@@ -1316,7 +1341,7 @@
   <h1 class="visually-hidden" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">Book a driving lesson</h1>
 
   <!-- Welcome banner -->
-  <div class="banner banner-welcome" id="welcomeBanner" data-tag="NEW" style="display:none">
+  <div class="banner banner-welcome" id="welcomeBanner"  style="display:none">
     <span><strong>Welcome.</strong> Pick any slot below to book your first lesson.</span>
     <button class="banner-dismiss" aria-label="Dismiss">&#x2715;</button>
   </div>
@@ -1328,8 +1353,8 @@
   </div>
 
   <!-- Guest banner -->
-  <div class="banner banner-credits" id="guestBanner" data-tag="GST" style="display:none">
-    <p>Browsing as a guest - pick any slot to pay &amp; book, or <a href="/learner/login.html?redirect=/learner/book.html">sign in</a> to use lesson hours.</p>
+  <div class="banner banner-credits" id="guestBanner"  style="display:none">
+    <p>Choose a time to book, or <a href="/learner/login.html?redirect=/learner/book.html">sign in</a> to use your hours.</p>
     <span></span>
   </div>
 
@@ -1340,7 +1365,7 @@
   </div>
 
   <!-- Next lesson card -->
-  <div class="next-lesson-card" id="nextLessonCard" data-tag="NXT" style="display:none">
+  <div class="next-lesson-card" id="nextLessonCard"  style="display:none">
     <div>
       <span class="next-lesson-label">Next lesson</span>
       <span class="next-lesson-detail" id="nextLessonDetail"></span>
@@ -1351,8 +1376,9 @@
   <!-- Pending lesson requests (request-to-book instructors; hidden when none) -->
   <div id="pendingRequestsCard" style="display:none"></div>
 
-  <section class="test-date-panel" id="testDatePanel" aria-labelledby="testDateTitle">
-    <h2 id="testDateTitle">Book your test date lesson</h2>
+  <details class="test-date-panel" id="testDatePanel" aria-labelledby="testDateTitle">
+    <summary><h2 id="testDateTitle">Book your test date lesson</h2></summary>
+    <div class="test-date-panel-body">
     <p id="testDateIntro">This is a fixed 1.5 hour booking for your warm-up and practical test.</p>
     <div class="test-date-meta" id="testDateMeta"></div>
     <div class="test-date-controls" id="testDateControls" style="display:none">
@@ -1360,7 +1386,8 @@
       <button class="test-date-action" id="btnBookTestDate" type="button" disabled>Book test lesson</button>
     </div>
     <div class="test-date-status" id="testDateStatus"></div>
-  </section>
+    </div>
+  </details>
 
   <!-- Reschedule banner -->
   <div class="reschedule-banner" id="rescheduleBanner" data-tag="MV" style="display:none">
@@ -1381,6 +1408,7 @@
   <!-- Lesson length control -->
   <section class="booking-controls" aria-labelledby="lessonLengthLabel">
     <div class="control-label" id="lessonLengthLabel">Lesson length</div>
+    <select class="lesson-length-select" id="lessonLengthSelect" aria-labelledby="lessonLengthLabel" disabled><option>Loading lengths</option></select>
     <div class="lesson-length-segmented" id="lessonLengthControls" role="group" aria-labelledby="lessonLengthLabel">
       <button class="lesson-length-option" type="button" disabled>Loading lengths</button>
     </div>
@@ -1388,6 +1416,7 @@
 
   <!-- Toolbar: instructor filter -->
   <div class="cal-toolbar" id="calToolbar">
+    <label class="instructor-label" for="instructorFilter">Instructor</label>
     <select class="filter-select" id="instructorFilter">
       <option value="">All instructors</option>
     </select>

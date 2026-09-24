@@ -1,34 +1,4 @@
-// Page-local glue for /learner/ (dashboard).
-// Previously two inline <script> blocks in learner/index.html - moved to an
-// external file in PR-P (audit #22) because production CSP blocks 'unsafe-inline'.
-//
-// (1) Mirror legacy readiness DOM into the new twin stat panel. Balance is
-//     rendered directly by index.js because it combines two distinct APIs.
-//
-// (2) Post-checkout credit verification fallback. When the page is loaded
-//     with ?hours_added=&session_id= in the URL (Stripe success redirect),
-//     verify the session via /api/credits and show a toast.
-
-(function () {
-  function mirror() {
-    // Readiness: read #readiness-value text.
-    var rv = document.getElementById('readiness-value');
-    var sv = document.getElementById('stat-readiness-value');
-    if (rv && sv && rv.textContent && rv.textContent !== '0%') {
-      sv.innerHTML = '<em>' + rv.textContent + '</em>';
-    }
-  }
-  // Run once after DOMContentLoaded and again after a short delay (index.js
-  // populates these asynchronously after fetching auth+bookings).
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mirror);
-  } else {
-    mirror();
-  }
-  setTimeout(mirror, 600);
-  setTimeout(mirror, 1500);
-})();
-
+// Post-checkout credit verification fallback. The dashboard owns balance display.
 (function () {
   var params = new URLSearchParams(window.location.search);
   var hoursAdded = params.get('hours_added');
