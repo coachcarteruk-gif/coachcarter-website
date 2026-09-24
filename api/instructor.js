@@ -90,6 +90,7 @@ const {
   SCHEDULE_UNAVAILABLE,
   loadInstructorScheduleWarnings,
   sendScheduleUnavailable,
+  requireNormalHoursReview,
   loadAvailabilityChangeReview,
   requireAvailabilityChangeReview,
 } = require('./_instructor-schedule-warnings');
@@ -3511,7 +3512,13 @@ async function handleCreateBooking(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    if (scheduleWarnings.length > 0) {
+    if (payMethod === 'flexible_package') {
+      if (requireNormalHoursReview(req, res, scheduleWarnings, {
+        schoolId, instructorId: instructor.id, learnerId: learner_id,
+        scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+        lessonTypeId: lessonType.id, transmissionType: bookingTransmissionType,
+      }, 'This lesson is outside your normal or one-off availability. You can override your normal hours for this flexible-package lesson.')) return;
+    } else if (scheduleWarnings.length > 0) {
       return sendScheduleUnavailable(res, scheduleWarnings);
     }
 
@@ -5397,7 +5404,7 @@ async function handleCreateOffer(req, res) {
 // ── POST /api/instructor?action=create-extension-offer ─────────────────────
 // Body: { booking_id, extension_minutes, offer_price_pence? }
 // Requests added time, funded by Flexible Hours, a new payment, or a free offer.
-// The complete extended lesson must fit availability; actual calendar overlaps also block it.
+// Normal-hours exceptions require confirmation; actual calendar overlaps remain blocked.
 async function handleCreateExtensionOffer(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const instructor = verifyInstructorAuth(req);
@@ -5490,8 +5497,6 @@ async function handleCreateExtensionOffer(req, res) {
       instructorId: instructor.id, schoolId, scheduledDate: booking.scheduled_date,
       startTime: String(booking.start_time).slice(0, 5), endTime: newEndTime,
     });
-    if (scheduleWarnings.length) return sendScheduleUnavailable(res, scheduleWarnings);
-
     const [bookingConflict] = await sql`
       SELECT lb.id, lb.start_time::text AS start_time, lb.end_time::text AS end_time,
              lu.name AS learner_name
@@ -5556,6 +5561,14 @@ async function handleCreateExtensionOffer(req, res) {
       LIMIT 1
     `;
     if (reservationConflict) return res.status(409).json({ error: 'Someone is currently booking time needed by this extension.' });
+
+    if (requireNormalHoursReview(req, res, scheduleWarnings, {
+      action: 'create-extension-offer', schoolId, instructorId: instructor.id,
+      bookingId, learnerId: booking.learner_id, scheduledDate: booking.scheduled_date,
+      startTime: String(booking.start_time).slice(0, 5), currentEnd, newEndTime,
+      extensionMinutes, paymentMethod: booking.payment_method,
+      explicitPrice: explicitPrice == null || explicitPrice === '' ? null : Number(explicitPrice),
+    }, `The extended lesson on ${booking.scheduled_date} would finish at ${newEndTime}, outside your normal or one-off availability. You can override your normal hours for this extension.`)) return;
 
     const pricing = usesFlexibleHours ? { pricePence: 0 } : await calcOfferLessonPrice(sql, {
       schoolId,

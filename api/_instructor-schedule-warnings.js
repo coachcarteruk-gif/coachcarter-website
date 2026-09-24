@@ -158,6 +158,25 @@ function sendScheduleUnavailable(res, warnings) {
   });
 }
 
+// Acknowledgement is specific to this instructor, school and proposed lesson.
+// It only relaxes normal hours; all other schedule conflicts remain hard stops.
+function requireNormalHoursReview(req, res, warnings, booking, error) {
+  if (!warnings.length) return false;
+  if (warnings.some(warning => warning.code !== 'OUTSIDE_NORMAL_HOURS')) {
+    sendScheduleUnavailable(res, warnings);
+    return true;
+  }
+  const token = createHash('sha256').update(JSON.stringify({ booking, warnings })).digest('hex');
+  if (req.body?.normal_hours_override_token === token) return false;
+  res.status(409).json({
+    code: 'NORMAL_HOURS_OVERRIDE_REQUIRED',
+    error,
+    warnings,
+    normal_hours_override_token: token,
+  });
+  return true;
+}
+
 // Only newly uncovered bookings need acknowledgement. Existing exceptions must
 // not prevent an instructor adding hours or making an unrelated schedule change.
 function availabilityChangeConflicts({ bookings, weeklyWindows, oneOffWindows, blackoutRanges,
@@ -231,6 +250,7 @@ module.exports = {
   buildInstructorScheduleWarnings,
   loadInstructorScheduleWarnings,
   sendScheduleUnavailable,
+  requireNormalHoursReview,
   availabilityChangeConflicts,
   loadAvailabilityChangeReview,
   requireAvailabilityChangeReview,

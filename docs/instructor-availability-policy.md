@@ -9,15 +9,34 @@ A lesson cannot span a gap between windows. Explicit date-specific availability
 may open a blackout date, matching the existing learner booking policy. Busy
 blocks and connected-calendar events still block that time.
 
-Instructor-created cash, credit, Flexible Hours and free bookings, fixed offers,
-broadcast offers, instructor edits and newly requested extensions return
+Instructor-created cash, credit and free bookings, fixed offers,
+broadcast offers and instructor edits return
 `409 SCHEDULE_UNAVAILABLE` for schedule conflicts. Legacy `availability_override`
 and `force` inputs do not bypass these checks. Upcoming admin time edits use the
 same guard; retrospective corrections retain their existing policy.
 
-For an intentional exception, the instructor first adds one-off availability
+Instructor-created Flexible Hours bookings have one exception (23 September
+2026): an outside-normal-hours warning returns `409 NORMAL_HOURS_OVERRIDE_REQUIRED`
+and a `normal_hours_override_token`. The booking screen explains the exception
+and asks the instructor to confirm. Cancel leaves the lesson unbooked; confirm
+resubmits the same lesson with that token. The token binds the school, instructor,
+learner, date, full time range, lesson type and transmission. A changed proposal
+requires fresh confirmation. All schedule checks run again on the retry; busy
+blocks, blackouts and external events cannot be bypassed. Normal availability is
+not edited, and package funding still uses the existing transaction.
+
+Lesson extension requests use the same warning and confirmation for normal-hours
+exceptions, including paid, free and Flexible Hours extensions. The acknowledgement
+binds the original booking, date, old/new finish, added minutes, funding method and
+explicit price to the authenticated school/instructor. Real clashes are checked
+before offering confirmation and again on retry. Cancelling sends no request.
+The learner must still accept the extension; Flexible Hours acceptance honours the
+instructor-agreed hours while rechecking busy blocks, blackouts, external events
+and occupied time. Funding, pricing and payment settlement are unchanged.
+
+For other intentional exceptions, the instructor first adds one-off availability
 from their calendar or changes weekly hours. A conflicting busy block must be
-removed or adjusted separately. The booking UI no longer offers “Continue anyway”.
+removed or adjusted separately.
 
 ## Existing lessons and availability changes
 
