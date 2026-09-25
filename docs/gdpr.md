@@ -1,5 +1,14 @@
 # GDPR Compliance (April 2026)
 
+## Flexible Hours bank receipts (September 2026; pending migration 072)
+
+Learner export includes payment and consent references, amount/date, reason and
+declarations. The shared deletion helper removes the learner link and the three
+free-text fields, retaining immutable financial facts, actor identity, opaque
+deduplication hashes and purchase links for seven-year financial retention.
+Audit and state events reference the receipt rather than copying its free text.
+See [bank-transfer contract](flexible-bank-transfer-purchases.md).
+
 ## Learner consent presentation (September 2026; pending deployment)
 
 Learner pages and booking aliases show accept/reject plus Choose preferences on

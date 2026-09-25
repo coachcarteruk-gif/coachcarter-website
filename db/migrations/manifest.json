@@ -583,6 +583,14 @@
       "filename": "071_trial_questionnaire_requests.sql",
       "checksum": "3d11006e3b7758aec8d3a016c8d3534d1958fd2bfc222bc7b235d2c6f7f5d0db",
       "execution": "numbered"
+    },
+    {
+      "id": "072",
+      "order": 73,
+      "prefix": "072",
+      "filename": "072_flexible_bank_transfer_purchases.sql",
+      "checksum": "d1c5ba73be9d964f4f985d26368f8aab5d0dc32443e1b96b2957824b4478190a",
+      "execution": "numbered"
     }
   ]
 }

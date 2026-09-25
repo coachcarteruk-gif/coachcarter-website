@@ -84,6 +84,7 @@ const {
   packagePurchaseAttemptsTableExists,
   postTrialDiscountQuotesTableExists,
   flexiblePackageTablesExist,
+  flexibleBankReceiptsTableExists,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
   fullCurriculumConsumerRightsTablesExist,
@@ -1759,6 +1760,13 @@ async function handleExportData(req, res) {
 
     const hasFlexiblePackages = await flexiblePackageTablesExist(sql);
     let flexibleHours = null;
+    const hasFlexibleBankReceipts = await flexibleBankReceiptsTableExists(sql);
+    const flexibleBankReceipts = hasFlexibleBankReceipts ? await sql`
+      SELECT id, product_version_id, amount_pence, received_on::text, bank_reference,
+             consent_evidence_reference, reason, disclosure_version, adult_age_confirmed,
+             terms_accepted, immediate_access_requested, created_at
+        FROM flexible_package_bank_receipts WHERE learner_id=${user.id} AND school_id=${schoolId}
+       ORDER BY created_at` : [];
     if (hasFlexiblePackages) {
       const [attempts, purchases, sources, allocations, returns, reductions, events] = await Promise.all([
         sql`SELECT product_slug, product_snapshot, amount_pence, currency, total_units,
@@ -2098,6 +2106,7 @@ async function handleExportData(req, res) {
       ...(hasPackagePurchaseAttempts ? { package_purchase_attempts: packagePurchaseAttempts } : {}),
       ...(hasPostTrialDiscountQuotes ? { post_trial_discount_quotes: postTrialDiscountQuotes } : {}),
       ...(hasFlexiblePackages ? { flexible_hours: flexibleHours } : {}),
+      ...(hasFlexibleBankReceipts ? { flexible_bank_receipts: flexibleBankReceipts } : {}),
       ...(hasFullCurriculum ? { full_curriculum: fullCurriculum } : {}),
       ...(hasRefundLedger ? { refund_events: refundEvents } : {}),
       ...(hasLearnerBroadcasts ? { broadcasts_received: broadcastsReceived } : {}),

@@ -1,5 +1,10 @@
 # Migration governance audit and phased cleanup
 
+25 September 2026 repository addition: `072_flexible_bank_transfer_purchases.sql`
+adds separate bank receipts and purchase-provider constraints. The manifest has
+73 entries including deferred 041. This task has not applied it to production;
+see [rollout prerequisites](flexible-bank-transfer-purchases.md).
+
 Repository follow-up (21 September 2026): `071_trial_questionnaire_requests.sql` is pending after 070. The manifest has 72 entries including deferred 041. Neither 070 nor 071 was applied to production by this task. The [combined rollout checklist](qualifying-trial-funnel.md) supersedes the 070-only funnel checklist. Historical production receipts below remain unchanged.
 
 Status: **production ledger installed; numbered history current through 069**

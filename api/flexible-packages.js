@@ -18,6 +18,7 @@ const {
   validateFlexibleProviderObject,
 } = require('./_flexible-package-payments');
 const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
+const { BankPurchaseError, bankProductTerms, validateBankPurchase, recordBankPurchase } = require('./_flexible-bank-purchase');
 
 function errorResponse(res, status, code, message) {
   return res.status(status).json({ error: true, code, message });
@@ -242,7 +243,19 @@ async function handleCreateCheckout(req, res) {
     const idempotencyKey = `cc-flexible-package-live-${attemptId}`;
     let inserted;
     try {
-      inserted = await sql`
+      inserted = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+        await client.query('SELECT id FROM learner_users WHERE id=$1 AND school_id=$2 FOR UPDATE', [scope.learner.id, scope.schoolId]);
+        const currentBalance = await client.query(
+          'SELECT remaining_units FROM flexible_package_balances WHERE school_id=$1 AND learner_id=$2',
+          [scope.schoolId, scope.learner.id]
+        );
+        if (Number(currentBalance.rows[0]?.remaining_units || 0) > 0) {
+          throw new BankPurchaseError(409, 'FLEXIBLE_BALANCE_MUST_BE_USED_FIRST', 'Use your existing Flexible Hours before buying another package.');
+        }
+        const insertSql = async (strings, ...values) => (await client.query(
+          strings.reduce((query, part, index) => query + (index ? '$' + index : '') + part, ''), values
+        )).rows;
+        return insertSql`
         INSERT INTO flexible_package_purchase_attempts (
           id, school_id, learner_id, product_id, product_version_id, product_slug,
           product_snapshot, amount_pence, currency, total_units, unit_minutes,
@@ -262,7 +275,9 @@ async function handleCreateCheckout(req, res) {
           ${priceQuote.quoteId}::uuid, ${JSON.stringify(priceQuote.quoteId ? priceQuote : {})}::jsonb
         ) RETURNING *
       `;
+      });
     } catch (insertError) {
+      if (insertError instanceof BankPurchaseError) return errorResponse(res, insertError.status, insertError.code, insertError.message);
       if (insertError?.code !== '23505') throw insertError;
       const [current] = await sql`
         SELECT * FROM flexible_package_purchase_attempts
@@ -407,12 +422,15 @@ async function handleAdminOverview(req, res) {
     const purchases = await sql`
       SELECT purchase.id, source.learner_id, learner.name AS learner_name, source.id AS source_id,
              COALESCE(purchase.product_slug, 'legacy-lesson-credit') AS product_slug,
-             purchase.product_version_id, source.original_value_pence AS amount_pence,
+             purchase.product_version_id, purchase.payment_provider, purchase.bank_receipt_id,
+             receipt.bank_reference, receipt.received_on::text,
+             source.original_value_pence AS amount_pence,
              source.initial_units AS total_units, source.rate_pence_per_unit,
              COALESCE(purchase.paid_at, source.created_at) AS paid_at,
              remaining.remaining_units, remaining.refundable_value_pence
         FROM flexible_package_sources source
         LEFT JOIN flexible_package_purchases purchase ON purchase.id = source.purchase_id AND purchase.school_id = ${scope.schoolId}
+        LEFT JOIN flexible_package_bank_receipts receipt ON receipt.id = purchase.bank_receipt_id AND receipt.school_id = ${scope.schoolId}
         LEFT JOIN learner_users learner ON learner.id = source.learner_id AND learner.school_id = ${scope.schoolId}
         JOIN flexible_package_source_remaining remaining ON remaining.source_id = source.id AND remaining.school_id = ${scope.schoolId}
        WHERE source.school_id = ${scope.schoolId}
@@ -522,6 +540,66 @@ async function handleAdminOverview(req, res) {
   } catch (error) {
     reportError('/api/flexible-packages?action=admin-overview', error);
     return errorResponse(res, 500, 'SERVER_ERROR', 'Failed to load Flexible Hours operations');
+  }
+}
+
+async function handleBankPurchaseOptions(req, res) {
+  if (req.method !== 'GET') return errorResponse(res, 405, 'METHOD_NOT_ALLOWED', 'GET required');
+  const scope = adminScope(req, res);
+  if (!scope) return;
+  try {
+    const sql = neon(process.env.POSTGRES_URL);
+    const [school] = await sql`SELECT config FROM schools WHERE id=${scope.schoolId} AND active=TRUE`;
+    const enabled = Boolean(school && isFlexiblePackageLivePurchasingEnabled(school.config, scope.schoolId));
+    if (!enabled) return res.json({ ok: true, enabled: false, products: [], learners: [] });
+    const products = await sql`
+      SELECT p.id AS product_id, p.slug AS product_slug, p.product_type,
+             v.id AS product_version_id, v.price_pence, v.currency, v.content, v.customer_terms_version
+        FROM package_products p
+        JOIN LATERAL (SELECT * FROM package_product_versions candidate
+          WHERE candidate.school_id=${scope.schoolId} AND candidate.product_id=p.id AND candidate.effective_from<=NOW()
+          ORDER BY candidate.effective_from DESC, candidate.version_number DESC LIMIT 1) v ON TRUE
+       WHERE p.school_id=${scope.schoolId} AND p.active=TRUE AND p.visible=TRUE AND p.product_type='flexible_hours'
+       ORDER BY p.sort_order, p.id`;
+    const learners = await sql`
+      SELECT learner.id, learner.name, learner.email, COALESCE(balance.remaining_minutes,0) AS remaining_minutes
+        FROM learner_users learner
+        LEFT JOIN flexible_package_balances balance ON balance.learner_id=learner.id AND balance.school_id=${scope.schoolId}
+       WHERE learner.school_id=${scope.schoolId} AND learner.email_verified=TRUE
+       ORDER BY learner.name, learner.id`;
+    return res.json({ ok: true, enabled, disclosure_version: FLEXIBLE_HOURS_DISCLOSURE_VERSION,
+      products: products.filter(bankProductTerms), learners });
+  } catch (error) {
+    reportError('/api/flexible-packages?action=bank-purchase-options', error);
+    return errorResponse(res, 500, 'SERVER_ERROR', 'Failed to load bank-transfer purchase options');
+  }
+}
+
+async function handleRecordBankPurchase(req, res) {
+  if (req.method !== 'POST') return errorResponse(res, 405, 'METHOD_NOT_ALLOWED', 'POST required');
+  const scope = adminScope(req, res);
+  if (!scope) return;
+  try {
+    const input = validateBankPurchase(req.body);
+    // One retry lets a simultaneous unique-reference winner return an exact replay
+    // or a conflict after the losing transaction has rolled back completely.
+    let result;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        result = await withNeonTransaction(process.env.POSTGRES_URL, client => recordBankPurchase(client, {
+          input, schoolId: scope.schoolId, admin: scope.admin, req,
+        }));
+        break;
+      } catch (error) {
+        if (error.code !== '23505' || attempt === 1) throw error;
+      }
+    }
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof BankPurchaseError) return errorResponse(res, error.status, error.code, error.message);
+    if (error.code === '23505') return errorResponse(res, 409, 'BANK_RECEIPT_CONFLICT', 'This bank transaction or request has already been recorded. Review the purchase history.');
+    reportError('/api/flexible-packages?action=record-bank-purchase', error);
+    return errorResponse(res, 500, 'SERVER_ERROR', 'Could not record the purchase. Retry with the same details and reference.');
   }
 }
 
@@ -682,6 +760,8 @@ module.exports = async function handler(req, res) {
   if (action === 'create-checkout') return handleCreateCheckout(req, res);
   if (action === 'attempt-status') return handleAttemptStatus(req, res);
   if (action === 'admin-overview') return handleAdminOverview(req, res);
+  if (action === 'bank-purchase-options') return handleBankPurchaseOptions(req, res);
+  if (action === 'record-bank-purchase') return handleRecordBankPurchase(req, res);
   if (action === 'refund-preview') return handleRefundPreview(req, res);
   if (action === 'record-refund-evidence') return handleRecordRefundEvidence(req, res);
   return errorResponse(res, 400, 'UNKNOWN_ACTION', 'Unknown Flexible Hours action');
