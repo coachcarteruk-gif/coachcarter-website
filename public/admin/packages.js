@@ -9,6 +9,7 @@
   var refundListEl = document.getElementById('programme-refund-list');
   var pilotAccessEl = document.getElementById('programme-pilot-access');
   var flexibleOperationsEl = document.getElementById('flexible-package-operations');
+  var bankPurchaseEl = document.getElementById('flexible-bank-purchase');
   var schoolScopeControlEl = document.getElementById('school-scope-control');
   var schoolScopeEl = document.getElementById('school-scope');
   var selectedSchoolId = null;
@@ -114,8 +115,8 @@
     var contradictions=(data.reconciliation||[]).filter(function(row){return row.contradictory;});
     var summary='<article class="operation-card"><div><h3>Reconciliation</h3><p>'+esc((data.purchases||[]).length)+' retained purchase(s) · '+esc((data.allocations||[]).length)+' recent allocation(s) · '+esc((data.reductions||[]).length)+' refund evidence row(s)</p><p class="operation-note">'+(contradictions.length?'<strong>'+esc(contradictions.length)+' contradiction(s) require investigation.</strong>':'No source over-allocation contradictions detected.')+'</p></div></article>';
     var purchases=(data.purchases||[]).map(function(row){
-      var refundForm=Number(row.remaining_units)>0?'<details><summary>Record completed original-method refund</summary><form class="flexible-refund-evidence-form"><p class="operation-note">This records a refund already completed in Stripe. It does not call Stripe. One unit is exactly 30 minutes at the immutable source rate.</p><label>Units refunded<input name="units" type="number" min="1" max="'+esc(row.remaining_units)+'" step="1" required></label><label>Stripe refund ID<input name="provider_refund_id" pattern="re_[A-Za-z0-9_]+" required></label><label>Evidence reference<input name="evidence_reference" minlength="2" maxlength="500" required></label><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">Record refund evidence</button></form></details>':'';
-      return '<article class="operation-card" data-flexible-source-id="'+esc(row.source_id)+'"><div><h3>'+esc(row.learner_name||'Anonymised learner')+'</h3><p>'+esc(row.product_slug)+' · paid '+esc(pounds(row.amount_pence))+'</p><p class="refund-total">Unused value '+esc(pounds(row.refundable_value_pence))+'</p><p class="operation-note">Source #'+esc(row.source_id)+' · '+esc(row.remaining_units)+' × 30-minute unit(s) remaining · frozen rate '+esc(pounds(row.rate_pence_per_unit))+' per unit</p></div><div>'+refundForm+'</div></article>';
+      var refundForm=row.payment_provider!=='bank_transfer'&&Number(row.remaining_units)>0?'<details><summary>Record completed original-method refund</summary><form class="flexible-refund-evidence-form"><p class="operation-note">This records a refund already completed in Stripe. It does not call Stripe. One unit is exactly 30 minutes at the immutable source rate.</p><label>Units refunded<input name="units" type="number" min="1" max="'+esc(row.remaining_units)+'" step="1" required></label><label>Stripe refund ID<input name="provider_refund_id" pattern="re_[A-Za-z0-9_]+" required></label><label>Evidence reference<input name="evidence_reference" minlength="2" maxlength="500" required></label><label>Audit reason<input name="reason" minlength="2" maxlength="1000" required></label><button type="submit">Record refund evidence</button></form></details>':'';
+      return '<article class="operation-card" data-flexible-source-id="'+esc(row.source_id)+'"><div><h3>'+esc(row.learner_name||'Anonymised learner')+'</h3><p>'+esc(row.product_slug)+' · paid '+esc(pounds(row.amount_pence))+'</p><p class="operation-note">'+esc(row.payment_provider==='bank_transfer'?'Bank transfer · '+(row.received_on||'')+' · '+(row.bank_reference||'Reference anonymised'):'Stripe / existing source')+'</p><p class="refund-total">Unused value '+esc(pounds(row.refundable_value_pence))+'</p><p class="operation-note">Source #'+esc(row.source_id)+' · '+esc(row.remaining_units)+' × 30-minute unit(s) remaining · frozen rate '+esc(pounds(row.rate_pence_per_unit))+' per unit</p></div><div>'+refundForm+'</div></article>';
     }).join('');
     var attemptExceptions=data.attempt_exceptions||[];
     var ledgerExceptions=data.exceptions||[];
@@ -133,11 +134,73 @@
     flexibleOperationsEl.innerHTML=summary+reviewQueue+failureHistory+(purchases||'<p class="empty-state">No Flexible Hours purchases.</p>');
   }
 
+  async function loadBankPurchaseOptions(){
+    var schoolAtLoad=selectedSchoolId;
+    bankPurchaseEl.innerHTML='<p class="empty-state">Loading bank-transfer purchase options…</p>';
+    try{
+      var data=await api('/api/flexible-packages?action=bank-purchase-options');
+      if(schoolAtLoad!==selectedSchoolId)return;
+      if(!data.enabled){bankPurchaseEl.innerHTML='<p class="empty-state">Bank-transfer recording is available when Flexible Hours purchasing is enabled for this school.</p>';return;}
+      var products=data.products||[],learners=data.learners||[];
+      bankPurchaseEl.innerHTML='<article class="operation-card bank-purchase-card"><div><h3>Record bank-transfer purchase</h3><p>Add Flexible Hours after a payment has arrived in your bank account.</p><p class="operation-note">Use the bank’s unique transaction reference, not a payer reference that may be reused. This records money already received and does not charge the learner.</p><p class="operation-note">Bank-funded lessons require the existing audited manual funding review before instructor payout. Stripe refund recording does not apply to these purchases.</p></div><form class="bank-purchase-form">'+
+        '<label>Learner<select name="learner_id" required><option value="">Choose a learner</option>'+learners.map(function(row){return '<option value="'+esc(row.id)+'">'+esc(row.name||'Learner')+' · '+esc(row.email)+' (#'+esc(row.id)+')</option>';}).join('')+'</select></label>'+
+        '<label>Flexible Hours package<select name="product_version_id" required><option value="">Choose a package</option>'+products.map(function(row){return '<option value="'+esc(row.product_version_id)+'">'+esc(row.content.name||row.product_slug)+' · '+esc(pounds(row.price_pence))+'</option>';}).join('')+'</select></label>'+
+        '<p class="bank-purchase-summary operation-note" aria-live="polite">Select the learner and package.</p>'+
+        '<label>Amount received (GBP)<input name="amount" type="number" min="0.01" step="0.01" required></label>'+
+        '<label>Payment received on<input name="received_on" type="date" required></label>'+
+        '<label>Unique bank transaction reference<input name="bank_reference" minlength="3" maxlength="200" autocomplete="off" required></label>'+
+        '<label>Consent evidence reference<input name="consent_evidence_reference" minlength="3" maxlength="500" placeholder="Reference to the learner’s email or signed agreement" required></label>'+
+        '<label>Audit reason<input name="reason" minlength="2" maxlength="1000" value="Flexible Hours package paid by bank transfer" required></label>'+
+        '<div class="bank-terms operation-note"></div>'+
+        '<label class="bank-check"><input name="funds_received_confirmed" type="checkbox" required> I have checked that the funds have arrived.</label>'+
+        '<label class="bank-check"><input name="adult_age_confirmed" type="checkbox" required> I hold the learner’s declaration that they are 18 or over.</label>'+
+        '<label class="bank-check"><input name="consumer_terms_accepted" type="checkbox" required> I hold evidence that the learner accepted the displayed terms.</label>'+
+        '<label class="bank-check"><input name="immediate_access_requested" type="checkbox" required> I hold the learner’s express request for immediate access shown above.</label>'+
+        '<button type="submit"'+(!products.length||!learners.length?' disabled':'')+'>Record payment and add hours</button>'+
+        '<p class="bank-result" role="status" aria-live="polite"></p></form></article>';
+      var form=bankPurchaseEl.querySelector('form');
+      form.dataset.schoolId=String(schoolAtLoad||'');
+      form.elements.received_on.value=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      form.elements.received_on.max=form.elements.received_on.value;
+      form.addEventListener('change',function(event){
+        var product=products.find(function(row){return Number(row.product_version_id)===Number(form.elements.product_version_id.value);});
+        var learner=learners.find(function(row){return Number(row.id)===Number(form.elements.learner_id.value);});
+        if(event.target===form.elements.product_version_id){
+          if(product)form.elements.amount.value=(Number(product.price_pence)/100).toFixed(2);
+          form.elements.consumer_terms_accepted.checked=false;
+          form.elements.immediate_access_requested.checked=false;
+        }
+        form.querySelector('.bank-purchase-summary').textContent=(learner?(learner.name||'Learner')+' currently has '+Number(learner.remaining_minutes)/60+' Flexible Hours. ':'')+(product?'This purchase adds '+Number(product.content.entitlement.units)/2+' hours for '+pounds(product.price_pence)+'.':'Choose a package.');
+        var rights=product&&product.content.consumer_rights;
+        form.querySelector('.bank-terms').textContent=rights?'Terms '+product.customer_terms_version+': '+rights.checkout_acknowledgement+' '+rights.immediate_access_request+' '+(product.content.refund_basis||''):'';
+      });
+      form.addEventListener('submit',async function(event){
+        event.preventDefault();
+        if(form.dataset.schoolId!==String(selectedSchoolId||''))return;
+        var output=form.querySelector('.bank-result');
+        var body={learner_id:Number(form.elements.learner_id.value),product_version_id:Number(form.elements.product_version_id.value),amount_pence:Math.round(Number(form.elements.amount.value)*100),received_on:form.elements.received_on.value,bank_reference:form.elements.bank_reference.value,consent_evidence_reference:form.elements.consent_evidence_reference.value,reason:form.elements.reason.value,disclosure_version:data.disclosure_version,funds_received_confirmed:form.elements.funds_received_confirmed.checked,adult_age_confirmed:form.elements.adult_age_confirmed.checked,consumer_terms_accepted:form.elements.consumer_terms_accepted.checked,immediate_access_requested:form.elements.immediate_access_requested.checked};
+        var payload=JSON.stringify(body);
+        if(form.dataset.payload!==payload){form.dataset.payload=payload;form.dataset.requestId=window.crypto.randomUUID();}
+        body.client_request_id=form.dataset.requestId;
+        var controls=Array.from(form.elements);
+        controls.forEach(function(control){control.disabled=true;});
+        output.textContent='Recording payment…';
+        try{
+          var result=await api('/api/flexible-packages?action=record-bank-purchase',{method:'POST',body:JSON.stringify(body)});
+          output.textContent=(result.reused?'This transfer was already recorded. No extra hours were added. ':'Payment recorded. ')+(result.minutes_added/60)+' Flexible Hours · purchase #'+result.purchase_id+'.';
+          output.className='bank-result';
+          await loadOperations();
+          // Leave this completed form locked, preserving the receipt for review.
+        }catch(error){output.textContent=error.message;output.className='bank-result error';controls.forEach(function(control){control.disabled=false;});}
+      });
+    }catch(error){if(schoolAtLoad===selectedSchoolId)bankPurchaseEl.innerHTML='<p class="empty-state">'+esc(error.message)+'</p>';}
+  }
+
   async function loadOperations(){
     try{var results=await Promise.all([api('/api/packages?action=test-bookings'),api('/api/packages?action=programme-list'),api('/api/packages?action=programme-refund-cases'),api('/api/packages?action=programme-pilot-access'),api('/api/flexible-packages?action=admin-overview')]);renderTestBookings(results[0].test_bookings||[]);renderProgrammes(results[1].programmes||[],results[1].eligible_instructors||[]);renderRefundCases(results[2].refund_cases||[]);renderPilotAccess(results[3]);renderFlexibleOperations(results[4]);}catch(e){testBookingListEl.innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';programmeListEl.innerHTML='';refundListEl.innerHTML='';pilotAccessEl.innerHTML='';flexibleOperationsEl.innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';}
   }
 
-  async function load(){try{show('Loading catalogue…');var data=await api('/api/packages?action=admin-list');render(data);await loadOperations();show(data.products.length+' retained products loaded for '+data.school.name+'.');}catch(e){show(e.message,true);}}
+  async function load(){bankPurchaseEl.innerHTML='';try{show('Loading catalogue…');var data=await api('/api/packages?action=admin-list');render(data);await Promise.all([loadOperations(),loadBankPurchaseOptions()]);show(data.products.length+' retained products loaded for '+data.school.name+'.');}catch(e){show(e.message,true);}}
 
   document.getElementById('save-feature').addEventListener('click',async function(){var button=this;try{button.disabled=true;await api('/api/packages?action=set-feature',{method:'POST',body:JSON.stringify({enabled:featureEl.checked})});show('School feature gate saved and audit logged.');}catch(e){show(e.message,true);featureEl.checked=!featureEl.checked;}finally{button.disabled=false;}});
   document.getElementById('save-purchasing-feature').addEventListener('click',async function(){var button=this;try{button.disabled=true;await api('/api/packages?action=set-purchasing-feature',{method:'POST',body:JSON.stringify({enabled:purchasingFeatureEl.checked})});show('Test purchasing gate saved and audit logged. No Stripe resource was changed.');}catch(e){show(e.message,true);purchasingFeatureEl.checked=!purchasingFeatureEl.checked;}finally{button.disabled=false;}});

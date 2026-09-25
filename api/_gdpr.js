@@ -114,6 +114,11 @@ async function flexiblePackageTablesExist(sql) {
     && row?.has_allocations && row?.has_returns && row?.has_reductions && row?.has_events);
 }
 
+async function flexibleBankReceiptsTableExists(sql) {
+  const [row] = await sql`SELECT to_regclass('public.flexible_package_bank_receipts') IS NOT NULL AS present`;
+  return Boolean(row?.present);
+}
+
 async function fullCurriculumTablesExist(sql) {
   const [row] = await sql`
     SELECT
@@ -182,6 +187,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasPostTrialDiscountQuotes = await postTrialDiscountQuotesTableExists(sql);
   const hasPencilledOfferColumns = await pencilledOfferColumnsExist(sql);
   const hasFlexiblePackages = await flexiblePackageTablesExist(sql);
+  const hasFlexibleBankReceipts = await flexibleBankReceiptsTableExists(sql);
   const hasFullCurriculum = await fullCurriculumTablesExist(sql);
   const hasFullCurriculumMatching = await fullCurriculumMatchingTablesExist(sql);
   const hasFullCurriculumConsumerRights = await fullCurriculumConsumerRightsTablesExist(sql);
@@ -316,6 +322,13 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
       sql`UPDATE flexible_package_state_events SET learner_id = NULL WHERE learner_id = ${learnerId}`
     );
   }
+  if (hasFlexibleBankReceipts) {
+    retainedAnonymisation.push(sql`
+      UPDATE flexible_package_bank_receipts
+         SET learner_id=NULL, bank_reference=NULL, consent_evidence_reference=NULL, reason=NULL
+       WHERE learner_id=${learnerId}
+         AND school_id=(SELECT school_id FROM learner_users WHERE id=${learnerId})`);
+  }
   if (hasFullCurriculum) {
     retainedAnonymisation.push(
       sql`UPDATE full_curriculum_test_bookings SET learner_id = NULL, test_centre = NULL WHERE learner_id = ${learnerId}`
@@ -359,6 +372,7 @@ module.exports = {
   packagePurchaseAttemptsTableExists,
   postTrialDiscountQuotesTableExists,
   flexiblePackageTablesExist,
+  flexibleBankReceiptsTableExists,
   fullCurriculumTablesExist,
   fullCurriculumMatchingTablesExist,
   fullCurriculumConsumerRightsTablesExist,

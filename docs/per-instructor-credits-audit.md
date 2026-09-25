@@ -1,5 +1,10 @@
 # Per-Instructor Credits Audit
 
+25 September 2026 (pending migration 072/deployment): [bank-paid Flexible Hours](flexible-bank-transfer-purchases.md)
+create a separate audited receipt, purchase and package source. No LCB or aggregate
+balance writes occur. Existing package allocation/return rules remain authoritative;
+non-Stripe payout funding still requires the existing manual evidence review.
+
 23 September 2026 learner UI cleanup (pending deployment): dashboard balances
 move below the next lesson into one compact summary. The combined display total
 still comes from the existing two balance reads; copy explicitly distinguishes

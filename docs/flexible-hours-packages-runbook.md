@@ -8,6 +8,11 @@ Full Curriculum remains test-only and isolated. Do not reuse its restricted key,
 
 ## Product contract
 
+25 September 2026 implementation (pending migration 072 and deployment): admins can
+record an actual off-platform bank transfer as a separate audited purchase/source.
+This is a second entitlement authority, distinct from signed Stripe fulfilment;
+it never invents Stripe identities. See [bank-transfer workflow and rollout](flexible-bank-transfer-purchases.md).
+
 | Product | Price | Entitlement | Frozen unit rate |
 |---|---:|---:|---:|
 | 10-hour Flexible Hours | £550 | 20 × 30 minutes | £27.50 |

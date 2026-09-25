@@ -1,5 +1,12 @@
 # CoachCarter Website — Project Reference
 
+## Bank-paid Flexible Hours (25 September 2026; pending rollout)
+
+Admin Packages supports `GET /api/flexible-packages?action=bank-purchase-options`
+and `POST ...?action=record-bank-purchase`. Migration 072 adds append-only bank
+receipts and a distinct purchase provider; no synthetic Stripe identities or
+ordinary Lesson Credit writes. See [workflow, accounting limits and rollout](docs/flexible-bank-transfer-purchases.md).
+
 ## Learner interface simplification (23 September 2026; pending deployment)
 
 Learner screens now prioritise the next task and disclose secondary detail on
