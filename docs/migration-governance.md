@@ -1,5 +1,13 @@
 # Migration governance audit and phased cleanup
 
+27 September 2026: migration `073_delivered_duration_corrections.sql` applied
+through the authoritative runner after user rollout approval and recovery
+snapshot `snap-wispy-flower-aboq9lsq`. Receipt succeeded at 21:51:15 UTC,
+checksum `e6cdd933d4f6fae4e29b5884e69d8a2d13eb9eea7eb6ea950ad28dda0b3daef0`.
+Production postflight confirmed the validated return-reason constraint and
+73 successful ledger entries with no pending migrations (041 remains deferred).
+The manifest has 74 entries. Historical receipts below remain unchanged.
+
 25 September 2026 repository addition: `072_flexible_bank_transfer_purchases.sql`
 adds separate bank receipts and purchase-provider constraints. The manifest has
 73 entries including deferred 041. This task has not applied it to production;
