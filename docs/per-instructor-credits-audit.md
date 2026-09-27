@@ -1,5 +1,19 @@
 # Per-Instructor Credits Audit
 
+27 September 2026 (migration 073 applied; deployment follows PR merge): admin delivered-duration
+corrections now use `_delivered-duration-correction.js`. Both the original and
+corrected lesson must have finished in the school's timezone, including past
+`scheduled` lessons awaiting the completion cron. Shortening returns the unused
+minutes to their original Lesson Credit or Flexible Hours sources; lengthening
+draws only the additional available minutes. Booking changes, replacement source
+allocations, scoped balance changes and required audit evidence commit together.
+Original source values and fees are preserved; no new credit grant or Stripe
+refund is created. Flexible returns use the new `delivered_duration_correction`
+reason. All existing payout/settlement claims, cancellation/forfeiture, mixed or
+unreconciled funding, and free-extension duration/funding mismatches block this
+path. Instructor edits and future-funded duration edits remain restricted.
+See [operating contract](delivered-duration-corrections.md).
+
 25 September 2026 (pending migration 072/deployment): [bank-paid Flexible Hours](flexible-bank-transfer-purchases.md)
 create a separate audited receipt, purchase and package source. No LCB or aggregate
 balance writes occur. Existing package allocation/return rules remain authoritative;
@@ -148,7 +162,7 @@ Classification:
 | Instructor-created credit booking | `api/instructor.js` credit transaction path | LCB + FIFO CT by instructor | Yes | Same safe shape as learner booking. Instructor schedule conflicts are hard refusals before this transaction; busy blocks cannot be overridden inside it. The school-scoped LCB lock, FIFO source draw and BCS attribution are unchanged. |
 | Cancellations / not delivered | `api/slots.js`, `api/instructor.js` cancel and mark-not-delivered paths | Booking `instructor_id` + `lockBalanceAdjustLCB` | Mostly yes | Returns credit to original instructor row and marks BCS refunded. Instructor `mark-not-delivered` is a transactional pre-payout exception for past unpaid lessons and refuses bookings already in `payout_line_items`. Self-serve free-trial learner cancellations terminate the booking without credit mutation because `minutes_deducted=0`. The learner single-cancel path now cleanly separates the early-returning Flexible Hours transaction from the standard UTC cutoff calculation, with isolated integration coverage for eligible, late, series, instructor, discounted, and drift-free cancellation cases. Ordinary cancel paths are not fully transactional with booking update. |
 | Reschedule | `api/slots.js`, `api/instructor.js` reschedule paths | Same-instructor moves carry original BCS; learner- or instructor-initiated instructor switches write paired transfer-out/transfer-in CT rows and replacement BCS | Yes | Same-instructor moves do not mutate balances. Ordinary switches preserve the paid entitlement without a second charge, move its instructor scope atomically, and keep the immutable original Stripe source linked through `transferred_from_credit_transaction_id`. Instructor confirmation also terminates the old booking, inserts the replacement, and rewrites funding in one transaction. Reserved Weekly Slot moves remain same-instructor only. |
-| Edit booking duration | `api/admin.js`, `api/instructor.js` edit-booking paths | Booking instructor's school-scoped LCB row; mutation uses scoped helper | Mostly yes | Extra-duration precheck no longer reads pooled learner balance. Response text preserved. |
+| Edit booking duration | `api/admin.js`, `_delivered-duration-correction.js`, `api/instructor.js` | Original BCS / Flexible allocations; school-scoped LCB for Lesson Credit only | Yes for the new delivered correction path | Admin past-funded corrections retire/return and replace allocations atomically with the booking and audit. Additional minutes draw available original sources. Existing future/instructor duration guards remain. Cash/free legacy edits are unchanged. |
 | Admin retrospective lesson entry | `api/admin.js` `handleCreateRetrospectiveBooking`, `public/admin/portal.js` | Credit option locks the selected learner/instructor/school LCB row and draws FIFO CT sources into BCS; cash option writes no credit draw | Yes | Past-only admin insert creates `chargeable` lessons. Credit-funded entries write BCS, snapshot payable list price, and decrement per-instructor balance in one transaction; cash entries keep `minutes_deducted = 0`. |
 | Admin adjust credits | `api/admin.js` `handleAdjustCredits`, `public/admin/portal.js` | UI requires explicit instructor; server uses school-scoped LCB auto-resolve/explicit instructor | Mostly yes | Server guard is scoped: 0 rows grandfathers to instructor `1`, 1 row auto-resolves, 2+ rows returns `AMBIGUOUS_INSTRUCTOR`, explicit `instructor_id` reads that exact LCB row. Admin UI now chooses an instructor and posts `instructor_id`; response/audit still includes pooled totals for compatibility. |
 | Goodwill/reconciliation | `api/_admin-credit-goodwill.js`, `api/_admin-credit-reconciliation.js` | Explicit learner/instructor/school + shared helper | Yes | Strongest admin path; tests already pin scope and mutation shape. |

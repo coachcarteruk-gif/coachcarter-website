@@ -591,6 +591,14 @@
       "filename": "072_flexible_bank_transfer_purchases.sql",
       "checksum": "d1c5ba73be9d964f4f985d26368f8aab5d0dc32443e1b96b2957824b4478190a",
       "execution": "numbered"
+    },
+    {
+      "id": "073",
+      "order": 74,
+      "prefix": "073",
+      "filename": "073_delivered_duration_corrections.sql",
+      "checksum": "e6cdd933d4f6fae4e29b5884e69d8a2d13eb9eea7eb6ea950ad28dda0b3daef0",
+      "execution": "numbered"
     }
   ]
 }

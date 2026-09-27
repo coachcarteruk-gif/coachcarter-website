@@ -97,6 +97,7 @@ const { checkRateLimit, getClientIp } = require('./_rate-limit');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
 const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_travel-time');
 const { withNeonTransaction } = require('./_db-transaction');
+const { correctDeliveredDuration, DurationCorrectionError } = require('./_delivered-duration-correction');
 const { planFifoCreditDraw } = require('./_bcs-fifo');
 const { buildPayoutV2ShadowStatement } = require('./_payout-v2-shadow');
 const { splitFifoPlanAcrossBookings } = require('./_bcs-booking-plan');
@@ -1307,6 +1308,22 @@ async function handleEditBooking(req, res) {
       newDuration = newType.duration_minutes;
     }
 
+    // Delivered corrections preserve original source history and commit booking,
+    // funding, learner balance and audit evidence as one transaction.
+    if (lessonTypeChanged && Number(newDuration) !== Number(booking.type_duration_minutes)
+        && ['credit', 'flexible_package'].includes(booking.payment_method)) {
+      const correction = await withNeonTransaction({ connectionString: process.env.POSTGRES_URL }, client =>
+        correctDeliveredDuration(client, {
+          schoolId, bookingId, lessonTypeId: newLessonTypeId,
+          expected: { ...booking, expected_duration_minutes: body.expected_duration_minutes },
+          changes: { scheduled_date: newDate, start_time: newStartTime, pickup_address: newPickupAddress,
+            dropoff_address: newDropoffAddress, notes: newNotes, force: force === true },
+          admin, req,
+        }));
+      await expireExtensionCheckoutSessions(correction.session_ids);
+      return res.json({ ok: true, booking_id: bookingId, minutes_returned: correction.minutes_returned });
+    }
+
     const requestedDurationDelta = Number(newDuration) - Number(booking.minutes_deducted || 0);
     if ((booking.payment_method === 'flexible_package' || booking.has_flexible_package_allocation === true)
         && requestedDurationDelta !== 0) {
@@ -1560,6 +1577,9 @@ async function handleEditBooking(req, res) {
 
     return res.json({ ok: true, booking_id: bookingId });
   } catch (err) {
+    if (err instanceof DurationCorrectionError) {
+      return res.status(err.status).json({ error: err.message, code: err.code });
+    }
     console.error('admin edit-booking error:', err);
     reportError('/api/admin', err);
     return res.status(500).json({ error: 'Failed to edit booking', details: 'Internal server error' });

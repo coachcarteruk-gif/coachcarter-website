@@ -1,5 +1,15 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.144 - Correct delivered lesson lengths (27 September 2026)
+
+Admin can correct a past 90-minute lesson to 60 minutes and return the unused
+30 minutes to its original Lesson Credit or Flexible Hours source. Longer
+corrections consume available time. The existing booking, allocation history,
+balance and audit change atomically; already-claimed payouts remain locked.
+Files: `api/_delivered-duration-correction.js`, admin API/editor, migration 073,
+and focused PostgreSQL/browser tests. See
+[contract and rollout](docs/delivered-duration-corrections.md).
+
 ## 2.143 - Learner visual clutter cleanup (23 September 2026; pending deployment)
 
 The dashboard puts the next lesson first, booking starts with seven dates and

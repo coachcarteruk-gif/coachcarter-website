@@ -1,5 +1,14 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+## Admin delivered duration corrections (27 September 2026)
+
+Reuse `admin?action=edit-booking` with the selected `lesson_type_id` and
+`expected_duration_minutes`. The server owns the past-only check, source-value
+accounting and payout guards in `_delivered-duration-correction.js`; native
+clients must not calculate new credit grants or refunds. Handle 409 by showing
+the refusal and refreshing stale booking details. Migration 073 adds an
+allocation-return reason, not a new table or public route.
+
 ## Qualifying questionnaire and trial requests (pending rollout)
 
 Native clients read `trial_questionnaire` from school public-config, collect the same three conditional questions and send raw answers in `questionnaire`. Server `_trial-qualification.js` is authoritative; clients cannot supply a route or offered price. Reuse existing live booking for eligible users and `trial-requests?action=submit` for others or a no-suitable-slot fallback. Requests are not appointments. Keep submission evidence separate from current profiles; authenticated historical-answer application now includes practical time. Migration 071 adds immutable school-scoped requests/booking associations and extends 070 intakes. Admin review/configuration/link/export/delete are action endpoints using existing auth. [Contract and rollout](docs/qualifying-trial-funnel.md).

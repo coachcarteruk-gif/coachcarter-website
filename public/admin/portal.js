@@ -1049,6 +1049,8 @@ let adminEditBookingId = null;
 let adminEditLessonTypes = [];
 let adminEditOrigMinutes = 0;
 let adminEditBookingStatus = '';
+let adminEditPaymentMethod = '';
+let adminEditOriginalDuration = 0;
 
 async function openAdminEditBooking(bookingId) {
   const b = allBookings.find(x => x.id === bookingId);
@@ -1056,6 +1058,10 @@ async function openAdminEditBooking(bookingId) {
   adminEditBookingId = bookingId;
   adminEditOrigMinutes = parseInt(b.minutes_deducted) || 0;
   adminEditBookingStatus = b.status || '';
+  adminEditPaymentMethod = b.payment_method || '';
+  var originalStart = b.start_time.split(':').map(Number);
+  var originalEnd = b.end_time.split(':').map(Number);
+  adminEditOriginalDuration = originalEnd[0] * 60 + originalEnd[1] - originalStart[0] * 60 - originalStart[1];
 
   document.getElementById('adminEditTitle').textContent = b.status === 'chargeable' ? 'Edit Lesson' : 'Edit Booking';
   var editDate = document.getElementById('adminEditDate');
@@ -1127,6 +1133,19 @@ function updateAdminEditEnd() {
     } else { infoEl.style.display = 'none'; }
   } else { infoEl.style.display = 'none'; }
 
+  if (adminEditPaymentMethod === 'flexible_package' && adminEditOrigMinutes > 0) {
+    var packageDelta = duration - adminEditOrigMinutes;
+    if (packageDelta !== 0) {
+      infoEl.textContent = packageDelta < 0
+        ? Math.abs(packageDelta) + ' minutes will be returned to Flexible Hours.'
+        : packageDelta + ' additional minutes will be used from Flexible Hours.';
+    }
+  }
+  if (duration !== adminEditOriginalDuration && (adminEditPaymentMethod === 'credit' || adminEditPaymentMethod === 'flexible_package')) {
+    infoEl.textContent += ' Corrections are available after the lesson finishes and before it is included in a payout.';
+    infoEl.style.display = 'block';
+  }
+
   if (saveBtn) {
     saveBtn.disabled = false;
     saveBtn.title = '';
@@ -1152,6 +1171,7 @@ async function confirmAdminEditBooking(forceOverride) {
       method: 'POST', headers: HEADERS,
       body: JSON.stringify({
         booking_id: adminEditBookingId,
+        expected_duration_minutes: adminEditOriginalDuration,
         scheduled_date: document.getElementById('adminEditDate').value,
         start_time: document.getElementById('adminEditTime').value.slice(0, 5),
         lesson_type_id: parseInt(document.getElementById('adminEditType').value),

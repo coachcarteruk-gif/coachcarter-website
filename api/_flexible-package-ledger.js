@@ -595,6 +595,7 @@ async function moveFlexiblePackageBookingAllocations(client, {
 }
 
 module.exports = {
+  loadLockedFlexibleSources,
   allocateFlexibleExtensionWithClient,
   FLEXIBLE_UNIT_MINUTES,
   bookFlexiblePackageSlotTransaction,

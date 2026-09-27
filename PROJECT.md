@@ -1,5 +1,13 @@
 # CoachCarter Website — Project Reference
 
+## Delivered lesson duration corrections (27 September 2026)
+
+Admin `POST /api/admin?action=edit-booking` supports past Lesson Credit and
+Flexible Hours length corrections through `_delivered-duration-correction.js`.
+Booking, original-source replacements, balance and audit commit atomically;
+payout claims and contradictory funding remain blocked. Requires migration 073.
+See [operating and rollout contract](docs/delivered-duration-corrections.md).
+
 ## Bank-paid Flexible Hours (25 September 2026; pending rollout)
 
 Admin Packages supports `GET /api/flexible-packages?action=bank-purchase-options`

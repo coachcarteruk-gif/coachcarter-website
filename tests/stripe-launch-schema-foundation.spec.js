@@ -291,7 +291,7 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
     expect(review.reviewStatus).toBe(STATUS);
   });
 
-  test('only explicitly reviewed Slice 2/Slice 4 modules and shadow fixture writer import the Slice 1 schema', () => {
+  test('only reviewed launch modules and the read-only delivered-correction guard reference the Slice 1 schema', () => {
     const applicationFiles = [
       ...walkFiles(path.join(root, 'api')),
       ...walkFiles(path.join(root, 'js')),
@@ -303,9 +303,14 @@ test.describe('Stripe launch Slice 1 inert schema foundation', () => {
       .map((file) => path.relative(root, file));
     expect(violations.sort()).toEqual([
       path.join('api', '_connect-v2-store.js'),
+      path.join('api', '_delivered-duration-correction.js'),
       path.join('api', '_stripe-launch-payment-contracts.js'),
       path.join('api', '_stripe-launch-payment-reconciler.js'),
       path.join('api', '_stripe-launch-shadow-fixture.js'),
     ].sort());
+    const correction = fs.readFileSync(path.join(root, 'api', '_delivered-duration-correction.js'), 'utf8');
+    expect(correction).toContain('SELECT 1 FROM stripe_launch_booking_earnings WHERE payment_contract_id=$3 AND school_id=$2');
+    expect(correction).not.toMatch(new RegExp(`\\b(?:INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|TRUNCATE(?:\\s+TABLE)?)\\s+(?:${TABLES.join('|')})\\b`, 'i'));
+    expect(correction).toContain("if (claims.rowCount) refuse('BOOKING_PAID_OUT'");
   });
 });
