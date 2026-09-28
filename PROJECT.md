@@ -8,6 +8,12 @@ Booking, original-source replacements, balance and audit commit atomically;
 payout claims and contradictory funding remain blocked. Requires migration 073.
 See [operating and rollout contract](docs/delivered-duration-corrections.md).
 
+Instructor access (28 September): calendar **Edit lesson length** uses
+`POST /api/instructor?action=correct-delivered-duration` for the signed-in
+instructor's own completed credit/package lesson. It accepts `booking_id`,
+`lesson_type_id` and `expected_duration_minutes`, reuses the atomic correction,
+preserves date/start time, and records instructor/support identity in the audit.
+
 ## Bank-paid Flexible Hours (25 September 2026; pending rollout)
 
 Admin Packages supports `GET /api/flexible-packages?action=bank-purchase-options`
@@ -826,6 +832,7 @@ The magic-link login actions (`request-login`, `validate-token`, `verify-token`)
 | `reschedule-availability` | GET | JWT | Read-only preview for an instructor-managed reschedule. Rechecks the selected instructor's availability/overrides, lessons, reservations, blackouts, busy/external events, pending requests/offers, recurring holds, notice/window, and pickup travel spacing. Query: `booking_id`, `new_instructor_id`, `new_date`, `new_start_time`. |
 | `reschedule-booking` | POST | JWT | Move an authorised booking to a new slot or active eligible same-school instructor (no old-lesson notice restriction and no count limit). Body: `{ booking_id, new_date, new_start_time, new_instructor_id? }`. Confirmation repeats the full availability check server-side. The old-row termination, replacement booking, and BCS/funding transfer are atomic; cross-instructor moves reuse migration 042's paired transfer ledger and do not charge the learner again. Reserved Weekly Slot occurrences cannot switch instructor. |
 | `edit-booking` | POST | JWT | In-place edit of a booking's date, time, or lesson type. Body: `{ booking_id, scheduled_date?, start_time?, lesson_type_id?, force?, notify? }`. Adjusts the learner's balance with that booking's instructor if duration changes. Returns conflict details if overlapping (with `can_force: true`). Sets `edited_at`, Setmore sync skips edited bookings |
+| `correct-delivered-duration` | POST | JWT | Correct own completed Lesson Credit/Flexible Hours lesson length. Body: `{ booking_id, lesson_type_id, expected_duration_minutes }`. School/ownership, past-only, original-source accounting, stale duration and payout guards are enforced atomically; returns `{ ok, booking_id, minutes_returned }`. Date/start time and other lesson details are preserved. |
 | `create-booking` | POST | JWT | Book a lesson on behalf of a learner (cash/credit/flexible-package/free payment). Flexible Hours bookings outside recurring/one-off availability return `409 NORMAL_HOURS_OVERRIDE_REQUIRED`; explicit confirmation resubmits the lesson-specific `normal_hours_override_token`. Other payment types and schedule blocks return `409 SCHEDULE_UNAVAILABLE`, regardless of legacy override/force fields. Busy blocks, blackouts and external events cannot be overridden. Flexible Hours records `created_by=instructor` for this route. Actual lesson and held-request conflicts are not overridable. |
 | `blackout-dates` | GET | JWT | Returns active/future blackout date ranges. Response: `{ blackout_dates: [{ id, start_date, end_date, reason }] }` |
 | `set-blackout-dates` | POST | JWT | Replace all future blackout ranges. Body: `{ ranges: [{ start_date, end_date, reason? }] }`. Validates no overlaps, max 365-day span |

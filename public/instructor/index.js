@@ -1658,6 +1658,9 @@ function openBookingDetail(bookingId) {
   } else {
     actions.innerHTML = `<button class="btn-modal-cancel" data-action="close-booking-modal">Close</button>`;
   }
+  if (b.can_report_not_delivered && ['credit', 'flexible_package'].includes(b.payment_method)) {
+    actions.insertAdjacentHTML('afterbegin', `<button class="btn-modal-cancel" data-action="correct-lesson-length" data-id="${b.id}">Edit lesson length</button>`);
+  }
 
   document.getElementById('bookingModal').classList.add('open');
 }
@@ -1963,8 +1966,11 @@ async function confirmInstrReschedule() {
 let editBookingId = null;
 let editBookingLessonTypes = [];
 let editBookingOrigMinutes = 0;
+let editBookingOriginalDuration = 0;
+let editBookingCorrection = false;
+let editBookingPaymentMethod = null;
 
-async function openEditBookingModal(bookingId) {
+async function openEditBookingModal(bookingId, correction = false) {
   let b = null;
   for (const ds in bookingCache) {
     b = bookingCache[ds].find(x => x.id === bookingId);
@@ -1974,13 +1980,25 @@ async function openEditBookingModal(bookingId) {
 
   editBookingId = bookingId;
   editBookingOrigMinutes = parseInt(b.minutes_deducted) || 0;
+  editBookingCorrection = correction;
+  editBookingPaymentMethod = b.payment_method;
+  const toMinutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  editBookingOriginalDuration = toMinutes(b.end_time) - toMinutes(b.start_time);
   closeBookingModal();
 
   document.getElementById('editBookingLearner').textContent = b.learner_name;
   document.getElementById('editBookingDate').value = b.scheduled_date;
-  document.getElementById('editBookingDate').min = new Date().toISOString().slice(0, 10);
+  document.getElementById('editBookingDate').min = correction ? '' : new Date().toISOString().slice(0, 10);
   document.getElementById('editBookingTime').value = b.start_time.slice(0, 5);
   configureLessonTransmissionSelect('editBookingTransmission', 'editBookingTransmissionWrap', b.transmission_type);
+  ['editBookingDate', 'editBookingTime', 'editBookingTransmission'].forEach(id => {
+    document.getElementById(id).disabled = correction;
+  });
+  document.querySelector('#editBookingModal .modal-title').textContent = correction ? 'Edit lesson length' : 'Edit Lesson';
+  document.querySelector('#editBookingModal .modal-sub').textContent = correction
+    ? 'Record the actual length of this completed lesson before it is included in a payout.'
+    : 'Change the date, time, or lesson type.';
+  document.getElementById('editBookingNotify').closest('label').style.display = correction ? 'none' : 'flex';
 
   // Load lesson types for dropdown (include inactive for legacy corrections)
   try {
@@ -1997,6 +2015,12 @@ async function openEditBookingModal(bookingId) {
     (lt.active === false ? ' [hidden]' : '') +
     '</option>'
   ).join('');
+  if (correction) {
+    // Extensions can leave the original type shorter than the actual booking.
+    // Keep the current duration selected until the instructor chooses a change.
+    sel.insertAdjacentHTML('afterbegin', '<option value="" data-duration="' + editBookingOriginalDuration + '">Current length (' + editBookingOriginalDuration + ' min)</option>');
+    sel.value = '';
+  }
 
   updateEditEndTime();
   document.getElementById('editBookingSaveBtn').disabled = false;
@@ -2019,6 +2043,17 @@ function updateEditEndTime() {
 
   // Show balance adjustment info
   const infoEl = document.getElementById('editBookingBalanceInfo');
+  if (editBookingCorrection) {
+    const delta = duration - editBookingOriginalDuration;
+    const balance = editBookingPaymentMethod === 'flexible_package' ? 'Flexible Hours' : 'lesson credit with you';
+    infoEl.textContent = delta < 0
+      ? Math.abs(delta) + ' minutes will be returned to the learner’s ' + balance + '.'
+      : delta > 0 ? delta + ' extra minutes will be used from the learner’s ' + balance + '. Enough hours must be available.'
+        : 'Choose the actual lesson length. The date and start time stay the same.';
+    infoEl.style.color = delta > 0 ? 'var(--red)' : 'var(--muted)';
+    infoEl.style.display = 'block';
+    return;
+  }
   if (editBookingOrigMinutes > 0) {
     const delta = duration - editBookingOrigMinutes;
     if (delta > 0) {
@@ -2047,6 +2082,7 @@ async function confirmEditBooking(forceOverride) {
   const newDate = document.getElementById('editBookingDate').value;
   const newTime = document.getElementById('editBookingTime').value;
   const newTypeId = parseInt(document.getElementById('editBookingType').value);
+  if (editBookingCorrection && !newTypeId) { showToast('Choose the actual lesson length', 'error'); return; }
   const newTransmission = normaliseTransmissionType(document.getElementById('editBookingTransmission')?.value) || (instructorTransmissionType === 'automatic' ? 'automatic' : 'manual');
   if (!newDate || !newTime) { showToast('Please select a date and time', 'error'); return; }
 
@@ -2054,10 +2090,14 @@ async function confirmEditBooking(forceOverride) {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   try {
-    const res = await ccAuth.fetchAuthed('/api/instructor?action=edit-booking', {
+    const res = await ccAuth.fetchAuthed('/api/instructor?action=' + (editBookingCorrection ? 'correct-delivered-duration' : 'edit-booking'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify(editBookingCorrection ? {
+        booking_id: editBookingId,
+        lesson_type_id: newTypeId,
+        expected_duration_minutes: editBookingOriginalDuration
+      } : {
         booking_id: editBookingId,
         scheduled_date: newDate,
         start_time: newTime.slice(0, 5),
@@ -2090,7 +2130,7 @@ async function confirmEditBooking(forceOverride) {
     if (!res.ok) throw new Error(data.error || data.message);
 
     closeEditBookingModal();
-    showToast('Lesson updated' + (data.balanceAdjusted ? ' - balance adjusted' : ''), 'success');
+    showToast(editBookingCorrection ? 'Lesson length updated — learner hours adjusted' : 'Lesson updated' + (data.balanceAdjusted ? ' - balance adjusted' : ''), 'success');
     // Full refresh from server - renderCurrentView awaits fetch before rendering
     await refreshSchedule(true);
   } catch (err) {
@@ -3270,6 +3310,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'open-not-delivered-modal') openNotDeliveredModal(parseInt(t.dataset.id, 10));
   else if (a === 'open-reschedule-modal') openRescheduleModal(parseInt(t.dataset.id, 10), t.dataset.date, t.dataset.start, t.dataset.end, t.dataset.name);
   else if (a === 'open-edit-booking-modal') openEditBookingModal(parseInt(t.dataset.id, 10));
+  else if (a === 'correct-lesson-length') openEditBookingModal(parseInt(t.dataset.id, 10), true);
   else if (a === 'open-extension-modal') openExtensionOfferModal(parseInt(t.dataset.id, 10));
   else if (a === 'close-booking-modal') closeBookingModal();
   else if (a === 'history-book-lesson') { closeHistoryModal(); openAddLessonModal(); }

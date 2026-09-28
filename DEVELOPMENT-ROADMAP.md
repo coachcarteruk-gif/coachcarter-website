@@ -1,5 +1,16 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.145 - Instructor delivered lesson length corrections (28 September 2026; pending deployment)
+
+Instructors can use **Edit lesson length** on their own completed Lesson Credit
+and Flexible Hours lessons. The shared admin accounting transaction returns or
+uses the difference, preserves original funding evidence, and refuses claimed
+payouts. The instructor flow fixes the date/start time and records instructor
+and support impersonation identity. No new migration is required.
+Files: `api/instructor.js`, `api/_delivered-duration-correction.js`,
+`public/instructor/index.js`, and focused PostgreSQL/browser tests.
+See [contract](docs/delivered-duration-corrections.md).
+
 ## 2.144 - Correct delivered lesson lengths (27 September 2026)
 
 Admin can correct a past 90-minute lesson to 60 minutes and return the unused

@@ -47,6 +47,7 @@ const { extractPostcode, bulkGeocodeUK, estimateDriveMinutes } = require('./_tra
 const { getEligibleBookings, payoutEvidenceBlockers }  = require('./_payout-helpers');
 const { loadInterimV1Preview } = require('./_interim-v1-payout');
 const { SCHEDULED, CHARGEABLE, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
+const { correctDeliveredDuration, DurationCorrectionError } = require('./_delivered-duration-correction');
 const { lockBalanceAndMutate, lockBalanceAdjustLCB } = require('./_credit-grant');
 const { withNeonTransaction } = require('./_db-transaction');
 const { validatePencilledOfferCreation } = require('./_pencilled-offers');
@@ -280,6 +281,7 @@ module.exports = async (req, res) => {
   if (action === 'reschedule-availability') return handleRescheduleAvailability(req, res);
   if (action === 'reschedule-booking') return handleRescheduleBooking(req, res);
   if (action === 'edit-booking')       return handleEditBooking(req, res);
+  if (action === 'correct-delivered-duration') return handleCorrectDeliveredDuration(req, res);
   if (action === 'create-booking')     return handleCreateBooking(req, res);
   if (action === 'stats')              return handleStats(req, res);
   if (action === 'upload-photo')       return handleUploadPhoto(req, res);
@@ -2783,6 +2785,42 @@ async function handleRescheduleAvailability(req, res) {
     console.error('instructor reschedule-availability error:', err);
     reportError('/api/instructor?action=reschedule-availability', err);
     return res.status(500).json({ error: 'Could not verify that slot', available: false });
+  }
+}
+
+// ── POST /api/instructor?action=correct-delivered-duration ─────────────────
+// Duration-only correction of the authenticated instructor's completed lesson.
+async function handleCorrectDeliveredDuration(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const instructor = verifyInstructorAuth(req);
+  if (!instructor) return res.status(401).json({ error: 'Unauthorised' });
+  const { booking_id, lesson_type_id, expected_duration_minutes } = req.body || {};
+  if (![booking_id, lesson_type_id, expected_duration_minutes].every(value => Number.isSafeInteger(value) && value > 0)) {
+    return res.status(400).json({ error: 'A booking, lesson length and original duration are required.' });
+  }
+  const schoolId = instructor.school_id;
+  try {
+    const correction = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const booking = (await client.query(`SELECT *, scheduled_date::text AS scheduled_date,
+        start_time::text AS start_time, end_time::text AS end_time FROM lesson_bookings
+        WHERE id=$1 AND instructor_id=$2 AND school_id=$3`, [booking_id, instructor.id, schoolId])).rows[0];
+      if (!booking) throw new DurationCorrectionError('BOOKING_NOT_FOUND', 'Booking not found.', 404);
+      return correctDeliveredDuration(client, {
+        schoolId, bookingId: booking_id, lessonTypeId: lesson_type_id,
+        expected: { ...booking, expected_duration_minutes },
+        changes: { scheduled_date: booking.scheduled_date, start_time: booking.start_time.slice(0, 5),
+          pickup_address: booking.pickup_address, dropoff_address: booking.dropoff_address,
+          notes: booking.instructor_notes, force: false },
+        instructor, req,
+      });
+    });
+    await expireExtensionCheckoutSessions(correction.session_ids);
+    return res.json({ ok: true, booking_id, minutes_returned: correction.minutes_returned });
+  } catch (err) {
+    if (err instanceof DurationCorrectionError) return res.status(err.status).json({ error: err.message, code: err.code });
+    console.error('instructor duration correction error:', err);
+    reportError('/api/instructor', err);
+    return res.status(500).json({ error: 'Failed to correct lesson length' });
   }
 }
 
