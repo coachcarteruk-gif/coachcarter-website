@@ -98,6 +98,67 @@ test.describe('delivered duration corrections against PostgreSQL', () => {
   });
   test.afterEach(async () => { await db.exec('ROLLBACK'); });
 
+  async function instructorRequest(body = {}, auth = { id: 1, school_id: 1, email: 'instructor@example.test' }, method = 'POST') {
+    const source = read('api/instructor.js');
+    const context = { process: { env: { POSTGRES_URL: 'test-only' } }, verifyInstructorAuth: () => auth,
+      correctDeliveredDuration, DurationCorrectionError, expireExtensionCheckoutSessions: async () => {},
+      withNeonTransaction: async (_options, callback) => {
+        await db.exec('SAVEPOINT instructor_route');
+        try { const result = await callback(client); await db.exec('RELEASE SAVEPOINT instructor_route'); return result; }
+        catch (error) { await db.exec('ROLLBACK TO SAVEPOINT instructor_route'); throw error; }
+      }, console, reportError: () => {},
+    };
+    vm.createContext(context);
+    vm.runInContext(source.slice(source.indexOf('async function handleCorrectDeliveredDuration('), source.indexOf('async function handleEditBooking(')), context);
+    const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+    await context.handleCorrectDeliveredDuration({ method, headers: {}, body: {
+      booking_id: 501, lesson_type_id: 2, expected_duration_minutes: 90, ...body,
+    } }, res);
+    return res;
+  }
+
+  for (const payment of ['credit', 'flexible_package']) {
+    test(`instructor corrects own completed ${payment} lesson and a stale retry cannot return hours twice`, async () => {
+      if (payment === 'flexible_package') await seedFlexible();
+      await db.exec("UPDATE lesson_bookings SET instructor_notes='Keep my notes',pickup_address='Original pickup' WHERE id=501");
+      const result = await instructorRequest({ scheduled_date: '2099-01-01', start_time: '18:00', instructor_id: 2, school_id: 2 });
+      expect(result.statusCode).toBe(200);
+      expect(result.body).toMatchObject({ ok: true, minutes_returned: 30 });
+      expect(await snapshot()).toMatchObject({ status: 'chargeable', end_time: '11:00:00', minutes_deducted: 60,
+        list_price_pence: 5400, scheduled_date: '2026-09-25', instructor_notes: 'Keep my notes', pickup_address: 'Original pickup' });
+      const audit = (await query("SELECT * FROM audit_log WHERE action='instructor.correct_delivered_duration'")).rows;
+      expect(audit).toHaveLength(1);
+      expect(audit[0].admin_id).toBeNull();
+      expect(audit[0].details).toMatchObject({ instructor_id: 1, impersonation: false });
+      expect((await instructorRequest()).body.code).toBe('BOOKING_CHANGED');
+    });
+  }
+
+  test('instructor route enforces auth, school, ownership, method and validated inputs', async () => {
+    expect((await instructorRequest({}, null)).statusCode).toBe(401);
+    expect((await instructorRequest({}, undefined, 'GET')).statusCode).toBe(405);
+    expect((await instructorRequest({}, { id: 2, school_id: 1 })).statusCode).toBe(404);
+    expect((await instructorRequest({}, { id: 1, school_id: 2 })).statusCode).toBe(404);
+    expect((await instructorRequest({ expected_duration_minutes: null })).statusCode).toBe(400);
+    expect((await instructorRequest({ lesson_type_id: 4 })).body.code).toBe('INVALID_DURATION');
+    await expect(correction(2, { instructor: { id: 2, school_id: 1 } })).rejects.toMatchObject({ code: 'BOOKING_NOT_FOUND' });
+    expect(await snapshot()).toMatchObject({ minutes_deducted: 90 });
+    expect((await query('SELECT * FROM booking_credit_sources')).rows).toHaveLength(1);
+  });
+
+  test('instructor route allows past scheduled lessons, preserves support actor and refuses claimed lessons', async () => {
+    await db.exec("UPDATE lesson_bookings SET status='scheduled' WHERE id=501");
+    await db.exec('INSERT INTO payout_line_items VALUES (501,1)');
+    expect((await instructorRequest()).body.code).toBe('BOOKING_PAID_OUT');
+    await db.exec('DELETE FROM payout_line_items');
+    const result = await instructorRequest({}, { id: 1, school_id: 1, impersonation: true,
+      impersonated_by_admin_id: 1, impersonated_by_admin_email: 'support@example.test' });
+    expect(result.statusCode).toBe(200);
+    expect(await snapshot()).toMatchObject({ status: 'scheduled', minutes_deducted: 60 });
+    const audit = (await query("SELECT * FROM audit_log WHERE action='instructor.correct_delivered_duration'")).rows[0];
+    expect(audit).toMatchObject({ admin_id: 1, admin_email: 'support@example.test', details: { instructor_id: 1, impersonation: true } });
+  });
+
   test('90 → 60 returns 30 scoped minutes and preserves original value/fee evidence', async () => {
     expect(await correction()).toMatchObject({ ok: true, minutes_returned: 30 });
     expect(await snapshot()).toMatchObject({ end_time: '11:00:00', minutes_deducted: 60, list_price_pence: 5400, status: 'chargeable' });

@@ -16,7 +16,8 @@ original funding. It does not cancel/rebook the lesson or issue a cash refund.
 
 ## Eligibility
 
-- Authenticated admin and booking in the selected school.
+- Authenticated admin and booking in the selected school, or the authenticated
+  instructor correcting their own same-school lesson.
 - Both original and corrected lesson ends are in the past, using the school
   timezone. Past `scheduled` bookings awaiting the completion cron are eligible;
   their status is preserved.
@@ -76,3 +77,26 @@ actual admin edit handler; a browser test exercises the actual editor functions
 and modal markup. The combined focused suite passed 87 tests. Production changes
 are limited to migration 073; no production financial or Stripe mutation was
 performed during verification.
+
+## Instructor access (28 September 2026)
+
+The instructor calendar's completed lesson details now offer **Edit lesson
+length** for Lesson Credit and Flexible Hours bookings before payout. The
+editor keeps the date, start time and transmission fixed, shows the hours to
+return/use, and submits the original elapsed duration for stale-edit protection.
+Past scheduled lessons awaiting the completion cron can use the same control.
+
+`POST /api/instructor?action=correct-delivered-duration` requires the normal
+cookie/CSRF instructor authentication and a positive integer `booking_id`,
+`lesson_type_id` and `expected_duration_minutes`. School and instructor scope
+come exclusively from authentication. Ownership is checked both when loading
+the booking and inside the shared correction transaction. The endpoint ignores
+client date, time, identity and override fields; corrections cannot bypass
+overlaps or move a lesson. All funding and payout guards above still apply.
+
+The required `instructor.correct_delivered_duration` audit records the instructor
+and any admin support impersonation. Ordinary instructor IDs are never written
+as admin IDs. No lesson-moved notification is sent for this historical change.
+Upcoming edits retain the existing editor and availability rules. Cash/free
+and other unsupported funding remain outside this source-backed correction flow.
+No additional migration is needed beyond the existing correction prerequisites.

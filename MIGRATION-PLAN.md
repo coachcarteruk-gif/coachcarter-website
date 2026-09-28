@@ -1,5 +1,14 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+## Instructor delivered duration corrections (28 September 2026)
+
+Use `POST /api/instructor?action=correct-delivered-duration` with `booking_id`,
+`lesson_type_id` and the displayed `expected_duration_minutes`. Only the length
+changes; date/time, ownership, available source-backed hours and payout claims
+are server-controlled. Handle 409 refusals/stale edits without repeating the
+mutation automatically, and refresh schedule/balances after success. The existing
+shared correction module and migration prerequisites apply; no new schema.
+
 ## Admin delivered duration corrections (27 September 2026)
 
 Reuse `admin?action=edit-booking` with the selected `lesson_type_id` and

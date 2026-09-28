@@ -147,17 +147,23 @@ async function correctFlexible(client, booking, duration, allocations) {
 
 // Caller MUST run this in one interactive transaction. No provider calls occur
 // here: every booking, allocation, balance and required audit write commits together.
-async function correctDeliveredDuration(client, { schoolId, bookingId, lessonTypeId, expected, changes, admin, req, now = new Date() }) {
+async function correctDeliveredDuration(client, { schoolId, bookingId, lessonTypeId, expected, changes, admin, instructor, req, now = new Date() }) {
   const identity = (await client.query(`SELECT learner_id,instructor_id FROM lesson_bookings WHERE id=$1 AND school_id=$2`, [bookingId, schoolId])).rows[0];
   if (!identity) refuse('BOOKING_NOT_FOUND', 'Booking not found.', 404);
+  if (instructor && (Number(instructor.school_id) !== Number(schoolId)
+      || Number(identity.instructor_id) !== Number(instructor.id))) refuse('BOOKING_NOT_FOUND', 'Booking not found.', 404);
   await client.query('SELECT pg_advisory_xact_lock($1,$2)', [schoolId, identity.instructor_id]);
   const learner = await client.query(`SELECT id FROM learner_users WHERE id=$1 AND school_id=$2 FOR UPDATE`, [identity.learner_id, schoolId]);
-  const instructor = await client.query(`SELECT id FROM instructors WHERE id=$1 AND school_id=$2`, [identity.instructor_id, schoolId]);
-  if (!learner.rowCount || !instructor.rowCount) refuse('BOOKING_SCOPE_MISMATCH', 'The learner and instructor must belong to this school.');
+  const instructorRecord = await client.query(`SELECT id FROM instructors WHERE id=$1 AND school_id=$2`, [identity.instructor_id, schoolId]);
+  if (!learner.rowCount || !instructorRecord.rowCount) refuse('BOOKING_SCOPE_MISMATCH', 'The learner and instructor must belong to this school.');
   await client.query('SELECT pg_advisory_xact_lock($1,$2)', [schoolId, bookingId]);
   const booking = (await client.query(`SELECT *,scheduled_date::text AS scheduled_date,start_time::text AS start_time,end_time::text AS end_time
     FROM lesson_bookings WHERE id=$1 AND school_id=$2 FOR UPDATE`, [bookingId, schoolId])).rows[0];
   if (!booking || booking.learner_id !== identity.learner_id || booking.instructor_id !== identity.instructor_id) refuse('BOOKING_CHANGED', 'The booking changed. Refresh and try again.');
+  if (instructor && (changes.scheduled_date !== booking.scheduled_date
+      || changes.start_time !== booking.start_time.slice(0, 5) || changes.force)) {
+    refuse('DURATION_ONLY', 'Only the lesson length can be corrected here.', 400);
+  }
   const oldDuration = minutes(booking.end_time) - minutes(booking.start_time);
   if (!expected || ['scheduled_date', 'start_time', 'end_time', 'lesson_type_id', 'minutes_deducted', 'list_price_pence', 'status'].some(key =>
     String(booking[key]) !== String(expected[key])) || (expected.expected_duration_minutes != null && Number(expected.expected_duration_minutes) !== oldDuration)) {
@@ -210,9 +216,13 @@ async function correctDeliveredDuration(client, { schoolId, bookingId, lessonTyp
   const offers = await client.query(`UPDATE lesson_offers SET status='cancelled'
     WHERE extension_booking_id=$1 AND school_id=$2 AND instructor_id=$3 AND status='pending' RETURNING stripe_session_id`,
   [bookingId, schoolId, booking.instructor_id]);
-  await logAuditRequired(sqlFor(client), { adminId: admin.id, adminEmail: admin.email, schoolId, req,
-    action: 'admin.correct_delivered_duration', targetType: 'booking', targetId: bookingId,
-    details: { old: { date: booking.scheduled_date, start: booking.start_time, end: booking.end_time, duration: oldDuration,
+  await logAuditRequired(sqlFor(client), {
+    adminId: instructor ? (instructor.impersonation === true ? instructor.impersonated_by_admin_id || null : null) : admin.id,
+    adminEmail: instructor ? (instructor.impersonation === true ? instructor.impersonated_by_admin_email || instructor.email : instructor.email) : admin.email,
+    schoolId, req,
+    action: instructor ? 'instructor.correct_delivered_duration' : 'admin.correct_delivered_duration', targetType: 'booking', targetId: bookingId,
+    details: { ...(instructor ? { instructor_id: instructor.id, impersonation: instructor.impersonation === true } : {}),
+    old: { date: booking.scheduled_date, start: booking.start_time, end: booking.end_time, duration: oldDuration,
       lesson_type_id: booking.lesson_type_id, value_pence: booking.list_price_pence, pickup_address: booking.pickup_address,
       dropoff_address: booking.dropoff_address, notes: booking.instructor_notes },
     new: { ...changes, end_time: endTime, duration, lesson_type_id: lessonTypeId, value_pence: funding.value },
