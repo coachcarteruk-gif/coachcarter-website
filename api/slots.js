@@ -76,6 +76,7 @@ const {
 } = require('./_stripe-launch-payment-contracts');
 const { resolveStripeCheckoutReturnUrls } = require('./_stripe-launch-shadow-return-urls');
 const { loadRetiredProductState, sendRetiredProduct } = require('./_retired-products');
+const { WeeklyBookingError, parseWeeklyBooking, commitWeeklyBooking, weeklySchemaReady } = require('./_flexible-weekly-booking');
 const {
   markBookingCreditSourcesRefunded,
   restoreBookingCreditSourcesActive,
@@ -1035,6 +1036,7 @@ module.exports = async (req, res) => {
   if (action === 'book-test-date') return handleBookTestDate(req, res);
   if (action === 'checkout-test-date') return handleCheckoutTestDate(req, res);
   if (action === 'book')         return handleBook(req, res);
+  if (action === 'flexible-weekly-preview' || action === 'flexible-weekly-commit') return handleFlexibleWeekly(req, res);
   if (action === 'request-slot') return handleRequestSlot(req, res);
   if (action === 'my-requests')  return handleMyRequests(req, res);
   if (action === 'withdraw-request') return handleWithdrawRequest(req, res);
@@ -4102,6 +4104,106 @@ async function handleCheckoutTestDate(req, res) {
     console.error('checkout-test-date error:', err);
     reportError('/api/slots?action=checkout-test-date', err);
     return res.status(500).json({ error: 'Failed to create test date checkout', details: 'Internal server error' });
+  }
+}
+
+// Dedicated package scheduling authority; deliberately does not create or
+// reactivate legacy credit repeats or Reserved Weekly Slot products.
+async function validateFlexibleWeeklySlots(sql, input, { schoolId, learnerId }) {
+  const [instructor] = await sql`SELECT id, email, active, request_to_book, offered_lesson_types,
+    COALESCE(transmission_type,'manual') AS transmission_type FROM instructors
+    WHERE id=${input.instructorId} AND school_id=${schoolId}`;
+  if (!instructor?.active || instructor.request_to_book || instructor.email === 'demo@coachcarter.uk') {
+    throw new WeeklyBookingError('INSTRUCTOR_NOT_ELIGIBLE', 'Choose an active instructor who accepts instant bookings.');
+  }
+  const lessonType = await getLessonType(sql, input.lessonTypeId, schoolId);
+  if (!lessonType || isFreeTrialLessonType(lessonType)
+      || Number(lessonType.duration_minutes) !== input.durationMinutes
+      || !isLessonTypeOffered(instructor.offered_lesson_types, lessonType.slug)
+      || !slotSupportsTransmission(instructor.transmission_type, input.transmissionType)) {
+    throw new WeeklyBookingError('INVALID_LESSON_TYPE', 'This lesson type or transmission is unavailable.', 400);
+  }
+  const clock = await loadSchoolOperationalClock(sql, schoolId);
+  if (!clock.schoolConfig.payments_enabled) {
+    throw new WeeklyBookingError('FLEXIBLE_PACKAGE_NOT_REQUIRED', 'Flexible Hours cannot fund a free booking.');
+  }
+  const conflicts = [];
+  for (const date of input.dates) {
+    const options = { ...input, schoolId, instructorId: input.instructorId, date,
+      bookingWindowBaseDate: clock.date, operationalTimezone: clock.timezone };
+    if (!(await slotFitsActiveAvailability(sql, options))
+        || slotStartInstant(date, input.startTime, clock.timezone) <= new Date()) {
+      conflicts.push({ date, reason: 'outside_availability' });
+    } else if (await slotHasBlockingOverlap(sql, options)) {
+      conflicts.push({ date, reason: 'slot_unavailable' });
+    } else if (await checkPickupTravelSpacingConflict(sql, options)) {
+      conflicts.push({ date, reason: 'pickup_travel_conflict' });
+    }
+  }
+  const [balance] = await sql`SELECT COALESCE(SUM(remaining_units * unit_minutes),0) AS remaining_minutes
+    FROM flexible_package_source_remaining
+    WHERE school_id=${schoolId} AND learner_id=${learnerId} AND available_at<=NOW()`;
+  const balanceMinutes = Number(balance?.remaining_minutes || 0);
+  const requiredMinutes = input.durationMinutes * input.dates.length;
+  return { ok: true, dates: input.dates, conflicts, can_commit: conflicts.length === 0,
+    transmission_type: concreteLessonTransmissionType(input.transmissionType, instructor.transmission_type),
+    required_minutes: requiredMinutes, balance_minutes: balanceMinutes,
+    has_sufficient_hours: balanceMinutes >= requiredMinutes };
+}
+
+async function notifyFlexibleWeekly(sql, result, input, { schoolId, learnerId }) {
+  const [learner] = await sql`SELECT name,email FROM learner_users WHERE id=${learnerId} AND school_id=${schoolId}`;
+  const [instructor] = await sql`SELECT name,email FROM instructors WHERE id=${input.instructorId} AND school_id=${schoolId}`;
+  const escape = value => String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const dateList = result.dates.map(date => `<li>${escape(formatDateDisplay(date))}: ${input.startTime}–${input.endTime}</li>`).join('');
+  const mailer = createTransporter();
+  const deliveries = await Promise.allSettled([
+    learner?.email && mailer.sendMail({ from: 'CoachCarter <bookings@coachcarter.uk>', to: learner.email,
+      subject: `${result.dates.length} weekly lessons confirmed`,
+      html: `<h1>Your weekly lessons are booked</h1><p>Instructor: ${escape(instructor?.name)}</p><ul>${dateList}</ul>
+        <p>Flexible Hours used: ${formatHours(input.durationMinutes * result.dates.length)}.
+        Remaining: ${formatHours(result.flexible_package_remaining_minutes)}.</p>
+        <p>Manage each lesson individually in My Lessons. Cancel at least 48 hours before a lesson to return its Flexible Hours.</p>` }),
+    instructor?.email && mailer.sendMail({ from: 'CoachCarter <bookings@coachcarter.uk>', to: instructor.email,
+      subject: `${result.dates.length} weekly lessons booked`,
+      html: `<h1>Weekly lessons booked</h1><p>Learner: ${escape(learner?.name)}</p><ul>${dateList}</ul><p>Funded using Flexible Hours.</p>` }),
+    ...result.dates.map(date => supersedeBroadcastSiblings({ instructor_id: input.instructorId,
+      scheduled_date: date, start_time: input.startTime, school_id: schoolId })),
+  ]);
+  if (deliveries.some(delivery => delivery.status === 'rejected')) throw new Error('One or more booking confirmations could not be delivered');
+}
+
+async function handleFlexibleWeekly(req, res, dependencies = {}) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+  const user = (dependencies.verifyAuth || verifyAuth)(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorised' });
+  const scope = { schoolId: user.school_id || 1, learnerId: user.id };
+  try {
+    const input = parseWeeklyBooking(req.body);
+    const sql = dependencies.sql || neon(process.env.POSTGRES_URL);
+    if (!(await weeklySchemaReady(sql))) {
+      throw new WeeklyBookingError('FLEXIBLE_WEEKLY_UNAVAILABLE', 'Weekly Flexible Hours booking is not available yet. Book individual lessons for now.', 503);
+    }
+    const validateSlots = dependencies.validateSlots || validateFlexibleWeeklySlots;
+    if (req.query.action === 'flexible-weekly-preview') {
+      return res.json(await validateSlots(sql, input, scope));
+    }
+    const result = await commitWeeklyBooking({ ...scope, input, clientRequestId: req.body.client_request_id,
+      connectionString: process.env.POSTGRES_URL, validateSlots, transaction: dependencies.transaction });
+    if (!result.reused) {
+      try { await (dependencies.notify || notifyFlexibleWeekly)(sql, result, input, scope); }
+      catch (error) { console.warn('Flexible weekly confirmation delivery failed:', error.message); }
+    }
+    return res.status(result.reused ? 200 : 201).json(result);
+  } catch (error) {
+    if (error instanceof WeeklyBookingError) {
+      return res.status(error.status).json({ error: true, code: error.code, message: error.message, ...error.extra });
+    }
+    if (['23505', '23P01', '40001', '40P01'].includes(error.code)) {
+      return res.status(409).json({ error: true, code: 'SLOTS_UNAVAILABLE', message: 'A slot or balance changed. Please refresh the weekly dates and try again.' });
+    }
+    reportError('/api/slots:flexible-weekly', error);
+    return res.status(500).json({ error: true, code: 'FLEXIBLE_WEEKLY_FAILED', message: 'Could not confirm weekly lessons. Retry the same request to check its result.' });
   }
 }
 
@@ -8598,7 +8700,7 @@ async function handleMyBookings(req, res) {
         COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
         to_jsonb(lb)->>'test_start_time' AS test_start_time,
         to_jsonb(lb)->>'test_centre' AS test_centre,
-        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id, lb.payment_method,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
         COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
@@ -8663,7 +8765,7 @@ async function handleMyBookings(req, res) {
         COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
         to_jsonb(lb)->>'test_start_time' AS test_start_time,
         to_jsonb(lb)->>'test_centre' AS test_centre,
-        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id, lb.payment_method,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
         COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
@@ -8705,7 +8807,7 @@ async function handleMyBookings(req, res) {
         COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
         to_jsonb(lb)->>'test_start_time' AS test_start_time,
         to_jsonb(lb)->>'test_centre' AS test_centre,
-        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id, lb.payment_method,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
         COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
@@ -8771,7 +8873,7 @@ async function handleMyBookings(req, res) {
         COALESCE(to_jsonb(lb)->>'booking_purpose', 'lesson') AS booking_purpose,
         to_jsonb(lb)->>'test_start_time' AS test_start_time,
         to_jsonb(lb)->>'test_centre' AS test_centre,
-        lb.lesson_type_id, lb.minutes_deducted, lb.series_id,
+        lb.lesson_type_id, lb.minutes_deducted, lb.series_id, lb.payment_method,
         COALESCE(lb.social_video_consent, false) AS social_video_consent,
         COALESCE(lb.social_video_age_confirmed, false) AS social_video_age_confirmed,
         COALESCE(lb.social_video_discount_pct, 0) AS social_video_discount_pct,
@@ -8992,6 +9094,8 @@ module.exports._allocateRecurringBlockPence = allocateRecurringBlockPence;
 module.exports._expireStaleRecurringBlockBankHoldForLearner = expireStaleRecurringBlockBankHoldForLearner;
 module.exports._buildRecurringBlockPreview = buildRecurringBlockPreview;
 module.exports._handleRecurringBlockCommit = handleRecurringBlockCommit;
+module.exports._handleFlexibleWeekly = handleFlexibleWeekly;
+module.exports._validateFlexibleWeeklySlots = validateFlexibleWeeklySlots;
 module.exports._handleAvailable = handleAvailable;
 module.exports._handleTrialWindowContext = handleTrialWindowContext;
 module.exports._parseRecurringBlockLessons = parseRecurringBlockLessons;

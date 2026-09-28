@@ -878,6 +878,11 @@
     .repeat-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
     .repeat-options { margin-top: 12px; display: none; }
     .repeat-options.open { display: block; }
+    #flexibleWeeklyOptions { margin-top: 12px; font-size: 0.85rem; line-height: 1.5; }
+    #flexibleWeeklyCount { display: block; width: 100%; min-height: 44px; margin: 8px 0 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--white); color: var(--text); font: inherit; }
+    #flexibleWeeklyPreview ul { margin: 0 0 12px; padding-left: 20px; }
+    #flexibleWeeklyPreview li { padding: 3px 0; }
+    #flexibleWeeklyPreview p { margin: 8px 0; }
     .repeat-weeks-select { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .repeat-count-label {
       display: block;
@@ -1577,7 +1582,23 @@
         <div style="font-size:0.76rem;color:var(--muted);margin-top:6px">Need a different address? Update your profile before booking.</div>
         <div id="mdLocationCheckHint" style="display:none;font-size:0.76rem;color:var(--muted);margin-top:6px">Checking this pickup against nearby lessons...</div>
       </div>
-      <!-- Repeat weekly toggle -->
+      <div class="repeat-section" id="flexibleWeeklySection" hidden>
+        <label class="repeat-toggle">
+          <input type="checkbox" id="flexibleWeeklyToggle">
+          <span>Book weekly using Flexible Hours</span>
+        </label>
+        <div id="flexibleWeeklyOptions" hidden>
+          <label for="flexibleWeeklyCount">Number of lessons, including this one</label>
+          <select id="flexibleWeeklyCount">
+            <option value="2">2 lessons</option>
+            <option value="3">3 lessons</option>
+            <option value="4" selected>4 lessons</option>
+          </select>
+          <div id="flexibleWeeklyPreview" role="status" aria-live="polite"></div>
+          <p class="modal-credit-note">Each lesson can be cancelled or moved individually in My Lessons.</p>
+        </div>
+      </div>
+      <!-- Legacy Lesson Credit repeats retain their retirement guard. -->
       <div class="repeat-section" id="repeatSection">
         <label class="repeat-toggle">
           <input type="checkbox" id="repeatToggle">

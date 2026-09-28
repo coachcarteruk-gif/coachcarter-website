@@ -202,53 +202,10 @@ async function bookFlexiblePackageSlotTransaction({
       const plan = planFlexiblePackageFifo(sources.rows, unitsRequired);
       if (!plan.ok) abort(plan);
 
-      const inserted = await client.query(
-        `INSERT INTO lesson_bookings (
-           learner_id, instructor_id, scheduled_date, start_time, end_time, status,
-           pickup_address, dropoff_address, lesson_type_id, transmission_type,
-           minutes_deducted, school_id, payment_method, stripe_fee_pence,
-           stripe_fee_source, list_price_pence, list_price_source
-           , flexible_package_booking_request_id, created_by
-         ) VALUES (
-           $1, $2, $3::date, $4::time, $5::time, $6,
-           $7, $8, $9, $10, $11, $12, 'flexible_package', 0,
-           'platform_absorbed_package_fee', $13, 'flexible_package_frozen_rate', $14::uuid, $15
-         )
-         RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
-        [
-          learnerId, instructorId, date, startTime, endTime, SCHEDULED,
-          pickupAddress || null, dropoffAddress || null, lessonTypeId || null,
-          transmissionType, Number(durationMinutes), schoolId, plan.contribution_pence, clientRequestId, createdBy,
-        ]
-      );
-      const booking = inserted.rows[0];
-
-      for (const allocation of plan.allocations) {
-        await client.query(
-          `INSERT INTO flexible_package_booking_allocations (
-             school_id, learner_id, source_id, booking_id, instructor_id,
-             units_allocated, unit_minutes, rate_pence_per_unit, contribution_pence
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [
-            schoolId, learnerId, allocation.source_id, booking.id, instructorId,
-            allocation.units, FLEXIBLE_UNIT_MINUTES, allocation.rate_pence_per_unit,
-            allocation.contribution_pence,
-          ]
-        );
-      }
-      await client.query(
-        `INSERT INTO flexible_package_state_events (
-           school_id, learner_id, event_type, booking_id, detail
-         ) VALUES ($1,$2,'booking_allocated',$3,$4::jsonb)`,
-        [schoolId, learnerId, booking.id, JSON.stringify({
-          instructor_id: instructorId,
-          units: unitsRequired,
-          unit_minutes: FLEXIBLE_UNIT_MINUTES,
-          contribution_pence: plan.contribution_pence,
-          client_request_id: clientRequestId,
-          sources: plan.allocations.map(row => ({ source_id: row.source_id, units: row.units })),
-        })]
-      );
+      const booking = await insertFlexiblePackageBooking(client, {
+        learnerId, instructorId, schoolId, date, startTime, endTime, lessonTypeId,
+        durationMinutes, pickupAddress, dropoffAddress, transmissionType, clientRequestId, createdBy, plan,
+      });
       const balance = await client.query(
         `SELECT COALESCE(SUM(remaining_units),0)::numeric AS remaining_units
            FROM flexible_package_source_remaining
@@ -269,6 +226,70 @@ async function bookFlexiblePackageSlotTransaction({
     if (error?.code === '23505') return { ok: false, code: 'SLOTS_UNAVAILABLE' };
     throw error;
   }
+}
+
+// The caller owns the transaction and source locks. Both single and weekly
+// bookings use the same immutable attribution writer.
+async function insertFlexiblePackageBooking(client, {
+  learnerId, instructorId, schoolId, date, startTime, endTime, lessonTypeId,
+  durationMinutes, pickupAddress, dropoffAddress, transmissionType,
+  clientRequestId, createdBy = 'learner', plan, weeklyRequestId = null,
+}) {
+  const inserted = await client.query(
+    `INSERT INTO lesson_bookings (
+       learner_id, instructor_id, scheduled_date, start_time, end_time, status,
+       pickup_address, dropoff_address, lesson_type_id, transmission_type,
+       minutes_deducted, school_id, payment_method, stripe_fee_pence,
+       stripe_fee_source, list_price_pence, list_price_source
+       , flexible_package_booking_request_id, created_by
+     ) VALUES (
+       $1, $2, $3::date, $4::time, $5::time, $6,
+       $7, $8, $9, $10, $11, $12, 'flexible_package', 0,
+       'platform_absorbed_package_fee', $13, 'flexible_package_frozen_rate', $14::uuid, $15
+     )
+     RETURNING id, scheduled_date::text, start_time::text, end_time::text, status, created_at`,
+    [
+      learnerId, instructorId, date, startTime, endTime, SCHEDULED,
+      pickupAddress || null, dropoffAddress || null, lessonTypeId || null,
+      transmissionType, Number(durationMinutes), schoolId, plan.contribution_pence, clientRequestId, createdBy,
+    ]
+  );
+  const booking = inserted.rows[0];
+  if (weeklyRequestId) {
+    await client.query(
+      `UPDATE lesson_bookings SET flexible_package_weekly_request_id = $1::uuid
+        WHERE id = $2 AND school_id = $3 AND learner_id = $4`,
+      [weeklyRequestId, booking.id, schoolId, learnerId]
+    );
+  }
+
+  for (const allocation of plan.allocations) {
+    await client.query(
+      `INSERT INTO flexible_package_booking_allocations (
+         school_id, learner_id, source_id, booking_id, instructor_id,
+         units_allocated, unit_minutes, rate_pence_per_unit, contribution_pence
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        schoolId, learnerId, allocation.source_id, booking.id, instructorId,
+        allocation.units, FLEXIBLE_UNIT_MINUTES, allocation.rate_pence_per_unit,
+        allocation.contribution_pence,
+      ]
+    );
+  }
+  await client.query(
+    `INSERT INTO flexible_package_state_events (
+       school_id, learner_id, event_type, booking_id, detail
+     ) VALUES ($1,$2,'booking_allocated',$3,$4::jsonb)`,
+    [schoolId, learnerId, booking.id, JSON.stringify({
+      instructor_id: instructorId,
+      units: plan.units,
+      unit_minutes: FLEXIBLE_UNIT_MINUTES,
+      contribution_pence: plan.contribution_pence,
+      client_request_id: clientRequestId,
+      sources: plan.allocations.map(row => ({ source_id: row.source_id, units: row.units })),
+    })]
+  );
+  return booking;
 }
 
 // Caller holds the learner, offer and booking locks in one transaction. Append
@@ -596,6 +617,7 @@ async function moveFlexiblePackageBookingAllocations(client, {
 
 module.exports = {
   loadLockedFlexibleSources,
+  insertFlexiblePackageBooking,
   allocateFlexibleExtensionWithClient,
   FLEXIBLE_UNIT_MINUTES,
   bookFlexiblePackageSlotTransaction,

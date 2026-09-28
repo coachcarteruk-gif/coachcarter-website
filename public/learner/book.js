@@ -18,6 +18,12 @@ let creditBalance = 0;
 let balanceMinutes = 0;
 let selectedInstructorBalanceMinutes = 0;
 let flexiblePackageBalanceMinutes = 0;
+let flexibleWeeklyEnabled = false;
+let flexibleWeeklyPreview = null;
+let flexibleWeeklyPreviewKey = null;
+let flexibleWeeklyPreviewVersion = 0;
+let flexibleWeeklyRequest = null;
+let flexibleWeeklySubmitting = false;
 let selectedFundingMethod = 'lesson_credit';
 let flexibleBookingRequestId = null;
 let paymentsEnabled = true; // assume true until balance API tells us otherwise
@@ -350,16 +356,20 @@ async function loadBalance() {
 
 async function loadFlexiblePackageBalance() {
   flexiblePackageBalanceMinutes = 0;
+  flexibleWeeklyEnabled = false;
   if (!auth) return;
   try {
     const res = await ccAuth.fetchAuthed('/api/flexible-packages?action=balance');
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || data.error);
     flexiblePackageBalanceMinutes = Number(data.remaining_minutes || 0);
+    flexibleWeeklyEnabled = data.weekly_booking_enabled === true;
   } catch {
     flexiblePackageBalanceMinutes = 0;
   }
   updateCreditBadge();
+  if (document.getElementById('bookModal')?.classList.contains('open')
+      && document.getElementById('bookConfirmStep')?.style.display !== 'none') syncFlexibleWeeklyControls();
 }
 
 async function loadSelectedInstructorBalance(slot) {
@@ -1808,6 +1818,7 @@ function applyLessonTypeToModal(lt, isGuest, needsProfileFields) {
 
   applyRequestModeUi(isGuest, ltPriceStr, chargeMins);
   if (!slotRequestMode) updateFundingPresentation(chargeMins);
+  syncFlexibleWeeklyControls();
 }
 
 // Request-to-book modal chrome: swap the book/pay copy for hold copy and hide
@@ -2324,6 +2335,9 @@ function closeBookModal() {
   clearTimeout(locationCheckTimer);
   document.getElementById('bookModal').classList.remove('open');
   document.getElementById('repeatToggle').checked = false;
+  document.getElementById('flexibleWeeklyToggle').checked = false;
+  flexibleWeeklyPreviewVersion++;
+  flexibleWeeklyPreview = null;
   document.getElementById('repeatOptions').classList.remove('open');
   setRepeatWeeks(4, { skipUpdate: true });
   repeatConflicts = [];
@@ -2335,6 +2349,84 @@ function closeBookModal() {
 
 // ─── Repeat weekly logic ──────────────────────────────────────────────────
 let repeatConflicts = [];
+
+function isFlexibleWeekly() {
+  return flexibleWeeklyEnabled && !slotRequestMode && document.getElementById('flexibleWeeklyToggle')?.checked === true;
+}
+
+function flexibleWeeklyBody() {
+  return { instructor_id: pendingSlot?.instructor_id, date: pendingSlot?.date,
+    start_time: pendingSlot?.start_time, end_time: pendingSlot?.end_time,
+    transmission_type: pendingSlot?.transmission_type || 'manual',
+    lesson_type_id: selectedLessonType?.id,
+    repeat_weeks: Number(document.getElementById('flexibleWeeklyCount').value),
+    pickup_address: resolveBookingPickupAddress(false), dropoff_address: resolveBookingDropoffAddress(false),
+    funding_method: 'flexible_package' };
+}
+
+function syncFlexibleWeeklyControls() {
+  const section = document.getElementById('flexibleWeeklySection');
+  if (!section) return;
+  const available = auth && paymentsEnabled && flexibleWeeklyEnabled && !slotRequestMode
+    && !pendingReschedule && flexiblePackageBalanceMinutes > 0
+    && Number(selectedLessonType?.duration_minutes || 0) > 0
+    && Number(selectedLessonType.duration_minutes) % 30 === 0 && maxRepeatLessonsForPendingSlot() >= 2;
+  section.hidden = !available;
+  if (!available) {
+    document.getElementById('flexibleWeeklyToggle').checked = false;
+    document.getElementById('flexibleWeeklyOptions').hidden = true;
+    return;
+  }
+  const active = isFlexibleWeekly();
+  document.getElementById('flexibleWeeklyOptions').hidden = !active;
+  if (active) {
+    document.getElementById('repeatToggle').checked = false;
+    document.getElementById('repeatOptions').classList.remove('open');
+    document.getElementById('repeatSection').style.display = 'none';
+    selectedFundingMethod = 'flexible_package';
+    updateDeductDisplay();
+    updateFlexibleWeeklyPreview();
+  } else {
+    flexibleWeeklyPreviewVersion++;
+    flexibleWeeklyPreview = null;
+    syncRepeatWindowOptions();
+    updateDeductDisplay();
+    updateBookButtonState();
+  }
+}
+
+async function updateFlexibleWeeklyPreview() {
+  if (!isFlexibleWeekly()) return;
+  const version = ++flexibleWeeklyPreviewVersion;
+  const body = flexibleWeeklyBody();
+  const key = JSON.stringify(body);
+  flexibleWeeklyPreview = null;
+  flexibleWeeklyPreviewKey = null;
+  const el = document.getElementById('flexibleWeeklyPreview');
+  el.textContent = 'Checking your weekly dates and Flexible Hours…';
+  updateBookButtonState();
+  try {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=flexible-weekly-preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: key,
+    });
+    const data = await res.json();
+    if (version !== flexibleWeeklyPreviewVersion || !isFlexibleWeekly()) return;
+    if (!res.ok) throw new Error(data.message || 'Could not check weekly dates. Please try again.');
+    flexibleWeeklyPreview = data;
+    flexibleWeeklyPreviewKey = key;
+    const unavailable = new Set((data.conflicts || []).map(row => row.date));
+    el.innerHTML = '<ul>' + data.dates.map(date => '<li>' + esc(new Date(date + 'T00:00:00Z')
+      .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }))
+      + ' at ' + esc(body.start_time) + (unavailable.has(date) ? ' — unavailable' : '') + '</li>').join('')
+      + '</ul><p>' + esc(formatHours(data.required_minutes)) + ' required · ' + esc(formatHours(data.balance_minutes)) + ' available.</p>'
+      + (!data.has_sufficient_hours ? '<p>Not enough Flexible Hours. Choose fewer lessons.</p>' : '')
+      + (!data.can_commit ? '<p>Choose fewer lessons or another time so every date is available.</p>' : '');
+  } catch (error) {
+    if (version === flexibleWeeklyPreviewVersion) el.textContent = error.message;
+  } finally {
+    if (version === flexibleWeeklyPreviewVersion) updateBookButtonState();
+  }
+}
 
 function toggleRepeatOptions() {
   if (incompatibleProductsRetired) {
@@ -2350,6 +2442,7 @@ function toggleRepeatOptions() {
 
 function getRepeatWeeks() {
   if (slotRequestMode) return 1;
+  if (isFlexibleWeekly()) return Number(document.getElementById('flexibleWeeklyCount').value);
   if (incompatibleProductsRetired) return 1;
   if (!document.getElementById('repeatToggle').checked) return 1;
   return parseInt(document.getElementById('repeatWeeksSelect').value, 10);
@@ -2493,6 +2586,14 @@ function updateDeductDisplay() {
   const totalStr = totalHrs % 1 === 0 ? `${totalHrs} hours` : `${totalHrs.toFixed(1)} hours`;
 
   document.getElementById('mdDeductHours').textContent = totalStr;
+  if (isFlexibleWeekly()) {
+    selectedFundingMethod = 'flexible_package';
+    syncFundingChoice(false, true);
+    document.getElementById('modalCreditPath').style.display = 'block';
+    document.getElementById('modalPayPath').style.display = 'none';
+    updateFundingPresentation(totalMins);
+    return;
+  }
 
   if (weeks > 1) {
     const perLesson = chargeMins / 60;
@@ -2570,6 +2671,11 @@ function updateBookButtonState() {
   const weeks = getRepeatWeeks();
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
+  if (isFlexibleWeekly()) {
+    label.textContent = flexibleWeeklySubmitting ? 'Booking weekly lessons…' : `Book ${weeks} lessons with Flexible Hours`;
+    btn.disabled = flexibleWeeklySubmitting || !flexibleWeeklyPreview?.can_commit || !flexibleWeeklyPreview?.has_sufficient_hours;
+    return;
+  }
   if (slotRequestMode) {
     label.textContent = 'Send request';
     btn.disabled = false;
@@ -2634,6 +2740,7 @@ async function confirmBookWithCredit() {
   const locations = validateBookingLocations(false);
   if (!locations) return;
   if (slotRequestMode) return confirmRequestWithCredit(locations);
+  if (isFlexibleWeekly()) return confirmFlexibleWeekly();
 
   const btn = document.getElementById('btnConfirmBook');
   const label = document.getElementById('bookBtnLabel');
@@ -2690,6 +2797,45 @@ async function confirmBookWithCredit() {
     btn.disabled = false;
     label.textContent = weeks > 1 ? `Book ${weeks} lessons` : 'Confirm booking';
     spinner.style.display = 'none';
+  }
+}
+
+async function confirmFlexibleWeekly() {
+  if (flexibleWeeklySubmitting) return;
+  const body = flexibleWeeklyBody();
+  const key = JSON.stringify(body);
+  if (flexibleWeeklyPreviewKey !== key || !flexibleWeeklyPreview?.can_commit || !flexibleWeeklyPreview?.has_sufficient_hours) {
+    await updateFlexibleWeeklyPreview();
+    showToast('Review the weekly dates before confirming.', 'error');
+    return;
+  }
+  if (flexibleWeeklyRequest?.key !== key) flexibleWeeklyRequest = { key, id: window.crypto.randomUUID() };
+  flexibleWeeklySubmitting = true;
+  updateBookButtonState();
+  try {
+    const res = await ccAuth.fetchAuthed('/api/slots?action=flexible-weekly-commit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, client_request_id: flexibleWeeklyRequest.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 402 || res.status === 409) await updateFlexibleWeeklyPreview();
+      throw new Error(data.message || 'Could not book weekly lessons. Try again to check this request.');
+    }
+    flexiblePackageBalanceMinutes = data.flexible_package_remaining_minutes;
+    lastBookingId = data.booking_id;
+    updateCreditBadge();
+    if (document.getElementById('bookModal').classList.contains('open') && JSON.stringify(flexibleWeeklyBody()) === key) {
+      showBookSuccess(body.repeat_weeks, data.dates);
+    } else {
+      showToast(`${body.repeat_weeks} weekly lessons booked using Flexible Hours. See My Lessons for the dates.`, 'success');
+    }
+    refreshAfterBooking();
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    flexibleWeeklySubmitting = false;
+    updateBookButtonState();
   }
 }
 
@@ -2873,7 +3019,10 @@ function showBookSuccess(weeks, dates) {
   document.getElementById('successInstructor').textContent = pendingSlot.instructor_name;
 
   const balanceEl = document.getElementById('successBalance');
-  if (balanceEl && selectedInstructorBalanceMinutes > 0) {
+  if (balanceEl && selectedFundingMethod === 'flexible_package') {
+    balanceEl.textContent = `Flexible Hours remaining: ${formatHours(flexiblePackageBalanceMinutes)}`;
+    balanceEl.style.display = 'block';
+  } else if (balanceEl && selectedInstructorBalanceMinutes > 0) {
     const instructor = pendingSlot && pendingSlot.instructor_name ? ` with ${pendingSlot.instructor_name}` : '';
     balanceEl.textContent = `Hours remaining${instructor}: ${(selectedInstructorBalanceMinutes / 60).toFixed(1)}h`;
     balanceEl.style.display = 'block';
@@ -3815,6 +3964,11 @@ document.addEventListener('click', function (e) {
   var guestTerms = document.getElementById('mdGuestTerms');
   if (guestTerms) guestTerms.addEventListener('change', function () { clearFieldError(guestTerms); });
   var repeatToggle = document.getElementById('repeatToggle');
+  document.getElementById('flexibleWeeklyToggle')?.addEventListener('change', syncFlexibleWeeklyControls);
+  document.getElementById('flexibleWeeklyCount')?.addEventListener('change', () => {
+    updateDeductDisplay();
+    updateFlexibleWeeklyPreview();
+  });
   if (repeatToggle) repeatToggle.addEventListener('change', toggleRepeatOptions);
   var repeatWeeks = document.getElementById('repeatWeeksSelect');
   if (repeatWeeks) repeatWeeks.addEventListener('change', function () { syncRepeatCountButtons(); updateRepeatDates(); });

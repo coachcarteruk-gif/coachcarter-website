@@ -1,5 +1,13 @@
 # Migration governance audit and phased cleanup
 
+28 September 2026: migration `074_flexible_weekly_bookings.sql` applied after
+user rollout approval, 12 successful multi-connection rehearsals, and recovery
+snapshot `snap-rough-heart-abh43tmr`. Receipt succeeded at 08:24:41 UTC,
+checksum `3e1b8f55867f7a37006501f5c5c8831d96f7a69811b5a3d2275893e69cb1f1b1`.
+Production postflight confirmed both valid indexes, all six enabled triggers,
+74 successful ledger entries and no pending migrations (041 remains deferred).
+The manifest has 75 entries. See [rollout evidence](flexible-weekly-rollout.md).
+
 27 September 2026: migration `073_delivered_duration_corrections.sql` applied
 through the authoritative runner after user rollout approval and recovery
 snapshot `snap-wispy-flower-aboq9lsq`. Receipt succeeded at 21:51:15 UTC,

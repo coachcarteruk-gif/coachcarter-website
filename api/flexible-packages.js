@@ -19,6 +19,7 @@ const {
 } = require('./_flexible-package-payments');
 const { quotePostTrialPrice, bindPostTrialQuote } = require('./_post-trial-discount');
 const { BankPurchaseError, bankProductTerms, validateBankPurchase, recordBankPurchase } = require('./_flexible-bank-purchase');
+const { weeklySchemaReady } = require('./_flexible-weekly-booking');
 
 function errorResponse(res, status, code, message) {
   return res.status(status).json({ error: true, code, message });
@@ -120,6 +121,7 @@ async function handleBalance(req, res) {
       remaining_minutes: Number(balance?.remaining_minutes || 0),
       refundable_value_pence: Number(balance?.refundable_value_pence || 0),
       sources,
+      weekly_booking_enabled: await weeklySchemaReady(sql),
     });
   } catch (error) {
     if (isMissingFlexibleSchemaError(error)) {

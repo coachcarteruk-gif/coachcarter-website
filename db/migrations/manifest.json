@@ -599,6 +599,14 @@
       "filename": "073_delivered_duration_corrections.sql",
       "checksum": "e6cdd933d4f6fae4e29b5884e69d8a2d13eb9eea7eb6ea950ad28dda0b3daef0",
       "execution": "numbered"
+    },
+    {
+      "id": "074",
+      "order": 75,
+      "prefix": "074",
+      "filename": "074_flexible_weekly_bookings.sql",
+      "checksum": "3e1b8f55867f7a37006501f5c5c8831d96f7a69811b5a3d2275893e69cb1f1b1",
+      "execution": "numbered"
     }
   ]
 }

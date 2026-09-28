@@ -39,6 +39,65 @@ rebooking. The existing cancellation/rescheduling rules apply to every allocatio
 including the added time. No new schema or Stripe configuration is required;
 migration 063 must already be installed.
 
+### Weekly booking (28 September 2026)
+
+Rollout authorised by Fraser on 28 September. Migration 074 is applied to production;
+application deployment is in progress. See [rollout evidence](flexible-weekly-rollout.md).
+
+Learners with Flexible Hours can select **2–4 consecutive weekly lessons**, including
+the selected first lesson, with an instant-booking instructor. The preview lists
+every date, the total package hours required and the remaining balance. The same
+local start time is retained across daylight-saving changes. Every date must fit
+the instructor's learner booking window, the 84-day platform ceiling, availability,
+notice, overlap and pickup-travel rules. An unavailable week blocks confirmation;
+the system does not silently skip it. Request-to-book instructors are excluded.
+
+This uses dedicated authenticated POST actions on `/api/slots`:
+`flexible-weekly-preview` and `flexible-weekly-commit`. It is independent of the
+retired Lesson Credit repeats and Reserved Weekly Slot products; their retirement
+guards remain in force. It does not require new Stripe configuration or a new
+payment. Insufficient package hours require fewer lessons or more hours; the
+selection never automatically switches to Lesson Credit or Checkout.
+
+Confirmation locks the learner, instructor scheduling scope and package sources,
+revalidates all dates and spends FIFO units in one transaction. All lessons are
+created or none are. Each lesson retains its exact frozen source value and actual
+duration. A school/learner-scoped UUID and request fingerprint in the existing
+append-only package events provide a durable retry receipt. A completed retry
+returns the original booking IDs before checking the now-consumed balance or slots;
+changing the payload with the same identity is refused. No Lesson Credit balances
+or legacy reserved-block rows are written.
+
+Each occurrence is cancelled or rescheduled individually under the existing
+Flexible Hours rules; there is no legacy cancel-series action. Eligible cancellation
+returns exact source units once, and rescheduling transfers the exact allocations.
+Migration 074 carries overlap protection to replacements and checks at transaction
+commit that the old booking is inactive. Payment, refund and payout policy is
+unchanged. Batch summary notifications are awaited after commit; a delivery failure
+is logged without undoing bookings, and retrying a completed request does not resend.
+
+Rollout sequence:
+
+1. Rehearse `db/migrations/074_flexible_weekly_bookings.sql` on a disposable Neon
+   branch with the existing package and scheduling migrations. Inspect its triggers
+   on bookings, checkout reservations, offers, requests and reserved-block holds.
+2. Exercise simultaneous competing booking/hold writes and same-learner spending
+   using separate PostgreSQL connections. Local tests exercise the actual SQL via
+   PGlite but do not establish multi-session concurrency behaviour.
+3. Apply migration 074 through the normal migration process, then deploy the API
+   and learner UI. The balance endpoint exposes `weekly_booking_enabled` only when
+   the new column and retry index exist; the control stays hidden without them.
+4. Verify a package-only learner can book a batch, sees each lesson and the correct
+   remaining hours, and can cancel/reschedule one occurrence. Verify insufficient
+   hours, a conflicting date and a repeated request cannot create partial or extra
+   bookings. Confirm the retired legacy routes remain unavailable where configured.
+
+Verification: 123 focused tests passed, including browser flow and mobile layout
+checks, plus syntax and migration-manifest validation. All 12 additional
+multi-connection races passed on a disposable production-derived Neon branch.
+Migration 074 then succeeded in production, with both indexes valid and all six
+triggers enabled. No learner balances or school configuration were changed.
+
 ## Separate live Stripe prerequisites
 
 Create and verify, without enabling the application gate:
