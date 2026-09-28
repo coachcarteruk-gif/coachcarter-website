@@ -36,7 +36,8 @@
           target.dataset.end,
           target.dataset.instructorName,
           parseFloat(target.dataset.hoursUntil),
-          target.dataset.seriesId || null
+          target.dataset.seriesId || null,
+          target.dataset.fundingMethod || null
         );
       } else if (action === 'open-reschedule-modal') {
         openRescheduleModal(
@@ -356,6 +357,7 @@
         ' data-end="' + end + '"' +
         ' data-instructor-name="' + esc(b.instructor_name) + '"' +
         ' data-hours-until="' + hoursUntil.toFixed(1) + '"' +
+        ' data-funding-method="' + esc(b.payment_method || '') + '"' +
         (b.series_id ? ' data-series-id="' + b.series_id + '"' : '') +
         '>Cancel</button>';
       html += '</div></details>';
@@ -387,7 +389,7 @@
     } catch (e) { showToast('Could not download calendar file', 'error'); }
   }
 
-  function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil, seriesId) {
+  function openCancelModal(bookingId, date, start, end, instructorName, hoursUntil, seriesId, fundingMethod) {
     pendingCancel = { bookingId: bookingId, date: date, start: start, end: end, instructorName: instructorName, hoursUntil: hoursUntil, seriesId: seriesId || null };
     var dateDisplay = new Date(date + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -401,6 +403,9 @@
     policyEl.innerHTML = willGet
       ? '&#x2713; You are cancelling more than 48 hours before the lesson. <strong>Your lesson credit will be returned to your balance automatically.</strong>'
       : '&#x26A0; This lesson is within 48 hours. <strong>Your lesson will be forfeited</strong> in line with the cancellation policy.';
+    if (willGet && fundingMethod === 'flexible_package') {
+      policyEl.innerHTML = '&#x2713; You are cancelling at least 48 hours before the lesson. <strong>The Flexible Hours used for this lesson will return to your package balance automatically.</strong>';
+    }
 
     var ackLabel = document.getElementById('cancelAckLabel');
     var ackCheck = document.getElementById('cancelAckCheck');
