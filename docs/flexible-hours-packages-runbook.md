@@ -41,8 +41,9 @@ migration 063 must already be installed.
 
 ### Weekly booking (28 September 2026)
 
-Rollout authorised by Fraser on 28 September. Migration 074 is applied to production;
-application deployment is in progress. See [rollout evidence](flexible-weekly-rollout.md).
+Rollout authorised by Fraser on 28 September. Migration 074 and the application
+are live, with authenticated read-only production verification complete.
+See [rollout evidence](flexible-weekly-rollout.md).
 
 Learners with Flexible Hours can select **2–4 consecutive weekly lessons**, including
 the selected first lesson, with an instant-booking instructor. The preview lists

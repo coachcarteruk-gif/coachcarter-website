@@ -57,7 +57,35 @@ financial rows, spend balances, alter school configuration or call Stripe.
 
 ## Application deployment
 
-Pending completion. The previous READY production deployment is
+PR [#489](https://github.com/coachcarteruk-gif/coachcarter-website/pull/489) merged
+as `56493643c14a72c6542a058d1cbaa80542bc1e63`. Full CI passed: 1,787 tests,
+345 intentionally skipped, plus syntax and encoding checks. Two migration
+inventory assertions were updated to include 074 after the first CI run;
+the rerun passed without application changes.
+
+Production deployment `dpl_EUTwcxkB8JBhaCZFhkpmhNcJUgNs` is READY:
+`coachcarter-website-ep0ltmplr-coachcarteruk-2599s-projects.vercel.app`.
+Vercel assigned the live `coachcarter.uk` and `www.coachcarter.uk` aliases.
+
+Post-deployment checks against the canonical `https://www.coachcarter.uk` host:
+
+- Live `book.js` and `book.html` match the released source.
+- Using an existing school-1 test learner, the authenticated package balance
+  endpoint returns `weekly_booking_enabled: true`.
+- The authenticated read-only preview returns four consecutive dates and 360
+  required minutes for four 90-minute lessons, using a currently offered lesson
+  type and the instructor's supported transmission.
+- An unauthenticated commit request is rejected with HTTP 401.
+- No authenticated booking commit was sent and no live package hours were spent.
+- Vercel's grouped error scan found no runtime errors for `/api/slots` or
+  `/api/flexible-packages` in the observed post-deployment interval.
+
+Verification initially followed the apex-to-www redirect, which strips manually
+supplied cookies, and then selected an incompatible lesson type. Direct canonical
+host requests and a supported current lesson type passed; no application fix was
+needed. These checks are a deployment smoke test, not continuous monitoring.
+
+The previous READY production deployment is
 `coachcarter-website-700pjh3fd-coachcarteruk-2599s-projects.vercel.app`.
 Application rollback can return to that deployment while retaining the additive
 migration and any already-created bookings. Do not remove financial evidence or
