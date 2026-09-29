@@ -1,5 +1,9 @@
 # Qualifying questionnaire and two-route trial funnel
 
+## Maintenance boundary
+
+Schools opt in through strict `config.trial_questionnaire.enabled`. When enabled, public free-trial booking requires server qualification; missing/invalid answers cannot fall back to old direct booking. General trial requests are enquiries, never slot holds, confirmed appointments, lesson requests or paid conversions. Store immutable submitted evidence separately from current profiles, and preserve original request attribution when linking a manual booking. Centres and displayed budget amounts are school configuration, never lesson-price mutations. Keep staff-authorised booking/offer and disabled-tenant behaviour. See [final contract and production gates](qualifying-trial-funnel.md).
+
 Implemented on `codex/qualifying-trial-questionnaire`, 21 September 2026. Production migration, deployment, feature activation, messages, campaigns and automation are **not authorised or executed**. The existing VSL manifest remains disabled and requires approved footage, poster, captions and transcript.
 
 ## Baseline and changed decision

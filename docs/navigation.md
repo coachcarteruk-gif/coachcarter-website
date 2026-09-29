@@ -1,5 +1,26 @@
 # Navigation design (app mode — March 2026)
 
+## Intentionally removed surfaces
+
+- Pricing page / tab
+- Lesson Advisor
+- Privacy Policy tab (page still exists, just not in nav)
+- Terms tab (page still exists, just not in nav)
+- Q&A feature entirely (removed April 2026 — learner/instructor Q&A pages, API handlers, `qa_questions`/`qa_answers` tables, and daily digest cron all deleted. Feature saw zero real-world use. Do not re-add.)
+- Old `.site-nav` dark top bar on any page (sidebar.js handles all nav)
+- Old `.bottom-nav` inline bottom bar on any page (sidebar.js handles all nav)
+- Old `.sub-tabs` on learner booking/buy-credits pages (sidebar handles navigation)
+- Quick-access pill row and action cards on instructor dashboard (sidebar duplicates these)
+- Calendar sync banner on booking/dashboard pages (accessible via profile or success modal)
+- Menu/hamburger as a bottom tab (sidebar opened via top header hamburger instead)
+- Videos in Learn section navigation (page still exists at `/learner/videos.html`, just not in nav — April 2026)
+- Hour-slot time grid on instructor calendar (the current selected-date schedule is a chronological list, never an empty-hour grid)
+- Daily view tab and monthly/weekly/agenda toggles on instructor calendar (replaced July 2026 by one learner-style month date selector + selected-day chronological list)
+- "Weekdays" and "Cancelled" filter buttons on instructor calendar (removed April 2026 — weekends always shown, cancelled always hidden)
+- Waitlist feature entirely (removed May 2026 — `waitlist` table, `api/waitlist.js`, learner profile "My Waitlist" card, and waitlist join form on `book.html` all deleted. Replaced by `learner_availability` driving cancellation notifications via `api/_notify-availability.js`. Weekly availability is now the single primitive for "ping me when something opens up". Do not re-add.)
+
+On the learner booking page, do not restore empty-hour grids, view toggles, date-navigation cursor state or a guest login wall. Page-level lesson-length selection and the date selector are intentional current features; the earlier modal-only/slot-first restriction is superseded by the booking-page contract below.
+
 ## Learner display order (September 2026; pending deployment)
 
 The dashboard leads with the next lesson; the permanent Driving Test destination
@@ -12,7 +33,7 @@ learner app installation. See [display contract](learner-interface-simplificatio
 
 When the school's questionnaire is enabled, every `/free` entry (including the lesson-modal trial link, campaign CTA and instructor/date hints) starts with the same three questions. Eligible answers reveal the existing live picker; other answers reveal a general weekly-availability request. Staff review requests in the expandable panel above the learner list in `/admin/learner-controls.html` and use existing manual booking tools. This adds neither a waitlist nor a new calendar. Disabled schools preserve their former route. [Routing and configuration](qualifying-trial-funnel.md).
 
-> **The "Intentionally removed" list lives in `CLAUDE.md`** because Claude tends to violate it. This file is structural reference — load it when working on sidebar, bottom tabs, or page layout.
+> Read this document for sidebar, bottom tabs, booking layout or restoration of apparently missing features. Both current structure and intentional removals are maintained here.
 
 The site is designed as an app experience.
 

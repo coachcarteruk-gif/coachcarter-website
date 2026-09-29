@@ -1,5 +1,18 @@
 # GDPR Compliance (April 2026)
 
+## Privacy maintenance rules
+
+1. **New pages MUST include cookie consent**: Every HTML page must load `cookie-consent.js` and `posthog-loader.js` instead of inline PostHog. Never add inline PostHog scripts.
+2. **Never load analytics without consent**: PostHog, or any future tracking, must only load after the user accepts analytics cookies. Use the `posthog-loader.js` pattern.
+3. **New PII fields must be included in data export**: If you add a new table or column containing personal data, update `handleExportData()` in `api/learner.js` to include it. Long-lived user-facing secrets (`calendar_token`, similar future tokens) must ship with a rotation endpoint and a `*_rotated_at` timestamp — see `api/calendar.js?action=rotate-token` for the pattern.
+4. **New PII tables must be included in deletion cascade**: If you add a table referencing `learner_users`, add the cleanup to `deleteLearnerCascade()` in `api/_gdpr.js` — the single shared helper used by learner self-delete (`api/learner.js`), admin delete (`api/admin.js`), and retention cron (`api/cron-retention.js`). Do not maintain per-call-site cascade lists.
+5. **New tenant-scoped GDPR tables need school_id**: Cookie consents, audit logs, and deletion requests are all scoped by `school_id`.
+6. **Admin data mutations must be audit-logged**: Any new admin action that creates, modifies, or deletes user data must call `logAudit()` from `api/_audit.js`.
+7. **Credit/financial records must never be hard-deleted**: Always anonymise instead. `credit_transactions` uses `learner_id = NULL, anonymized = true`; `lesson_bookings` uses `learner_id = NULL, learner_anonymized = true` (FK is `ON DELETE SET NULL`, May 2026). 7-year legal retention.
+8. **New third-party services**: If integrating a new service that processes personal data, update `public/privacy.html` to list it, and consider whether it needs consent.
+9. **Cookie consent categories**: The shared system has Necessary, Analytics and Marketing categories. Keep optional tracking behind its corresponding consent gate; extend the shared system when adding a genuinely new category.
+10. **Data retention**: New tables with PII should have a retention policy. Add cleanup logic to `api/cron-retention.js` if data has a defined lifetime.
+
 ## Flexible Hours bank receipts (September 2026; pending migration 072)
 
 Learner export includes payment and consent references, amount/date, reason and
@@ -27,7 +40,7 @@ retained financial evidence, included in learner export and anonymised by cleari
 its learner binding during deletion. Its cash, trial source and provider binding
 remain immutable; do not delete quote rows or rewrite package purchase snapshots.
 
-> Hard rules live in `CLAUDE.md`. This file is reference material — load it when adding PII, admin actions, consent flows, or retention logic.
+> Read this contract when adding PII, admin actions, consent flows or retention logic. Shared repository rules live in [AGENTS.md](../AGENTS.md).
 
 The platform is GDPR-compliant.
 

@@ -7,7 +7,7 @@ cash and therefore its earning basis; no separate subsidy or payout eligibility
 change is introduced. Narrow idempotent compensation handles unfulfillable pencil
 payments. See [feature contract](trial-discount-pencilled-offers-plan.md).
 
-> Hard rules live in `CLAUDE.md`. This file is reference material — load it when working on payouts, connect onboarding, or fee models.
+> Read this reference and [payout contracts](payout-contracts.md) for payouts, Connect onboarding or fee models. For Simon rollout or shadow work, start with [the payout handover](payout-handover.md).
 
 Instructors are paid via Stripe Connect Express accounts. Money flows: learner pays → platform Stripe account → weekly Friday transfer to instructor's connected account.
 

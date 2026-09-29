@@ -1,6 +1,16 @@
 # Setmore → CoachCarter booking transition (live since April 2026)
 
-> **Hard "do NOT" rules live in `CLAUDE.md`.** This file is reference material — load it when touching the sync, booking imports, or the transition off Setmore.
+## Import maintenance rules
+
+- Do NOT delete or modify the `setmore_key` column or `idx_bookings_setmore_key` index
+- Do NOT add CHECK constraints on lesson_bookings duration — multiple lesson types exist (60, 90, 120, 165 min). A `chk_booking_90_min` constraint was removed in April 2026 because it blocked non-standard durations.
+- **Valid booking statuses:** `scheduled`, `chargeable`, `refunded`. The `lesson_bookings_status_check` CHECK constraint enforces this. Collapsed from seven states in May 2026 — see [`docs/booking-statuses.md`](booking-statuses.md) and `BOOKING-STATUS-RESTRUCTURE-PLAN.md`. If adding a new status, update the constraint through governed migrations AND the constants in `api/_booking-status.js`.
+- Do NOT send notifications for imported bookings (the sync deliberately skips this)
+- Imported bookings block slots automatically — no changes needed in `slots.js`
+- The service mapping in `setmore-sync.js` is hardcoded to Fraser's Setmore account — update if services change
+- Do NOT clear `setmore_key` when editing a booking — the sync needs it to find and skip the booking (edit protection uses `edited_at`)
+
+> Read this contract for sync, booking imports or the transition off Setmore. The repository still schedules the sync; retirement requires a separate scoped decision.
 
 Fraser is migrating from Setmore (third-party booking) to CoachCarter's built-in booking system. **Both systems run in parallel** during the transition.
 

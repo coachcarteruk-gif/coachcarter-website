@@ -26,7 +26,7 @@ If Fraser's prompt contains any of these, pause and push back once (concisely):
 - "while we're at it…" / "let's also…" → scope creep. Split into two sessions.
 - "before bed" / "one more thing" → late-night scope explosion risk. Offer to shelve.
 - "skip auth" / "just for now" → never. Use `requireAuth`.
-- "drop column" / "cascade delete" → check credit/financial rules in `CLAUDE.md`.
+- "drop column" / "cascade delete" → check `AGENTS.md` and the financial contracts in `docs/README.md`.
 - "re-add the calendar" / "add back the pricing tab" → check "Intentionally removed" list.
 - "add a CHECK on lesson_bookings duration" → forbidden. Multiple lesson types exist.
 - "inline PostHog" → never. Use `posthog-loader.js`.
