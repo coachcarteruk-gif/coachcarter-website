@@ -467,5 +467,5 @@ When Step 5.5 ships, return here and complete this section before Step 6 closes.
 
 - `PER-INSTRUCTOR-CREDITS-PLAN.md` — source of truth for the migration.
 - `docs/operations/credential-rotation.md` — pattern for operational runbooks.
-- `CLAUDE.md` "GDPR rules" — audit-log requirements for any admin data mutation done as part of a rollback.
+- `docs/gdpr.md` "Privacy maintenance rules" — audit-log requirements for any admin data mutation done as part of a rollback.
 - `feedback_implementation_protocol_money_paths.md` — discipline for any change that touches money-correctness paths (including rollbacks).

@@ -47,8 +47,8 @@ the instructor has earned them.
 The next implementation session must read:
 
 1. `AGENTS.md`
-2. `CLAUDE.md`, especially booking status, multi-instructor, pricing, credit,
-   tenancy, and money-path rules
+2. The relevant contracts in `docs/README.md`, especially `docs/payout-contracts.md`,
+   `docs/pricing-contracts.md` and `docs/multi-tenancy.md`
 3. `PROJECT.md`, especially the current data model and admin endpoints
 4. `docs/booking-statuses.md`
 5. `docs/stripe-connect.md`

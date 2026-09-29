@@ -62,7 +62,7 @@ Some tasks span multiple areas. In that case, run one command first, then read t
 If your draft prompt contains any of these, pause and pick a template (don't just start):
 
 - "drop column" / "delete table" / "cascade delete" → **never hard-delete credit data**. Use `/schema-migration` and plan anonymization.
-- "remove from nav" / "simplify the menu" → check `CLAUDE.md` "Intentionally removed" list first. Use `/nav-change`.
+- "remove from nav" / "simplify the menu" → check `docs/navigation.md` "Intentionally removed surfaces" first. Use `/nav-change`.
 - "re-add the calendar view" → **don't.** It was removed intentionally. Read `docs/navigation.md`.
 - "add a CHECK constraint to lesson_bookings" → stop. Duration constraints are forbidden; status has its own constraint. Use `/schema-migration`.
 - "skip auth for this" → never. Use `requireAuth` or validate school context via `?school_id=X`.

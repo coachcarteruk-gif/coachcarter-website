@@ -10,7 +10,7 @@ Work from the top down. Do not combine every item into one pull request. Each se
 
 Before starting any item:
 
-1. Read `AGENTS.md` and the relevant sections of `CLAUDE.md`.
+1. Read `AGENTS.md` and the task-relevant contracts in `docs/README.md`.
 2. Start from the latest remote `main`.
 3. Create a fresh `codex/` branch for the selected item.
 4. Preserve tenant scoping with `school_id` and add focused regression tests.
@@ -490,7 +490,7 @@ The initially reported admin platform-balance failures passed when rerun indepen
 
 - The test files above
 - Product code only when a test exposes a verified current-contract regression
-- `CLAUDE.md`, `docs/navigation.md`, and relevant feature plans as the source of intended behavior
+- `AGENTS.md`, `docs/navigation.md`, and relevant feature contracts from `docs/README.md` as the source of intended behavior
 
 ### Implementation approach
 
@@ -498,7 +498,7 @@ The initially reported admin platform-balance failures passed when rerun indepen
    - Real regression against current documented behavior.
    - Stale test for an intentionally changed/removed feature.
    - Brittle source-shape assertion that should be replaced with behavior testing.
-2. Check `CLAUDE.md` and `docs/navigation.md` before changing navigation, booking UI, calendars, waitlist, Q&A, confirmation prompts, or other removed surfaces.
+2. Check `docs/navigation.md` before changing navigation, booking UI, calendars, waitlist, Q&A, confirmation prompts, or other removed surfaces.
 3. Do not alter correct production behavior merely to satisfy an exact source substring.
 4. Prefer tests that execute exported helpers, handler behavior, or rendered DOM over tests that search function source text.
 5. Keep high-value contract assertions for money, tenant, auth, and booking status rules.
@@ -554,4 +554,4 @@ To keep reviews safe and reversible:
 
 ## Starting prompt for the next Codex session
 
-> Read `AGENTS.md`, `CLAUDE.md`, and `CODE-REVIEW-REMEDIATION-PLAN.md`. Start with the first unchecked item only. Verify the issue against current `main`, create a fresh `codex/` branch, implement the scoped fix with focused tests, run the relevant verification commands, and report any assumptions or contract changes. Do not combine unrelated remediation items or restore intentionally removed product features.
+> Read `AGENTS.md`, the task-relevant contracts in `docs/README.md`, and `CODE-REVIEW-REMEDIATION-PLAN.md`. Start with the first unchecked item only. Verify the issue against current `main`, create a fresh `codex/` branch, implement the scoped fix with focused tests, run the relevant verification commands, and report any assumptions or contract changes. Do not combine unrelated remediation items or restore intentionally removed product features.

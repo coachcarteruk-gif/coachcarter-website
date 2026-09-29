@@ -1,5 +1,17 @@
 # Trial window, post-trial discount and pencilled offers
 
+## Maintenance boundary
+
+Use `_post-trial-discount.js` and `_post-trial-webhook.js` for account eligibility,
+server price snapshots and signed payment timing. Never infer payment initiation
+from a Stripe object's creation timestamp. The configured repeatable discount
+stacks after local pricing; existing Stripe promotion entry applies last. Earnings
+and new package cash/refund values follow the reduced actual payment. Preserve
+existing product gates. An unpaid pencilled offer is only a calendar hold; its
+84-day horizon and instructor-selected start-minus-12/24/48-hour payment deadline
+(default 48 hours) are separate from ordinary
+learner booking windows. See `docs/trial-discount-pencilled-offers-plan.md`.
+
 Status: reconciled with current main for the owner-requested restoration on
 19 September 2026. Fraser explicitly requested restoring pencilled offers to
 the site and including the trial-window and post-trial-discount changes.

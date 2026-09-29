@@ -1,10 +1,46 @@
 # Instructor Payout Summary — Design & Implementation Spec
 
+## Calculation and rendering maintenance contract
+
+This maintained contract takes precedence over the historical fixed-fee design discussion below. Use recorded actual provider fees; do not infer them from that discussion or export this generator's rounding policy into another payout engine.
+
+Weekly payout images are generated from lesson data by `api/_payout-summary.js`
+(calculation) and `api/_payout-summary-html.js` (render). Hard rules:
+
+1. **Truncate to the penny, once, at the end.** Never round. Never store a
+   derived hourly payout rate and multiply it up — that produced four different
+   amounts for the same lesson length across four weeks.
+2. **Never default a pupil's price, a duration, or a Stripe fee.** A missing one
+   blocks. A NULL `stripe_fee_pence` means "unknown", never "no fee": treating it
+   as zero overpays 93p on a £55 hour.
+3. **Never recompute a Stripe fee from a percentage.** Use only what the balance
+   transaction reports. UK cards are 1.5% + 20p, but PayPal passthrough is ~3.9%
+   and Flexible Hours packages ~0.54%, and a lesson is always one charge.
+4. **Every rendered total must reconcile exactly to the sum of its lines**, or
+   refuse to render. Enforced in both the calculation and the renderer.
+5. **Duration comes from `end_time − start_time`** on the booking, never
+   `lesson_types.duration_minutes` and never a `COALESCE(..., 90)` default.
+6. **Resolve pupils by `learner_id`, never by name.** `ILIKE '%Esha%'` also
+   matches "Aleesha".
+7. **Rates are effective-dated** in `instructor_rate_history` and
+   `learner_legacy_rates` (migration 069). Read them as-of the period start so an
+   old week reproduces its own figures. The franchise fee has no default.
+8. **The reference PNG is a structural regression test, not a byte comparison.**
+   Font and rasteriser versions move glyphs while the layout is unchanged; assert
+   geometry, colours and ink-profile correlation.
+9. **Blocked lessons are reported, never dropped.** A week that silently omits a
+   lesson is indistinguishable from one where it never happened.
+
+`api/cron-stripe-fee-backfill.js` (hourly, :45) repairs any fee the webhook fails
+to persist. The webhook's capture is deliberately best-effort so a Stripe timeout
+cannot cost a learner their credit; do not make it fatal, and do not remove the
+cron that compensates for it.
+
 **For:** CoachCarter / DrivePro
 **Purpose:** Generate the weekly instructor payout summary image directly from lesson
 data, replacing the current manual process.
-**Status:** Design is settled and in production use. One calculation rule is
-unresolved — see [Open decision](#open-decision-stripe-fixed-fee).
+**Historical design status:** The original fixed-fee discussion is retained below.
+For maintenance, use the recorded-fee contract at the top of this document.
 
 ---
 

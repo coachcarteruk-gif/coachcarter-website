@@ -1,6 +1,14 @@
 # Multi-tenancy (April 2026)
 
-> Hard rules live in `CLAUDE.md`. This file is reference material — load it when working on tenant-scoped features, auth, or school branding.
+## Tenant maintenance rules
+
+1. Every new tenant-scoped table MUST have `school_id INTEGER NOT NULL REFERENCES schools(id)` with `DEFAULT 1`
+2. Every query on tenant-scoped data MUST constrain it to the effective authorised `school_id`, including joined records
+3. Every new JWT must include `school_id` in the payload
+4. Use `requireAuth` from `api/_auth.js`, not local auth functions
+5. New public endpoints use `api/_tenant.js` and the resolution contract below. Legacy `?school_id=` compatibility is not authority to add client-selected tenant IDs to new endpoints.
+
+> Read this contract for tenant-scoped features, school resolution or branding. Shared repository rules live in [AGENTS.md](../AGENTS.md).
 
 The platform is multi-tenant. Each driving school is an isolated tenant with their own instructors, learners, bookings, lesson types, pricing, and branding.
 
@@ -56,3 +64,13 @@ The platform is multi-tenant. Each driving school is an isolated tenant with the
 - Self-service school signup — priority for InstructorBook launch
 - Multi-school instructors
 - Per-school content (videos, quizzes)
+
+## InstructorBook and school branding
+
+> Full strategy: [`INSTRUCTORBOOK-PLAN.md`](../INSTRUCTORBOOK-PLAN.md)
+
+- **One codebase, two front doors** — InstructorBook and CoachCarter share API, database, and backend. Different presentation layers.
+- **InstructorBook is invisible to learners** — learners on coachcarter.uk (or any school) never see "InstructorBook." School brands are primary.
+- **InstructorBook is independent** — not publicly tied to Fraser or CoachCarter. Competing schools must trust it as a neutral platform.
+- **Feature flags per school** — `schools.config` JSONB controls which features are enabled (e.g., `learnerbook_enabled`). CoachCarter has everything; new InstructorBook schools get booking/payments only.
+- **Commercial strategy** — the Model D proposal and its 0.75% payout fee remain in `INSTRUCTORBOOK-PLAN.md`. This documentation consolidation does not change or activate pricing; verify the applicable commercial decision and configured values before pricing work.

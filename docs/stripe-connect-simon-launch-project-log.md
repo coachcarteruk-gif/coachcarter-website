@@ -1,19 +1,21 @@
 # Stripe Connect Simon Launch Project Log
 
+> **Reading update — 29 September 2026:** Start with [the payout handover](payout-handover.md), then the protected specifications and the dated evidence relevant to the proposed operation. The August summary below is historical: later September records include manual payments. This update does not certify current production readiness or authorise any money movement. The append-only log and protected evidence are preserved.
+
 **Purpose:** Durable handover and journey log for the Simon Stripe Connect,
 payment-contract, refund, and instructor-payout launch.
 
-**Current status:** **SIMON INTERIM V1 HARDENING IMPLEMENTED LOCALLY FOR REVIEW
+**Historical status (13 August 2026):** **SIMON INTERIM V1 HARDENING IMPLEMENTED LOCALLY FOR REVIEW
 ON PR #388 BASELINE — NOT MERGED, MIGRATED, DEPLOYED OR OPERATED — SIMON NOT
 ONBOARDED OR PAID — ACCOUNTS V2/A8 EVIDENCE PRESERVED AND DEFERRED —
 PRODUCTION ACTION NOT APPROVED**
 
-**Last updated:** 13 August 2026
+**Original summary date:** 13 August 2026
 
 **Verified source baseline:** frozen remote `main` at
 `f29e67d945a559fd00c7ff08e1f34c96514e01f1` (PR #388 merge)
 
-**Current hold:** Do not apply migration 043, deploy, configure or operate the
+**Recorded hold (13 August 2026; later operations require their own evidence):** Do not apply migration 043, deploy, configure or operate the
 interim v1 account/invite/approval/payout routes until this implementation is
 reviewed and merged and the exact later operation is separately authorized. Do not resume A8,
 A9, Slice 4 reconciliation or Accounts v2 onboarding as the immediate launch
@@ -34,8 +36,10 @@ the journey from chat history or provider dashboards.
 
 ## 2. How future sessions must use this document
 
-1. Read this document before any Simon launch, Stripe Connect payout rollout,
-   or Simon shadow-exercise work.
+1. Start with [the payout handover](payout-handover.md) before Simon launch,
+   Stripe Connect payout rollout or Simon shadow-exercise work. Read this log
+   for the relevant identity, scenario and dated evidence; expand the history
+   when needed to establish continuity or satisfy a protected gate.
 2. Then read the protected product specification and technical plan listed
    below. Do not infer product policy from this log when either protected
    document answers the question.
@@ -60,8 +64,8 @@ The source hierarchy is:
    Accounts v2/payout-v2 target preserved as deferred long-term work.
 2. [`stripe-connect-simon-launch-technical-implementation-plan.md`](stripe-connect-simon-launch-technical-implementation-plan.md)
    — implementation sequence, slice gates, tests, and acceptance criteria.
-3. `AGENTS.md` and `CLAUDE.md` — repository, tenancy, auth, money, and safety
-   rules.
+3. [AGENTS.md](../AGENTS.md) and its task-specific contracts — repository,
+   tenancy, auth, money and safety rules. `CLAUDE.md` points to that shared entry.
 4. [`stripe-connect-simon-slice-3-rollout-review.md`](stripe-connect-simon-slice-3-rollout-review.md)
    — exact Slice 3 merge, CI/deployment, production-inactive evidence, preserved
    contracts, and the prepared but unexecuted activation/rollback runbook.
@@ -77,8 +81,9 @@ The source hierarchy is:
    governs the future launch.
 8. Committed code, migrations, tests, rollout manifests, Git history, and
    reviewed PR evidence.
-9. This log — the current journey/handover record, not a replacement for
-   product authority or executable tests.
+9. This log — dated journey/evidence history, not a replacement for
+   product authority or executable tests. Use [the handover](payout-handover.md)
+   to locate later superseding records and explicitly unverified current state.
 
 ### Protected-document integrity
 

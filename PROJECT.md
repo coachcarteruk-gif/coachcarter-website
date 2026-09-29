@@ -84,9 +84,9 @@ pilot restrictions and Stripe test/live gates remain in force. See
 [the feature contract and rollout packet](docs/trial-discount-pencilled-offers-plan.md)
 for discount ordering, accounting, completion limitations and verification.
 
-> **Last updated:** 13 August 2026
+> **Reference baseline:** 13 August 2026; later dated updates appear above and in topic documents. This label is not a current deployment status.
 
-A complete reference for the CoachCarter driving instructor website. Use this when continuing development with an AI assistant — paste it in at the start of a new session so the AI is fully up to speed.
+On-demand API, schema and flow reference for CoachCarter. Start with `AGENTS.md` and [the topic map](docs/README.md); search the sections relevant to the task rather than loading this entire document at session start.
 
 ---
 
