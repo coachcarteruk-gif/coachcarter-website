@@ -607,6 +607,14 @@
       "filename": "074_flexible_weekly_bookings.sql",
       "checksum": "3e1b8f55867f7a37006501f5c5c8831d96f7a69811b5a3d2275893e69cb1f1b1",
       "execution": "numbered"
+    },
+    {
+      "id": "075",
+      "order": 76,
+      "prefix": "075",
+      "filename": "075_instructor_busy_block_overrides.sql",
+      "checksum": "21866e2c69c8f2ef4475f6b9b946bee0ccebb9f0dcbe47f9ad8b97d5ff8a3850",
+      "execution": "numbered"
     }
   ]
 }

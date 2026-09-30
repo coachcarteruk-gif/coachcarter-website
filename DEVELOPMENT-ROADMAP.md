@@ -1,5 +1,13 @@
 # Coach Carter — Website Development Roadmap
 
+## 2.146 - Instructor booking and offer availability overrides (30 September 2026; pending migration and deployment)
+
+New instructor bookings and fixed/broadcast offers can proceed outside normal
+hours or through specifically reviewed busy blocks after a confirmation window.
+Lesson clashes, held slots, blackouts and external events remain blocking.
+Pencilled offers preserve the reviewed blocks for payment fulfilment through
+migration 075. See [policy and rollout boundary](docs/instructor-availability-policy.md).
+
 ## 2.145 - Instructor delivered lesson length corrections (28 September 2026; pending deployment)
 
 Instructors can use **Edit lesson length** on their own completed Lesson Credit

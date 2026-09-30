@@ -12,6 +12,41 @@ const root = path.resolve(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 
 test.describe('instructor schedule warning overrides', () => {
+  for (const action of ['create-booking', 'create-offer', 'create-broadcast-offer']) {
+    for (const confirm of [true, false]) {
+      test(action + (confirm ? ' confirms busy-block override' : ' cancels without saving'), async ({ page }) => {
+        await page.setContent('<!doctype html><html><body></body></html>');
+        await page.addScriptTag({ path: path.join(root, 'public/shared/instructor-booking-actions.js') });
+        const prompts = [];
+        page.on('dialog', async dialog => {
+          prompts.push(dialog.message());
+          if (confirm) await dialog.accept(); else await dialog.dismiss();
+        });
+        const result = await page.evaluate(async action => {
+          const calls = [];
+          window.ccAuth = { fetchAuthed: async (_, options) => {
+            calls.push(JSON.parse(options.body));
+            return calls.length === 1
+              ? { status: 409, json: async () => ({ code: 'SCHEDULE_OVERRIDE_REQUIRED',
+                error: 'This time overlaps busy blocks: 18:00–20:00.',
+                schedule_override_token: 'reviewed-blocks' }) }
+              : { status: 200, json: async () => ({ ok: true }) };
+          } };
+          const result = await window.BookingActions.postWithScheduleCheck('/api/instructor?action=' + action, {
+            payment_method: 'cash', scheduled_date: '2030-09-23', start_time: '18:00', learner_id: 22,
+          });
+          return { cancelled: result.cancelled, calls };
+        }, action);
+        expect(prompts).toHaveLength(1);
+        expect(prompts[0]).toContain('18:00–20:00');
+        expect(prompts[0]).toContain('I understand the diary conflict.');
+        expect(prompts[0]).toContain(action === 'create-booking' ? 'Book this lesson anyway?' : 'Send this offer anyway?');
+        expect(result.cancelled).toBe(!confirm);
+        expect(result.calls).toHaveLength(confirm ? 2 : 1);
+        if (confirm) expect(result.calls[1]).toEqual({ ...result.calls[0], schedule_override_token: 'reviewed-blocks' });
+      });
+    }
+  }
   test('reports busy, blackout, external-calendar, and outside-hours warnings together', () => {
     const warnings = buildInstructorScheduleWarnings({
       startTime: '18:00',

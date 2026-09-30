@@ -33,6 +33,7 @@ test.describe('pencilled offer database concurrency', () => {
       `);
       const migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '066_pencilled_offers.sql'), 'utf8');
       await admin.query(migration);
+      await admin.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '075_instructor_busy_block_overrides.sql'), 'utf8'));
       await expect(admin.query(`INSERT INTO lesson_offers(school_id,instructor_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled) VALUES(1,2,'2026-12-01','08:00','09:00','manual','pending',clock_timestamp()+interval '1 day',1,9000,true)`)).rejects.toMatchObject({ code: '23514' });
       await admin.query(`INSERT INTO lesson_offers(school_id,instructor_id,learner_id,scheduled_date,start_time,end_time,kind,status,expires_at,max_repeat_weeks,offer_price_pence,pencilled) VALUES(1,2,3,'2026-12-01','10:00','11:00','manual','pending',clock_timestamp()+interval '1 day',1,9000,true)`);
       await expect(admin.query(`INSERT INTO lesson_bookings(school_id,instructor_id,scheduled_date,start_time,end_time,status) VALUES(1,2,'2026-12-01','10:30','11:30','scheduled')`)).rejects.toMatchObject({ code: '23P01' });

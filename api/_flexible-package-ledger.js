@@ -2,6 +2,7 @@
 
 const { withNeonTransaction } = require('./_db-transaction');
 const { SCHEDULED, REFUNDED, BLOCKING_STATUSES } = require('./_booking-status');
+const { busyBlocksWereReviewed, SCHEDULE_UNAVAILABLE } = require('./_instructor-schedule-warnings');
 const { operationalTimeZone, zonedDateTimeToDate } = require('./_full-curriculum');
 
 const FLEXIBLE_UNIT_MINUTES = 30;
@@ -132,6 +133,7 @@ async function bookFlexiblePackageSlotTransaction({
   transmissionType = 'manual',
   clientRequestId,
   createdBy = 'learner',
+  busyBlockOverrides = [],
 }) {
   const unitsRequired = unitsForDuration(durationMinutes);
   if (!unitsRequired) {
@@ -197,6 +199,19 @@ async function bookFlexiblePackageSlotTransaction({
         [schoolId, instructorId, date, startTime, BLOCKING_STATUSES]
       );
       if (conflicts.rowCount) abort({ code: 'SLOTS_UNAVAILABLE' });
+
+      if (createdBy === 'instructor') {
+        const busy = await client.query(
+          `SELECT id, start_time::text, end_time::text FROM instructor_busy_blocks
+            WHERE school_id = $1 AND instructor_id = $2 AND block_date = $3::date
+              AND start_time < $5::time AND end_time > $4::time`,
+          [schoolId, instructorId, date, startTime, endTime]
+        );
+        if (!busyBlocksWereReviewed(busy.rows, busyBlockOverrides)) abort({
+          code: SCHEDULE_UNAVAILABLE,
+          warnings: [{ code: 'BUSY_BLOCK', message: 'Busy blocks have changed. Review the lesson again.' }],
+        });
+      }
 
       const sources = await loadLockedFlexibleSources(client, { schoolId, learnerId });
       const plan = planFlexiblePackageFifo(sources.rows, unitsRequired);

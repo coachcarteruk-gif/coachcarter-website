@@ -6,7 +6,7 @@ const { createRequire } = require('module');
 const {
   availabilityChangeConflicts, buildInstructorScheduleWarnings,
   loadAvailabilityChangeReview, requireAvailabilityChangeReview,
-  requireNormalHoursReview,
+  requireInstructorScheduleReview,
 } = require('../api/_instructor-schedule-warnings');
 
 process.env.STRIPE_SECRET_KEY ||= 'sk_test_availability_unit_only';
@@ -38,13 +38,21 @@ function loadModule(file, mocks) {
   return module.exports;
 }
 
-function fixture({ windows = [window], overrides = [], busy = [], blackouts = [], events = [], pendingRequests = [], extensionConflict, fundingResult, auth = true, failAudit = false } = {}) {
+function fixture({ windows = [window], overrides = [], busy = [], blackouts = [], events = [], pendingRequests = [], occupied, extensionConflict, fundingResult, auth = true, failAudit = false } = {}) {
   const calls = [], funding = [], notifications = [], transactions = [];
   let savedBooking = { ...booking };
   const query = async (text, values = []) => {
     text = text.replace(/\s+/g, ' ').trim();
     calls.push({ text, values });
     if (failAudit && text.startsWith('INSERT INTO audit_log')) throw new Error('Audit write failed');
+    if (text.includes(') occupied LIMIT 1')) return occupied ? [{ source: occupied }] : [];
+    if (text.includes('FROM learner_credit_balances')) return [{ balance_minutes: 300 }];
+    if (text.includes('FROM credit_transactions ct')) return [{
+      id: 1, school_id: 7, minutes: 300, amount_pence: 15000, effective_rate_pence_per_minute: 50,
+      stripe_fee_pence: 0, absorbed_by: 'platform', created_at: '2026-01-01',
+    }];
+    if (text.startsWith('INSERT INTO booking_credit_sources')) return [{ id: 1 }];
+    if (text.startsWith('UPDATE learner_credit_balances')) return [{ balance_minutes: 210 }];
     if (text.includes('information_schema.columns')) return [{ exists: true }];
     if (extensionConflict && text.includes('FROM ' + extensionConflict) && text.startsWith('SELECT')
         && !text.includes('WHERE lb.id =')) return [{ id: 999, learner_name: 'Another learner', start_time: '19:30', end_time: '20:30' }];
@@ -69,7 +77,9 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
   const tx = async (_, callback) => {
     transactions.push('begin');
     try {
-      const result = await callback({ query: async (text, values) => ({ rows: await query(text, values) }) });
+      const result = await callback({ query: async (text, values) => {
+        const rows = await query(text, values); return { rows, rowCount: rows.length };
+      } });
       transactions.push('commit');
       return result;
     } catch (error) { transactions.push('rollback'); throw error; }
@@ -99,13 +109,13 @@ function fixture({ windows = [window], overrides = [], busy = [], blackouts = []
   };
 }
 
-test('outside-hours creation requires review for packages and stays blocked for other payments despite old override fields', async () => {
+test('outside-hours creation requires review for every payment despite old override fields', async () => {
   for (const payment of ['flexible_package', 'credit', 'cash', 'free']) {
     const f = fixture({ windows: [{ ...window, end_time: '11:30' }] });
     const res = await f.run('create-booking', { learner_id: 22, scheduled_date: date, start_time: '12:00',
       payment_method: payment, availability_override: true, force: true });
     expect(res.statusCode, payment).toBe(409);
-    expect(res.body.code).toBe(payment === 'flexible_package' ? 'NORMAL_HOURS_OVERRIDE_REQUIRED' : 'SCHEDULE_UNAVAILABLE');
+    expect(res.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
     expect(f.funding).toEqual([]);
     expect(f.notifications).toEqual([]);
     expect(f.calls.filter(call => /^(INSERT|UPDATE|DELETE)/.test(call.text))).toEqual([]);
@@ -115,14 +125,14 @@ test('outside-hours creation requires review for packages and stays blocked for 
 const outsideHoursBooking = { learner_id: 22, scheduled_date: date, start_time: '18:00',
   payment_method: 'flexible_package', client_request_id: 'cfca77ec-1d30-4a34-8cf9-49c08b212c1b' };
 
-test('confirmed normal-hours exception books once through the unchanged package transaction', async () => {
+test('confirmed normal-hours exception books once with unchanged package funding', async () => {
   const f = fixture();
   const warning = await f.run('create-booking', outsideHoursBooking);
-  expect(warning.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+  expect(warning.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
   expect(f.funding).toEqual([]);
   expect(f.notifications).toEqual([]);
   const result = await f.run('create-booking', { ...outsideHoursBooking,
-    normal_hours_override_token: warning.body.normal_hours_override_token });
+    schedule_override_token: warning.body.schedule_override_token });
   expect(result.statusCode).toBe(200);
   expect(f.funding).toHaveLength(1);
   expect(f.funding[0]).toMatchObject({ createdBy: 'instructor', schoolId: 7, instructorId: 6,
@@ -134,10 +144,10 @@ test('changed lesson details or an invalid review token require fresh confirmati
   const f = fixture();
   const warning = await f.run('create-booking', outsideHoursBooking);
   for (const changes of [{ start_time: '19:00' }, { learner_id: 23 }, { scheduled_date: '2030-09-24' },
-    { normal_hours_override_token: true }, { normal_hours_override_token: 'invalid' }]) {
+    { schedule_override_token: true }, { schedule_override_token: 'invalid' }]) {
     const result = await f.run('create-booking', { ...outsideHoursBooking,
-      normal_hours_override_token: warning.body.normal_hours_override_token, ...changes });
-    expect(result.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+      schedule_override_token: warning.body.schedule_override_token, ...changes });
+    expect(result.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
   }
   expect(f.funding).toEqual([]);
 });
@@ -147,24 +157,24 @@ test('normal-hours acknowledgement cannot cross school or instructor scope', () 
   const original = response();
   const proposal = { schoolId: 7, instructorId: 6, learnerId: 22, scheduledDate: date,
     startTime: '18:00', endTime: '19:30' };
-  requireNormalHoursReview({ body: {} }, original, warnings, proposal);
+  requireInstructorScheduleReview({ body: {} }, original, warnings, proposal);
   for (const changes of [{ schoolId: 8 }, { instructorId: 9 }]) {
     const res = response();
-    expect(requireNormalHoursReview({ body: {
-      normal_hours_override_token: original.body.normal_hours_override_token,
+    expect(requireInstructorScheduleReview({ body: {
+      schedule_override_token: original.body.schedule_override_token,
     } }, res, warnings, { ...proposal, ...changes })).toBe(true);
-    expect(res.body.code).toBe('NORMAL_HOURS_OVERRIDE_REQUIRED');
+    expect(res.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
   }
 });
 
 test('confirmed normal-hours exception cannot bypass new blocks or pending requests', async () => {
   const warning = await fixture().run('create-booking', outsideHoursBooking);
-  for (const block of ['busy', 'blackouts', 'events', 'pendingRequests']) {
+  for (const block of ['blackouts', 'events', 'pendingRequests']) {
     const f = fixture({ [block]: [{ id: 9, start_time: '18:00', end_time: '20:00' }] });
     const result = await f.run('create-booking', { ...outsideHoursBooking,
-      normal_hours_override_token: warning.body.normal_hours_override_token });
+      schedule_override_token: warning.body.schedule_override_token });
     expect(result.statusCode).toBe(409);
-    expect(result.body.normal_hours_override_token).toBeUndefined();
+    expect(result.body.schedule_override_token).toBeUndefined();
     expect(f.funding).toEqual([]);
     expect(f.notifications).toEqual([]);
   }
@@ -174,7 +184,7 @@ test('confirmed exception still reports a booking conflict from the package tran
   const f = fixture({ fundingResult: { ok: false, code: 'SLOTS_UNAVAILABLE' } });
   const warning = await f.run('create-booking', outsideHoursBooking);
   const result = await f.run('create-booking', { ...outsideHoursBooking,
-    normal_hours_override_token: warning.body.normal_hours_override_token });
+    schedule_override_token: warning.body.schedule_override_token });
   expect(result.statusCode).toBe(409);
   expect(result.body.error).toContain('already booked');
   expect(f.notifications).toEqual([]);
@@ -190,13 +200,13 @@ test('one-off availability permits a valid Flexible Hours booking with instructo
   expect(f.funding[0]).toMatchObject({ createdBy: 'instructor', schoolId: 7, instructorId: 6, durationMinutes: 90 });
 });
 
-test('one-off coverage never overrides busy blocks or external events', async () => {
+test('one-off coverage still requires busy-block review and cannot bypass external events', async () => {
   for (const block of ['busy', 'events']) {
     const f = fixture({ overrides: [{ start_time: '12:00', end_time: '14:00' }],
       [block]: [{ start_time: '13:00', end_time: '14:00' }] });
     const res = await f.run('create-booking', { learner_id: 22, scheduled_date: date, start_time: '12:00',
       payment_method: 'flexible_package', availability_override: true });
-    expect(res.body.code).toBe('SCHEDULE_UNAVAILABLE');
+    expect(res.body.code).toBe(block === 'busy' ? 'SCHEDULE_OVERRIDE_REQUIRED' : 'SCHEDULE_UNAVAILABLE');
     expect(f.funding).toEqual([]);
   }
 });
@@ -324,7 +334,7 @@ test('manual and broadcast offers cannot bypass availability with the old overri
     const res = await f.run(action, { learner_id: 22, learner_ids: [22], scheduled_date: upcoming,
       start_time: '12:00', availability_override: true });
     expect(res.statusCode, JSON.stringify(res.body)).toBe(409);
-    expect(res.body.code).toBe('SCHEDULE_UNAVAILABLE');
+    expect(res.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
     expect(f.calls.some(call => call.text.startsWith('INSERT'))).toBe(false);
   }
 });
@@ -429,8 +439,10 @@ test('coverage respects full duration, lunch gaps, one-off hours and transmissio
 
 test('unauthenticated requests cannot reach schedule reads', async () => {
   const f = fixture({ auth: false });
-  const res = await f.run('create-booking', {});
-  expect(res.statusCode).toBe(401);
+  for (const action of ['create-booking', 'create-offer', 'create-broadcast-offer']) {
+    const res = await f.run(action, { schedule_override_token: 'not-authentication' });
+    expect(res.statusCode).toBe(401);
+  }
   expect(f.calls).toEqual([]);
 });
 
@@ -448,4 +460,81 @@ test('availability UI only retries after approval and binds the returned token',
   expect(prompts[0]).toContain('Test learner');
   expect(prompts[0]).toContain('12:00–13:30');
   expect(calls[1].availability_conflict_token).toBe('review-token');
+});
+
+for (const payment of ['cash', 'free', 'credit', 'flexible_package']) {
+  test(payment + ' booking overrides only the reviewed busy blocks after confirmation', async () => {
+    const busy = [{ id: 8, start_time: '18:00', end_time: '20:00' }];
+    const f = fixture({ busy });
+    const body = { ...outsideHoursBooking, payment_method: payment };
+    const warning = await f.run('create-booking', body);
+    expect(warning.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
+    expect(warning.body.error).toContain('18:00–20:00');
+    expect(f.calls.some(call => /^(INSERT|UPDATE|DELETE)/.test(call.text))).toBe(false);
+    const confirmed = { ...body, schedule_override_token: warning.body.schedule_override_token };
+    busy.push({ id: 9, start_time: '18:30', end_time: '19:00' });
+    const changed = await f.run('create-booking', confirmed);
+    expect(changed.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
+    expect(changed.body.schedule_override_token).not.toBe(warning.body.schedule_override_token);
+    const result = await f.run('create-booking', { ...body, schedule_override_token: changed.body.schedule_override_token });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(200);
+    if (payment === 'credit') {
+      expect(f.transactions).toEqual(['begin', 'commit']);
+      expect(f.calls.filter(call => call.text.startsWith('INSERT INTO booking_credit_sources'))).toHaveLength(1);
+      expect(f.calls.find(call => call.text.startsWith('UPDATE learner_credit_balances')).values).toEqual([22, 6, 7, 90]);
+    }
+    if (payment === 'flexible_package') expect(f.funding[0].busyBlockOverrides).toHaveLength(2);
+  });
+}
+
+for (const action of ['create-booking', 'create-offer', 'create-broadcast-offer']) {
+  test(action + ' rejects every occupied-time class even with an override token', async () => {
+    const body = { learner_id: 22, learner_ids: [22], scheduled_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), start_time: '18:00' };
+    const warning = await fixture().run(action, body);
+    for (const occupied of ['an existing lesson', 'a pending offer', 'a pending lesson request', 'a checkout reservation', 'a recurring slot hold']) {
+      const f = fixture({ occupied });
+      const result = await f.run(action, { ...body, schedule_override_token: warning.body.schedule_override_token });
+      expect(result.statusCode).toBe(409);
+      expect(result.body.code).toBe('SCHEDULE_UNAVAILABLE');
+      expect(f.calls.some(call => /^(INSERT|UPDATE|DELETE)/.test(call.text))).toBe(false);
+      expect(f.notifications).toEqual([]);
+    }
+  });
+}
+
+for (const action of ['create-offer', 'create-broadcast-offer']) {
+  test(action + ' sends after busy-block confirmation and binds recipients and prices', async () => {
+    const f = fixture({ busy: [{ id: 8, start_time: '18:00', end_time: '20:00' }] });
+    const body = { learner_id: 22, learner_ids: [22], scheduled_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), start_time: '18:00' };
+    const warning = await f.run(action, body);
+    expect(warning.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
+    const confirm = { ...body, schedule_override_token: warning.body.schedule_override_token };
+    const changedRecipient = await f.run(action, { ...confirm, learner_id: 23, learner_ids: [23] });
+    expect(changedRecipient.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
+    const changedPrice = await f.run(action, { ...confirm, discount_pct: 50 });
+    expect(changedPrice.body.code).toBe('SCHEDULE_OVERRIDE_REQUIRED');
+    expect(f.notifications).toEqual([]);
+    const result = await f.run(action, confirm);
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(200);
+    expect(f.calls.filter(call => call.text.startsWith('INSERT INTO lesson_offers'))).toHaveLength(1);
+  });
+}
+
+test('Flexible Hours transaction rejects changed busy blocks before drawing any package source', async () => {
+  const writes = [];
+  const ledger = loadModule('api/_flexible-package-ledger.js', {
+    './_db-transaction': { withNeonTransaction: async (_, callback) => callback({ query: async (text, values) => {
+      let rows = [];
+      if (text.includes('SELECT id FROM learner_users') || text.includes('SELECT id FROM instructors')) rows = [{ id: 22 }];
+      if (text.includes('FROM instructor_busy_blocks')) rows = [{ id: 8, start_time: '18:00:00', end_time: '21:00:00' }];
+      if (/^\s*(INSERT|UPDATE)|FROM flexible_package_sources/.test(text)) writes.push(text);
+      return { rows, rowCount: rows.length };
+    } }) },
+  });
+  const result = await ledger.bookFlexiblePackageSlotTransaction({ connectionString: 'unused', learnerId: 22,
+    instructorId: 6, schoolId: 7, date, startTime: '18:00', endTime: '19:30', lessonTypeId: 1,
+    durationMinutes: 90, clientRequestId: outsideHoursBooking.client_request_id, createdBy: 'instructor',
+    busyBlockOverrides: [{ id: 8, start_time: '18:00:00', end_time: '20:00:00' }] });
+  expect(result).toMatchObject({ ok: false, code: 'SCHEDULE_UNAVAILABLE' });
+  expect(writes).toEqual([]);
 });

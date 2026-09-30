@@ -637,6 +637,22 @@
     var data = await res.json();
 
     var isExtension = url === '/api/instructor?action=create-extension-offer';
+    var isOffer = url === '/api/instructor?action=create-offer'
+      || url === '/api/instructor?action=create-broadcast-offer';
+    if (res.status === 409 && data.code === 'SCHEDULE_OVERRIDE_REQUIRED'
+        && (isOffer || url === '/api/instructor?action=create-booking') && data.schedule_override_token) {
+      var schedulePrompt = data.error + '\n\nLesson: ' + payload.scheduled_date + ' at ' + payload.start_time
+        + '\n\nYour availability and busy blocks will stay unchanged.'
+        + '\n\nI understand the diary conflict. ' + (isOffer ? 'Send this offer anyway?' : 'Book this lesson anyway?');
+      if (!window.confirm(schedulePrompt)) return { cancelled: true, res: res, data: data };
+      payload.schedule_override_token = data.schedule_override_token;
+      res = await ccAuth.fetchAuthed(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      data = await res.json();
+    }
     if (res.status === 409 && data.code === 'NORMAL_HOURS_OVERRIDE_REQUIRED'
         && (isExtension || payload.payment_method === 'flexible_package') && data.normal_hours_override_token) {
       var prompt = isExtension
