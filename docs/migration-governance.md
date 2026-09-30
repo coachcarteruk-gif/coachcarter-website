@@ -2,6 +2,12 @@
 
 ## Latest recorded status
 
+30 September 2026 repository-only addition: migration
+`075_instructor_busy_block_overrides.sql` prepares exact busy-block snapshots
+for instructor-confirmed pencilled offers. It has not been applied to production.
+The isolated branch has 76 manifest entries including deferred 041. See
+[availability policy and integration caveat](instructor-availability-policy.md).
+
 The latest receipt recorded in this document is 28 September 2026: migration 074, 74 successful ledger entries, no pending migrations, and 041 deferred. This is a summary of the dated evidence below, not a new live verification. Earlier inventories and “pending” statements describe their own dates; verify the current manifest and ledger before any later operation.
 
 28 September 2026: migration `074_flexible_weekly_bookings.sql` applied after

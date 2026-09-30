@@ -40,6 +40,7 @@ function harness() {
     Date: Clock, process: { env: {} }, console,
     verifyInstructorAuth: () => ({ id: 7, school_id: 3 }),
     neon: () => sql, BLOCKING_STATUSES: ['scheduled', 'chargeable'],
+    requireInstructorScheduleReview: () => false, loadInstructorOccupiedTime: async () => null, reviewedBusyBlocks: () => [],
     isLessonTypeOffered: () => true, loadInstructorScheduleWarnings: async () => [],
     generateToken: () => 'test-token',
     calcOfferLessonPrice: async () => ({ pricePence: 5000, discountPct: 0 }),

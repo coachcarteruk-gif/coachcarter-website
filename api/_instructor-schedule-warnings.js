@@ -42,10 +42,13 @@ function buildInstructorScheduleWarnings({
     || weeklyWindows.some(window => windowCoversSlot(window, startMinutes, endMinutes));
   const warnings = [];
 
-  if (busyBlocks.some(block => windowOverlapsSlot(block, startMinutes, endMinutes))) {
+  const overlappingBusy = busyBlocks.filter(block => windowOverlapsSlot(block, startMinutes, endMinutes));
+  if (overlappingBusy.length) {
     warnings.push({
       code: 'BUSY_BLOCK',
-      message: 'This time overlaps a busy block on the instructor calendar.',
+      message: 'This time overlaps busy blocks: ' + overlappingBusy.map(block =>
+        String(block.start_time).slice(0, 5) + '–' + String(block.end_time).slice(0, 5)).join(', ') + '.',
+      blocks: normaliseBusyBlocks(overlappingBusy),
     });
   }
 
@@ -104,13 +107,14 @@ async function loadInstructorScheduleWarnings(sql, {
         AND active = true
     `,
     sql`
-      SELECT start_time::text AS start_time, end_time::text AS end_time
+      SELECT id, start_time::text AS start_time, end_time::text AS end_time
       FROM instructor_busy_blocks
       WHERE instructor_id = ${instructorId}
         AND school_id = ${schoolId}
         AND block_date = ${scheduledDate}::date
         AND start_time < ${endTime}::time
         AND end_time > ${startTime}::time
+      ORDER BY start_time, id
     `,
     sql`
       SELECT id
@@ -147,6 +151,78 @@ async function loadInstructorScheduleWarnings(sql, {
     blackoutDates,
     externalEvents,
   });
+}
+
+function normaliseBusyBlocks(blocks = []) {
+  return blocks.map(block => ({
+    id: Number(block.id),
+    start_time: String(block.start_time).length === 5 ? block.start_time + ':00' : String(block.start_time),
+    end_time: String(block.end_time).length === 5 ? block.end_time + ':00' : String(block.end_time),
+  })).sort((a, b) => a.id - b.id);
+}
+
+function reviewedBusyBlocks(warnings) {
+  return warnings.find(warning => warning.code === 'BUSY_BLOCK')?.blocks || [];
+}
+
+function busyBlocksWereReviewed(current, reviewed = []) {
+  return normaliseBusyBlocks(current).every(block => reviewed.some(approved =>
+    approved.id === block.id && approved.start_time === block.start_time && approved.end_time === block.end_time));
+}
+
+// Full overlaps, not just identical start times. No override applies to occupied
+// lessons or held slots; broadcast siblings intentionally share one offered slot.
+async function loadInstructorOccupiedTime(sql, { instructorId, schoolId, scheduledDate, startTime, endTime, broadcast = false }) {
+  const [conflict] = await sql`
+    SELECT source FROM (
+      SELECT 'an existing lesson' AS source FROM lesson_bookings
+       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+         AND scheduled_date = ${scheduledDate}::date AND status = ANY(${BLOCKING_STATUSES}::text[])
+         AND slot_released_at IS NULL AND start_time < ${endTime}::time AND end_time > ${startTime}::time
+      UNION ALL
+      SELECT 'a pending offer' FROM lesson_offers
+       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+         AND scheduled_date = ${scheduledDate}::date AND status = 'pending' AND expires_at > NOW()
+         AND NOT (${broadcast} AND kind = 'broadcast'
+           AND start_time = ${startTime}::time AND end_time = ${endTime}::time)
+         AND start_time < ${endTime}::time AND end_time > ${startTime}::time
+      UNION ALL
+      SELECT 'a pending lesson request' FROM lesson_requests
+       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+         AND scheduled_date = ${scheduledDate}::date AND status = 'pending' AND expires_at > NOW()
+         AND start_time < ${endTime}::time AND end_time > ${startTime}::time
+      UNION ALL
+      SELECT 'a checkout reservation' FROM slot_reservations
+       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+         AND scheduled_date = ${scheduledDate}::date AND expires_at > NOW()
+         AND start_time < ${endTime}::time AND end_time > ${startTime}::time
+      UNION ALL
+      SELECT 'a recurring slot hold' FROM recurring_slot_block_items
+       WHERE school_id = ${schoolId} AND instructor_id = ${instructorId}
+         AND scheduled_date = ${scheduledDate}::date AND status IN ('held', 'booked')
+         AND start_time < ${endTime}::time AND end_time > ${startTime}::time
+    ) occupied LIMIT 1
+  `;
+  return conflict;
+}
+
+// New bookings and fixed offers can override normal hours and specific busy
+// blocks. Extensions retain their narrower normal-hours-only policy below.
+function requireInstructorScheduleReview(req, res, warnings, proposal) {
+  if (!warnings.length) return false;
+  if (warnings.some(warning => !['OUTSIDE_NORMAL_HOURS', 'BUSY_BLOCK'].includes(warning.code))) {
+    sendScheduleUnavailable(res, warnings);
+    return true;
+  }
+  const token = createHash('sha256').update(JSON.stringify({ proposal, warnings })).digest('hex');
+  if (req.body?.schedule_override_token === token) return false;
+  res.status(409).json({
+    code: 'SCHEDULE_OVERRIDE_REQUIRED',
+    error: warnings.map(warning => warning.message).join(' '),
+    warnings,
+    schedule_override_token: token,
+  });
+  return true;
 }
 
 function sendScheduleUnavailable(res, warnings) {
@@ -251,6 +327,11 @@ module.exports = {
   loadInstructorScheduleWarnings,
   sendScheduleUnavailable,
   requireNormalHoursReview,
+  requireInstructorScheduleReview,
+  loadInstructorOccupiedTime,
+  normaliseBusyBlocks,
+  reviewedBusyBlocks,
+  busyBlocksWereReviewed,
   availabilityChangeConflicts,
   loadAvailabilityChangeReview,
   requireAvailabilityChangeReview,

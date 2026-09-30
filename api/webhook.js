@@ -3442,6 +3442,14 @@ async function findPencilledFulfilmentConflict(client, {
        SELECT 'busy_block' FROM instructor_busy_blocks
         WHERE school_id=$1 AND instructor_id=$2 AND block_date=$3::date
           AND start_time < $5::time AND end_time > $4::time
+          AND NOT EXISTS (
+            SELECT 1 FROM lesson_offers approved
+             WHERE approved.id=$6 AND approved.school_id=$1 AND approved.instructor_id=$2
+               AND approved.scheduled_date=$3::date AND approved.start_time=$4::time AND approved.end_time=$5::time
+               AND approved.busy_block_overrides @> jsonb_build_array(jsonb_build_object(
+                 'id', instructor_busy_blocks.id, 'start_time', instructor_busy_blocks.start_time::text,
+                 'end_time', instructor_busy_blocks.end_time::text))
+          )
      ) conflicts LIMIT 1`,
     [schoolId, instructorId, scheduledDate, startTime, endTime, offerId, BLOCKING_STATUSES]
   );

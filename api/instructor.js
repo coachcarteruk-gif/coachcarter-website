@@ -92,6 +92,10 @@ const {
   loadInstructorScheduleWarnings,
   sendScheduleUnavailable,
   requireNormalHoursReview,
+  requireInstructorScheduleReview,
+  loadInstructorOccupiedTime,
+  reviewedBusyBlocks,
+  busyBlocksWereReviewed,
   loadAvailabilityChangeReview,
   requireAvailabilityChangeReview,
 } = require('./_instructor-schedule-warnings');
@@ -3191,6 +3195,7 @@ async function createInstructorCreditBookingTransaction({
   dropoffAddress,
   sourceTypes = CREDIT_BOOKING_SOURCE_TYPES,
   blockingStatuses = BLOCKING_STATUSES,
+  busyBlockOverrides = [],
 }) {
   try {
     return await withNeonTransaction(connectionString, async client => {
@@ -3249,17 +3254,16 @@ async function createInstructorCreditBookingTransaction({
       }
 
       const busyBlockConflict = await client.query(
-        `SELECT id
+        `SELECT id, start_time::text, end_time::text
            FROM instructor_busy_blocks
           WHERE instructor_id = $1
             AND school_id = $2
             AND block_date = $3::date
             AND start_time < $5::time
-            AND end_time > $4::time
-          LIMIT 1`,
+            AND end_time > $4::time`,
         [instructorId, schoolId, scheduledDate, startTime, endTime]
       );
-      if (busyBlockConflict.rowCount > 0) {
+      if (!busyBlocksWereReviewed(busyBlockConflict.rows, busyBlockOverrides)) {
         abortInstructorBookingTransaction({
           ok: false,
           code: SCHEDULE_UNAVAILABLE,
@@ -3550,19 +3554,22 @@ async function handleCreateBooking(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    if (payMethod === 'flexible_package') {
-      if (requireNormalHoursReview(req, res, scheduleWarnings, {
-        schoolId, instructorId: instructor.id, learnerId: learner_id,
-        scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
-        lessonTypeId: lessonType.id, transmissionType: bookingTransmissionType,
-      }, 'This lesson is outside your normal or one-off availability. You can override your normal hours for this flexible-package lesson.')) return;
-    } else if (scheduleWarnings.length > 0) {
-      return sendScheduleUnavailable(res, scheduleWarnings);
-    }
+    const occupied = await loadInstructorOccupiedTime(sql, {
+      instructorId: instructor.id, schoolId, scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+    });
+    if (occupied) return res.status(409).json({ code: SCHEDULE_UNAVAILABLE,
+      error: 'This time overlaps ' + occupied.source + '. Choose another time.' });
+    if (requireInstructorScheduleReview(req, res, scheduleWarnings, {
+      action: 'create-booking', schoolId, instructorId: instructor.id, learnerId: learner_id,
+      scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+      lessonTypeId: lessonType.id, transmissionType: bookingTransmissionType, paymentMethod: payMethod,
+    })) return;
+    const busyBlockOverrides = reviewedBusyBlocks(scheduleWarnings);
 
     if (payMethod === 'flexible_package') {
       const booked = await bookFlexiblePackageSlotTransaction({
         createdBy: 'instructor',
+        busyBlockOverrides,
         connectionString: process.env.POSTGRES_URL,
         learnerId: learner_id,
         instructorId: instructor.id,
@@ -3584,6 +3591,9 @@ async function handleCreateBooking(req, res) {
           return res.status(402).json({
             error: `${learner.name} doesn't have enough flexible package minutes. They need ${durationStr} but have ${(remainingMinutes / 60).toFixed(1)} hrs. Use "Cash" or "Free" instead.`,
           });
+        }
+        if (booked.code === SCHEDULE_UNAVAILABLE) {
+          return sendScheduleUnavailable(res, booked.warnings || []);
         }
         if (booked.code === 'SLOTS_UNAVAILABLE') {
           return res.status(409).json({ error: 'That slot is already booked. Please choose another time.' });
@@ -3612,6 +3622,7 @@ async function handleCreateBooking(req, res) {
       booking = booked.booking;
     } else if (payMethod === 'credit') {
       const booked = await createInstructorCreditBookingTransaction({
+        busyBlockOverrides,
         connectionString: process.env.POSTGRES_URL,
         learnerId: learner_id,
         instructorId: instructor.id,
@@ -5208,8 +5219,19 @@ async function handleCreateOffer(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    if (scheduleWarnings.length > 0) {
-      return sendScheduleUnavailable(res, scheduleWarnings);
+    if (!isFlexible) {
+      const occupied = await loadInstructorOccupiedTime(sql, {
+        instructorId: instructor.id, schoolId, scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+      });
+      if (occupied) return res.status(409).json({ code: SCHEDULE_UNAVAILABLE,
+        error: 'This time overlaps ' + occupied.source + '. Choose another time.' });
+      if (requireInstructorScheduleReview(req, res, scheduleWarnings, {
+        action: 'create-offer', schoolId, instructorId: instructor.id,
+        learnerId: learnerIdClean, learnerEmail: learner_email || null, learnerName: learner_name || null,
+        scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+        lessonTypeId: lessonType.id, price: offer_price_pence, discount: discountPctClean,
+        repeatWeeks: maxRepeatWeeksClean, pencilled, expiryHours: req.body?.pencilled_expiry_hours,
+      })) return;
     }
 
     let existingLearner = null;
@@ -5280,6 +5302,7 @@ async function handleCreateOffer(req, res) {
           learnerId: existingLearner.id, scheduledDate: scheduled_date, startTime: start_time,
           endTime: end_time, lessonTypeId: lessonType.id, offerPricePence: offerPricing.pricePence,
           expiresAt: policy.expiresAt, schoolId,
+          busyBlockOverrides: reviewedBusyBlocks(scheduleWarnings),
         },
       });
     } else {
@@ -6174,9 +6197,18 @@ async function handleCreateBroadcastOffer(req, res) {
       startTime: start_time,
       endTime: end_time,
     });
-    if (scheduleWarnings.length > 0) {
-      return sendScheduleUnavailable(res, scheduleWarnings);
-    }
+    const occupied = await loadInstructorOccupiedTime(sql, {
+      instructorId: instructor.id, schoolId, scheduledDate: scheduled_date,
+      startTime: start_time, endTime: end_time, broadcast: true,
+    });
+    if (occupied) return res.status(409).json({ code: SCHEDULE_UNAVAILABLE,
+      error: 'This time overlaps ' + occupied.source + '. Choose another time.' });
+    if (requireInstructorScheduleReview(req, res, scheduleWarnings, {
+      action: 'create-broadcast-offer', schoolId, instructorId: instructor.id,
+      learnerIds: [...new Set(learner_ids)].sort((a, b) => a - b),
+      scheduledDate: scheduled_date, startTime: start_time, endTime: end_time,
+      lessonTypeId: lessonType.id, discount: dp,
+    })) return;
 
     // Verify each learner is in this school AND has availability covering the slot.
     // We trust the frontend less than the DB — re-validate so a malicious client

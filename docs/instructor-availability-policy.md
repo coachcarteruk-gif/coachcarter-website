@@ -4,28 +4,47 @@
 
 ## Booking rules
 
-The complete lesson must fit one recurring or date-specific available window.
+Without an explicitly confirmed exception below, the complete lesson must fit
+one recurring or date-specific available window.
 A lesson cannot span a gap between windows. Explicit date-specific availability
-may open a blackout date, matching the existing learner booking policy. Busy
-blocks and connected-calendar events still block that time.
+may open a blackout date, matching the existing learner booking policy. Connected
+calendar events remain blocking. Busy blocks require explicit review below.
 
-Instructor-created cash, credit and free bookings, fixed offers,
-broadcast offers and instructor edits return
-`409 SCHEDULE_UNAVAILABLE` for schedule conflicts. Legacy `availability_override`
-and `force` inputs do not bypass these checks. Upcoming admin time edits use the
-same guard; retrospective corrections retain their existing policy.
+30 September 2026 — prepared on `codex/instructor-availability-override`, pending
+migration and deployment. New instructor-created cash, credit, free and Flexible
+Hours bookings, fixed offers (including pencilled offers) and manual broadcasts
+may override normal hours and busy blocks after explicit confirmation. The server
+returns `409 SCHEDULE_OVERRIDE_REQUIRED`, warnings with the busy-block times and
+`schedule_override_token`. The client shows the date/time and conflict, and asks
+whether to book or send anyway. Cancel leaves everything unsaved and sends no
+notifications. The exact proposal is retried only after confirmation.
 
-Instructor-created Flexible Hours bookings have one exception (23 September
-2026): an outside-normal-hours warning returns `409 NORMAL_HOURS_OVERRIDE_REQUIRED`
-and a `normal_hours_override_token`. The booking screen explains the exception
-and asks the instructor to confirm. Cancel leaves the lesson unbooked; confirm
-resubmits the same lesson with that token. The token binds the school, instructor,
-learner, date, full time range, lesson type and transmission. A changed proposal
-requires fresh confirmation. All schedule checks run again on the retry; busy
-blocks, blackouts and external events cannot be bypassed. Normal availability is
-not edited, and package funding still uses the existing transaction.
+The token binds the authenticated school/instructor, action, recipients, date,
+full time range, lesson type and relevant payment/price/transmission options,
+plus the exact conflicting busy-block identities and times. Changed details or
+blocks require fresh review. Normal availability and busy blocks remain intact.
+Blackouts, connected-calendar events, existing lessons, pending requests/offers,
+checkout reservations and recurring holds remain blocking. Broadcast siblings
+may share the same full slot, preserving their first-to-accept contract.
+Legacy `availability_override` and `force` never grant an override.
 
-Lesson extension requests use the same warning and confirmation for normal-hours
+Credit and Flexible Hours transactions recheck busy-block snapshots before
+funding. Pencilled offers persist those snapshots in
+`lesson_offers.busy_block_overrides`; their creation transaction, database guard
+and payment fulfilment honour only the exact acknowledged blocks. New or changed
+blocks remain blocking. Migration `075_instructor_busy_block_overrides.sql` is
+required before deploying this application change. It adds an empty-default JSON
+snapshot and replaces the existing pencilled guard without changing its other
+conflict rules. Historical offers are not granted an exception. No production
+migration or deployment was performed by this task. The separately developed
+booking-pilot migration also uses 075 locally; reconcile migration numbering and
+guard changes if these independent branches are combined.
+
+Instructor time edits and upcoming admin time edits retain their existing
+`409 SCHEDULE_UNAVAILABLE` policy. Historical corrections are unchanged.
+
+Lesson extension requests retain their normal-hours-only warning and confirmation
+(`NORMAL_HOURS_OVERRIDE_REQUIRED` and `normal_hours_override_token`) for
 exceptions, including paid, free and Flexible Hours extensions. The acknowledgement
 binds the original booking, date, old/new finish, added minutes, funding method and
 explicit price to the authenticated school/instructor. Real clashes are checked
@@ -34,9 +53,8 @@ The learner must still accept the extension; Flexible Hours acceptance honours t
 instructor-agreed hours while rechecking busy blocks, blackouts, external events
 and occupied time. Funding, pricing and payment settlement are unchanged.
 
-For other intentional exceptions, the instructor first adds one-off availability
-from their calendar or changes weekly hours. A conflicting busy block must be
-removed or adjusted separately.
+For exceptions outside the new-booking and fixed-offer paths, the instructor
+first adjusts availability or the conflicting block.
 
 ## Existing lessons and availability changes
 
@@ -66,12 +84,24 @@ explicitly records `created_by='instructor'` on the instructor route; the learne
 route retains `learner`. Existing creator labels and historic override audits
 are not rewritten.
 
-No schema migration is required. Existing bookings, in-flight payment settlement,
+The new pencilled busy-block snapshot requires migration 075. Existing bookings, in-flight payment settlement,
 credit minutes, FIFO attribution, refunds and payouts retain their contracts.
 This change governs new instructor scheduling actions, not retrospective
 revalidation or cancellation of already agreed lessons/offers.
 
 ## Verification
+
+30 September 2026: 117 focused checks passed across booking/offer routes,
+confirmation and cancellation in Chromium, pricing, pencilled Checkout retries,
+signed webhook routing and fulfilment, and availability rules. The new embedded
+PostgreSQL test executes migration 075 twice, the real creation guard and
+payment-time conflict SQL. It covers exact busy-block snapshots, changed/new
+blocks, school isolation and non-overridable occupied time. It is a
+single-connection test, not a concurrency certification. Syntax, encoding and
+migration-manifest checks passed. No live bookings, messages or payments were
+created. The booking-pilot checkout and server were left untouched.
+
+Historical 21 September verification:
 
 64 focused Playwright tests passed across availability enforcement, one-off
 availability, schedule checks, weekly transmission, busy blocks, payment links
