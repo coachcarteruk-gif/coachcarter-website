@@ -1622,3 +1622,6 @@ Emits `payout-{slug}-{week}.png` and the matching `.json`, so a disputed figure
 traces to lesson ids without regenerating anything. Pay weeks run **midday Friday
 to midday Friday, Europe/London** — a lesson at 11:00 Friday belongs to the
 closing week, one at 13:00 to the opening week.
+
+
+Flexible Hours pending refunds (1 October 2026, pending deployment): record-refund-evidence accepts pending/succeeded and commits unused hours immediately. record-refund-status records the subsequent outcome without another balance change. Admin overview returns provider_status per reduction. No Stripe call or migration. See docs/flexible-hours-packages-runbook.md.

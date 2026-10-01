@@ -2816,3 +2816,6 @@ Added an audited atomic conversion for approved offline legacy balances, exact m
 ### 2026-09-07 — Restore Flexible Hours balance view permissions
 
 Repaired the migration-058 ACL regression that prevented runtime balance reads. Added migration 059, rerun protection and an inherited-role permission regression test; validated real balance-handler responses with production runtime permissions.
+
+
+1 October 2026 — Flexible Hours pending-refund recording implemented, pending deployment. Admins can remove hours as soon as a Stripe refund is initiated and later record its outcome without deducting twice. Failed/canceled refunds remain unavailable for operator review. No migration. See docs/flexible-hours-packages-runbook.md.
