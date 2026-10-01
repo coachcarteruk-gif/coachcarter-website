@@ -871,3 +871,6 @@ each amount). No new endpoint shape is needed — it follows the existing
 **Do not** reimplement the arithmetic in the app. Truncate-once-at-the-end and
 never-store-a-derived-rate are the rules the whole exercise exists to enforce;
 a second implementation is a second place for them to drift.
+
+
+API addition: Flexible Hours `record-refund-evidence` accepts `provider_status` pending/succeeded; `record-refund-status` appends a terminal outcome to a pending reduction. Shared server-side balance removal is immediate and idempotent; native clients can use the same endpoints. No schema migration. See docs/flexible-hours-packages-runbook.md.

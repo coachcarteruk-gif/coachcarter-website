@@ -523,7 +523,13 @@ async function handleAdminOverview(req, res) {
       SELECT reduction.id, reduction.learner_id, reduction.source_id, reduction.units_reduced,
              reduction.rate_pence_per_unit, reduction.gross_refund_pence,
              reduction.stripe_fee_deduction_pence, reduction.learner_refund_pence,
-             reduction.provider_refund_id, reduction.evidence_reference, reduction.created_at
+             reduction.provider_refund_id, reduction.evidence_reference, reduction.created_at,
+             COALESCE((SELECT event.detail->>'provider_status'
+               FROM flexible_package_state_events event
+               WHERE event.school_id = reduction.school_id AND event.source_id = reduction.source_id
+                 AND event.event_type IN ('manual_refund_evidence_recorded','manual_refund_status_recorded')
+                 AND event.detail->>'reduction_id' = reduction.id::text
+               ORDER BY event.id DESC LIMIT 1), 'succeeded') AS provider_status
         FROM flexible_package_source_reductions reduction
        WHERE reduction.school_id = ${scope.schoolId}
        ORDER BY reduction.created_at DESC, reduction.id DESC LIMIT 200
@@ -612,19 +618,31 @@ async function handleRecordRefundEvidence(req, res) {
   const sourceId = Number(req.body?.source_id);
   const units = Number(req.body?.units);
   const providerRefundId = String(req.body?.provider_refund_id || '').trim();
+  // Older clients only recorded completed refunds. New clients explicitly record
+  // the observed provider status; a pending refund commits the same hours once.
+  const providerStatus = req.body?.provider_status ?? 'succeeded';
   const evidenceReference = String(req.body?.evidence_reference || '').trim();
   const reason = String(req.body?.reason || '').trim();
   const requestIp = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
   if (!Number.isSafeInteger(sourceId) || sourceId <= 0 || !Number.isSafeInteger(units) || units <= 0) {
     return errorResponse(res, 400, 'INVALID_REFUND_REDUCTION', 'A source and positive whole number of 30-minute units are required');
   }
-  if (!/^re_[A-Za-z0-9_]+$/.test(providerRefundId)
+  if (!['pending', 'succeeded'].includes(providerStatus)
+      || !/^re_[A-Za-z0-9_]+$/.test(providerRefundId)
       || evidenceReference.length < 2 || evidenceReference.length > 500
       || reason.length < 2 || reason.length > 1000) {
     return errorResponse(res, 400, 'INVALID_REFUND_EVIDENCE', 'Valid provider refund evidence and an audit reason are required');
   }
   try {
     const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      // Match booking's learner -> source lock order, then read balances in a
+      // fresh statement after any competing booking/refund has committed.
+      await client.query(
+        `SELECT learner.id FROM learner_users learner JOIN flexible_package_sources source
+           ON source.learner_id=learner.id AND source.school_id=learner.school_id
+          WHERE source.id=$1 AND source.school_id=$2 FOR UPDATE OF learner`, [sourceId, scope.schoolId]
+      );
+      await client.query(`SELECT id FROM flexible_package_sources WHERE id=$1 AND school_id=$2 FOR UPDATE`, [sourceId, scope.schoolId]);
       const sourceResult = await client.query(
         `SELECT source.id, source.learner_id, source.rate_pence_per_unit,
                 source.initial_units, source.original_value_pence,
@@ -657,6 +675,18 @@ async function handleRecordRefundEvidence(req, res) {
       if (!source.stripe_payment_intent_id) {
         return { ok: false, status: 409, code: 'ORIGINAL_PAYMENT_IDENTITY_MISSING', message: 'The original payment identity requires reconciliation before refund evidence can be recorded' };
       }
+      const previous = await client.query(
+        `SELECT id, source_id, units_reduced, learner_refund_pence, provider_refund_id, created_at
+           FROM flexible_package_source_reductions WHERE school_id=$1 AND provider_refund_id=$2`,
+        [scope.schoolId, providerRefundId]
+      );
+      if (previous.rows[0]) {
+        const recorded = previous.rows[0];
+        if (Number(recorded.source_id) !== sourceId || Number(recorded.units_reduced) !== units) {
+          return { ok: false, status: 409, code: 'REFUND_EVIDENCE_CONFLICT', message: 'This refund is already recorded against different hours or a different source' };
+        }
+        return { ok: true, reused: true, reduction: recorded };
+      }
       if (units > Number(source.remaining_units)) {
         return { ok: false, status: 409, code: 'REFUND_EXCEEDS_UNUSED_VALUE', message: 'Refund evidence exceeds the unused units on this original payment' };
       }
@@ -684,6 +714,7 @@ async function handleRecordRefundEvidence(req, res) {
           unit_minutes: 30,
           learner_refund_pence: gross,
           provider_refund_id: providerRefundId,
+          provider_status: providerStatus,
           original_payment_intent_id: source.stripe_payment_intent_id,
           provider_call_made_by_application: false,
           reason,
@@ -698,11 +729,12 @@ async function handleRecordRefundEvidence(req, res) {
           units,
           learner_refund_pence: gross,
           provider_refund_id: providerRefundId,
+          provider_status: providerStatus,
           reason,
           provider_call_made_by_application: false,
         }), requestIp, scope.schoolId]
       );
-      return { ok: true, reduction: inserted.rows[0] };
+      return { ok: true, reused: false, reduction: inserted.rows[0], provider_status: providerStatus };
     });
     if (!result.ok) return errorResponse(res, result.status, result.code, result.message);
     return res.status(201).json({ ...result, provider_call_made_by_application: false });
@@ -710,6 +742,57 @@ async function handleRecordRefundEvidence(req, res) {
     if (error?.code === '23505') return errorResponse(res, 409, 'REFUND_EVIDENCE_ALREADY_RECORDED', 'This provider refund identity has already been recorded');
     reportError('/api/flexible-packages?action=record-refund-evidence', error);
     return errorResponse(res, 500, 'SERVER_ERROR', 'Failed to record Flexible Hours refund evidence');
+  }
+}
+
+async function handleRecordRefundStatus(req, res) {
+  if (req.method !== 'POST') return errorResponse(res, 405, 'METHOD_NOT_ALLOWED', 'POST required');
+  const scope = adminScope(req, res);
+  if (!scope) return;
+  const reductionId = Number(req.body?.reduction_id);
+  const providerStatus = req.body?.provider_status;
+  if (!Number.isSafeInteger(reductionId) || reductionId <= 0
+      || !['succeeded', 'failed', 'canceled'].includes(providerStatus)) {
+    return errorResponse(res, 400, 'INVALID_REFUND_STATUS', 'A recorded refund and its current Stripe outcome are required');
+  }
+  try {
+    const result = await withNeonTransaction(process.env.POSTGRES_URL, async client => {
+      const { rows: [reduction] } = await client.query(
+        `SELECT id, learner_id, source_id, provider_refund_id FROM flexible_package_source_reductions
+          WHERE id=$1 AND school_id=$2 FOR UPDATE`, [reductionId, scope.schoolId]
+      );
+      if (!reduction) return { ok: false, status: 404, code: 'REFUND_NOT_FOUND', message: 'Recorded refund not found' };
+      const { rows: [event] } = await client.query(
+        `SELECT detail FROM flexible_package_state_events
+          WHERE school_id=$1 AND source_id=$2
+            AND event_type IN ('manual_refund_evidence_recorded','manual_refund_status_recorded')
+            AND detail->>'reduction_id'=$3 ORDER BY id DESC LIMIT 1`,
+        [scope.schoolId, reduction.source_id, String(reductionId)]
+      );
+      const previousStatus = event?.detail?.provider_status || 'succeeded';
+      if (previousStatus === providerStatus) return { ok: true, reused: true, provider_status: providerStatus };
+      if (previousStatus !== 'pending') return { ok: false, status: 409, code: 'REFUND_STATUS_REVIEW_REQUIRED', message: 'This refund already has a final recorded outcome; review the evidence before any correction' };
+      const detail = JSON.stringify({ reduction_id: reduction.id, provider_refund_id: reduction.provider_refund_id,
+        previous_status: previousStatus, provider_status: providerStatus, provider_call_made_by_application: false });
+      await client.query(
+        `INSERT INTO flexible_package_state_events (school_id,learner_id,event_type,source_id,detail)
+         VALUES ($1,$2,'manual_refund_status_recorded',$3,$4::jsonb)`,
+        [scope.schoolId, reduction.learner_id, reduction.source_id, detail]
+      );
+      await client.query(
+        `INSERT INTO audit_log (admin_id,admin_email,action,target_type,target_id,details,ip_address,school_id)
+         VALUES ($1,$2,'package.flexible_refund_status_recorded','flexible_package_source',$3,$4::jsonb,$5,$6)`,
+        [scope.admin.id, scope.admin.email || null, String(reduction.source_id), detail,
+          String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown', scope.schoolId]
+      );
+      // Status evidence never deducts twice or silently restores spendable hours.
+      return { ok: true, reused: false, provider_status: providerStatus };
+    });
+    if (!result.ok) return errorResponse(res, result.status, result.code, result.message);
+    return res.json({ ...result, provider_call_made_by_application: false });
+  } catch (error) {
+    reportError('/api/flexible-packages?action=record-refund-status', error);
+    return errorResponse(res, 500, 'SERVER_ERROR', 'Failed to record Flexible Hours refund status');
   }
 }
 
@@ -766,6 +849,7 @@ module.exports = async function handler(req, res) {
   if (action === 'record-bank-purchase') return handleRecordBankPurchase(req, res);
   if (action === 'refund-preview') return handleRefundPreview(req, res);
   if (action === 'record-refund-evidence') return handleRecordRefundEvidence(req, res);
+  if (action === 'record-refund-status') return handleRecordRefundStatus(req, res);
   return errorResponse(res, 400, 'UNKNOWN_ACTION', 'Unknown Flexible Hours action');
 };
 

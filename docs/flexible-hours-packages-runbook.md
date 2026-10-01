@@ -130,7 +130,16 @@ The code rejects absent identities and known shared/test identities. It omits `p
 
 ## Refund operation
 
-The application never calls `stripe.refunds.create` for Flexible Hours. An operator previews unused source value, issues each refund manually to that source's original PaymentIntent/payment method, then records its `re_...` identity, units, evidence reference and reason. The recorder rejects more units than remain and writes the source reduction, state event and audit row atomically. Never deduct the original Stripe fee from the learner.
+The application never calls `stripe.refunds.create` for Flexible Hours. Preview unused source value first, then initiate each refund manually against that source's original PaymentIntent/payment method. Never deduct the original Stripe fee from the learner.
+
+1 October 2026 implementation, pending deployment: **Admin → Learner Packages → Flexible Hours → Record original-method refund** accepts **Pending — bank processing** or **Succeeded**. Enter the actual Stripe `re_...` refund ID, 30-minute units, evidence reference and reason immediately after initiating the refund. Do not wait for the receiving bank: either status removes those units from the spendable balance in the same transaction as the immutable source reduction, state event and audit record. This commits hours to an initiated refund; it is not proof the bank has paid the learner. The separate provider status preserves that distinction. Amounts use remaining immutable source value; original processing fees remain absorbed.
+
+The existing learner/source locks serialize recording with booking. Identical retries reuse the reduction; a reused provider ID with different source/units is refused. Already allocated lesson hours cannot be removed through this recorder. Resolve eligible cancellations separately and refresh the unused balance first. Record each source against its own original payment.
+
+**Recorded refunds** remains visible when no hours are left. For a pending record, use **Record refund status** once Stripe shows Succeeded, Failed or Canceled. This appends audited evidence without another deduction or Stripe call. Failed/canceled outcomes stay unavailable for booking and require an operator review of repayment or a separately reviewed restoration; no automatic restoration or new refund is performed. Terminal outcome corrections require review. Provider status is manually recorded from Stripe, not polled or verified by this endpoint.
+
+No migration or feature activation is required. Existing completed records without status metadata retain their historical succeeded interpretation. Existing bank-transfer purchase restrictions remain: this recorder requires the original Stripe payment identity. New status events contain only refund identity/status and reuse the existing learner export, anonymisation and financial retention paths; do not enter personal bank details in evidence references.
+
 
 ## Monitoring and incident response
 
