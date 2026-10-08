@@ -1,0 +1,57 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { spawn } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
+const { chromium } = require('@playwright/test');
+test('browser journey, private links, admin guard, errors, mobile and keyboard', { timeout: 90000 }, async () => {
+  const child = spawn(process.execPath, [path.join(__dirname, 'server.cjs')], { env: { ...process.env, GIVEAWAY_TEST_RUN: 'true', GIVEAWAY_PREVIEW_PORT: '0' }, windowsHide: true });
+  let browser;
+  try {
+    const origin = await new Promise((resolve, reject) => { child.stdout.on('data', chunk => { const match = String(chunk).match(/http:\/\/127\.0\.0\.1:\d+/); if (match) resolve(match[0]); }); child.once('error', reject); child.once('exit', code => reject(Error('Preview exited ' + code))); });
+    browser = await chromium.launch({ headless: true, channel: 'msedge' });
+    const context = await browser.newContext({ viewport: { width: 1365, height: 1000 } });
+    const page = await context.newPage(), pageErrors = [], external = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('request', req => { if (!req.url().startsWith(origin)) external.push(req.url()); });
+    assert.equal((await context.request.get(origin + '/api/giveaway?action=review')).status(), 401);
+    assert.equal((await context.request.post(origin + '/api/giveaway?action=nominate', { data: {} })).status(), 403);
+    await page.goto(origin); await page.waitForFunction(() => document.querySelector('[data-deadline]').textContent.includes('October'));
+    await page.keyboard.press('Tab'); assert.equal(await page.locator('.skip').evaluate(el => el === document.activeElement), true);
+    const shots = path.resolve(__dirname, '../../tmp/giveaway-screenshots'); fs.mkdirSync(shots, { recursive: true });
+    await page.screenshot({ path: path.join(shots, 'nomination-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 320, height: 900 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: path.join(shots, 'nomination-mobile.png'), fullPage: true });
+    await page.getByRole('button', { name: /Send their nomination/ }).click();
+    assert.match(await page.locator('#errors').innerText(), /check/); assert.equal(await page.locator('#errors').evaluate(el => el === document.activeElement), true);
+    for (const [name, value] of Object.entries({ nominee_name: 'Robin Example', nominee_phone: '07700900789', nominee_email: 'robin@example.test', nominator_name: 'Casey Example', nominator_phone: '07700900654', nominator_email: 'casey@example.test', reason: 'Robin helps everyone around them and driving would mean so much.' })) await page.locator('[name=' + name + ']').fill(value);
+    await page.locator('#permission').check();
+    // A transient response preserves all typed answers for a safe retry.
+    await page.route('**/api/giveaway?action=nominate', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Please try again.' }) }), { times: 1 });
+    await page.getByRole('button', { name: /Send their nomination/ }).click(); await page.waitForFunction(() => document.querySelector('#errors').textContent === 'Please try again.');
+    assert.equal(await page.locator('#nominee_name').inputValue(), 'Robin Example');
+    await page.getByRole('button', { name: /Send their nomination/ }).click(); await page.getByText('A lovely thing to do.').waitFor();
+    await page.goto(origin + '/review'); await page.getByRole('button', { name: 'Open fictional review session' }).click(); await page.locator('#desk:not([hidden])').waitFor();
+    const invitations = page.getByRole('link', { name: /See my nomination and apply/ }); assert.equal(await invitations.count(), 2);
+    const link = await invitations.last().getAttribute('href'); await invitations.last().click(); await page.locator('#application:not([hidden])').waitFor();
+    assert.equal(new URL(page.url()).hash, ''); assert.match(await page.locator('#nominated-by').innerText(), /Casey Example/);
+    assert.equal(await page.locator('#name').inputValue(), 'Robin Example'); assert.equal(await page.locator('input[type=checkbox]:checked').count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: path.join(shots, 'application-mobile.png'), fullPage: true });
+    await page.locator('#meaning').fill('Being able to travel independently would open up work opportunities.'); await page.locator('#hours').fill('0');
+    await page.locator('[name=test_booked][value=yes]').check(); await page.locator('#test-details:not([hidden])').waitFor();
+    await page.locator('#test_date').fill('2026-12-03'); await page.locator('#test_time').fill('10:15'); await page.locator('#test_location').fill('Example Test Centre');
+    await page.locator('[name=practice_car][value=no]').check(); await page.locator('#address').fill('1 Fictional Lane'); await page.locator('#postcode').fill('SW1A 1AA'); await page.locator('#employment').selectOption('prefer-not-to-say'); await page.locator('#contact_confirmed').check();
+    await page.getByRole('button', { name: /Send my application/ }).click(); await page.getByText('You’re all done.').waitFor();
+    await page.reload(); await page.getByText('You’re all done.').waitFor();
+    await page.goto(origin + link); await page.getByText('You’re all done.').waitFor();
+    await page.getByRole('button', { name: 'Withdraw marketing permissions' }).click(); await page.getByText('Your marketing permissions have been withdrawn.').waitFor();
+    await page.goto(origin + '/review'); await page.getByText(/2 nomination\(s\)/).waitFor(); await page.locator('details').last().locator('summary').click();
+    assert.match(await page.locator('details').last().innerText(), /Example Test Centre/);
+    await page.setViewportSize({ width: 1365, height: 1000 }); await page.screenshot({ path: path.join(shots, 'review-desktop.png'), fullPage: true });
+    await page.goto(origin + '/apply#invalid'); await page.getByText('We can’t open this invitation.').waitFor(); assert.equal(await page.locator('#application').isVisible(), false);
+    assert.deepEqual(pageErrors, []); assert.deepEqual(external, []);
+    console.log('Verified: full browser journey; private association; admin/session guard; exact form persistence; zero optional defaults; responsive 320px; keyboard error focus; no third-party requests.');
+  } finally { if (browser) await browser.close(); child.kill(); }
+});
