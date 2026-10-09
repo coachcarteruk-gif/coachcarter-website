@@ -1,5 +1,11 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+Giveaway admin integration actions (`record-invitation-request`, `run-integration`)
+are school-scoped authenticated JSON API calls; the browser only collects the
+evidence reference and displays results. Provider credentials, consent checks,
+queue claims and contact provisioning remain server-side. See the
+[integration contract](docs/giveaway-integration-runner.md) for native-client reuse.
+
 ## Giveaway persistence boundary (9 October 2026; not deployed)
 
 Privacy remains server-side: existing learner exports/deletion include giveaway

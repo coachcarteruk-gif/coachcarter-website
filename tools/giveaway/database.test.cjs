@@ -10,6 +10,7 @@ const { identity, digest } = require('./highlevel-sync.cjs');
 const { invitationHandler, resendTransport } = require('./invitation.cjs');
 const { createContactMatcher } = require('./contact-matching.cjs');
 const { createBoundedWorker } = require('./bounded-worker.cjs');
+const { runIntegration, runNextIntegration, resendPermission, requested } = require('./integration.cjs');
 const { subjectHash, privacyReady, exportGiveaway, learnerErasureQueries } = require('../../api/_giveaway-privacy');
 const nominate = () => ({ submission_key: crypto.randomUUID(), nominee_name: 'Alex', nominee_email: 'alex@example.test', nominee_phone: '07700900123',
   nominator_name: 'Jamie', nominator_email: 'jamie@example.test', nominator_phone: '07700900456', reason: 'Private nomination reason', relationship: 'Friend', permission: true });
@@ -41,6 +42,74 @@ function bounded(f, id, overrides={}) {
   return createBoundedWorker({db:f.db,vault:f.vault,config,invitationRequested:async()=>true,
     providerAllowsInvitation:async()=>true,...overrides});
 }
+
+test('composed SQL integration sends once, provisions suppressed contacts, syncs application and preserves withdrawal',async t=>{
+  const f=await setup(t),{row,token}=await f.seeded();
+  const contacts=[],records=new Map(),writes=[];let sends=0;
+  const config={enabled:true,schoolId:1,campaignKey:'test',nominationId:row.id,
+    invitation:{enabled:true,origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test',testOnly:true,testRecipient:'alex@example.test'},
+    crm:{enabled:true,environment:'rehearsal',locationId:'fake-location',reviewUrl:'https://example.test/review',associations:{nominee:{id:'fake-nominee',first:'contact'},nominator:{id:'fake-nominator',first:'contact'}}},
+    provisioning:{enabled:true,creationApproved:true,reviewReference:'fictional-review'}};
+  const providers={providerAllowsInvitation:async()=>true,invitationTransport:{send:async()=>{sends++;return {accepted:true,id:'fake-email'};}},
+    search:async({field,value})=>{const found=contacts.filter(c=>c[field]===value);return {contacts:found,total:found.length};},
+    crmTransport:{async request(method,path,body){
+      if(method!=='GET')writes.push({method,path,body});
+      if(method==='POST'&&path==='/contacts/'){const contact={...body,id:'contact-'+contacts.length};contacts.push(contact);return {contact};}
+      if(method==='GET'&&path.startsWith('/contacts/'))return {contact:contacts.find(c=>c.id===path.split('/')[2])};
+      if(method==='POST'&&path.endsWith('/records')){const record={...body,id:'record-1'};records.set(record.id,record);return {record};}
+      if(path.includes('/records/')){const record=records.get(path.split('/records/')[1].split('?')[0]);if(method==='PUT')record.properties=body.properties;return {record};}
+      if(method==='POST'&&path==='/associations/relations')return {id:'relation-'+writes.length};
+      throw Error('Unexpected provider operation');
+    }}};
+  const run=()=>runIntegration({...f,sql:tagged(f.pg),config,providers});
+  assert.equal((await runIntegration({...f,sql:tagged(f.pg),config:{...config,enabled:false},providers})).status,'disabled');
+  assert.equal((await runIntegration({...f,sql:tagged(f.pg),config:{...config,schoolId:2},providers})).status,'unavailable');
+  assert.equal(await f.db.recordInvitationRequest(2,'test',row.id,'request-case'),false);
+  assert.equal(await f.db.recordInvitationRequest(1,'test',row.id,'request-case'),true);
+  const first=await run();assert.equal(first.invitation.status,'succeeded');assert.equal(first.crm.status,'succeeded');
+  assert.equal(sends,1);assert.equal(contacts.length,2);assert.ok(contacts.every(c=>c.dnd===true));
+  await f.db.apply(1,token,apply());
+  for(let i=0;i<3;i++)await run();
+  assert.equal(sends,1);assert.equal(contacts.length,2);assert.equal(records.size,1);
+  assert.equal(records.get('record-1').properties.application_status,'submitted');
+  await f.db.withdraw(1,token);assert.equal(await f.db.invitationUnblocked(1,row.id),false);await run();
+  assert.ok(contacts.every(c=>c.dnd===true));assert.doesNotMatch(JSON.stringify(writes),/Private application reason|Private nomination reason|sealed_token|tags/);
+});
+
+test('composed provider ambiguity stops before any CRM lookup or mutation',async t=>{
+  const f=await setup(t),{row}=await f.seeded();await f.db.recordInvitationRequest(1,'test',row.id,'case-123');let sends=0,lookups=0;
+  const config={enabled:true,schoolId:1,campaignKey:'test',nominationId:row.id,invitation:{enabled:true,origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test'},crm:{enabled:true}};
+  const result=await runIntegration({...f,sql:tagged(f.pg),config,providers:{providerAllowsInvitation:async()=>true,invitationTransport:{send:async()=>{sends++;throw Error('timeout');}},search:async()=>{lookups++;},crmTransport:{}}});
+  assert.equal(result.status,'review_required');assert.equal(sends,1);assert.equal(lookups,0);
+  const held=await runIntegration({...f,sql:tagged(f.pg),config});assert.equal(held.status,'review_required');assert.equal(sends,1);
+});
+
+test('queue tick skips unrequested email and selects only the configured school and campaign',async t=>{
+ const f=await setup(t),{row}=await f.seeded();await f.db.nominate(2,'test',nominate());
+ const config={enabled:true,schoolId:1,campaignKey:'test',invitation:{enabled:true,origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test'}};
+ let sends=0;const options={...f,sql:tagged(f.pg),config,providers:{providerAllowsInvitation:async()=>true,invitationTransport:{send:async()=>{sends++;return {accepted:true,id:'tick-email'};}}}};
+ assert.equal((await runNextIntegration(options)).status,'idle');
+ await f.db.recordInvitationRequest(1,'test',row.id,'case-queue');
+ assert.equal((await runNextIntegration(options)).invitation.status,'succeeded');assert.equal(sends,1);
+ assert.equal((await runNextIntegration(options)).status,'idle');
+ assert.ok((await f.pg.query('SELECT state FROM giveaway_jobs WHERE school_id=2')).rows.every(j=>j.state==='pending'));
+});
+
+test('Resend permission rejects suppression, opt-out, malformed and failed lookup; evidence is identity-bound',async()=>{
+  const source={school_id:1,campaign_key:'test',id:crypto.randomUUID(),nomination:{nominee:{email:'alex@example.test'},permission:{accepted_at:new Date().toISOString()}}};
+  assert.equal(requested(source),false);
+  for(const responses of [
+    [{status:200,body:{email:'alex@example.test'}}],
+    [{status:404,body:{name:'not_found',message:'wrong resource'}}],
+    [{status:403,body:{}}],
+    [{status:404,body:{name:'not_found',message:'Suppression not found'}},{status:200,body:{email:'alex@example.test',unsubscribed:true}}]
+  ]){
+    let i=0;const check=resendPermission({apiKey:'fake',fetchImpl:async()=>{const r=responses[i++];return {status:r.status,json:async()=>r.body};}});
+    assert.equal(await check(source),false);
+  }
+  let n=0;assert.equal(await resendPermission({apiKey:'fake',fetchImpl:async()=>({status:404,json:async()=>({name:'not_found',message:++n===1?'Suppression not found':'Contact not found'})})})(source),true);
+  assert.equal(await resendPermission({apiKey:'fake',fetchImpl:async()=>{throw Error('timeout');}})(source),false);
+});
 
 test('bounded runner requires both activation gates and never claims another tenant/campaign/nomination',async t=>{
   const f=await setup(t),{row}=await f.seeded();

@@ -116,6 +116,20 @@ function createDatabase({ transaction, vault }) {
         return consent?.granted===true && !consent.withdrawn_at && blocked.length===0;
       });
     },
+    async recordInvitationRequest(school,campaign,id,reference) {
+      scope(school);
+      if(typeof reference!=='string'||!/^[A-Za-z0-9 _.-]{3,100}$/.test(reference))throw Error('Invalid evidence reference');
+      return transaction(async sql=>{
+        const [row]=await sql`SELECT nomination FROM giveaway_nominations WHERE school_id=${school} AND campaign_key=${campaign}
+          AND id=${id} AND erasure_requested_at IS NULL AND application IS NULL FOR UPDATE`;
+        if(!row)return false;
+        const evidence={school_id:school,campaign_key:campaign,nomination_id:id,
+          email_hash:subjectHash('email',row.nomination.nominee.email),requested_at:new Date().toISOString(),reference};
+        await sql`UPDATE giveaway_nominations SET nomination=jsonb_set(nomination,'{permission,invitation_request}',${JSON.stringify(evidence)}::jsonb)
+          WHERE school_id=${school} AND campaign_key=${campaign} AND id=${id}`;
+        return true;
+      });
+    },
     // Conservative invitation veto, not evidence that the nominee requested email.
     async invitationUnblocked(school, id) {
       scope(school); return transaction(async sql => {
@@ -237,7 +251,9 @@ function createDatabase({ transaction, vault }) {
                 WHERE school_id=${school} AND channel=${channel} AND subject_hash=${key}`;
               suppression.push(...entries);
             }
-            result.push({ role: 'nominee', id: row.id, contact: row.nomination.nominee, application: row.application, consents, suppression, provider_contacts:contactReferences(mappings,row.nomination.nominee,school) });
+            result.push({ role: 'nominee', id: row.id, contact: row.nomination.nominee, application: row.application,
+              invitation_request:row.nomination.permission?.invitation_request || null,
+              consents, suppression, provider_contacts:contactReferences(mappings,row.nomination.nominee,school) });
           }
           if (row.nomination.nominator.email === email) result.push({ role: 'nominator', id: row.id, contact: row.nomination.nominator,
             reason: row.nomination.reason, relationship: row.nomination.relationship, permission: row.nomination.permission, created_at: row.created_at, provider_contacts:contactReferences(mappings,row.nomination.nominator,school) });

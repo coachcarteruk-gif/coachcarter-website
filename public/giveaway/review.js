@@ -9,6 +9,35 @@ const element = (tag, text, className) => {
 function answer(parent, label, value) {
   parent.append(element('h3', label), element('p', value == null || value === '' ? 'Not provided' : String(value)));
 }
+async function integrationAction(action,body) {
+  const config=await fetch('/api/giveaway?action=config',{cache:'no-store'});
+  if(!config.ok)throw Error('Campaign unavailable.');
+  const csrf=decodeURIComponent(document.cookie.split('; ').find(c=>c.startsWith('cc_csrf='))?.slice(8)||'');
+  const response=await fetch('/api/giveaway?action='+action,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)});
+  const data=await response.json();if(!response.ok)throw Error(data.message||'Integration unavailable.');return data;
+}
+function integrationControls(row) {
+  const section=element('details');section.append(element('summary','Invitation and CRM controls'));
+  const status=element('p','Run once processes at most one invitation and one CRM update. Uncertain outcomes require investigation.','small');status.setAttribute('role','status');
+  if(!row.application) {
+    const label=element('label',null,'check'),check=document.createElement('input');check.type='checkbox';
+    label.append(check,element('span','The nominee specifically requested an invitation email; I have verified this separately from the nomination.'));
+    const refLabel=element('label','Evidence reference (case ID, no personal story)'),reference=document.createElement('input');reference.maxLength=100;reference.placeholder='Request evidence reference';refLabel.append(reference);
+    const save=element('button','Record invitation request','quiet');save.type='button';
+    save.addEventListener('click',async()=>{save.disabled=true;try{
+      const data=await integrationAction('record-invitation-request',{nomination_id:row.id,nominee_requested:check.checked,verification_reference:reference.value.trim()});
+      status.textContent=data.ok?'Request evidence recorded. No email has been sent.':'This nomination can no longer accept request evidence.';
+    }catch(e){status.textContent=e.message;}finally{save.disabled=false;}});
+    section.append(label,refLabel,save);
+  }
+  const run=element('button','Run invitation / CRM once','quiet');run.type='button';
+  run.addEventListener('click',async()=>{run.disabled=true;try{
+    const data=await integrationAction('run-integration',{nomination_id:row.id});
+    status.textContent='Result: '+data.result.status+(data.result.invitation?' · Invitation: '+data.result.invitation.status:'')+(data.result.crm?' · CRM: '+data.result.crm.status:'');
+    await loadIntegrationStatus();
+  }catch(e){status.textContent=e.message;}finally{run.disabled=false;}});
+  section.append(run,status);return section;
+}
 function render(row) {
   const card = element('details', null, 'card review');
   card.id = 'nomination-' + row.id;
@@ -25,7 +54,7 @@ function render(row) {
   details.append(element('summary', 'Contact details and other answers'));
   const data = element('pre', JSON.stringify(row, null, 2));
   data.style.whiteSpace = 'pre-wrap';
-  details.append(data); card.append(details);
+  details.append(data); card.append(details,integrationControls(row));
   return card;
 }
 async function load() {

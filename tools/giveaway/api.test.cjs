@@ -1,6 +1,16 @@
 const {test}=require('node:test'); const assert=require('node:assert/strict'); const fs=require('node:fs'); const path=require('node:path'); const crypto=require('node:crypto');
 const {PGlite}=require('@electric-sql/pglite'); const jwt=require('jsonwebtoken');
 const {createDatabase,tagged,tokenVault}=require('./database.cjs'); const {createHandler}=require('../../api/_giveaway-handler');
+test('scheduled integration requires cron auth and explicit activation before any database access',async()=>{
+ const handler=require('../../api/cron-giveaway-integrations');
+ const prior=process.env.CRON_SECRET,enabled=process.env.GIVEAWAY_WORKER_ENABLED;process.env.CRON_SECRET='fictional-cron-secret';delete process.env.GIVEAWAY_WORKER_ENABLED;
+ const call=async(req)=>{const res={code:200,setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;return this;}};await handler(req,res);return res;};
+ try{
+  assert.equal((await call({method:'POST',headers:{}})).code,405);
+  assert.equal((await call({method:'GET',headers:{},query:{}})).code,401);
+  const r=await call({method:'GET',headers:{authorization:'Bearer fictional-cron-secret'},query:{}});assert.equal(r.data.status,'disabled');
+ }finally{if(prior===undefined)delete process.env.CRON_SECRET;else process.env.CRON_SECRET=prior;if(enabled===undefined)delete process.env.GIVEAWAY_WORKER_ENABLED;else process.env.GIVEAWAY_WORKER_ENABLED=enabled;}
+});
 test('real handler and SQL cover nomination, invitation session, application, withdrawal and admin boundaries',async t=>{
  const pg=new PGlite(); t.after(()=>pg.close());
  await pg.exec("CREATE TABLE schools(id INTEGER PRIMARY KEY,config JSONB,primary_host TEXT,slug TEXT,active BOOLEAN); CREATE TABLE rate_limits(key TEXT PRIMARY KEY,request_count INTEGER,window_start TIMESTAMPTZ); INSERT INTO schools VALUES(1,'{}','giveaway.example.test','one',true),(2,'{}','other.example.test','two',true)");
@@ -10,7 +20,7 @@ test('real handler and SQL cover nomination, invitation session, application, wi
  await pg.query("UPDATE schools SET config=$1::jsonb",[JSON.stringify({giveaway:{enabled:true,campaign_key:'api-test',origin:'https://giveaway.example.test'}})]);
  await pg.exec("INSERT INTO giveaway_campaigns(school_id,campaign_key,closes_at,retain_until,enabled) VALUES(1,'api-test',now()+interval '1 day',now()+interval '90 days',true),(2,'api-test',now()+interval '1 day',now()+interval '90 days',true)");
  const vault=tokenVault(crypto.randomBytes(32)),transaction=cb=>pg.transaction(client=>cb(tagged(client))),db=createDatabase({transaction,vault});
- let now=Date.now(); const handler=createHandler({db,sql:tagged(pg),transaction,vault,enabled:true,now:()=>now});
+ let now=Date.now(),workerCalls=[]; const handler=createHandler({db,sql:tagged(pg),transaction,vault,enabled:true,now:()=>now,runIntegration:async config=>{workerCalls.push(config);return {status:'processed'};}});
  const csrf='a'.repeat(64); let session='';
  async function call(action,body={},overrides={}) {
   const req={query:{action},method:['config','review','integration-status'].includes(action)?'GET':'POST',url:'/api/giveaway',headers:{host:'giveaway.example.test',origin:'https://giveaway.example.test','content-type':'application/json','x-csrf-token':csrf,cookie:'cc_csrf='+csrf+(session?'; '+session:'')},body,...overrides};
@@ -54,6 +64,25 @@ test('real handler and SQL cover nomination, invitation session, application, wi
    const wrong=jwt.sign({id:2,role:'admin',isAdmin:true,school_id:2},process.env.JWT_SECRET,{expiresIn:'5m'});
    assert.equal((await call('review',{}, {headers:{host:'giveaway.example.test',cookie:'cc_admin='+wrong}})).code,401);
    const headers={host:'giveaway.example.test',origin:'https://giveaway.example.test','content-type':'application/json','x-csrf-token':csrf,cookie:'cc_admin='+auth+'; cc_csrf='+csrf};
+   await t.test('integration actions require admin, CSRF, evidence and trusted scoped activation',async()=>{
+    await db.nominate(1,'api-test',{...body,submission_key:crypto.randomUUID(),nominee_email:'worker@example.test',nominee_phone:'07700900781'});
+    const id=(await pg.query("SELECT id FROM giveaway_nominations WHERE nomination->'nominee'->>'email'='worker@example.test'")).rows[0].id;
+    const request={nomination_id:id,nominee_requested:true,verification_reference:'direct-request-123'};
+    assert.equal((await call('record-invitation-request',request)).code,401);
+    assert.equal((await call('record-invitation-request',request,{headers:{...headers,cookie:'cc_admin='+wrong+'; cc_csrf='+csrf}})).code,401);
+    assert.equal((await call('record-invitation-request',request,{headers:{...headers,'x-csrf-token':'bad'}})).code,403);
+    assert.equal((await call('record-invitation-request',{...request,nominee_requested:false},{headers})).code,400);
+    assert.equal((await call('record-invitation-request',request,{headers})).data.ok,true);
+    const evidence=(await pg.query('SELECT nomination FROM giveaway_nominations WHERE id=$1',[id])).rows[0].nomination.permission.invitation_request;
+    assert.equal(evidence.reference,'direct-request-123');assert.equal(evidence.nomination_id,id);
+    assert.equal((await call('run-integration',request,{headers})).code,409);assert.equal(workerCalls.length,0);
+    await pg.exec("UPDATE schools SET config=jsonb_set(config,'{giveaway,integration}','{\"enabled\":true}') WHERE id=1");
+    assert.equal((await call('run-integration',{...request,schoolId:2,campaignKey:'evil',invitation:{origin:'https://evil.test'}},{headers})).code,200);
+    assert.equal(workerCalls[0].schoolId,1);assert.equal(workerCalls[0].campaignKey,'api-test');assert.equal(workerCalls[0].invitation.origin,'https://giveaway.example.test');
+    assert.equal((await call('run-integration',{nomination_id:crypto.randomUUID()},{headers})).code,404);
+    assert.equal((await pg.query("SELECT count(*)::int AS n FROM audit_log WHERE action='giveaway.run-integration'")).rows[0].n,1);
+    await pg.query('DELETE FROM giveaway_nominations WHERE school_id=1 AND id=$1',[id]);
+   });
    await t.test('integration status is read-only, admin-only and scoped to school and campaign',async()=>{
     assert.equal((await call('integration-status')).code,401);
     assert.equal((await call('integration-status',{}, {headers:{host:'giveaway.example.test',cookie:'cc_admin='+wrong}})).code,401);
@@ -88,7 +117,7 @@ test('real handler and SQL cover nomination, invitation session, application, wi
    assert.equal(queue.code,200);assert.equal(queue.data.records[0].id,row.id);
    assert.doesNotMatch(JSON.stringify(queue.data),/alex@example|token|Private reason/);
    assert.equal((await call('privacy-queue',{}, {method:'GET',headers:{host:'giveaway.example.test',cookie:'cc_admin='+wrong}})).code,401);
-   assert.equal((await pg.query('SELECT * FROM audit_log')).rows.length,2);
+   assert.equal((await pg.query('SELECT * FROM audit_log')).rows.length,4);
    await pg.query("UPDATE schools SET config=jsonb_set(config,'{giveaway,enabled}','true') WHERE id=1");
    assert.equal((await call('invitation')).code,404);
   } finally { if(previous===undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET=previous; }

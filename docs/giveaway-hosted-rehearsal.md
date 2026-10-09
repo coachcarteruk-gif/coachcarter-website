@@ -1,5 +1,12 @@
 # Private hosted rehearsal — 9 October 2026
 
+Latest build: `dpl_CsczLUoXed274k2aqJxZzCh2amV7`,
+https://coachcarter-giveaway-rehearsal-7d8tl6nz5.vercel.app. This includes the later
+price, employment, copy, cookie notice and CTA docking fixes plus the disabled
+[integration runner](giveaway-integration-runner.md). Hosted admin login, protected
+review, unauthenticated cron rejection and disabled integration controls passed.
+Use this origin rather than the historical URLs below.
+
 ## Latest copy and deadline revision
 
 Owner requested 18:00 UK on Sunday 11 October (17:00 UTC), plus selection of

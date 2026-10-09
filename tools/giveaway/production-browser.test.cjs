@@ -107,6 +107,11 @@ test('production pages: nomination, private invitation, separate answers and aut
     await context.addCookies([{name:'cc_admin',value:admin,url:origin,httpOnly:true,sameSite:'Lax'}]);
     await page.goto(origin+'/giveaway/review.html'); await page.getByText(/All available records loaded/).waitFor();
     await page.locator('#nomination-'+row.id+' > summary').click();
+    await page.getByText('Invitation and CRM controls',{exact:true}).click();
+    await page.getByRole('button',{name:'Run invitation / CRM once',exact:true}).click();
+    await page.getByText('Integration worker is disabled.',{exact:true}).waitFor();
+    await page.locator('#nomination-'+row.id+' > summary').click();
+    await page.locator('#nomination-'+row.id+' > summary').click();
     await page.getByRole('heading',{name:'1. Difference driving would make to everyday life'}).waitFor();
     await page.getByRole('heading',{name:'2. Barriers free lessons would help overcome'}).waitFor();
     assert.ok((await page.locator('#records').innerText()).includes(meaning)); assert.ok((await page.locator('#records').innerText()).includes(barriers));

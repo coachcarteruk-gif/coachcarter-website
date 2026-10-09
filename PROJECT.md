@@ -1,5 +1,13 @@
 # CoachCarter Website — Project Reference
 
+## Giveaway integration runner (9 October 2026; protected rehearsal)
+
+Admin request-evidence and one-run controls, a separately gated scheduled queue
+entry point, provider suppression checks and real fictional-contact CRM evidence
+are documented in [the integration contract](docs/giveaway-integration-runner.md).
+No production activation or cron schedule is installed. Environment and school
+activation gates remain off in the hosted rehearsal.
+
 ## Giveaway storage (9 October 2026; local implementation only)
 
 Privacy follow-up: migration 078 adds persistent giveaway marketing suppression;

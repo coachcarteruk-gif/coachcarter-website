@@ -7,13 +7,13 @@ const { logAuditRequired } = require('./_audit');
 const { createHash } = require('node:crypto');
 const COOKIE = '__Secure-cc_giveaway';
 const fail = (res,status,code,message,fields={}) => res.status(status).json({error:true,code,message,fields});
-function createHandler({ db, sql, vault, enabled = false, now = () => Date.now(), onError = async () => {} }) {
+function createHandler({ db, sql, vault, enabled = false, runIntegration, now = () => Date.now(), onError = async () => {} }) {
   return async (req,res) => {
     res.setHeader('Cache-Control','no-store');
     if (!enabled) return fail(res,404,'DISABLED','This giveaway is not available.');
     try {
       const action = req.query?.action;
-      if (!['config','nominate','invitation','apply','withdraw','review','integration-status','privacy-queue','privacy-export','request-erasure'].includes(action)) return fail(res,404,'ACTION','Action not found.');
+      if (!['config','nominate','invitation','apply','withdraw','review','integration-status','privacy-queue','privacy-export','request-erasure','record-invitation-request','run-integration'].includes(action)) return fail(res,404,'ACTION','Action not found.');
       const expectedMethod = ['config','review','integration-status','privacy-queue'].includes(action) ? 'GET' : 'POST';
       if (req.method !== expectedMethod) return fail(res,405,'METHOD','Method not allowed.');
       const tenant = await resolveSchoolFromRequest({ headers: req.headers, query: {} },{sql});
@@ -23,7 +23,7 @@ function createHandler({ db, sql, vault, enabled = false, now = () => Date.now()
       const config = school?.giveaway;
       const privacyAction=['privacy-queue','privacy-export','request-erasure'].includes(action);
       // Closing entries must preserve authenticated review and operational visibility.
-      const existingAccess=privacyAction || ['config','invitation','withdraw','review','integration-status'].includes(action);
+      const existingAccess=privacyAction || ['config','invitation','withdraw','review','integration-status','record-invitation-request','run-integration'].includes(action);
       if ((!existingAccess && config?.enabled !== true) || typeof config?.campaign_key !== 'string') return fail(res,404,'DISABLED','This giveaway is not available.');
       const [campaign] = await sql`SELECT closes_at,enabled,closes_at>clock_timestamp() AS open FROM giveaway_campaigns
         WHERE school_id=${schoolId} AND campaign_key=${config.campaign_key}`;
@@ -35,6 +35,27 @@ function createHandler({ db, sql, vault, enabled = false, now = () => Date.now()
       if (action === 'config') {
         ensureCsrfCookie(req,res);
         return res.json({ok:true,deadline:campaign.closes_at,open:config.enabled===true && campaign.enabled && campaign.open});
+      }
+      if (['record-invitation-request','run-integration'].includes(action)) {
+        const admin=requireAuth(req,{roles:['admin']});
+        if (!admin || Number(getSchoolId(admin,req))!==schoolId) return fail(res,401,'AUTH','School administrator access required.');
+        const id=req.body?.nomination_id;
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id||'')) return fail(res,400,'ID','Choose a nomination.');
+        const [row]=await sql`SELECT id FROM giveaway_nominations WHERE school_id=${schoolId} AND campaign_key=${config.campaign_key}
+          AND id=${id} AND erasure_requested_at IS NULL`;
+        if (!row) return fail(res,404,'NOMINATION','Nomination unavailable.');
+        if (action==='record-invitation-request') {
+          const reference=req.body?.verification_reference;
+          if (req.body?.nominee_requested!==true || typeof reference!=='string' || !/^[A-Za-z0-9 _.-]{3,100}$/.test(reference))
+            return fail(res,400,'EVIDENCE','Confirm the nominee requested this invitation and record the evidence reference.');
+          await logAuditRequired(sql,{adminId:admin.id,adminEmail:admin.email,schoolId,req,action:'giveaway.record-invitation-request',targetType:'giveaway',
+            details:{nomination_id:id,verification_reference:reference,stage:'authorized_request'}});
+          return res.json({ok:await db.recordInvitationRequest(schoolId,config.campaign_key,id,reference)});
+        }
+        if (config.integration?.enabled!==true || typeof runIntegration!=='function') return fail(res,409,'DISABLED','Integration worker is disabled.');
+        await logAuditRequired(sql,{adminId:admin.id,adminEmail:admin.email,schoolId,req,action:'giveaway.run-integration',targetType:'giveaway',details:{nomination_id:id,stage:'authorized_request'}});
+        return res.json({ok:true,result:await runIntegration({...config.integration,schoolId,campaignKey:config.campaign_key,nominationId:id,
+          invitation:{...config.integration.invitation,origin:config.origin}})});
       }
       if (action === 'review' || action === 'privacy-queue' || action === 'integration-status') {
         const admin = requireAuth(req,{roles:['admin']});
