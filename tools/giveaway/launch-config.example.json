@@ -1,0 +1,37 @@
+{
+  "environment": {
+    "GIVEAWAY_API_ENABLED": "false",
+    "GIVEAWAY_WORKER_ENABLED": "false",
+    "GIVEAWAY_AUTOMATION_ENABLED": "false",
+    "GIVEAWAY_RETENTION_ENABLED": "false",
+    "GIVEAWAY_WORKER_SCHOOL_ID": "1"
+  },
+  "schoolId": 1,
+  "giveaway": {
+    "enabled": false,
+    "campaign_key": "lifelong-learner-pass-2026-10",
+    "origin": "https://www.coachcarter.uk",
+    "integration": {
+      "enabled": false,
+      "invitation": { "enabled": false, "from": "enquiries@coachcarter.uk", "replyTo": "fraser@coachcarter.uk", "testOnly": false },
+      "crm": {
+        "enabled": false,
+        "environment": "production",
+        "locationId": "RFUEKcQDtlsBSCVBJsMs",
+        "reviewUrl": "https://www.coachcarter.uk/giveaway/review.html",
+        "associations": {
+          "nominee": { "id": "6ac89342a34a2b8a41df6869", "first": "contact" },
+          "nominator": { "id": "6ac8935571c518edf07d6390", "first": "contact" }
+        }
+      },
+      "provisioning": { "enabled": false, "creationApproved": false }
+    }
+  },
+  "campaign": {
+    "school_id": 1,
+    "campaign_key": "lifelong-learner-pass-2026-10",
+    "closes_at": "2026-10-11T23:00:00.000Z",
+    "retain_until": "2027-01-09T23:00:00.000Z",
+    "enabled": false
+  }
+}

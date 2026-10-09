@@ -2,6 +2,11 @@
 
 ## Confirmed owner direction (supersedes earlier proposals below)
 
+Latest retention instruction: keep automatic cleanup off for now. Do not infer
+approval of the suggested 12-month marketing or 90-day post-lesson periods.
+The earlier unsuccessful-entry policy remains approved; it needs manual handling
+while automation is off. See [production setup review](giveaway-launch-ready-review.md).
+
 Fraser personally offers the lessons; CoachCarter's website manages nominations
 and applications. The owner chooses the recipient himself, exercising discretion
 within the published eligibility rules and two equally weighted criteria. He has

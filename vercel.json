@@ -47,6 +47,8 @@
     }
   ],
   "rewrites": [
+    { "source": "/giveaway", "destination": "/public/giveaway/index.html" },
+    { "source": "/giveaway/", "destination": "/public/giveaway/index.html" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/r/:code", "destination": "/api/r?code=:code" },
     { "source": "/simon", "destination": "/learner/book.html" },
