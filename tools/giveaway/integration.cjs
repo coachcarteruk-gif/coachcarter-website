@@ -4,6 +4,7 @@ const {createContactSearch}=require('./contact-matching.cjs');
 const {createHttpTransport}=require('./highlevel-sync.cjs');
 const {resendTransport}=require('./invitation.cjs');
 const {subjectHash}=require('../../api/_giveaway-privacy');
+const {WORDING}=require('./domain.cjs');
 
 // No automatic retries or writes on import. A failed lookup never authorizes email.
 function resendPermission({apiKey,fetchImpl=fetch}) {
@@ -30,6 +31,11 @@ function requested(source) {
     evidence.nomination_id===source.id && evidence.email_hash===subjectHash('email',source.nomination.nominee.email) &&
     Number.isFinite(Date.parse(evidence.requested_at)) && typeof evidence.reference==='string' && evidence.reference.length>=3;
 }
+function nominationPermitsInvitation(source) {
+  const permission=source.nomination.permission;
+  return permission?.version==='giveaway-v1' && permission.wording===WORDING.permission &&
+    Number.isFinite(Date.parse(permission.accepted_at));
+}
 
 async function runIntegration({db,sql,transaction,vault,config,credentials={},providers={}}) {
   config=structuredClone(config);
@@ -53,7 +59,8 @@ async function runIntegration({db,sql,transaction,vault,config,credentials={},pr
       associationIds:Object.values(crmConfig.associations||{}).map(a=>a.id),writeEnabled:true});
   }
   if (config.invitation?.enabled===true && !providers.invitationTransport && !credentials.resend) return {status:'configuration_required'};
-  const worker=createBoundedWorker({db,config,vault,search,crmTransport,invitationRequested:requested,
+  const worker=createBoundedWorker({db,config,vault,search,crmTransport,
+    invitationRequested:config.invitation?.permissionMode==='nomination'?nominationPermitsInvitation:requested,
     invitationTransport:providers.invitationTransport || resendTransport({apiKey:credentials.resend,enabled:config.invitation?.enabled===true}),
     providerAllowsInvitation:providers.providerAllowsInvitation || resendPermission({apiKey:credentials.resend})});
   const invitation=await worker.run('invitation');
@@ -84,4 +91,4 @@ async function runNextIntegration(options) {
     ORDER BY j.available_at,j.created_at,j.id LIMIT 1`;
   return next?runIntegration({...options,config:{...config,nominationId:next.id}}):{status:'idle'};
 }
-module.exports={runIntegration,runNextIntegration,resendPermission,requested};
+module.exports={runIntegration,runNextIntegration,resendPermission,requested,nominationPermitsInvitation};

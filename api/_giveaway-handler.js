@@ -107,7 +107,22 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
       const limitedSql = async (...args) => { try { return await sql(...args); } catch(error) { limiterFailed=true; throw error; } };
       const limit = await checkRateLimit(limitedSql,{key:`giveaway:${schoolId}:${action}:${getClientIp(req)}`,max:action==='nominate'?10:60,windowSeconds:3600});
       if (limiterFailed || !limit.allowed) return fail(res,429,'RATE_LIMIT','Please try again later.');
-      if (action === 'nominate') return res.json(await db.nominate(schoolId,config.campaign_key,req.body || {}));
+      if (action === 'nominate') return res.json(await db.nominate(schoolId,config.campaign_key,req.body || {}, {
+        afterCreated: async nominationId => {
+          if (config.integration?.enabled!==true || config.integration.invitation?.enabled!==true ||
+              config.integration.invitation?.permissionMode!=='nomination' || typeof runIntegration!=='function') return;
+          try {
+            // Await bounded invitation work; never perform CRM writes from public submission.
+            await runIntegration({...config.integration,schoolId,campaignKey:config.campaign_key,nominationId,
+              crm:{enabled:false},provisioning:{enabled:false},
+              invitation:{...config.integration.invitation,origin:config.origin}});
+          } catch (error) {
+            // The nomination is committed. Delivery failure must not report entry failure
+            // or encourage duplicates; the persisted job is available for staff review.
+            try { await onError(error); } catch {}
+          }
+        }
+      }));
       let token;
       if (action === 'invitation' && req.body?.token) {
         token = req.body.token;

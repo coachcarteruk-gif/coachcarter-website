@@ -20,7 +20,7 @@ test('real handler and SQL cover nomination, invitation session, application, wi
  await pg.query("UPDATE schools SET config=$1::jsonb",[JSON.stringify({giveaway:{enabled:true,campaign_key:'api-test',origin:'https://giveaway.example.test'}})]);
  await pg.exec("INSERT INTO giveaway_campaigns(school_id,campaign_key,closes_at,retain_until,enabled) VALUES(1,'api-test',now()+interval '1 day',now()+interval '90 days',true),(2,'api-test',now()+interval '1 day',now()+interval '90 days',true)");
  const vault=tokenVault(crypto.randomBytes(32)),transaction=cb=>pg.transaction(client=>cb(tagged(client))),db=createDatabase({transaction,vault});
- let now=Date.now(),workerCalls=[]; const handler=createHandler({db,sql:tagged(pg),transaction,vault,enabled:true,now:()=>now,runIntegration:async config=>{workerCalls.push(config);return {status:'processed'};}});
+ let now=Date.now(),workerCalls=[],workerFailure=false; const handler=createHandler({db,sql:tagged(pg),transaction,vault,enabled:true,now:()=>now,runIntegration:async config=>{workerCalls.push(config);if(workerFailure)throw Error('Provider unavailable');return {status:'processed'};}});
  const csrf='a'.repeat(64); let session='';
  async function call(action,body={},overrides={}) {
   const req={query:{action},method:['config','review','integration-status'].includes(action)?'GET':'POST',url:'/api/giveaway',headers:{host:'giveaway.example.test',origin:'https://giveaway.example.test','content-type':'application/json','x-csrf-token':csrf,cookie:'cc_csrf='+csrf+(session?'; '+session:'')},body,...overrides};
@@ -35,8 +35,16 @@ test('real handler and SQL cover nomination, invitation session, application, wi
  });
  const body={submission_key:crypto.randomUUID(),nominee_name:'Alex',nominee_phone:'07700900123',nominee_email:'alex@example.test',nominator_name:'Jamie',nominator_phone:'07700900456',nominator_email:'jamie@example.test',reason:'Private reason',permission:true};
  await t.test('nomination reaches SQL exactly once on retry',async()=>{
+  await pg.query("UPDATE schools SET config=jsonb_set(config,'{giveaway,integration}',$1::jsonb) WHERE id=1",[JSON.stringify({enabled:true,invitation:{enabled:true,permissionMode:'nomination'},crm:{enabled:true}})]);
+  workerFailure=true;
   assert.equal((await call('nominate',body)).code,200); assert.equal((await call('nominate',body)).code,200);
   assert.equal((await pg.query('SELECT * FROM giveaway_nominations')).rows.length,1);
+  assert.equal(workerCalls.length,1);assert.equal(workerCalls[0].schoolId,1);assert.equal(workerCalls[0].campaignKey,'api-test');
+  assert.equal(workerCalls[0].crm.enabled,false);assert.equal(workerCalls[0].provisioning.enabled,false);
+  assert.equal(workerCalls[0].invitation.origin,'https://giveaway.example.test');
+  assert.equal(workerCalls[0].nominationId,(await pg.query('SELECT id FROM giveaway_nominations')).rows[0].id);
+  workerFailure=false;workerCalls=[];
+  await pg.exec("UPDATE schools SET config=config #- '{giveaway,integration}' WHERE id=1");
  });
  const row=(await pg.query('SELECT * FROM giveaway_nominations')).rows[0], job=(await pg.query("SELECT * FROM giveaway_jobs WHERE kind='invitation'")).rows[0];
  const token=vault.open(job.payload.sealed_token,`1:${row.id}`);

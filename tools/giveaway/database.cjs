@@ -52,10 +52,10 @@ function createDatabase({ transaction, vault }) {
     return row;
   }
   return {
-    async nominate(school, campaign, body) {
+    async nominate(school, campaign, body, { afterCreated } = {}) {
       scope(school); if (body.website) return { ok: true };
       const data = nomination(body);
-      return transaction(async sql => {
+      const createdId = await transaction(async sql => {
         await open(sql, school, campaign);
         const id = uuid(), token = crypto.randomBytes(32).toString('base64url');
         const [{ timestamp }] = await sql`SELECT clock_timestamp() AS timestamp`;
@@ -69,8 +69,12 @@ function createDatabase({ transaction, vault }) {
           await job(sql, school, id, 'invitation', 'nomination', { sealed_token: vault.seal(token, `${school}:${id}`) });
           await job(sql, school, id, 'crm', 'nomination');
         }
-        return { ok: true };
+        return rows.length ? id : null;
       });
+      // Dispatch only after commit, only for a new nomination. Duplicate submissions
+      // never trigger another send and callbacks cannot expose private token material.
+      if (createdId && afterCreated) await afterCreated(createdId);
+      return { ok: true };
     },
     async inspect(school, token) {
       scope(school); return transaction(async sql => {

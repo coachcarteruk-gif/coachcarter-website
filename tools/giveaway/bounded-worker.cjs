@@ -15,7 +15,7 @@ function createBoundedWorker({ db, config, vault, invitationTransport, crmTransp
   const scope={schoolId:config.schoolId,campaignKey:config.campaignKey};
   const authorized=async source => {
     if (source.school_id!==scope.schoolId || source.campaign_key!==scope.campaignKey || source.id!==config.nominationId) return false;
-    // Sharing permission is not an invitation request. Both external checks must
+    // The configured permission policy and provider check must
     // return an explicit fresh true; missing adapters, failures and unknowns block.
     if (typeof invitationRequested!=='function' || typeof providerAllowsInvitation!=='function') return false;
     return await db.invitationUnblocked(scope.schoolId,source.id)===true &&

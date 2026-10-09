@@ -1,5 +1,10 @@
 # Public opening — 9 October 2026
 
+**Superseded invitation workflow:** the owner clarified that the separately
+requested-email step below was not their intended flow. See
+[automatic invitation correction](giveaway-automatic-invitations.md). This file
+records the initial opening; it is not the current invitation operating guide.
+
 The owner approved finalising the public notice, opening entries and enabling
 controlled invitation sending. This continues the setup recorded in
 [production setup](giveaway-production-setup.md). Automatic cleanup remains off

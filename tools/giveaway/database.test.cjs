@@ -43,6 +43,34 @@ function bounded(f, id, overrides={}) {
     providerAllowsInvitation:async()=>true,...overrides});
 }
 
+test('automatic nomination invitation commits before sending and sends exactly once without a manual request',async t=>{
+  const f=await setup(t),body=nominate();let callbacks=0,sends=0;
+  const afterCreated=async nominationId=>{
+    callbacks++;
+    const config={enabled:true,schoolId:1,campaignKey:'test',nominationId,
+      invitation:{enabled:true,permissionMode:'nomination',origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test',testOnly:true,testRecipient:'alex@example.test'},crm:{enabled:false}};
+    const providers={providerAllowsInvitation:async()=>true,invitationTransport:{send:async message=>{sends++;assert.deepEqual(message.to,['alex@example.test']);assert.match(message.text,/giveaway\/apply.html#/);return {accepted:true,id:'fake-auto-email'};}}};
+    const result=await runIntegration({...f,sql:tagged(f.pg),config,providers});
+    assert.equal(result.invitation.status,'succeeded');
+    await runIntegration({...f,sql:tagged(f.pg),config,providers});
+  };
+  assert.deepEqual(await f.db.nominate(1,'test',body,{afterCreated}),{ok:true});
+  await f.db.nominate(1,'test',body,{afterCreated});
+  await f.db.nominate(1,'test',{...body,submission_key:crypto.randomUUID()},{afterCreated});
+  assert.equal(callbacks,1);assert.equal(sends,1);
+  const row=(await f.pg.query('SELECT nomination FROM giveaway_nominations')).rows[0];
+  assert.equal(row.nomination.permission.invitation_request,undefined);
+  assert.equal(row.nomination.nominator_consents.every(c=>c.granted===false),true);
+});
+
+test('automatic invitation permission requires the recorded confirmation wording and time',()=>{
+  const {nominationPermitsInvitation}=require('./integration.cjs'),{WORDING}=require('./domain.cjs');
+  const permission={version:'giveaway-v1',wording:WORDING.permission,accepted_at:new Date().toISOString()};
+  assert.equal(nominationPermitsInvitation({nomination:{permission}}),true);
+  for(const change of [{version:'unknown'},{wording:'different'},{accepted_at:null},{accepted_at:'invalid'}])
+    assert.equal(nominationPermitsInvitation({nomination:{permission:{...permission,...change}}}),false);
+});
+
 test('composed SQL integration sends once, provisions suppressed contacts, syncs application and preserves withdrawal',async t=>{
   const f=await setup(t),{row,token}=await f.seeded();
   const contacts=[],records=new Map(),writes=[];let sends=0;
