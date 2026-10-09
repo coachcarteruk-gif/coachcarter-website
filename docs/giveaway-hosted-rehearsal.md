@@ -1,5 +1,18 @@
 # Private hosted rehearsal — 9 October 2026
 
+## Latest copy and deadline revision
+
+Owner requested 18:00 UK on Sunday 11 October (17:00 UTC), plus selection of
+a new winner if the first winner has not responded within five days. Source,
+email template, terms and the isolated campaign deadline now agree. The revised
+protected Preview is `dpl_6TMzPoQdNMKRod9NpcoEQe6rTFDY`:
+https://coachcarter-giveaway-rehearsal-3wm4pgevc.vercel.app/giveaway/index.html
+The rehearsal school's trusted origin now points to this preview; use it instead
+of earlier deployment URLs. All three hosted pages and the API deadline were
+verified, and 15 domain tests passed including the precise closing boundary.
+The previously delivered email is unchanged; no replacement email was sent.
+Earlier evidence below describes the previous artifact.
+
 The owner authorized the private test deployment and isolated database setup.
 The full hosted journey passed at 14:11 UK time on 9 October. Public launch,
 real invitations, provider activation and production migrations remain unapproved.

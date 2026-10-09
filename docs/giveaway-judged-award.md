@@ -1,5 +1,11 @@
 # Community driving lesson award — working proposal, 9 October 2026
 
+Latest owner decision: applications close Sunday 11 October 2026 at 18:00 UK
+time (17:00 UTC). The winner has five days from notification to respond; after
+that, a new winner will be selected if no response is received, using the same
+judging criteria. This supersedes earlier deadline and replacement-approval
+notes below. No automatic winner selection or notification is activated.
+
 The original personal-account Facebook post is already live. It offers one-hour
 weekly lessons until practical-test pass and invites nominations through Sunday
 11 October. It promises private follow-up with nominators. It does not promise a

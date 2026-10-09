@@ -1,5 +1,5 @@
 const crypto = require('node:crypto');
-const DEADLINE = '2026-10-11T21:00:00.000Z'; // 22:00 Europe/London (BST).
+const DEADLINE = '2026-10-11T17:00:00.000Z'; // 18:00 Europe/London (BST).
 const WORDING = Object.freeze({
   email: 'Email me about future giveaways, updates and promotions.',
   sms: 'Text me about future giveaways, updates and promotions.',
