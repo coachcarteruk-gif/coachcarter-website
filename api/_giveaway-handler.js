@@ -107,8 +107,13 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
       const limitedSql = async (...args) => { try { return await sql(...args); } catch(error) { limiterFailed=true; throw error; } };
       const limit = await checkRateLimit(limitedSql,{key:`giveaway:${schoolId}:${action}:${getClientIp(req)}`,max:action==='nominate'?10:60,windowSeconds:3600});
       if (limiterFailed || !limit.allowed) return fail(res,429,'RATE_LIMIT','Please try again later.');
-      if (action === 'nominate') return res.json(await db.nominate(schoolId,config.campaign_key,req.body || {}, {
-        afterCreated: async nominationId => {
+      if (action === 'nominate') {
+        let applicationUrl;
+        const result = await db.nominate(schoolId,config.campaign_key,req.body || {}, {
+        afterCreated: async (nominationId, invitationToken) => {
+          const link = new URL('/giveaway/apply.html',config.origin);
+          link.hash = invitationToken;
+          applicationUrl = link.href;
           if (config.integration?.enabled!==true || config.integration.invitation?.enabled!==true ||
               config.integration.invitation?.permissionMode!=='nomination' || typeof runIntegration!=='function') return;
           try {
@@ -122,7 +127,9 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
             try { await onError(error); } catch {}
           }
         }
-      }));
+        });
+        return res.json({...result,...(applicationUrl ? {application_url:applicationUrl} : {})});
+      }
       let token;
       if (action === 'invitation' && req.body?.token) {
         token = req.body.token;

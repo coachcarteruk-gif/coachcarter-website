@@ -23,6 +23,23 @@ function completed() {
   button.addEventListener('click', async () => { button.disabled = true; try { await api('withdraw'); line.textContent = 'Your marketing permissions have been withdrawn.'; button.remove(); } catch { line.textContent = 'We couldn’t save that change. Please try again.'; button.disabled = false; } });
   $('result').append(line, button);
 }
+function shareApplicationLink(url) {
+  const link = new URL(url);
+  if (link.origin !== location.origin || link.pathname !== '/giveaway/apply.html' || !/^#[A-Za-z0-9_-]{43}$/.test(link.hash)) return;
+  const label = document.createElement('label'); label.textContent = 'Send their private application link';
+  const input = document.createElement('input'); input.type = 'text'; input.readOnly = true;
+  input.id = 'nominee-share-link'; input.value = link.href; label.htmlFor = input.id;
+  input.addEventListener('click', () => input.select());
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'primary'; button.textContent = 'Copy link';
+  const status = document.createElement('p'); status.className = 'small'; status.setAttribute('role','status');
+  status.textContent = 'Send this privately to your nominee by text or WhatsApp. This personal link gives access to their application; don’t post it publicly.';
+  button.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(link.href); button.textContent = 'Link copied'; }
+    catch { input.focus(); input.select(); status.textContent = 'Select and copy the link above, then send it privately to your nominee.'; }
+  });
+  const field = document.createElement('div'); field.className = 'field'; field.append(label,input);
+  $('result').append(field,button,status);
+}
 function values(form) {
   const data = Object.fromEntries(new FormData(form));
   form.querySelectorAll('[type=checkbox]').forEach(input => { data[input.name] = input.checked; });
@@ -49,9 +66,10 @@ function connect(form, action) {
     if (Object.keys(invalid).length) { errors(form, { message: 'Please check the highlighted answers.', fields: invalid }); return; }
     const button = form.querySelector('[type=submit]'); button.disabled = true;
     try {
-      await api(action, values(form)); form.hidden = true;
+      const response = await api(action, values(form)); form.hidden = true;
       if (action === 'apply') completed();
       else showResult('A lovely thing to do.', 'Your nomination has been received. Their private application link is sent automatically by email. Ask them to check their inbox and spam folder. If it hasn’t arrived, contact fraser@coachcarter.uk. They must apply before the deadline; there’s no need to nominate them again.', true);
+      if (action === 'nominate' && response.application_url) shareApplicationLink(response.application_url);
     } catch (error) { errors(form, error); }
     finally { button.disabled = false; }
   });

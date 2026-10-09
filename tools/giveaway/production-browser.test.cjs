@@ -62,6 +62,12 @@ test('production pages: nomination, private invitation, separate answers and aut
     await page.locator('#nominator_marketing_email').check();
     await page.locator('#permission').check(); await page.getByRole('button',{name:/Send their nomination/}).click();
     await page.getByText('A lovely thing to do.').waitFor();
+    const sharedLink=await page.locator('#nominee-share-link').inputValue();
+    assert.equal(new URL(sharedLink).origin,origin);
+    assert.match(sharedLink,/\/giveaway\/apply.html#[A-Za-z0-9_-]{43}$/);
+    await page.getByRole('button',{name:'Copy link',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#nominee-share-link') &&
+      (document.querySelector('#result button').textContent==='Link copied' || document.activeElement.id==='nominee-share-link'));
     const row=(await pg.query('SELECT * FROM giveaway_nominations')).rows[0];
     assert.equal(row.nomination.nominator_consents[0].granted,true);
     assert.equal(row.nomination.nominator_consents[1].granted,false);

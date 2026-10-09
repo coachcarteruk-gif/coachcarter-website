@@ -12,7 +12,9 @@ The existing manual-request mode remains the default for other configurations.
 
 Public submission commits the nomination and queued jobs, then awaits a bounded
 invitation run for the newly created ID. The public response never exposes that
-ID or token. Repeated submission keys and repeated nominator/nominee pairs do
+ID. On the owner's request, newly created nominations return the private
+application URL to the submitting nominator for direct sharing. Repeated
+submission keys and repeated nominator/nominee pairs do
 not dispatch again. No public request can choose a school, campaign, origin or
 permission mode. Public dispatch explicitly disables CRM and provisioning.
 
@@ -47,3 +49,14 @@ automatic-email wording, visible mobile form, unchecked optional consent, open
 entry config, the Sunday midnight deadline, unauthenticated review rejection and
 CSRF rejection. No production test nomination or message was created: actual
 inbox delivery remains unverified pending the first genuine nomination.
+
+## Nominator sharing
+
+The submission confirmation shows a read-only personal link and Copy link button,
+with manual selection as a clipboard fallback. Only a newly created nomination
+receives a link: reusing contact details or a submission key cannot retrieve an
+existing nominee's link. It is the same token as the automatic email, returned
+in a no-store response, and is never placed in analytics, logs or local storage.
+The privacy notice explains the nominator receives it and it must be shared only
+with the nominee. Automated API and browser tests cover link access, duplicate
+non-disclosure and copying/fallback. Automatic email behaviour is unchanged.

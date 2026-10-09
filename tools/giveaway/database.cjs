@@ -55,7 +55,7 @@ function createDatabase({ transaction, vault }) {
     async nominate(school, campaign, body, { afterCreated } = {}) {
       scope(school); if (body.website) return { ok: true };
       const data = nomination(body);
-      const createdId = await transaction(async sql => {
+      const created = await transaction(async sql => {
         await open(sql, school, campaign);
         const id = uuid(), token = crypto.randomBytes(32).toString('base64url');
         const [{ timestamp }] = await sql`SELECT clock_timestamp() AS timestamp`;
@@ -69,11 +69,11 @@ function createDatabase({ transaction, vault }) {
           await job(sql, school, id, 'invitation', 'nomination', { sealed_token: vault.seal(token, `${school}:${id}`) });
           await job(sql, school, id, 'crm', 'nomination');
         }
-        return rows.length ? id : null;
+        return rows.length ? { id, token } : null;
       });
       // Dispatch only after commit, only for a new nomination. Duplicate submissions
-      // never trigger another send and callbacks cannot expose private token material.
-      if (createdId && afterCreated) await afterCreated(createdId);
+      // never trigger another send. Only the creator receives the link for sharing.
+      if (created && afterCreated) await afterCreated(created.id, created.token);
       return { ok: true };
     },
     async inspect(school, token) {

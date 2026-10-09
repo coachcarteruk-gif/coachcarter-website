@@ -37,7 +37,12 @@ test('real handler and SQL cover nomination, invitation session, application, wi
  await t.test('nomination reaches SQL exactly once on retry',async()=>{
   await pg.query("UPDATE schools SET config=jsonb_set(config,'{giveaway,integration}',$1::jsonb) WHERE id=1",[JSON.stringify({enabled:true,invitation:{enabled:true,permissionMode:'nomination'},crm:{enabled:true}})]);
   workerFailure=true;
-  assert.equal((await call('nominate',body)).code,200); assert.equal((await call('nominate',body)).code,200);
+  const first=await call('nominate',body);assert.equal(first.code,200);
+  const shared=new URL(first.data.application_url);assert.equal(shared.origin,'https://giveaway.example.test');assert.equal(shared.pathname,'/giveaway/apply.html');
+  assert.match(shared.hash,/^#[A-Za-z0-9_-]{43}$/);
+  assert.equal((await db.inspect(1,shared.hash.slice(1))).nominee.email,body.nominee_email);
+  assert.equal((await call('nominate',body)).data.application_url,undefined);
+  assert.equal((await call('nominate',{...body,submission_key:crypto.randomUUID()})).data.application_url,undefined);
   assert.equal((await pg.query('SELECT * FROM giveaway_nominations')).rows.length,1);
   assert.equal(workerCalls.length,1);assert.equal(workerCalls[0].schoolId,1);assert.equal(workerCalls[0].campaignKey,'api-test');
   assert.equal(workerCalls[0].crm.enabled,false);assert.equal(workerCalls[0].provisioning.enabled,false);
