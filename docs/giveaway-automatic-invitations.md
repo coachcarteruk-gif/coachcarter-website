@@ -60,3 +60,24 @@ in a no-store response, and is never placed in analytics, logs or local storage.
 The privacy notice explains the nominator receives it and it must be shared only
 with the nominee. Automated API and browser tests cover link access, duplicate
 non-disclosure and copying/fallback. Automatic email behaviour is unchanged.
+
+## Nominator confirmation email
+
+The owner approved a transactional confirmation containing the nominee's name,
+the same private application link, the deadline and a private-sharing reminder.
+No promotional content or consent grant is included. The school setting
+`integration.invitation.confirmationEnabled` controls creation and dispatch.
+Only new submissions enqueue it; old nominations are not backfilled.
+
+It uses the existing invitation job kind with event `nominator-confirmation`,
+its own encrypted token envelope, fenced claim, recipient suppression checks,
+provider idempotency key and receipt. Nominee workers claim only `nomination`
+events; confirmation workers claim only the confirmation event. Both cascade
+with nomination erasure and strip token envelopes after confirmed acceptance.
+No schema change is required. A confirmation receipt cannot mark the nominee
+invitation accepted or enqueue its CRM acceptance event. Ambiguous sends stop
+for review and are never automatically replayed.
+
+The confirmation says the nominee was emailed only when the nominee invitation
+has a recorded provider acceptance; otherwise it supplies the shareable link
+without claiming delivery. Inbox delivery itself is not guaranteed by acceptance.

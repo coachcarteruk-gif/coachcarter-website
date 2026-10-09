@@ -10,7 +10,8 @@ const {WORDING}=require('./domain.cjs');
 function resendPermission({apiKey,fetchImpl=fetch}) {
   return async source=>{
     if (!apiKey) return false;
-    const email=source.nomination.nominee.email.trim().toLowerCase();
+    const role=source.event_key==='nominator-confirmation'?'nominator':'nominee';
+    const email=source.nomination[role].email.trim().toLowerCase();
     async function read(path) {
       const r=await fetchImpl('https://api.resend.com'+path,{headers:{Authorization:'Bearer '+apiKey},
         redirect:'error',signal:AbortSignal.timeout(10000)});
@@ -66,6 +67,15 @@ async function runIntegration({db,sql,transaction,vault,config,credentials={},pr
   const invitation=await worker.run('invitation');
   // Stop on ambiguity; do not proceed to other mutations when operator review is needed.
   if (['uncertain','claim_lost'].includes(invitation.status)) return {status:'review_required',invitation};
+  let confirmation={status:'disabled'};
+  if(config.invitation?.confirmationEnabled===true) {
+    const confirmationWorker=createBoundedWorker({db,vault,config:{...config,invitation:{...config.invitation,recipientRole:'nominator'}},
+      invitationRequested:nominationPermitsInvitation,
+      invitationTransport:providers.invitationTransport || resendTransport({apiKey:credentials.resend,enabled:config.invitation.enabled===true}),
+      providerAllowsInvitation:providers.providerAllowsInvitation || resendPermission({apiKey:credentials.resend})});
+    confirmation=await confirmationWorker.run('invitation');
+    if(['uncertain','claim_lost'].includes(confirmation.status))return {status:'review_required',invitation,confirmation};
+  }
   if (config.crm?.enabled===true && config.provisioning?.enabled===true) {
     const provision=createContactProvisioner({config:crmConfig,store:createProvisioningStore({transaction}),search,transport:crmTransport,
       enabled:true,creationApproved:config.provisioning.creationApproved===true,reviewReference:config.provisioning.reviewReference});
@@ -73,7 +83,7 @@ async function runIntegration({db,sql,transaction,vault,config,credentials={},pr
     catch {return {status:'review_required',invitation,crm:{status:'provisioning_review_required'}};}
   }
   const crm=await worker.run('crm');
-  return {status:[invitation,crm].some(r=>['uncertain','claim_lost'].includes(r.status))?'review_required':'processed',invitation,crm};
+  return {status:[invitation,crm].some(r=>['uncertain','claim_lost'].includes(r.status))?'review_required':'processed',invitation,confirmation,crm};
 }
 async function runNextIntegration(options) {
   const {sql,config}=options;

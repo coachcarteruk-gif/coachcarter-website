@@ -52,7 +52,7 @@ function createDatabase({ transaction, vault }) {
     return row;
   }
   return {
-    async nominate(school, campaign, body, { afterCreated } = {}) {
+    async nominate(school, campaign, body, { afterCreated, confirmNominator = false } = {}) {
       scope(school); if (body.website) return { ok: true };
       const data = nomination(body);
       const created = await transaction(async sql => {
@@ -67,6 +67,7 @@ function createDatabase({ transaction, vault }) {
           ON CONFLICT DO NOTHING RETURNING id`;
         if (rows.length) {
           await job(sql, school, id, 'invitation', 'nomination', { sealed_token: vault.seal(token, `${school}:${id}`) });
+          if (confirmNominator) await job(sql, school, id, 'invitation', 'nominator-confirmation', { sealed_token: vault.seal(token, `${school}:${id}`) });
           await job(sql, school, id, 'crm', 'nomination');
         }
         return rows.length ? { id, token } : null;
@@ -170,19 +171,20 @@ function createDatabase({ transaction, vault }) {
       });
     },
     // Conservative invitation veto, not evidence that the nominee requested email.
-    async invitationUnblocked(school, id) {
+    async invitationUnblocked(school, id, role = 'nominee') {
+      if (!['nominee','nominator'].includes(role)) throw Error('Invalid invitation role');
       scope(school); return transaction(async sql => {
         const [row] = await sql`SELECT nomination FROM giveaway_nominations WHERE school_id=${school} AND id=${id}
           AND erasure_requested_at IS NULL AND application IS NULL`;
         if (!row) return false;
-        const key=subjectHash('email',row.nomination.nominee.email);
+        const key=subjectHash('email',row.nomination[role].email);
         const blocked=await sql`SELECT 1 FROM giveaway_marketing_suppressions
           WHERE school_id=${school} AND channel='email' AND subject_hash=${key}`;
         return blocked.length===0;
       });
     },
     async claim(school, kind, bounds = {}) {
-      const campaign = bounds.campaignKey ?? null, nominationId = bounds.nominationId ?? null;
+      const campaign = bounds.campaignKey ?? null, nominationId = bounds.nominationId ?? null, eventKey = bounds.eventKey ?? null;
       if (campaign !== null && (typeof campaign !== 'string' || !campaign) ||
           nominationId !== null && !/^[a-f0-9-]{36}$/i.test(nominationId)) throw Error('Invalid claim scope');
       scope(school); return transaction(async sql => {
@@ -190,6 +192,7 @@ function createDatabase({ transaction, vault }) {
         await sql`UPDATE giveaway_jobs j SET state='uncertain' WHERE school_id=${school} AND kind=${kind}
           AND state='dispatching' AND lease_until<clock_timestamp()
           AND (${nominationId}::uuid IS NULL OR nomination_id=${nominationId}::uuid)
+          AND (${eventKey}::text IS NULL OR event_key=${eventKey})
           AND EXISTS (SELECT 1 FROM giveaway_nominations n WHERE n.school_id=j.school_id AND n.id=j.nomination_id
             AND (${campaign}::text IS NULL OR n.campaign_key=${campaign}))`;
         const token = uuid();
@@ -198,9 +201,10 @@ function createDatabase({ transaction, vault }) {
           WHERE j.school_id=${school} AND j.kind=${kind} AND n.erasure_requested_at IS NULL
           AND (${campaign}::text IS NULL OR n.campaign_key=${campaign})
           AND (${nominationId}::uuid IS NULL OR n.id=${nominationId}::uuid)
+          AND (${eventKey}::text IS NULL OR j.event_key=${eventKey})
           AND (j.state='pending' OR (j.state='claimed' AND j.lease_until<clock_timestamp())) AND j.available_at<=clock_timestamp()
           AND NOT EXISTS (SELECT 1 FROM giveaway_jobs older WHERE older.school_id=j.school_id AND older.nomination_id=j.nomination_id
-            AND older.kind=j.kind AND older.id<>j.id AND (older.state IN ('dispatching','uncertain') OR
+            AND older.kind=j.kind AND (${eventKey}::text IS NULL OR older.event_key=${eventKey}) AND older.id<>j.id AND (older.state IN ('dispatching','uncertain') OR
               (older.state IN ('pending','claimed') AND (older.created_at,older.id)<(j.created_at,j.id))))
           ORDER BY j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1)
           UPDATE giveaway_jobs SET state='claimed',claim_token=${token},lease_until=clock_timestamp()+interval '2 minutes',attempts=attempts+1
@@ -210,7 +214,7 @@ function createDatabase({ transaction, vault }) {
     },
     async loadClaim(school, id, claim) {
       scope(school); return transaction(async sql => {
-        const [row] = await sql`SELECT n.*,j.kind FROM giveaway_jobs j JOIN giveaway_nominations n
+        const [row] = await sql`SELECT n.*,j.kind,j.event_key FROM giveaway_jobs j JOIN giveaway_nominations n
           ON n.school_id=j.school_id AND n.id=j.nomination_id
           WHERE j.school_id=${school} AND j.id=${id} AND j.claim_token=${claim}
           AND j.state='claimed' AND j.lease_until>clock_timestamp() AND n.erasure_requested_at IS NULL`;
@@ -243,20 +247,20 @@ function createDatabase({ transaction, vault }) {
       scope(school); return transaction(async sql => {
         const rows = await sql`UPDATE giveaway_jobs SET state=${accepted === true ? 'succeeded' : 'uncertain'},completed_at=clock_timestamp(),
           payload=CASE WHEN ${accepted === true} THEN ${JSON.stringify(safeReceipt)}::jsonb ELSE payload END
-          WHERE school_id=${school} AND id=${id} AND claim_token=${claim} AND state='dispatching' RETURNING id,nomination_id,kind`;
-        if (rows.length && accepted === true && rows[0].kind === 'invitation') await job(sql, school, rows[0].nomination_id, 'crm', 'invitation-accepted');
+          WHERE school_id=${school} AND id=${id} AND claim_token=${claim} AND state='dispatching' RETURNING id,nomination_id,kind,event_key`;
+        if (rows.length && accepted === true && rows[0].kind === 'invitation' && rows[0].event_key==='nomination') await job(sql, school, rows[0].nomination_id, 'crm', 'invitation-accepted');
         return rows.length === 1;
       });
     },
     async loadDispatch(school, id, claim) {
       scope(school); return transaction(async sql => {
-        const [row] = await sql`SELECT n.*,j.kind,j.payload,c.enabled AS campaign_enabled,c.closes_at FROM giveaway_jobs j JOIN giveaway_nominations n
+        const [row] = await sql`SELECT n.*,j.kind,j.event_key,j.payload,c.enabled AS campaign_enabled,c.closes_at FROM giveaway_jobs j JOIN giveaway_nominations n
           ON n.school_id=j.school_id AND n.id=j.nomination_id
           JOIN giveaway_campaigns c ON c.school_id=n.school_id AND c.campaign_key=n.campaign_key
           WHERE j.school_id=${school} AND j.id=${id}
           AND j.claim_token=${claim} AND j.state='dispatching' AND j.lease_until>clock_timestamp() AND n.erasure_requested_at IS NULL`;
         if (!row) throw new Error('Dispatch ownership lost');
-        const [invitation] = await sql`SELECT state FROM giveaway_jobs WHERE school_id=${school} AND nomination_id=${row.id} AND kind='invitation'`;
+        const [invitation] = await sql`SELECT state FROM giveaway_jobs WHERE school_id=${school} AND nomination_id=${row.id} AND kind='invitation' AND event_key='nomination'`;
         return { ...row, invitation_status: invitation?.state === 'succeeded' ? 'accepted_by_provider' : invitation?.state === 'uncertain' ? 'uncertain' : 'queued' };
       });
     },

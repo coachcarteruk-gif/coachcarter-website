@@ -71,6 +71,36 @@ test('automatic invitation permission requires the recorded confirmation wording
     assert.equal(nominationPermitsInvitation({nomination:{permission:{...permission,...change}}}),false);
 });
 
+test('nominator confirmation has its own recipient, receipt and idempotency key, sharing the same private link',async t=>{
+  const f=await setup(t),body=nominate(),messages=[],keys=[];
+  await f.db.nominate(1,'test',body,{confirmNominator:true});
+  const row=(await f.pg.query('SELECT * FROM giveaway_nominations')).rows[0];
+  const config={enabled:true,schoolId:1,campaignKey:'test',nominationId:row.id,
+    invitation:{enabled:true,permissionMode:'nomination',confirmationEnabled:true,origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test'},crm:{enabled:false}};
+  const providers={providerAllowsInvitation:async()=>true,invitationTransport:{send:async(message,key)=>{messages.push(message);keys.push(key);return {accepted:true,id:'receipt-'+messages.length};}}};
+  const result=await runIntegration({...f,sql:tagged(f.pg),config,providers});
+  assert.equal(result.invitation.status,'succeeded');assert.equal(result.confirmation.status,'succeeded');
+  assert.deepEqual(messages.map(m=>m.to[0]),['alex@example.test','jamie@example.test']);
+  assert.notEqual(keys[0],keys[1]);
+  assert.equal(messages[0].text.match(/https:\/\/example.test\/giveaway\/apply.html#[\w-]+/)[0],messages[1].text.match(/https:\/\/example.test\/giveaway\/apply.html#[\w-]+/)[0]);
+  assert.match(messages[1].text,/Your nomination for Alex has been submitted/);
+  assert.match(messages[1].text,/We have also emailed your nominee/);
+  assert.doesNotMatch(messages[1].text,/Private nomination reason/);
+  await f.db.nominate(1,'test',body,{confirmNominator:true});
+  await runIntegration({...f,sql:tagged(f.pg),config,providers});assert.equal(messages.length,2);
+  const jobs=(await f.pg.query("SELECT event_key,state,payload FROM giveaway_jobs WHERE kind='invitation' ORDER BY event_key")).rows;
+  assert.equal(jobs.length,2);assert.ok(jobs.every(j=>j.state==='succeeded' && !j.payload.sealed_token));
+});
+
+test('suppressed nominator confirmation cannot prevent the nominee invitation',async t=>{
+  const f=await setup(t),body=nominate();await f.db.nominate(1,'test',body,{confirmNominator:true});
+  const row=(await f.pg.query('SELECT * FROM giveaway_nominations')).rows[0];let sends=0;
+  const config={enabled:true,schoolId:1,campaignKey:'test',nominationId:row.id,
+    invitation:{enabled:true,permissionMode:'nomination',confirmationEnabled:true,origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test'},crm:{enabled:false}};
+  const result=await runIntegration({...f,sql:tagged(f.pg),config,providers:{providerAllowsInvitation:async source=>source.event_key!=='nominator-confirmation',invitationTransport:{send:async()=>{sends++;return {accepted:true,id:'nominee-only'};}}}});
+  assert.equal(result.invitation.status,'succeeded');assert.equal(result.confirmation.status,'deferred');assert.equal(sends,1);
+});
+
 test('composed SQL integration sends once, provisions suppressed contacts, syncs application and preserves withdrawal',async t=>{
   const f=await setup(t),{row,token}=await f.seeded();
   const contacts=[],records=new Map(),writes=[];let sends=0;

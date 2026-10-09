@@ -18,7 +18,7 @@ function createBoundedWorker({ db, config, vault, invitationTransport, crmTransp
     // The configured permission policy and provider check must
     // return an explicit fresh true; missing adapters, failures and unknowns block.
     if (typeof invitationRequested!=='function' || typeof providerAllowsInvitation!=='function') return false;
-    return await db.invitationUnblocked(scope.schoolId,source.id)===true &&
+    return await db.invitationUnblocked(scope.schoolId,source.id,config.invitation?.recipientRole==='nominator'?'nominator':'nominee')===true &&
       await invitationRequested(source)===true && await providerAllowsInvitation(source)===true;
   };
   return Object.freeze({async run(kind) {
@@ -37,7 +37,8 @@ function createBoundedWorker({ db, config, vault, invitationTransport, crmTransp
       handler=crmHandler({config:crmConfig,transport:crmTransport,now,
         plansFor:createContactMatcher({config:crmConfig,search,enabled:true})});
     }
-    return processOne({db,schoolId:scope.schoolId,kind,handler,enabled:true,claimScope});
+    return processOne({db,schoolId:scope.schoolId,kind,handler,enabled:true,
+      claimScope:kind==='invitation'?{...claimScope,eventKey:config.invitation?.recipientRole==='nominator'?'nominator-confirmation':'nomination'}:claimScope});
   }});
 }
 module.exports={createBoundedWorker};

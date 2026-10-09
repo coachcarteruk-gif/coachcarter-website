@@ -110,6 +110,7 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
       if (action === 'nominate') {
         let applicationUrl;
         const result = await db.nominate(schoolId,config.campaign_key,req.body || {}, {
+        confirmNominator: config.integration?.invitation?.confirmationEnabled===true,
         afterCreated: async (nominationId, invitationToken) => {
           const link = new URL('/giveaway/apply.html',config.origin);
           link.hash = invitationToken;
