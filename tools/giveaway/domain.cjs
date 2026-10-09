@@ -23,6 +23,8 @@ function nomination(body) {
     }
   }
   out.reason = clean(body.reason, 3000);
+  out.relationship = clean(body.relationship, 160);
+  if (body.relationship != null && body.relationship !== '' && !out.relationship) errors.relationship = 'Enter your relationship in up to 160 characters, or leave this blank.';
   if (!out.reason) errors.reason = 'Tell us why you are nominating this person (up to 3,000 characters).';
   if (body.permission !== true) errors.permission = 'Please confirm you have their permission.';
   if (!/^[0-9a-f-]{36}$/i.test(body.submission_key || '')) errors.form = 'Refresh this page and try again.';
@@ -31,7 +33,7 @@ function nomination(body) {
 }
 function application(body) {
   const out = {}, errors = {};
-  for (const [field, max] of Object.entries({ name: 160, meaning: 3000, address: 500, postcode: 10 })) {
+  for (const [field, max] of Object.entries({ name: 160, meaning: 3000, barriers: 3000, address: 500, postcode: 10 })) {
     out[field] = clean(body[field], max);
     if (!out[field]) errors[field] = 'Please complete this answer (maximum ' + max + ' characters).';
   }

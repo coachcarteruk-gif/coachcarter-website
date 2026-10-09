@@ -26,6 +26,20 @@ module.exports = async (req, res) => {
 
     results.trial_intakes_purged = 0;
     const intakeSchools = await sql`SELECT id FROM schools`;
+    // Separate release gate; only stage cleanup, never erase provider evidence.
+    if (process.env.GIVEAWAY_RETENTION_ENABLED === 'true') {
+      const { privacyReady } = require('./_giveaway-privacy');
+      if (await privacyReady(sql)) {
+        const { createDatabase, poolTransactions } = require('../tools/giveaway/database.cjs');
+        const { Pool } = require('pg');
+        const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+        try {
+          const giveawayDb = createDatabase({ transaction: poolTransactions(pool) });
+          results.giveaway_cleanup_requested = 0;
+          for (const school of intakeSchools) results.giveaway_cleanup_requested += (await giveawayDb.requestRetention(Number(school.id))).length;
+        } finally { await pool.end(); }
+      }
+    }
     for (const school of intakeSchools) {
       // Weekly worker: seven-day margin keeps the intended ceiling at 24 months.
       const expired = await sql`DELETE FROM trial_booking_intakes WHERE school_id = ${school.id}

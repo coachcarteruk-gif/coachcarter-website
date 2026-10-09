@@ -39,7 +39,7 @@ test('browser journey, private links, admin guard, errors, mobile and keyboard',
     assert.equal(await page.locator('#name').inputValue(), 'Robin Example'); assert.equal(await page.locator('input[type=checkbox]:checked').count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: path.join(shots, 'application-mobile.png'), fullPage: true });
-    await page.locator('#meaning').fill('Being able to travel independently would open up work opportunities.'); await page.locator('#hours').fill('0');
+    await page.locator('#meaning').fill('Being able to travel independently would open up work opportunities.'); await page.locator('#barriers').fill('Lesson costs prevent me from starting; free lessons would help.'); await page.locator('#hours').fill('0');
     await page.locator('[name=test_booked][value=yes]').check(); await page.locator('#test-details:not([hidden])').waitFor();
     await page.locator('#test_date').fill('2026-12-03'); await page.locator('#test_time').fill('10:15'); await page.locator('#test_location').fill('Example Test Centre');
     await page.locator('[name=practice_car][value=no]').check(); await page.locator('#address').fill('1 Fictional Lane'); await page.locator('#postcode').fill('SW1A 1AA'); await page.locator('#employment').selectOption('prefer-not-to-say'); await page.locator('#contact_confirmed').check();

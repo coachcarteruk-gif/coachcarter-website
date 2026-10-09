@@ -1,0 +1,56 @@
+-- Prepared source access only; NOT applied. Governed rollout requires approval.
+-- Independent of deferred migration 075. Role remains NOLOGIN until activated.
+CREATE ROLE cc_fraser_diary_reader NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE cc_fraser_diary_reader SET default_transaction_read_only=on;
+ALTER ROLE cc_fraser_diary_reader SET statement_timeout='5s';
+CREATE SCHEMA cc_fraser_diary_preview;
+REVOKE ALL ON SCHEMA cc_fraser_diary_preview FROM PUBLIC;
+GRANT USAGE ON SCHEMA cc_fraser_diary_preview TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.schools WITH (security_barrier=true) AS SELECT id,active FROM public.schools WHERE id=1;
+REVOKE ALL ON cc_fraser_diary_preview.schools FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.schools TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.instructors WITH (security_barrier=true) AS SELECT id,school_id,active,offered_lesson_types,max_booking_days_ahead,min_booking_notice_hours,transmission_type,request_to_book,slot_start_interval_minutes,buffer_minutes FROM public.instructors WHERE school_id=1 AND id=4;
+REVOKE ALL ON cc_fraser_diary_preview.instructors FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.instructors TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.lesson_types WITH (security_barrier=true) AS SELECT id,school_id,active,slug,duration_minutes FROM public.lesson_types WHERE school_id=1 AND id IN (1,2);
+REVOKE ALL ON cc_fraser_diary_preview.lesson_types FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.lesson_types TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.instructor_availability WITH (security_barrier=true) AS SELECT school_id,instructor_id,day_of_week,start_time,end_time,transmission_type,active FROM public.instructor_availability WHERE school_id=1 AND instructor_id=4;
+REVOKE ALL ON cc_fraser_diary_preview.instructor_availability FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.instructor_availability TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.instructor_availability_overrides WITH (security_barrier=true) AS SELECT school_id,instructor_id,override_date,start_time,end_time,transmission_type,active FROM public.instructor_availability_overrides WHERE school_id=1 AND instructor_id=4 AND override_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.instructor_availability_overrides FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.instructor_availability_overrides TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.instructor_blackout_dates WITH (security_barrier=true) AS SELECT school_id,instructor_id,blackout_date,end_date FROM public.instructor_blackout_dates WHERE school_id=1 AND instructor_id=4 AND blackout_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13 AND COALESCE(end_date,blackout_date) >= (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date;
+REVOKE ALL ON cc_fraser_diary_preview.instructor_blackout_dates FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.instructor_blackout_dates TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.lesson_bookings WITH (security_barrier=true) AS SELECT 0::integer AS id,school_id,instructor_id,scheduled_date,start_time,end_time,status,substring(upper(pickup_address) from E'\\m([A-Z]{1,2}[0-9][A-Z0-9]?[[:space:]]*[0-9][A-Z]{2})\\M') AS pickup_address,COALESCE(substring(upper(COALESCE(NULLIF(btrim(dropoff_address),''),pickup_address)) from E'\\m([A-Z]{1,2}[0-9][A-Z0-9]?[[:space:]]*[0-9][A-Z]{2})\\M'),'UNKNOWN') AS dropoff_address FROM public.lesson_bookings WHERE school_id=1 AND instructor_id=4 AND scheduled_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.lesson_bookings FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.lesson_bookings TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.slot_reservations WITH (security_barrier=true) AS SELECT school_id,instructor_id,scheduled_date,start_time,end_time,expires_at FROM public.slot_reservations WHERE school_id=1 AND instructor_id=4 AND scheduled_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.slot_reservations FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.slot_reservations TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.lesson_offers WITH (security_barrier=true) AS SELECT school_id,instructor_id,scheduled_date,start_time,end_time,status,expires_at FROM public.lesson_offers WHERE school_id=1 AND instructor_id=4 AND scheduled_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.lesson_offers FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.lesson_offers TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.lesson_requests WITH (security_barrier=true) AS SELECT school_id,instructor_id,scheduled_date,start_time,end_time,status,expires_at FROM public.lesson_requests WHERE school_id=1 AND instructor_id=4 AND scheduled_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.lesson_requests FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.lesson_requests TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.recurring_slot_block_items WITH (security_barrier=true) AS SELECT school_id,instructor_id,block_id,scheduled_date,start_time,end_time,status FROM public.recurring_slot_block_items WHERE school_id=1 AND instructor_id=4 AND scheduled_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.recurring_slot_block_items FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.recurring_slot_block_items TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.recurring_slot_blocks WITH (security_barrier=true) AS SELECT id,school_id,status,expires_at FROM public.recurring_slot_blocks WHERE school_id=1 AND instructor_id=4;
+REVOKE ALL ON cc_fraser_diary_preview.recurring_slot_blocks FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.recurring_slot_blocks TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.instructor_busy_blocks WITH (security_barrier=true) AS SELECT school_id,instructor_id,block_date,start_time,end_time FROM public.instructor_busy_blocks WHERE school_id=1 AND instructor_id=4 AND block_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.instructor_busy_blocks FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.instructor_busy_blocks TO cc_fraser_diary_reader;
+CREATE VIEW cc_fraser_diary_preview.instructor_external_events WITH (security_barrier=true) AS SELECT school_id,instructor_id,event_date,start_time,end_time,is_all_day FROM public.instructor_external_events WHERE school_id=1 AND instructor_id=4 AND event_date BETWEEN (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date AND (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London')::date+13;
+REVOKE ALL ON cc_fraser_diary_preview.instructor_external_events FROM PUBLIC;
+GRANT SELECT ON cc_fraser_diary_preview.instructor_external_events TO cc_fraser_diary_reader;
+-- Reject inherited PUBLIC access rather than silently changing existing users.
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema','cc_fraser_diary_preview') AND n.nspname NOT LIKE 'pg_toast%' AND c.relkind IN ('r','p','v','m') AND has_table_privilege('cc_fraser_diary_reader',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) THEN RAISE EXCEPTION 'SOURCE_PUBLIC_TABLE_ACCESS_REVIEW_REQUIRED'; END IF;
+ IF has_schema_privilege('cc_fraser_diary_reader','public','CREATE') THEN RAISE EXCEPTION 'SOURCE_PUBLIC_SCHEMA_ACCESS_REVIEW_REQUIRED'; END IF;
+ IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND p.prosecdef AND has_function_privilege('cc_fraser_diary_reader',p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'SOURCE_PUBLIC_DEFINER_ACCESS_REVIEW_REQUIRED'; END IF;
+END $$;

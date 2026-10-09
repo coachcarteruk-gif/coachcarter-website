@@ -2,6 +2,10 @@
 (function () {
   'use strict';
 
+  // Giveaway forms/review contain private nomination and application answers.
+  // Never initialize analytics or session replay on this campaign surface.
+  if (/^\/giveaway(?:\/|$)/.test(window.location.pathname)) return;
+
   var PH_KEY = 'phc_JZFh3Xw0qVp167yJzkHaYTm1FT1hpkutpg2VSmJPJH3';
   var PH_HOST = 'https://eu.i.posthog.com';
   var loaded = false;

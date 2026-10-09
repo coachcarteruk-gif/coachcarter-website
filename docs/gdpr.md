@@ -1,5 +1,14 @@
 # GDPR Compliance (April 2026)
 
+## Giveaway privacy follow-up (9 October 2026; not deployed)
+
+Learner exports include role-separated giveaway data. Shared learner deletion
+atomically stages matching same-school nominations for provider cleanup and stops
+queued work; it does not silently delete another person's answers or provider
+evidence. Giveaway opt-outs persist across repeat submissions and nomination
+deletion. Migration 078, marketing send integration and scoped HighLevel cleanup
+remain release gates. See [implementation and limitations](giveaway-storage.md).
+
 ## Privacy maintenance rules
 
 1. **New pages MUST include cookie consent**: Every HTML page must load `cookie-consent.js` and `posthog-loader.js` instead of inline PostHog. Never add inline PostHog scripts.
@@ -83,3 +92,29 @@ Optional self-reported current test state/date/time/centre remains in `learner_u
 - `api/learner.js` — `export-data`, `request-deletion`, `confirm-deletion` actions
 - `public/learner/confirm-deletion.html` — token-based deletion confirmation page
 - `public/learner/profile.html` — "Privacy & Data" section (export, cookie settings, delete account)
+
+### Giveaway contact provisioning follow-up (9 October 2026)
+
+The local-only shared contact provisioner stores identity/channel hashes, provider
+contact IDs, reservation metadata and a review reference under the existing
+nomination CRM journal. These hashes/IDs are personal data, not anonymous data;
+the nomination retention/erasure lifecycle applies. No raw contact details are
+copied into this ledger. Keep operational claim tokens out of subject exports.
+Unresolved provider writes block final deletion on the anchor and requesting
+nomination; late receipts remain available for cleanup. Before activation, provider
+cleanup and identity-verified export must account for shared same-school identity
+mappings across nominations, including mappings anchored on another nomination.
+Do not delete unrelated CRM history or erase uncertainty evidence to unblock a retry.
+Live provisioning and automatic provider cleanup remain disabled/unimplemented.
+
+### Giveaway shared-reference exports and object cleanup (9 October follow-up)
+
+Role-scoped exports now include HighLevel location/contact references from matching
+same-school identity journals, including anchors on another nomination. Internal
+claim tokens and review references remain excluded. The local cleanup worker
+persists deletion intent, verifies object ownership, deletes only the giveaway
+custom object and requires absence readback. Uncertain deletion is reconciled by
+reads only. Final local deletion is blocked until its journalled object is verified
+absent. Shared contacts remain subject to explicit identity/retention review; the
+worker cannot delete them, so object cleanup alone is not full subject erasure.
+No cleanup scheduler or production activation has been added.

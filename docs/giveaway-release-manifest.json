@@ -1,0 +1,319 @@
+{
+  "purpose": "Review overlay only; not a deployable build or execution approval",
+  "date": "2026-10-09",
+  "branch": "codex/giveaway-nomination-flow",
+  "base": "91b3e07d8354c666ad92aa179328f4ae78e289eb",
+  "head": "ad2004f476c2544f175714753add5ccebff21e79",
+  "files": [
+    {
+      "path": "api/_gdpr.js",
+      "bytes": 19987,
+      "sha256": "b16558c3716101bcfe288e71f52de369a8e6cd6f55c53590ebd73e4aee9304b9"
+    },
+    {
+      "path": "api/_giveaway-handler.js",
+      "bytes": 9120,
+      "sha256": "080552c0c5833a31ec631064439b00f8202459fc4425a1c02fe29e501c46dff1"
+    },
+    {
+      "path": "api/_giveaway-privacy.js",
+      "bytes": 3075,
+      "sha256": "c421d7a0d761825c03fa6fbbd3c5bc0ee8b9f4a8a11a5854524d08540d4c5b98"
+    },
+    {
+      "path": "api/cron-retention.js",
+      "bytes": 8031,
+      "sha256": "99a0ef69926aeafbd350e1a1ee5e2c8326f566904c958783ac0e9e955dc2b362"
+    },
+    {
+      "path": "api/giveaway.js",
+      "bytes": 1193,
+      "sha256": "6c882866791df1ad4b963a9a75b5c8e325103f3ca3efab91d6fdc87b49f6b513"
+    },
+    {
+      "path": "api/learner.js",
+      "bytes": 113855,
+      "sha256": "97d46bd53e0b56b713e0c18191277e5fef7781147342346eded9224cfe7cb563"
+    },
+    {
+      "path": "db/migrations/076_fraser_diary_preview_access.sql",
+      "bytes": 8627,
+      "sha256": "3c6da0e3e29ad3f5a970e4386f2cf351339b4b56fd56db431aa91834ff891f38"
+    },
+    {
+      "path": "db/migrations/077_giveaway_storage.sql",
+      "bytes": 2922,
+      "sha256": "d39335dc5c63771a35d0db2dd0483bd8440b1a1c5c7cdabe1c60c83acb0e7acc"
+    },
+    {
+      "path": "db/migrations/078_giveaway_privacy.sql",
+      "bytes": 419,
+      "sha256": "fed208ef29420a6c8c6d34781c42112bdd27a932c58ffd5869495a49d952bee0"
+    },
+    {
+      "path": "db/migrations/manifest.json",
+      "bytes": 19435,
+      "sha256": "c18e57e5bfd78f549e5761b1fbefcd029dd6fe547448d4634a4dda45896e7363"
+    },
+    {
+      "path": "DEVELOPMENT-ROADMAP.md",
+      "bytes": 262077,
+      "sha256": "3f6759fc3acb298747c60eb27cd2752d4391a2d37f30b58362d160dc28bdfd94"
+    },
+    {
+      "path": "docs/gdpr.md",
+      "bytes": 12881,
+      "sha256": "dfa506c694d791cf59b524a5ccde69d5f65e82a9d895d300f308fb182904d042"
+    },
+    {
+      "path": "docs/giveaway-judged-award.md",
+      "bytes": 10087,
+      "sha256": "d3e72ff83e953c3f9779b37f085b9d06b56ec1b714a9b15fcee2a6f7a5fdb9a1"
+    },
+    {
+      "path": "docs/giveaway-launch-readiness.md",
+      "bytes": 22416,
+      "sha256": "70824672b707d57fd3cdba8cf0ce273e5c2fb5a7fd2c67983c345bb723d295e6"
+    },
+    {
+      "path": "docs/giveaway-release-package.md",
+      "bytes": 8062,
+      "sha256": "5e0bc5ec6dcd63f2f7300148189ad5c8cd9bf962e4e1e7b2f1404fc8800fc9f3"
+    },
+    {
+      "path": "docs/giveaway-storage.md",
+      "bytes": 49183,
+      "sha256": "242b7b8d3d94774bf5f6f20c600a9083b7bc4285200dfba04c8a2898f2fe6067"
+    },
+    {
+      "path": "docs/migration-governance.md",
+      "bytes": 31114,
+      "sha256": "e08ff374962800f9bc190622deaf2db9dae1af2f6f2bd83b728927690bf9bc83"
+    },
+    {
+      "path": "MIGRATION-PLAN.md",
+      "bytes": 76397,
+      "sha256": "b3d7380f220d356a901f571c49c2230b65c6a43f2bb553e19419ea15095224ec"
+    },
+    {
+      "path": "PROJECT.md",
+      "bytes": 166677,
+      "sha256": "c0aedad2bccb8a24e97cf28e20f8f7e97495ec4a62e8fa4e07a9276da080c12a"
+    },
+    {
+      "path": "public/giveaway/app.js",
+      "bytes": 8544,
+      "sha256": "1b635a03c2b29004192f76b4c0bc40844e772a7e5dbc4e0b3a7aff2840bbe5f4"
+    },
+    {
+      "path": "public/giveaway/apply.html",
+      "bytes": 12095,
+      "sha256": "6e1d6f0d6c455b8f69ef05760a0a33ac03d3ca71a96ef34927988f2786de77ef"
+    },
+    {
+      "path": "public/giveaway/body.ttf",
+      "bytes": 656568,
+      "sha256": "d636e4683231f931eda222d588e944d082bfd3bdba02f928bee461c0f185b251"
+    },
+    {
+      "path": "public/giveaway/heading.ttf",
+      "bytes": 408496,
+      "sha256": "413e7357809ddd12fd80a96a8a396de0e401638d4acd3cb3e37532f0472ac682"
+    },
+    {
+      "path": "public/giveaway/index.html",
+      "bytes": 8240,
+      "sha256": "9f8e9b851cec1a8cbcfb035311505ccd29211e0b59a97c39960906fd13bb3e41"
+    },
+    {
+      "path": "public/giveaway/privacy.html",
+      "bytes": 5423,
+      "sha256": "d3c254256a75905edd2103feffb8c1b9ded2d3339dc0d8470ed667bed8621152"
+    },
+    {
+      "path": "public/giveaway/review.html",
+      "bytes": 1512,
+      "sha256": "4eb8318348dd4b1c44c1d8ffa81a23a84ad6981fd223e200579ca8182b622486"
+    },
+    {
+      "path": "public/giveaway/review.js",
+      "bytes": 3653,
+      "sha256": "a006d5e9afd4a3e3e89b11c791022385e5e388071e0183ef1c4af48c8dadd192"
+    },
+    {
+      "path": "public/giveaway/style.css",
+      "bytes": 10647,
+      "sha256": "37c1c6c200662bffe90bc67f07773c52440489569dfb0aa8d2430190d064eb05"
+    },
+    {
+      "path": "public/giveaway/terms.html",
+      "bytes": 6778,
+      "sha256": "dbd44ea59a032333ff895f901012ecbc15afdff27c6480314afe7bee71b05eb8"
+    },
+    {
+      "path": "public/posthog-loader.js",
+      "bytes": 7825,
+      "sha256": "bc7e072080f9d3dfeb9fc962189d709724098a229b0482366ce5337ab1d92415"
+    },
+    {
+      "path": "tools/giveaway/api-preview.cjs",
+      "bytes": 3500,
+      "sha256": "0c3551953439fe1b46add660cc019e722eeb7af24d14f98185cb7411eb9ca78e"
+    },
+    {
+      "path": "tools/giveaway/api.test.cjs",
+      "bytes": 11058,
+      "sha256": "2e0758b8fb7f34ad55481897461e4feb0019250b8118851ada8108e07a80dffa"
+    },
+    {
+      "path": "tools/giveaway/browser.test.cjs",
+      "bytes": 6795,
+      "sha256": "3991d3266dc2f3b53cc1c49c11fa39e0f7814ac6edbfbca03d4d4aa7b6e49bb1"
+    },
+    {
+      "path": "tools/giveaway/contact-matching.cjs",
+      "bytes": 4899,
+      "sha256": "0481baf3dece7248edae86c1f98025c2244f848affed08e7c4d073d2250fa169"
+    },
+    {
+      "path": "tools/giveaway/contact-matching.test.cjs",
+      "bytes": 6063,
+      "sha256": "643cd6ab47c28a56487a3afaee4626cdbee55b24622833b547909ed869ff259d"
+    },
+    {
+      "path": "tools/giveaway/contact-provisioning.cjs",
+      "bytes": 7875,
+      "sha256": "e5f699affdfecc6d132943400c9d93737db730943c54b496fc0996349456ed66"
+    },
+    {
+      "path": "tools/giveaway/contact-provisioning.test.cjs",
+      "bytes": 9996,
+      "sha256": "a8ce9b78b09c85dcb43686c6591d37e069dc37695616904a2fd6256f74ebcf53"
+    },
+    {
+      "path": "tools/giveaway/database-worker.cjs",
+      "bytes": 3678,
+      "sha256": "d155a0401f64e3c5e77684948fad22c8abf857cbfccbac17338af8c55238b476"
+    },
+    {
+      "path": "tools/giveaway/database.cjs",
+      "bytes": 18696,
+      "sha256": "b4982513cfe7a57951aa01139df695cdc60ff44a1ef45f66f12fba3bf8bb66a7"
+    },
+    {
+      "path": "tools/giveaway/database.test.cjs",
+      "bytes": 25916,
+      "sha256": "2cfa28b76037df168440eac77b875c4968c4677c2b3f92ebf0dd7dfb40f72c1c"
+    },
+    {
+      "path": "tools/giveaway/domain.cjs",
+      "bytes": 8643,
+      "sha256": "8d1f13d93906c07aa60750ec91752eba12c89ac72c6c82897c48fbdfae73f37a"
+    },
+    {
+      "path": "tools/giveaway/domain.test.cjs",
+      "bytes": 8014,
+      "sha256": "72eb058a4c6f794e63ec209ecb044a2de76219ab273541d31ad38ba8a35d1449"
+    },
+    {
+      "path": "tools/giveaway/highlevel-configuration.json",
+      "bytes": 9070,
+      "sha256": "31751e522ff024260f6e01d2e4e64875ef93ce14ff250529020f8cca5efeba17"
+    },
+    {
+      "path": "tools/giveaway/highlevel-rehearsal.cjs",
+      "bytes": 5534,
+      "sha256": "0059dc0692ac51535fb0401b036e6f110c6aeef551d07bb90d0af97b596b685f"
+    },
+    {
+      "path": "tools/giveaway/highlevel-sync.cjs",
+      "bytes": 12637,
+      "sha256": "955c089bbaa8d520a495440a44566fef61c679ed134022817fe5795f85515b31"
+    },
+    {
+      "path": "tools/giveaway/highlevel-sync.test.cjs",
+      "bytes": 12533,
+      "sha256": "b11f6cd98b091704cf6a0acc56ab9bdf7c32e9d0f0083138883b555e7f8aa958"
+    },
+    {
+      "path": "tools/giveaway/invitation.cjs",
+      "bytes": 6614,
+      "sha256": "2ac54636e775cb6efc22200a6649c62cf104e55ede16a03b22214aa7c75f5b3a"
+    },
+    {
+      "path": "tools/giveaway/neon-privacy-rehearsal.cjs",
+      "bytes": 4591,
+      "sha256": "50b478f0d95f2eb2c797eabf6b580c7bfc55678b8e560f4c690f7fb09c68f197"
+    },
+    {
+      "path": "tools/giveaway/neon-rehearsal.cjs",
+      "bytes": 4249,
+      "sha256": "c1e2113ba0e21a407318c83fdeba625d3eb451da7d633d1046ac998f69b62b1c"
+    },
+    {
+      "path": "tools/giveaway/privacy-references.cjs",
+      "bytes": 1195,
+      "sha256": "fefb1c19831cce41bcaa1b5a3ba9cb0daefd939c0a4b004b3ca567ef5185bcce"
+    },
+    {
+      "path": "tools/giveaway/production-browser.test.cjs",
+      "bytes": 9547,
+      "sha256": "c6e6712a55f566d660528b02aaa546ec893c91cb6bc7ae4cf83c97701cde73e5"
+    },
+    {
+      "path": "tools/giveaway/provider-cleanup.cjs",
+      "bytes": 6838,
+      "sha256": "aa7d3dc593f1338922c18fc492b34dee294339fff754a0157eff79416aff1d8a"
+    },
+    {
+      "path": "tools/giveaway/provider-cleanup.test.cjs",
+      "bytes": 6467,
+      "sha256": "2b97f03495d82c423bbab7550f7b2bb0c695715520826b992c4ef76029c887cb"
+    },
+    {
+      "path": "tools/giveaway/public/app.js",
+      "bytes": 6180,
+      "sha256": "b5d15c25e7caceb015fd6d9b8361b4565c6dc3b36079eb6111714ceded84a43a"
+    },
+    {
+      "path": "tools/giveaway/public/apply.html",
+      "bytes": 7624,
+      "sha256": "1409f1e4609c6352282aedae582f6bb696d7ae82040bd05cd5445a81731f84f6"
+    },
+    {
+      "path": "tools/giveaway/public/index.html",
+      "bytes": 5298,
+      "sha256": "3196aac36d80c83c9b69a245aacb072fd185a9209aff119de915a617df2fc92d"
+    },
+    {
+      "path": "tools/giveaway/public/privacy.html",
+      "bytes": 2360,
+      "sha256": "d41f604a4debe24cb34465975eebcbe3ceb9d9a85715df040a485c7abe71b92b"
+    },
+    {
+      "path": "tools/giveaway/public/review.html",
+      "bytes": 1579,
+      "sha256": "1b7274a60c1e894f4285aaa6dfb09cbb3be5be6315d1a0bfefbd23a3d47c93de"
+    },
+    {
+      "path": "tools/giveaway/public/review.js",
+      "bytes": 3216,
+      "sha256": "f8234546c07161da78e6e14302394be1c9cc9eb978d56970fd90aa6f0b31f38d"
+    },
+    {
+      "path": "tools/giveaway/public/style.css",
+      "bytes": 5996,
+      "sha256": "6611414dfed550dc46011132af3f5328e671d2efa506b2c0eac59d919cedd9bd"
+    },
+    {
+      "path": "tools/giveaway/README.md",
+      "bytes": 19474,
+      "sha256": "181c12e186f95cb799a669ce47ca94e40be4fd4ee42365a2c23bb62c027e8579"
+    },
+    {
+      "path": "tools/giveaway/server.cjs",
+      "bytes": 8661,
+      "sha256": "4a7cbb9c45b953303d9fd61102887ae244e3018be602772d60dd32a7bc14cbec"
+    }
+  ]
+}

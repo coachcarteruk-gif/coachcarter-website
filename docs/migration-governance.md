@@ -2,6 +2,27 @@
 
 ## Latest recorded status
 
+9 October 2026 privacy follow-up: additive migration 078 creates giveaway
+marketing suppression storage. Manifest now has 79 entries and passes checks.
+078 passed local PGlite checks and the governed isolated Neon rehearsal on
+`br-twilight-term-abtld5ie`, including eight concurrent withdrawals. No production
+application occurred. Existing 077 bytes/checksum remain unchanged.
+
+9 October 2026 giveaway follow-up: ledger inspection on the isolated branch found
+076 already applied as `076_fraser_diary_preview_access.sql`. Its exact source was
+recovered from the handover and matched to the recorded checksum; the new giveaway
+migration was renumbered 077. The 78-entry manifest passes governance checks.
+077 was applied through the governed runner only on `br-twilight-term-abtld5ie`;
+production was not changed. Independent-connection giveaway races passed. See
+[current API and rehearsal evidence](giveaway-storage.md).
+
+9 October 2026 repository-only addition: migration
+`077_giveaway_storage.sql` adds inactive giveaway campaigns, submissions, consent
+evidence and a durable queue. It was tested locally with PGlite; it has not been
+applied to Neon. The manifest has 77 entries including deferred 041. Independent
+connection races, runtime grants and production privacy/API integration remain
+release prerequisites. See [giveaway storage](giveaway-storage.md).
+
 30 September 2026 repository-only addition: migration
 `075_instructor_busy_block_overrides.sql` prepares exact busy-block snapshots
 for instructor-confirmed pencilled offers. It has not been applied to production.

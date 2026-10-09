@@ -193,6 +193,8 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   const hasFullCurriculumConsumerRights = await fullCurriculumConsumerRightsTablesExist(sql);
   const hasFullCurriculumPilotAccess = await fullCurriculumPilotAccessTableExists(sql);
   const hasCurriculumProgress = await curriculumProgressTablesExist(sql);
+  const giveawayPrivacy = require('./_giveaway-privacy');
+  const hasGiveawayPrivacy = await giveawayPrivacy.privacyReady(sql);
 
   const txn = [
     sql`DELETE FROM trial_booking_intakes WHERE learner_id = ${learnerId} AND school_id = (SELECT school_id FROM learner_users WHERE id = ${learnerId})`,
@@ -358,6 +360,7 @@ async function deleteLearnerCascade(sql, learnerId, opts = {}) {
   // 4. Finally, the learner row itself. Must be last — earlier FK references
   //    (skill_ratings.user_id, slot_reservations.learner_id, etc.) would
   //    block this DELETE if their rows still existed.
+  if (hasGiveawayPrivacy) txn.push(...giveawayPrivacy.learnerErasureQueries(sql,learnerId));
   txn.push(sql`DELETE FROM learner_users WHERE id = ${learnerId}`);
 
   await sql.transaction(txn);

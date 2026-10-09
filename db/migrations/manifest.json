@@ -615,6 +615,30 @@
       "filename": "075_instructor_busy_block_overrides.sql",
       "checksum": "21866e2c69c8f2ef4475f6b9b946bee0ccebb9f0dcbe47f9ad8b97d5ff8a3850",
       "execution": "numbered"
+    },
+    {
+      "id": "076",
+      "order": 77,
+      "prefix": "076",
+      "filename": "076_fraser_diary_preview_access.sql",
+      "checksum": "3c6da0e3e29ad3f5a970e4386f2cf351339b4b56fd56db431aa91834ff891f38",
+      "execution": "numbered"
+    },
+    {
+      "id": "077",
+      "order": 78,
+      "prefix": "077",
+      "filename": "077_giveaway_storage.sql",
+      "checksum": "d39335dc5c63771a35d0db2dd0483bd8440b1a1c5c7cdabe1c60c83acb0e7acc",
+      "execution": "numbered"
+    },
+    {
+      "id": "078",
+      "order": 79,
+      "prefix": "078",
+      "filename": "078_giveaway_privacy.sql",
+      "checksum": "fed208ef29420a6c8c6d34781c42112bdd27a932c58ffd5869495a49d952bee0",
+      "execution": "numbered"
     }
   ]
 }

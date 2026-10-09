@@ -2050,12 +2050,13 @@ async function handleExportData(req, res) {
       WHERE r.school_id=${schoolId} AND (lower(e.email)=lower(${profile.email}) OR EXISTS (
         SELECT 1 FROM trial_request_bookings l JOIN lesson_bookings b ON b.school_id=${schoolId} AND b.id=l.booking_id
         WHERE l.school_id=${schoolId} AND l.request_id=r.id AND b.learner_id=${user.id})) ORDER BY r.submitted_at`;
+    const giveaway = await require('./_giveaway-privacy').exportGiveaway(sql,schoolId,profile.email);
     const exportData = {
       _metadata: {
         exported_at: new Date().toISOString(),
         format: 'json',
         data_categories: [
-          'profile', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences', 'trial_requests', 'trial_booking_intakes',
+          'profile', 'giveaway', 'onboarding', 'bookings', 'transactions', 'trial_course_preferences', 'trial_requests', 'trial_booking_intakes',
           'driving_sessions', 'skill_ratings', 'quiz_results',
           'mock_tests', 'mock_test_faults', 'focused_practice',
           'referral_code', 'referrals_made',
@@ -2075,6 +2076,7 @@ async function handleExportData(req, res) {
           ...(hasCurriculumProgress ? ['curriculum_review_submissions', 'curriculum_rating_events', 'curriculum_completion_events'] : [])
         ]
       },
+      giveaway,
       profile: profile || {},
       trial_booking_intakes: trialIntakes,
       trial_requests: trialRequests,

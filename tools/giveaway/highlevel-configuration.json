@@ -1,0 +1,280 @@
+{
+  "inspected_on": "2026-10-09",
+  "location_id": "RFUEKcQDtlsBSCVBJsMs",
+  "location_name": "Coach Carter Driving School",
+  "status": "bounded_fictional_live_crm_test_passed",
+  "live_sync_enabled": false,
+  "live_messaging_enabled": false,
+  "object": {
+    "id": "6ac8930e2c5fcd574ecc03e5",
+    "key": "custom_objects.giveaway_nominations",
+    "name": "Giveaway Nominations",
+    "fields": [
+      {
+        "key": "nomination_reference",
+        "name": "Nomination Reference",
+        "type": "single_line",
+        "unique": true
+      },
+      {
+        "key": "campaign_key",
+        "name": "Campaign Key",
+        "type": "single_line"
+      },
+      {
+        "key": "application_status",
+        "name": "Application Status",
+        "type": "single_line",
+        "planned_values": [
+          "awaiting_application",
+          "submitted",
+          "closed_incomplete"
+        ]
+      },
+      {
+        "key": "invitation_status",
+        "name": "Invitation Status",
+        "type": "single_line",
+        "planned_values": [
+          "queued",
+          "accepted_by_provider",
+          "failed",
+          "uncertain",
+          "suppressed"
+        ]
+      },
+      {
+        "key": "website_review_url",
+        "name": "Website Review URL",
+        "type": "single_line"
+      },
+      {
+        "key": "relationship_to_nominee",
+        "name": "Relationship to Nominee",
+        "type": "single_line"
+      }
+    ],
+    "associations": [
+      {
+        "label": "Nominee",
+        "target": "Contacts",
+        "contacts_per_nomination": 1,
+        "nominations_per_contact": "many",
+        "id": "6ac89342a34a2b8a41df6869",
+        "first_object": "contact",
+        "second_object": "custom_objects.giveaway_nominations"
+      },
+      {
+        "label": "Nominator",
+        "target": "Contacts",
+        "contacts_per_nomination": 1,
+        "nominations_per_contact": "many",
+        "id": "6ac8935571c518edf07d6390",
+        "first_object": "contact",
+        "second_object": "custom_objects.giveaway_nominations"
+      }
+    ]
+  },
+  "proposed_integration": {
+    "name": "CoachCarter Giveaway CRM",
+    "created": true,
+    "scopes": [
+      "contacts.readonly",
+      "contacts.write",
+      "objects/schema.readonly",
+      "objects/record.readonly",
+      "objects/record.write",
+      "associations.readonly",
+      "associations/relation.readonly",
+      "associations/relation.write"
+    ],
+    "scope_limit": "These are location-level permissions, not an object-specific security boundary. Application code must constrain usage to giveaway records and approved contacts.",
+    "excluded": [
+      "message sending",
+      "workflow modification",
+      "payments",
+      "calendars",
+      "object schema editing"
+    ],
+    "id": "6ac894a3ca0e31c7e7cdd563"
+  },
+  "observations": {
+    "custom_objects_before": 0,
+    "custom_fields_before": 54,
+    "existing_pipelines": [
+      "Reactivation/ Win Back Pipeline",
+      "Marketing Pipeline",
+      "Sales"
+    ],
+    "marketing_folder": "Six visible workflows, all Draft, zero total and active enrolments. This was not an exhaustive audit of every workflow trigger.",
+    "other_workflows": "Several published lesson-credit addition/deduction/refund workflows observed. They were not modified or enrolled.",
+    "existing_integration_inspected": "CoachCarter New Contacts/Read Write",
+    "existing_scopes": [
+      "contacts.readonly",
+      "contacts.write",
+      "locations/customFields.readonly",
+      "conversations/message.readonly",
+      "conversations/message.write"
+    ],
+    "workflow_trigger_review": {
+      "date": "2026-10-09",
+      "published": 10,
+      "service_booking": 6,
+      "order_submitted": 3,
+      "free_trial_form": 1,
+      "draft": 8,
+      "contact_or_giveaway_object_creation_triggers_observed": 0,
+      "changes_made": false
+    }
+  },
+  "data_boundary": {
+    "website_authority": [
+      "original nomination",
+      "original application",
+      "secure invitation token",
+      "deadline",
+      "consent evidence"
+    ],
+    "crm_projection": [
+      "approved contact links",
+      "nomination reference",
+      "campaign",
+      "application and invitation status",
+      "optional relationship",
+      "authenticated website review link"
+    ],
+    "forbidden_in_crm_projection": [
+      "invitation tokens",
+      "session secrets",
+      "financial balances",
+      "automatic marketing enrolment"
+    ],
+    "privacy": "Export, deletion, retention and consent suppression integration remain required before real data sync. No records or contacts were imported during configuration."
+  },
+  "readonly_verification": {
+    "object_id": "6ac8930e2c5fcd574ecc03e5",
+    "fields": [
+      {
+        "id": "CABlg1ijYH49p4M0flfU",
+        "fieldKey": "custom_objects.giveaway_nominations.nomination_reference",
+        "name": "Nomination Reference"
+      },
+      {
+        "id": "v5vT3leWZI0nSAYoHpK2",
+        "fieldKey": "custom_objects.giveaway_nominations.campaign_key",
+        "name": "Campaign Key"
+      },
+      {
+        "id": "sHVIe6ktO1Tl3FNExhjb",
+        "fieldKey": "custom_objects.giveaway_nominations.application_status",
+        "name": "Application Status"
+      },
+      {
+        "id": "U1FMGOYVP2aXwzi04G82",
+        "fieldKey": "custom_objects.giveaway_nominations.invitation_status",
+        "name": "Invitation Status"
+      },
+      {
+        "id": "ozUzaVHd0Q2R2iYYNefP",
+        "fieldKey": "custom_objects.giveaway_nominations.website_review_url",
+        "name": "Website Review URL"
+      },
+      {
+        "id": "dxa68xIySXvEgX3xNoCt",
+        "fieldKey": "custom_objects.giveaway_nominations.relationship_to_nominee",
+        "name": "Relationship to Nominee"
+      }
+    ],
+    "location_id": "RFUEKcQDtlsBSCVBJsMs",
+    "verified_at": "2026-10-09T07:19:04.4309403Z"
+  },
+  "local_sync_implementation": {
+    "tests_passed": 31,
+    "contact_plans": "trusted operator review required",
+    "live_provider_writes_tested": true,
+    "production_queue_implemented": false,
+    "status": "implemented_offline_verified",
+    "rehearsal": "nomination_application_withdrawal_disk_reload"
+  },
+  "live_test": {
+    "date": "2026-10-09",
+    "record_id": "6ac8a141567b5f194dc942f1",
+    "reference": "rehearsal:1:TEST-giveaway-20261009:TEST-20261009-CRM-01",
+    "fictional_contacts": [
+      {
+        "id": "c5B2Oepw0AJR8nejp3Bw",
+        "name": "TEST DO NOT CONTACT Giveaway Nominee",
+        "dnd": true
+      },
+      {
+        "id": "Vvg51eeXPZ1dPDF8OvHl",
+        "name": "TEST DO NOT CONTACT Giveaway Nominator",
+        "dnd": true
+      }
+    ],
+    "relations": [
+      {
+        "id": "6ac8a1419acba7393472830a",
+        "role": "nominee",
+        "contact_id": "c5B2Oepw0AJR8nejp3Bw"
+      },
+      {
+        "id": "6ac8a141728a997aea60799a",
+        "role": "nominator",
+        "contact_id": "Vvg51eeXPZ1dPDF8OvHl"
+      }
+    ],
+    "successful_writes": 6,
+    "status_transition": [
+      "awaiting_application",
+      "submitted"
+    ],
+    "invitation_status": "suppressed",
+    "automatic_sync_enabled": false,
+    "messages_sent": 0,
+    "limitations": [
+      "Controlled adapter test using a local fictional journal, not end-to-end live website sync.",
+      "Local review URL is a test placeholder; the fixture is not in the preview database.",
+      "No privacy cleanup, marketing suppression, sender or production launch proof."
+    ],
+    "evidence": "Ignored tmp/giveaway-live-pilot-* journals and receipts; do not replay or reset."
+  },
+  "cleanup_rehearsal": {
+    "date": "2026-10-09",
+    "disposable_record_id": "6ac8a6fcbd5e694e95ee8e8d",
+    "delete_status": 200,
+    "readback_status": 404,
+    "remaining_relations": 0,
+    "shared_contacts_preserved": true,
+    "dnd_unchanged": true,
+    "original_pilot_preserved": true,
+    "initial_validation_rejection": 422,
+    "correction": "DELETE without locationId query, only after explicit validation rejection",
+    "automated_cleanup_enabled": false,
+    "evidence": "Ignored tmp/giveaway-cleanup-rehearsal.json and tmp/giveaway-cleanup-correction.json; do not replay."
+  },
+  "workflow_and_duplicates_review": {
+    "date": "2026-10-09",
+    "location_id": "RFUEKcQDtlsBSCVBJsMs",
+    "published_workflows": 10,
+    "draft_workflows": 8,
+    "marketing_workflows_all_draft": true,
+    "published_last_updated": "2026-09-25/26",
+    "prior_trigger_review": "docs/giveaway-storage.md: bounded fictional live CRM test",
+    "allow_duplicate_contact": false,
+    "primary_match": "Email",
+    "secondary_match": "Phone",
+    "settings_changed": false,
+    "limitation": "Inventory and update dates rechecked; trigger details rely on earlier same-day review. No claim that account settings provide provider-wide exactly-once semantics."
+  },
+  "cleanup_read_verification": {
+    "checked_at": "2026-10-09T12:17:38.759Z",
+    "provider_mutations": 0,
+    "checks": {
+      "original_present": true,
+      "location_confirmed": true,
+      "reference_confirmed": true,
+      "deleted_fixture_absent": true
+    }
+  }
+}

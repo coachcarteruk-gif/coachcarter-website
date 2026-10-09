@@ -1,5 +1,27 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+## Giveaway persistence boundary (9 October 2026; not deployed)
+
+Privacy remains server-side: existing learner exports/deletion include giveaway
+data; `privacy-queue` is a school-admin JSON endpoint. New suppression storage is
+migration 078. Native clients must use the same authenticated withdrawal/API
+paths and must not infer marketing permission from a checkbox cached locally.
+
+Follow-up API contract: GET `config` obtains CSRF state; POST `nominate`,
+`invitation`, `apply`, `withdraw` use JSON and `X-CSRF-Token`. Invitation exchange
+uses an HttpOnly session cookie, not client token storage. GET `review` is
+school-admin scoped. GET `integration-status` uses the same admin/school scope and
+returns campaign job-kind/state counts only; it makes no provider calls or mutations.
+Staff privacy POSTs require audited identity-verification
+references. Native callers must preserve the same cookie/CSRF/session guarantees.
+
+The giveaway repository and queue in `tools/giveaway` are server-only modules
+with injected database transactions; they have no browser dependency. No new
+public API contract is exposed yet. Future web/native callers must share the
+existing authenticated/tenant-scoped `?action=` API pattern; never bundle the
+database adapter, invitation encryption key or CRM credential in a client.
+See [storage contract](docs/giveaway-storage.md).
+
 ## Instructor delivered duration corrections (28 September 2026)
 
 Use `POST /api/instructor?action=correct-delivered-duration` with `booking_id`,

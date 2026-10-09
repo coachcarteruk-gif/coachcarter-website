@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { createService, DEADLINE } = require('./domain.cjs');
 const nomination = () => ({ submission_key: randomUUID(), nominee_name: 'Alex Fictional', nominee_phone: '+44 7700 900123', nominee_email: 'alex@example.test', nominator_name: 'Jamie Fictional', nominator_phone: '07700900456', nominator_email: 'jamie@example.test', reason: 'This would make getting to work much easier.', permission: true });
-const application = () => ({ name: 'Alex Fictional', meaning: 'More independence and easier travel to work.', hours: '0', test_booked: 'no', practice_car: 'no', address: '1 Example Road', postcode: 'SW1A 1AA', employment: 'prefer-not-to-say', contact_confirmed: true });
+const application = () => ({ name: 'Alex Fictional', meaning: 'More independence and easier travel to work.', barriers: 'Lesson costs are a barrier; free lessons would make learning possible.', hours: '0', test_booked: 'no', practice_car: 'no', address: '1 Example Road', postcode: 'SW1A 1AA', employment: 'prefer-not-to-say', contact_confirmed: true });
 function setup() { const store = { data: { nominations: [], outbox: [], consents: [] }, saves: 0, async save() { this.saves++; } }; let date = new Date('2026-10-09T10:00:00Z'); return { store, service: createService(store, { now: () => date }), clock: value => { date = new Date(value); } }; }
 test('nomination persists with an outbox invitation and opaque token', async () => { const { service, store } = setup(); await service.nominate(1, nomination()); assert.equal(store.saves, 1); assert.equal(store.data.outbox.length, 1); assert.match(store.data.outbox[0].token, /^[A-Za-z0-9_-]{43}$/); assert.equal(store.data.nominations[0].nominee.phone, '07700900123'); });
 test('opening is read-only and exposes only nominee contact and nominator name', async () => { const { service, store } = setup(); await service.nominate(1, nomination()); const token = store.data.outbox[0].token; const before = JSON.stringify(store.data); const data = service.inspect(1, token); assert.equal(JSON.stringify(store.data), before); assert.equal(data.nominator_name, 'Jamie Fictional'); assert.equal(data.reason, undefined); assert.equal(data.nominator, undefined); assert.equal(data.nominee.email, 'alex@example.test'); service.inspect(1, token); });
@@ -19,3 +19,14 @@ test('exact BST deadline closes nominations and applications but preserves confi
 test('failed capture retains nomination and retries same outbox item', async () => { const { service, store } = setup(); await service.nominate(1, nomination()); await service.deliver(async () => { throw Error('fake outage'); }); assert.equal(store.data.nominations.length, 1); assert.equal(store.data.outbox[0].status, 'queued'); let count = 0; await service.deliver(async () => count++); await service.deliver(async () => count++); assert.equal(count, 1); assert.equal(store.data.outbox[0].attempts, 2); });
 test('server rejects coercible and missing inputs', async () => { const { service, store } = setup(); await service.nominate(1, nomination()); await assert.rejects(service.apply(1, store.data.outbox[0].token, { ...application(), hours: '', test_booked: true, employment: '' }), error => !!error.fields.hours && !!error.fields.test_booked && !!error.fields.employment); });
 test('honeypot does not save or invite', async () => { const { service, store } = setup(); await service.nominate(1, { website: 'spam' }); assert.equal(store.saves, 0); assert.equal(store.data.outbox.length, 0); });
+
+test('both judging answers are required, bounded and saved separately', async () => {
+ const {service,store}=setup();await service.nominate(1,nomination());const token=store.data.outbox[0].token;
+ for(const field of ['meaning','barriers'])for(const value of ['', ' '.repeat(4), 'x'.repeat(3001)]){
+  await assert.rejects(service.apply(1,token,{...application(),[field]:value}),error=>!!error.fields[field]);
+  assert.equal(store.data.nominations[0].application,null);
+ }
+ await service.apply(1,token,{...application(),meaning:'  I could get to work.  ',barriers:'  I cannot afford lessons.  '});
+ assert.equal(store.data.nominations[0].application.meaning,'I could get to work.');
+ assert.equal(store.data.nominations[0].application.barriers,'I cannot afford lessons.');
+});

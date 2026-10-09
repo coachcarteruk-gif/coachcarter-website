@@ -1,5 +1,17 @@
 # Coach Carter — Website Development Roadmap
 
+## Giveaway database and queue (9 October 2026; local only)
+
+Privacy follow-up implemented locally: role-separated learner exports, atomic
+deletion staging, persistent giveaway opt-outs and admin cleanup queue. Migration
+078 and actual HighLevel cleanup/suppression remain unreleased prerequisites.
+
+SQL repository, migration 077, invitation encryption and claim-fenced CRM worker
+are implemented and locally tested. Real API/privacy integration, shared contact
+provisioning or reviewed mappings, independent-connection rehearsal and provider
+compatibility remain before release. The preview still uses its local JSON store.
+See [giveaway storage](docs/giveaway-storage.md).
+
 ## 2.146 - Instructor booking and offer availability overrides (30 September 2026; pending migration and deployment)
 
 New instructor bookings and fixed/broadcast offers can proceed outside normal

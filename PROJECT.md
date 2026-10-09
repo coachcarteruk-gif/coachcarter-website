@@ -1,5 +1,28 @@
 # CoachCarter Website — Project Reference
 
+## Giveaway storage (9 October 2026; local implementation only)
+
+Privacy follow-up: migration 078 adds persistent giveaway marketing suppression;
+learner exports/deletion and gated retention include giveaway records. Admin
+`privacy-queue` exposes pending cleanup cases. Provider cleanup and production
+rollout remain pending; see the storage contract below.
+
+Follow-up: disabled-by-default `/api/giveaway?action=...` now supports config,
+nomination, invitation, application, withdrawal, authenticated review and audited
+staff privacy requests. GET `integration-status` adds read-only school/campaign
+job counts to the private review page, including uncertain work after closure.
+It does not enable or retry integrations. Draft pages live under `/giveaway/`. Migration 077 was
+rehearsed on an isolated Neon branch only; automatic production processing remains off.
+The scoped Resend invitation handler now has captured SQL-flow tests and one
+authorized fictional email reported delivered. A bounded live CRM test also passed.
+These are test receipts, not campaign activation or public deployment.
+
+Migration 077 and `tools/giveaway/database.cjs` add inactive campaign storage,
+atomic nomination/application persistence, consent evidence and a fenced durable
+queue. The SQL-backed CRM worker is tested with fake transport. No production
+API, migration, sender or campaign was activated. See the
+[storage and release contract](docs/giveaway-storage.md).
+
 ## Delivered lesson duration corrections (27 September 2026)
 
 Admin `POST /api/admin?action=edit-booking` supports past Lesson Credit and
