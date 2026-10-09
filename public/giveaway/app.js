@@ -32,7 +32,7 @@ function shareApplicationLink(url) {
   input.addEventListener('click', () => input.select());
   const button = document.createElement('button'); button.type = 'button'; button.className = 'primary'; button.textContent = 'Copy link';
   const status = document.createElement('p'); status.className = 'small'; status.setAttribute('role','status');
-  status.textContent = 'Send this privately to your nominee by text or WhatsApp. This personal link gives access to their application; don’t post it publicly.';
+  status.textContent = 'You can also copy this link and send it to your nominee to ensure they definitely receive the link so they can submit before the deadline. This personal link gives access to their application; don’t post it publicly.';
   button.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(link.href); button.textContent = 'Link copied'; }
     catch { input.focus(); input.select(); status.textContent = 'Select and copy the link above, then send it privately to your nominee.'; }
