@@ -51,7 +51,7 @@ function connect(form, action) {
     try {
       await api(action, values(form)); form.hidden = true;
       if (action === 'apply') completed();
-      else showResult('A lovely thing to do.', 'Your nomination has been received. We’ll invite the person you nominated by email. They’ll need to complete their application before the deadline. There’s no need to nominate them again.', true);
+      else showResult('A lovely thing to do.', 'Your nomination has been received. Please ask your nominee to email fraser@coachcarter.uk to request their private application link. They must complete their application before the deadline. There’s no need to nominate them again.', true);
     } catch (error) { errors(form, error); }
     finally { button.disabled = false; }
   });
