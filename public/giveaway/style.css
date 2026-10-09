@@ -25,7 +25,7 @@
 
 .application-cta{transition:opacity .18s ease,transform .3s ease}
 .application-started .application-cta{opacity:0;transform:translateY(100%);pointer-events:none}
-#application-heading{transform-origin:top left;position:relative}
+#application-heading{transform-origin:top left;position:relative;color:var(--accent)}
 @media(prefers-reduced-motion:reduce){.application-cta{transition:none}}
 
 .nomination-page .layout{display:block;max-width:980px;padding-top:36px}.nomination-page .intro{position:static}.nomination-page .giveaway-title{font-size:clamp(44px,6vw,70px)}.nomination-page .brand-logo{display:block;line-height:0}.nomination-page .brand-logo img{display:block;width:auto;height:92px}.nomination-page .header{padding-top:16px;padding-bottom:16px}.nomination-page #form{max-width:740px;margin:36px auto 0}.nomination-page .intro>p,.nomination-page .intro>.notice,.nomination-page .intro>.deadline,.nomination-page .nomination-steps{max-width:740px;margin-left:auto;margin-right:auto}.nomination-page .nomination-steps{display:block}
