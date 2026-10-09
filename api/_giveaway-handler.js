@@ -13,7 +13,7 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
     if (!enabled) return fail(res,404,'DISABLED','This giveaway is not available.');
     try {
       const action = req.query?.action;
-      if (!['config','nominate','invitation','apply','withdraw','review','integration-status','privacy-queue','privacy-export','request-erasure','record-invitation-request','run-integration'].includes(action)) return fail(res,404,'ACTION','Action not found.');
+      if (!['config','nominate','invitation','apply','withdraw','withdraw-marketing','review','integration-status','privacy-queue','privacy-export','request-erasure','record-invitation-request','run-integration'].includes(action)) return fail(res,404,'ACTION','Action not found.');
       const expectedMethod = ['config','review','integration-status','privacy-queue'].includes(action) ? 'GET' : 'POST';
       if (req.method !== expectedMethod) return fail(res,405,'METHOD','Method not allowed.');
       const tenant = await resolveSchoolFromRequest({ headers: req.headers, query: {} },{sql});
@@ -21,7 +21,7 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
       const schoolId = Number(tenant.schoolId);
       const [school] = await sql`SELECT config->'giveaway' AS giveaway FROM schools WHERE id=${schoolId}`;
       const config = school?.giveaway;
-      const privacyAction=['privacy-queue','privacy-export','request-erasure'].includes(action);
+      const privacyAction=['privacy-queue','privacy-export','request-erasure','withdraw-marketing'].includes(action);
       // Closing entries must preserve authenticated review and operational visibility.
       const existingAccess=privacyAction || ['config','invitation','withdraw','review','integration-status','record-invitation-request','run-integration'].includes(action);
       if ((!existingAccess && config?.enabled !== true) || typeof config?.campaign_key !== 'string') return fail(res,404,'DISABLED','This giveaway is not available.');
@@ -87,17 +87,18 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
           AND erasure_requested_at IS NULL ORDER BY id DESC LIMIT 51`;
         return res.json({ok:true,records:rows.slice(0,50).map(row=>({id:row.id,...row.nomination,application:row.application,created_at:row.created_at,submitted_at:row.submitted_at})),next:rows.length>50?rows[49].id:null});
       }
-      if (['privacy-export','request-erasure'].includes(action)) {
+      if (['privacy-export','request-erasure','withdraw-marketing'].includes(action)) {
         const admin=requireAuth(req,{roles:['admin']});
         if (!admin || Number(getSchoolId(admin,req))!==schoolId) return fail(res,401,'AUTH','School administrator access required.');
         const reference=req.body?.verification_reference;
         if (typeof reference!=='string' || !/^[A-Za-z0-9 _.-]{3,100}$/.test(reference)) return fail(res,400,'VERIFICATION','Record the identity-verification case reference.');
         const email=String(req.body?.verified_email || '').trim().toLowerCase();
         const id=req.body?.nomination_id;
-        if (action==='privacy-export' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res,400,'EMAIL','Enter the verified email address.');
+        if (action!=='request-erasure' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res,400,'EMAIL','Enter the verified email address.');
         if (action==='request-erasure' && !/^[0-9a-f-]{36}$/i.test(id || '')) return fail(res,400,'ID','Choose a nomination.');
         await logAuditRequired(sql,{adminId:admin.id,adminEmail:admin.email,schoolId,req,action:'giveaway.'+action,targetType:'giveaway',
-          details:{verification_reference:reference,subject_hash:createHash('sha256').update(action==='privacy-export'?email:id).digest('hex'),stage:'authorized_request'}});
+          details:{verification_reference:reference,subject_hash:createHash('sha256').update(action==='request-erasure'?id:email).digest('hex'),stage:'authorized_request'}});
+        if (action==='withdraw-marketing') return res.json(await db.withdrawForEmail(schoolId,email));
         if (action==='privacy-export') return res.json({ok:true,records:await db.exportForEmail(schoolId,email)});
         return res.json({ok:await db.requestErasure(schoolId,id),message:'Erasure review requested. Provider cleanup is required before final deletion.'});
       }

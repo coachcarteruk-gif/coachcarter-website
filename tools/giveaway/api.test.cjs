@@ -117,7 +117,16 @@ test('real handler and SQL cover nomination, invitation session, application, wi
    assert.equal(queue.code,200);assert.equal(queue.data.records[0].id,row.id);
    assert.doesNotMatch(JSON.stringify(queue.data),/alex@example|token|Private reason/);
    assert.equal((await call('privacy-queue',{}, {method:'GET',headers:{host:'giveaway.example.test',cookie:'cc_admin='+wrong}})).code,401);
-   assert.equal((await pg.query('SELECT * FROM audit_log')).rows.length,4);
+   await t.test('staff marketing opt-out requires identity reference, auth and CSRF after campaign closure',async()=>{
+    const request={verified_email:'jamie@example.test',verification_reference:'optout-001'};
+    assert.equal((await call('withdraw-marketing',request)).code,401);
+    assert.equal((await call('withdraw-marketing',request,{headers:{...headers,cookie:'cc_admin='+wrong+'; cc_csrf='+csrf}})).code,401);
+    assert.equal((await call('withdraw-marketing',request,{headers:{...headers,'x-csrf-token':'bad'}})).code,403);
+    assert.equal((await call('withdraw-marketing',{...request,verification_reference:''},{headers})).code,400);
+    assert.equal((await call('withdraw-marketing',request,{headers})).data.ok,true);
+    assert.equal((await pg.query("SELECT count(*)::int AS n FROM audit_log WHERE action='giveaway.withdraw-marketing'")).rows[0].n,1);
+   });
+   assert.equal((await pg.query('SELECT * FROM audit_log')).rows.length,5);
    await pg.query("UPDATE schools SET config=jsonb_set(config,'{giveaway,enabled}','true') WHERE id=1");
    assert.equal((await call('invitation')).code,404);
   } finally { if(previous===undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET=previous; }

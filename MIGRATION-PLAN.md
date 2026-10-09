@@ -1,5 +1,10 @@
 # CoachCarter: PWA to Native App Migration Plan (Revised)
 
+Nominator marketing choices are optional booleans on the existing nomination
+request. Server-owned consent evidence and identity-scoped withdrawal are portable
+JSON APIs; the staff `withdraw-marketing` action requires admin auth, CSRF and an
+identity-verification reference. See [consent contract](docs/giveaway-nominator-consent.md).
+
 Giveaway admin integration actions (`record-invitation-request`, `run-integration`)
 are school-scoped authenticated JSON API calls; the browser only collects the
 evidence reference and displays results. Provider credentials, consent checks,

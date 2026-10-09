@@ -479,3 +479,29 @@ test('separate judging answers survive SQL storage and nominee export only',asyn
  assert.ok(!(await f.db.exportForEmail(1,'jamie@example.test'))[0].application);
  assert.deepEqual(await f.db.exportForEmail(2,'alex@example.test'),[]);
 });
+
+test('nominator consent is optional, role-scoped, exportable and withdrawal survives later nominations',async t=>{
+ const f=await setup(t),body={...nominate(),nominator_marketing_email:true};
+ await f.db.nominate(1,'test',body);await f.db.nominate(2,'test',body);
+ let row=(await f.pg.query('SELECT * FROM giveaway_nominations WHERE school_id=1')).rows[0];
+ assert.equal(row.nomination.nominator_consents[0].granted,true);assert.equal(row.nomination.nominator_consents[1].granted,false);
+ assert.ok(row.nomination.nominator_consents[0].recorded_at);assert.match(row.nomination.nominator_consents[0].wording,/nominate someone/);
+ assert.equal(await f.db.mayMarket(1,row.id,'email','nominator'),true);assert.equal(await f.db.mayMarket(1,row.id,'email'),false);
+ const other=(await f.pg.query('SELECT id FROM giveaway_nominations WHERE school_id=2')).rows[0];
+ await f.db.nominate(1,'test',{...body,nominator_marketing_email:false});
+ assert.equal(await f.db.mayMarket(1,row.id,'email','nominator'),true);
+ const nominee=await f.db.exportForEmail(1,body.nominee_email);assert.equal(nominee[0].consents.length,0);assert.doesNotMatch(JSON.stringify(nominee),/giveaway-nominator-v1/);
+ await f.db.withdrawForEmail(1,body.nominator_email);await f.db.withdrawForEmail(1,body.nominator_email);
+ assert.equal(await f.db.mayMarket(1,row.id,'email','nominator'),false);assert.equal(await f.db.mayMarket(2,other.id,'email','nominator'),true);
+ assert.equal(await f.db.invitationUnblocked(1,row.id),true);
+ const exported=(await f.db.exportForEmail(1,body.nominator_email))[0];assert.ok(exported.consents[0].withdrawn_at);assert.equal(exported.suppression.length,2);assert.equal(exported.reason,body.reason);assert.equal(exported.application,undefined);
+ await f.db.nominate(1,'test',{...body,submission_key:crypto.randomUUID(),nominee_email:'second@example.test',nominator_marketing_sms:true});
+ const later=(await f.pg.query("SELECT id FROM giveaway_nominations WHERE school_id=1 AND nomination->'nominee'->>'email'='second@example.test'")).rows[0];
+ assert.equal(await f.db.mayMarket(1,later.id,'email','nominator'),false);assert.equal(await f.db.mayMarket(1,later.id,'sms','nominator'),false);
+ await f.db.requestErasure(1,row.id);assert.equal(await f.db.mayMarket(1,row.id,'email','nominator'),false);
+});
+test('missing and string nominator choices never grant consent',async t=>{
+ const f=await setup(t);await f.db.nominate(1,'test',{...nominate(),nominator_marketing_email:'true'});
+ const row=(await f.pg.query('SELECT * FROM giveaway_nominations')).rows[0];assert.ok(row.nomination.nominator_consents.every(c=>c.granted===false));
+ assert.equal(await f.db.mayMarket(1,row.id,'email','nominator'),false);
+});

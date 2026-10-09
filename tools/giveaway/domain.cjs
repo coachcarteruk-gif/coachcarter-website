@@ -1,6 +1,8 @@
 const crypto = require('node:crypto');
 const DEADLINE = '2026-10-11T23:00:00.000Z'; // Midnight at the end of Sunday 11 October, Europe/London (BST).
 const WORDING = Object.freeze({
+  nominator_email: 'Email me about CoachCarter offers and future giveaways where I can nominate someone.',
+  nominator_sms: 'Text me about CoachCarter offers and future giveaways where I can nominate someone.',
   email: 'Email me about future giveaways, updates and promotions.',
   sms: 'Text me about future giveaways, updates and promotions.',
   permission: 'I have permission to provide this person’s contact details so CoachCarter can invite them to apply.',
@@ -24,6 +26,7 @@ function nomination(body) {
   }
   out.reason = clean(body.reason, 3000);
   out.relationship = clean(body.relationship, 160);
+  out.nominator_marketing = { email: body.nominator_marketing_email === true, sms: body.nominator_marketing_sms === true };
   if (body.relationship != null && body.relationship !== '' && !out.relationship) errors.relationship = 'Enter your relationship in up to 160 characters, or leave this blank.';
   if (!out.reason) errors.reason = 'Tell us why you are nominating this person (up to 3,000 characters).';
   if (body.permission !== true) errors.permission = 'Please confirm you have their permission.';
@@ -77,6 +80,7 @@ function createService(store, options = {}) {
       if (duplicate) return { ok: true };
       const token = crypto.randomBytes(32).toString('base64url');
       const row = { id: crypto.randomUUID(), school_id: schoolId, submission_key: body.submission_key, ...data, token_hash: hash(token), created_at: now().toISOString(), permission: { wording: WORDING.permission, version: 'giveaway-v1', accepted_at: now().toISOString() }, application: null };
+      row.nominator_consents=['email','sms'].map(channel=>({channel,granted:data.nominator_marketing[channel],wording:WORDING['nominator_'+channel],version:'giveaway-nominator-v1',recorded_at:row.created_at,withdrawn_at:null}));
       // Nomination and outbox persist together before delivery is attempted.
       store.data.nominations.push(row);
       store.data.outbox.push({ id: crypto.randomUUID(), school_id: schoolId, nomination_id: row.id, token, status: 'queued', attempts: 0, recipient: row.nominee.email, created_at: now().toISOString() });

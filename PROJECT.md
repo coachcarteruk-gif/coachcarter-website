@@ -2,6 +2,11 @@
 
 ## Giveaway integration runner (9 October 2026; protected rehearsal)
 
+Optional nominator email/SMS consent and the audited staff `withdraw-marketing`
+action are described in [the consent contract](docs/giveaway-nominator-consent.md).
+Evidence uses existing JSONB and follows exports, erasure and retention; no new
+migration or marketing activation is included.
+
 Admin request-evidence and one-run controls, a separately gated scheduled queue
 entry point, provider suppression checks and real fictional-contact CRM evidence
 are documented in [the integration contract](docs/giveaway-integration-runner.md).

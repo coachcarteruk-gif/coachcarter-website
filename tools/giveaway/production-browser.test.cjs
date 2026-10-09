@@ -19,6 +19,7 @@ test('production pages: nomination, private invitation, separate answers and aut
   let browser, server;
   try {
     await pg.exec("CREATE TABLE schools(id INTEGER PRIMARY KEY,config JSONB,primary_host TEXT,slug TEXT,active BOOLEAN); CREATE TABLE rate_limits(key TEXT PRIMARY KEY,request_count INTEGER,window_start TIMESTAMPTZ)");
+    await pg.exec("CREATE TABLE audit_log(id SERIAL PRIMARY KEY,school_id INTEGER,admin_id INTEGER,admin_email TEXT,action TEXT,target_type TEXT,target_id INTEGER,details JSONB,ip_address TEXT)");
     for(const file of ['077_giveaway_storage.sql','078_giveaway_privacy.sql']) await pg.exec(fs.readFileSync(path.join(root,'db/migrations',file),'utf8'));
     const vault=tokenVault(crypto.randomBytes(32)), db=createDatabase({transaction:cb=>pg.transaction(client=>cb(tagged(client))),vault});
     const handler=createHandler({db,sql:tagged(pg),vault,enabled:true});
@@ -56,9 +57,14 @@ test('production pages: nomination, private invitation, separate answers and aut
     await page.getByRole('button',{name:'Got it',exact:true}).click();
     await page.locator('#nomination:not([hidden])').waitFor();
     for(const [name,value] of Object.entries({nominee_name:'Robin Browser',nominee_phone:'07700900789',nominee_email:'robin@example.test',nominator_name:'Casey Browser',nominator_phone:'07700900654',nominator_email:'casey@example.test',reason:'Private nomination, never shared with the applicant.'})) await page.locator('[name='+name+']').fill(value);
+    assert.equal(await page.locator('#nominator_marketing_email').isChecked(),false);
+    assert.equal(await page.locator('#nominator_marketing_sms').isChecked(),false);
+    await page.locator('#nominator_marketing_email').check();
     await page.locator('#permission').check(); await page.getByRole('button',{name:/Send their nomination/}).click();
     await page.getByText('A lovely thing to do.').waitFor();
     const row=(await pg.query('SELECT * FROM giveaway_nominations')).rows[0];
+    assert.equal(row.nomination.nominator_consents[0].granted,true);
+    assert.equal(row.nomination.nominator_consents[1].granted,false);
     const job=(await pg.query("SELECT * FROM giveaway_jobs WHERE kind='invitation'")).rows[0];
     const token=vault.open(job.payload.sealed_token,`1:${row.id}`);
     await page.goto(origin+'/giveaway/apply.html#'+token); await page.locator('#application:not([hidden])').waitFor();
@@ -106,6 +112,12 @@ test('production pages: nomination, private invitation, separate answers and aut
     const admin=jwt.sign({id:1,role:'admin',isAdmin:true,school_id:1},process.env.JWT_SECRET,{expiresIn:'5m'});
     await context.addCookies([{name:'cc_admin',value:admin,url:origin,httpOnly:true,sameSite:'Lax'}]);
     await page.goto(origin+'/giveaway/review.html'); await page.getByText(/All available records loaded/).waitFor();
+    await page.getByText('Record a marketing opt-out',{exact:true}).click();
+    await page.locator('#withdraw-email').fill('casey@example.test');await page.locator('#withdraw-reference').fill('email-request-001');
+    await page.getByRole('button',{name:'Stop promotional emails and texts',exact:true}).click();
+    await page.getByText(/Marketing opt-out recorded/).waitFor();
+    assert.equal(await db.mayMarket(1,row.id,'email','nominator'),false);
+    assert.ok((await pg.query('SELECT application FROM giveaway_nominations WHERE id=$1',[row.id])).rows[0].application);
     await page.locator('#nomination-'+row.id+' > summary').click();
     await page.getByText('Invitation and CRM controls',{exact:true}).click();
     await page.getByRole('button',{name:'Run invitation / CRM once',exact:true}).click();

@@ -83,5 +83,14 @@ async function loadIntegrationStatus() {
   } catch { target.textContent = 'Integration status unavailable. Sign in as a school administrator, or try again.'; }
 }
 document.getElementById('more').addEventListener('click',load);
+document.getElementById('marketing-withdrawal').addEventListener('submit',async event=>{
+  event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),status=document.getElementById('withdraw-status');
+  button.disabled=true;
+  try {
+    await integrationAction('withdraw-marketing',{verified_email:document.getElementById('withdraw-email').value.trim(),verification_reference:document.getElementById('withdraw-reference').value.trim()});
+    status.textContent='Marketing opt-out recorded. Nomination and application kept. Any external marketing lists must also honour this opt-out before further sends.';
+    form.reset();await loadIntegrationStatus();
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+});
 document.getElementById('refresh-integrations').addEventListener('click',loadIntegrationStatus);
 load(); loadIntegrationStatus();

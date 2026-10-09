@@ -60,6 +60,8 @@ function createDatabase({ transaction, vault }) {
         const id = uuid(), token = crypto.randomBytes(32).toString('base64url');
         const [{ timestamp }] = await sql`SELECT clock_timestamp() AS timestamp`;
         data.permission = { wording: WORDING.permission, version: 'giveaway-v1', accepted_at: timestamp };
+        data.nominator_consents = ['email','sms'].map(channel => ({ channel, granted:data.nominator_marketing[channel],
+          wording:WORDING['nominator_'+channel], version:'giveaway-nominator-v1', recorded_at:timestamp, withdrawn_at:null }));
         const rows = await sql`INSERT INTO giveaway_nominations(school_id,id,campaign_key,submission_key,pair_hash,token_hash,nomination)
           VALUES (${school},${id},${campaign},${body.submission_key},${hash(JSON.stringify([data.nominee.email,data.nominator.email]))},${hash(token)},${JSON.stringify(data)}::jsonb)
           ON CONFLICT DO NOTHING RETURNING id`;
@@ -104,15 +106,48 @@ function createDatabase({ transaction, vault }) {
         return { ok: true };
       });
     },
-    async mayMarket(school,id,channel) {
-      scope(school);if(!['email','sms'].includes(channel)) throw Error('Invalid channel');
+    // Caller verifies the requester identity before using this staff-only operation.
+    async withdrawForEmail(school, verifiedEmail) {
+      scope(school); const email=String(verifiedEmail).trim().toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Error('Invalid verified email');
       return transaction(async sql=>{
-        const [row]=await sql`SELECT nomination FROM giveaway_nominations WHERE school_id=${school} AND id=${id}
-          AND erasure_requested_at IS NULL AND application IS NOT NULL`;
+        const rows=await sql`SELECT id,nomination FROM giveaway_nominations WHERE school_id=${school}
+          AND (nomination->'nominee'->>'email'=${email} OR nomination->'nominator'->>'email'=${email}) FOR UPDATE`;
+        const [{timestamp}]=await sql`SELECT clock_timestamp() AS timestamp`;
+        // Preserve the email veto even when older nomination records were removed.
+        await sql`INSERT INTO giveaway_marketing_suppressions(school_id,channel,subject_hash)
+          VALUES (${school},'email',${subjectHash('email',email)}) ON CONFLICT DO NOTHING`;
+        for(const row of rows) {
+          for(const role of ['nominee','nominator']) {
+            const person=row.nomination[role];if(person.email!==email)continue;
+            await sql`INSERT INTO giveaway_marketing_suppressions(school_id,channel,subject_hash)
+              VALUES (${school},'sms',${subjectHash('sms',person.phone)}) ON CONFLICT DO NOTHING`;
+            if(role==='nominee') await sql`UPDATE giveaway_consents SET withdrawn_at=clock_timestamp()
+              WHERE school_id=${school} AND nomination_id=${row.id} AND granted=TRUE AND withdrawn_at IS NULL`;
+            else {
+              const consents=(row.nomination.nominator_consents||[]).map(c=>c.granted&&!c.withdrawn_at?{...c,withdrawn_at:timestamp}:c);
+              await sql`UPDATE giveaway_nominations SET nomination=jsonb_set(nomination,'{nominator_consents}',${JSON.stringify(consents)}::jsonb)
+                WHERE school_id=${school} AND id=${row.id}`;
+            }
+          }
+          await job(sql,school,row.id,'suppression','identity-withdrawal:'+subjectHash('email',email),{subject_email_hash:subjectHash('email',email)});
+        }
+        return {ok:true};
+      });
+    },
+    async mayMarket(school,id,channel,role='nominee') {
+      scope(school);if(!['email','sms'].includes(channel)) throw Error('Invalid channel');
+      if(!['nominee','nominator'].includes(role))throw Error('Invalid consent role');
+      return transaction(async sql=>{
+        const [row]=await sql`SELECT nomination,application FROM giveaway_nominations WHERE school_id=${school} AND id=${id}
+          AND erasure_requested_at IS NULL`;
         if(!row)return false;
-        const key=subjectHash(channel,row.nomination.nominee[channel==='email'?'email':'phone']);
-        const [consent]=await sql`SELECT granted,withdrawn_at FROM giveaway_consents WHERE school_id=${school} AND nomination_id=${id} AND channel=${channel}`;
-        const blocked=await sql`SELECT 1 FROM giveaway_marketing_suppressions WHERE school_id=${school} AND channel=${channel} AND subject_hash=${key}`;
+        if(role==='nominee'&&!row.application)return false;
+        const key=subjectHash(channel,row.nomination[role][channel==='email'?'email':'phone']);
+        const consent=role==='nominator' ? row.nomination.nominator_consents?.find(c=>c.channel===channel)
+          : (await sql`SELECT granted,withdrawn_at FROM giveaway_consents WHERE school_id=${school} AND nomination_id=${id} AND channel=${channel}`)[0];
+        const blocked=await sql`SELECT 1 FROM giveaway_marketing_suppressions WHERE school_id=${school}
+          AND ((channel=${channel} AND subject_hash=${key}) OR (channel='email' AND subject_hash=${subjectHash('email',row.nomination[role].email)}))`;
         return consent?.granted===true && !consent.withdrawn_at && blocked.length===0;
       });
     },
@@ -255,8 +290,14 @@ function createDatabase({ transaction, vault }) {
               invitation_request:row.nomination.permission?.invitation_request || null,
               consents, suppression, provider_contacts:contactReferences(mappings,row.nomination.nominee,school) });
           }
-          if (row.nomination.nominator.email === email) result.push({ role: 'nominator', id: row.id, contact: row.nomination.nominator,
+          if (row.nomination.nominator.email === email) {
+            const suppression=[];
+            for(const channel of ['email','sms']) suppression.push(...await sql`SELECT channel,recorded_at FROM giveaway_marketing_suppressions
+              WHERE school_id=${school} AND channel=${channel} AND subject_hash=${subjectHash(channel,row.nomination.nominator[channel==='email'?'email':'phone'])}`);
+            result.push({ role: 'nominator', id: row.id, contact: row.nomination.nominator, suppression,
+            consents:row.nomination.nominator_consents||[],
             reason: row.nomination.reason, relationship: row.nomination.relationship, permission: row.nomination.permission, created_at: row.created_at, provider_contacts:contactReferences(mappings,row.nomination.nominator,school) });
+          }
         }
         return result;
       });
@@ -276,8 +317,8 @@ function createDatabase({ transaction, vault }) {
       scope(school); return transaction(async sql => {
         const [subject]=await sql`SELECT nomination FROM giveaway_nominations WHERE school_id=${school} AND id=${id} FOR UPDATE`;
         if(!subject) return false;
-        for (const channel of ['email','sms']) {
-          const key=subjectHash(channel,subject.nomination.nominee[channel==='email'?'email':'phone']);
+        for (const role of ['nominee','nominator']) for (const channel of ['email','sms']) {
+          const key=subjectHash(channel,subject.nomination[role][channel==='email'?'email':'phone']);
           await sql`INSERT INTO giveaway_marketing_suppressions(school_id,channel,subject_hash)
             VALUES (${school},${channel},${key}) ON CONFLICT DO NOTHING`;
         }

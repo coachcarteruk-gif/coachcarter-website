@@ -1,11 +1,20 @@
 # Private hosted rehearsal — 9 October 2026
 
-Latest build: `dpl_4HPqxBWyZFJGg8FQCEP3qrwzpCvB`,
-https://coachcarter-giveaway-rehearsal-mey4mbahm.vercel.app. This includes the later
+Latest build: `dpl_77WikeJaZ5ZqtEaGvDCVghFT3r7h`,
+https://coachcarter-giveaway-rehearsal-fg9suw01u.vercel.app. This includes the later
 price, employment, copy, cookie notice and CTA docking fixes plus the disabled
 [integration runner](giveaway-integration-runner.md). Hosted admin login, protected
 review, unauthenticated cron rejection and disabled integration controls passed.
 Use this origin rather than the historical URLs below.
+
+Nominator optional email/SMS consent and staff withdrawal are implemented in this
+build; see [the consent contract](giveaway-nominator-consent.md). Hosted browser
+verification saved fictional consent through the API, then used real admin login
+and the opt-out control to record withdrawal. SQL confirmed evidence and pending
+jobs only; no provider sends occurred. 65 domain/database/API tests and the local
+browser-to-SQL workflow passed, with four targeted checks repeated after the final
+identity-veto change. Source privacy exports and retention include the evidence.
+The earlier owner-response note about pending nominator implementation is superseded.
 
 ## Latest copy and deadline revision
 
