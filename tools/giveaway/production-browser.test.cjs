@@ -53,7 +53,7 @@ test('production pages: nomination, private invitation, separate answers and aut
     });
     assert.equal((await context.request.get(origin+'/api/giveaway?action=review')).status(),401);
     await page.goto(origin+'/giveaway/index.html');
-    await page.getByRole('button',{name:'Reject All',exact:true}).click();
+    await page.getByRole('button',{name:'Got it',exact:true}).click();
     await page.locator('#nomination:not([hidden])').waitFor();
     for(const [name,value] of Object.entries({nominee_name:'Robin Browser',nominee_phone:'07700900789',nominee_email:'robin@example.test',nominator_name:'Casey Browser',nominator_phone:'07700900654',nominator_email:'casey@example.test',reason:'Private nomination, never shared with the applicant.'})) await page.locator('[name='+name+']').fill(value);
     await page.locator('#permission').check(); await page.getByRole('button',{name:/Send their nomination/}).click();

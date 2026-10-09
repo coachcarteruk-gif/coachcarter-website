@@ -2,6 +2,42 @@
 (function () {
   'use strict';
 
+  // Campaign pages use necessary cookies only. Keep site-wide preferences intact.
+  if (/^\/giveaway(?:\/|$)/.test(window.location.pathname)) {
+    var noticeKey = 'cc_giveaway_cookie_notice';
+    function showNecessaryNotice() {
+      if (document.getElementById('cc-necessary-notice')) return;
+      var notice = document.createElement('aside');
+      notice.id = 'cc-necessary-notice';
+      notice.setAttribute('aria-label', 'Necessary cookies');
+      notice.innerHTML = '<strong>Necessary cookies only</strong>' +
+        '<p>We use necessary cookies to keep your application secure and make this page work. No analytics or advertising tracking runs on giveaway pages.</p>' +
+        '<a href="/giveaway/privacy.html">Campaign privacy notice</a>' +
+        '<button type="button">Got it</button>';
+      var style = document.createElement('style');
+      style.textContent = '#cc-necessary-notice{position:fixed;bottom:12px;left:12px;right:12px;z-index:99999;max-width:520px;max-height:45dvh;overflow:auto;margin:auto;padding:20px;background:#fff;color:#272727;border:1px solid #dedad2;border-radius:16px;box-shadow:0 8px 32px #0002;font:15px/1.5 Lato,sans-serif}#cc-necessary-notice p{margin:8px 0 12px}#cc-necessary-notice a{color:inherit;text-decoration:underline}#cc-necessary-notice button{display:block;width:100%;margin-top:14px;min-height:44px;border:0;border-radius:10px;background:#f58321;color:#272727;font:700 15px Lato,sans-serif;cursor:pointer}#cc-necessary-notice button:focus-visible{outline:3px solid #205a91;outline-offset:3px}';
+      notice.appendChild(style);
+      notice.querySelector('button').addEventListener('click', function () {
+        try { sessionStorage.setItem(noticeKey, 'seen'); } catch (e) { /* optional dismissal memory */ }
+        notice.remove();
+      });
+      document.body.appendChild(notice);
+    }
+    window.ccCookieConsent = {
+      hasConsented: function () { return true; },
+      analyticsAllowed: function () { return false; },
+      marketingAllowed: function () { return false; },
+      show: showNecessaryNotice
+    };
+    var noticeSeen = false;
+    try { noticeSeen = sessionStorage.getItem(noticeKey) === 'seen'; } catch (e) { /* show without storage */ }
+    if (!noticeSeen) {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showNecessaryNotice);
+      else showNecessaryNotice();
+    }
+    return;
+  }
+
   var STORAGE_KEY = 'cc_cookie_consent';
   var CONSENT_VERSION = 2;
 
