@@ -2,6 +2,13 @@
 
 ## Latest recorded status
 
+9 October 2026: explicitly approved production giveaway migrations 077 and 078
+applied through the governed runner after snapshot `snap-lucky-thunder-abn4fwoy`.
+Preflight found exactly those two pending; postflight reports 78 applied and no
+pending migrations. Config/entry/sending/retention remain disabled. See the
+[production setup receipt](giveaway-production-setup.md) for target, grants and
+verification. No migration 079 was introduced.
+
 9 October 2026 privacy follow-up: additive migration 078 creates giveaway
 marketing suppression storage. Manifest now has 79 entries and passes checks.
 078 passed local PGlite checks and the governed isolated Neon rehearsal on

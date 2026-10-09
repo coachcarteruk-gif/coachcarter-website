@@ -1,5 +1,9 @@
 # Giveaway production setup review — 9 October 2026
 
+Subsequent owner approval executed the inert setup described here. See the
+[production receipt](giveaway-production-setup.md); this review plan is retained
+as the scope approved, not the latest deployment status.
+
 Preparation completed for review; public activation is not performed. This is the
 current plan, superseding the old release package's status and unresolved-item
 list where the dated evidence below resolves it.
