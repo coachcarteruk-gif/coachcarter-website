@@ -63,27 +63,24 @@ function connectApplicationHeading() {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let docked = null;
   let scheduled = false;
-  let animation;
   function update() {
     scheduled = false;
     if ($('application').hidden) return;
     const target = heading.getBoundingClientRect();
-    const next = target.top <= innerHeight * 0.72;
-    if (next === docked) return;
-    const initial = docked === null;
+    // Hand over where the matching fixed button meets its in-flow position.
+    bar.style.paddingLeft = `${target.left}px`;
+    bar.style.paddingRight = '0';
+    button.style.width = `${target.width}px`;
+    button.style.margin = '0';
     const source = button.getBoundingClientRect();
-    animation?.cancel();
+    const next = target.top <= source.top;
+    if (next === docked) return;
     docked = next;
     document.body.classList.toggle('application-started', docked);
     bar.inert = docked;
     bar.setAttribute('aria-hidden', String(docked));
     if (docked && document.activeElement === button) heading.focus({ preventScroll: true });
-    if (docked && !initial && !reducedMotion.matches && target.top > 0) {
-      animation = heading.animate([
-        { transform: `translate(${source.left - target.left}px, ${source.top - target.top}px) scale(${source.width / target.width}, ${source.height / target.height})`, backgroundColor: '#f58321', borderRadius: '9px', color: '#272727' },
-        { transform: 'none', backgroundColor: 'transparent', borderRadius: '0', color: '#272727' }
-      ], { duration: 360, easing: 'cubic-bezier(.22,1,.36,1)' });
-    }
+
   }
   function schedule() {
     if (!scheduled) { scheduled = true; requestAnimationFrame(update); }

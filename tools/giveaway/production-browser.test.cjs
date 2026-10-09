@@ -63,6 +63,22 @@ test('production pages: nomination, private invitation, separate answers and aut
     const token=vault.open(job.payload.sealed_token,`1:${row.id}`);
     await page.goto(origin+'/giveaway/apply.html#'+token); await page.locator('#application:not([hidden])').waitFor();
     assert.equal(new URL(page.url()).hash,'');
+    for (const width of [320,506,706,1365]) {
+      await page.setViewportSize({width,height:715});
+      await page.evaluate(()=>scrollTo(0,0));
+      await page.waitForFunction(()=>!document.body.classList.contains('application-started'));
+      const styles=await page.evaluate(()=>['application-heading','start-application'].map(id=>{
+        const e=document.getElementById(id),s=getComputedStyle(e),r=e.getBoundingClientRect();
+        return {color:s.color,background:s.backgroundColor,radius:s.borderRadius,font:s.fontSize,height:r.height,left:r.left,width:r.width};
+      }));
+      assert.deepEqual(styles[0],styles[1]);
+      for (const offset of [8,-8,8,-8]) {
+        await page.evaluate(offset=>{const h=document.getElementById('application-heading').getBoundingClientRect(),b=document.getElementById('start-application').getBoundingClientRect();scrollBy(0,h.top-b.top-offset);},offset);
+        await page.waitForFunction(docked=>document.body.classList.contains('application-started')===docked,offset<0);
+        assert.equal(await page.locator('#application-heading').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(245, 131, 33)');
+        assert.equal(await page.locator('#application-heading').evaluate(e=>e.getAnimations().length),0);
+      }
+    }
     assert.match(await page.locator('#nominated-by').innerText(),/Casey Browser/);
     assert.doesNotMatch(await page.locator('body').innerText(),/Private nomination|casey@example.test/);
     assert.equal(await page.locator('input[type=checkbox]:checked').count(),0);
