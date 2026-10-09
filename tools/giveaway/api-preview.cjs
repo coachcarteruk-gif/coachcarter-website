@@ -7,7 +7,7 @@ async function start(){
  await pg.exec(fs.readFileSync(path.join(root,'db/migrations/077_giveaway_storage.sql'),'utf8'));
  await pg.exec(fs.readFileSync(path.join(root,'db/migrations/078_giveaway_privacy.sql'),'utf8'));
  await pg.query('INSERT INTO schools VALUES(1,$1::jsonb,$2,$3,true)',[JSON.stringify({giveaway:{enabled:true,campaign_key:'fictional',origin}}),'127.0.0.1','coachcarter']);
- await pg.exec("INSERT INTO giveaway_campaigns(school_id,campaign_key,closes_at,retain_until,enabled) VALUES(1,'fictional','2026-10-11T21:00:00Z','2027-01-09T21:00:00Z',true)");
+ await pg.exec("INSERT INTO giveaway_campaigns(school_id,campaign_key,closes_at,retain_until,enabled) VALUES(1,'fictional','2026-10-11T23:00:00Z','2027-01-09T21:00:00Z',true)");
  const vault=tokenVault(crypto.randomBytes(32)),transaction=cb=>pg.transaction(client=>cb(tagged(client))),db=createDatabase({transaction,vault});
  await db.nominate(1,'fictional',{submission_key:crypto.randomUUID(),nominee_name:'Alex Fictional',nominee_phone:'07700900123',nominee_email:'alex@example.test',nominator_name:'Jamie Fictional',nominator_phone:'07700900456',nominator_email:'jamie@example.test',reason:'Fictional API preview nomination.',permission:true});
  const job=(await pg.query("SELECT * FROM giveaway_jobs WHERE kind='invitation'")).rows[0];

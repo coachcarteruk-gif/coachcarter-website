@@ -56,7 +56,11 @@ function connect(form, action) {
 }
 async function start() {
   const config = await api('config');
-  const deadline = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(config.deadline));
+  const closes = new Date(config.deadline);
+  const midnight = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(closes) === '00:00:00';
+  const deadline = midnight
+    ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'full' }).format(new Date(closes.getTime() - 1)) + ' at midnight (end of Sunday)'
+    : new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'full', timeStyle: 'short' }).format(closes);
   document.querySelectorAll('[data-deadline]').forEach(el => { el.textContent = deadline; });
   if ($('nomination')) {
     if (!config.open) { $('nomination').hidden = true; showResult('Applications have closed.', 'Thank you for your interest in our first giveaway.'); }

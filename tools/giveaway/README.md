@@ -205,8 +205,8 @@ Closing the terminal/server ends the preview, not its saved fictional records.
   application. This is single-process local storage, not a Neon substitute.
 - Optional unchecked learning interests. Separate email/SMS consent evidence
   with exact wording, version, timestamp and withdrawal; no enrolment or sender.
-- A single service deadline: `2026-10-11T21:00:00.000Z`, which is Sunday
-  11 October 2026 at 10pm Europe/London. The service accepts a deadline setting;
+- A single service deadline: `2026-10-11T23:00:00.000Z`, which is Sunday
+  11 October 2026 at midnight, end of day, Europe/London. The service accepts a deadline setting;
   tests inject a clock. Both submissions close at the boundary; completed
   confirmation stays available. The normal preview obeys the real deadline.
 - Fictional review session uses an isolated JWT key and existing `requireAuth`

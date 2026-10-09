@@ -1,13 +1,23 @@
 # Private hosted rehearsal — 9 October 2026
 
-Latest build: `dpl_CsczLUoXed274k2aqJxZzCh2amV7`,
-https://coachcarter-giveaway-rehearsal-7d8tl6nz5.vercel.app. This includes the later
+Latest build: `dpl_4HPqxBWyZFJGg8FQCEP3qrwzpCvB`,
+https://coachcarter-giveaway-rehearsal-mey4mbahm.vercel.app. This includes the later
 price, employment, copy, cookie notice and CTA docking fixes plus the disabled
 [integration runner](giveaway-integration-runner.md). Hosted admin login, protected
 review, unauthenticated cron rejection and disabled integration controls passed.
 Use this origin rather than the historical URLs below.
 
 ## Latest copy and deadline revision
+
+The owner subsequently moved the application deadline to midnight at the end of
+Sunday 11 October 2026 UK time: exclusive cutoff `2026-10-11T23:00:00.000Z`.
+Source, invitation template and isolated campaign configuration have been updated.
+The latest build above passed hosted checks for all three pages, the API cutoff,
+and rendered nomination/application deadline wording. The exact-boundary domain
+test accepts the final millisecond before midnight and rejects at midnight.
+The rehearsal trusted origin points to the latest build. No email was resent.
+
+Historical 18:00 revision (superseded):
 
 Owner requested 18:00 UK on Sunday 11 October (17:00 UTC), plus selection of
 a new winner if the first winner has not responded within five days. Source,
@@ -113,6 +123,27 @@ The signed-in test reviewer is `reviewer@example.test`; its random password is
 kept in that ignored file, not in this document. Local previews were untouched.
 
 ## Remaining work
+
+### Owner responses, 9 October 2026
+
+- The owner currently intends to judge alone; no independent judge has been
+  arranged. This does not close the subjective-judging launch gate. CAP Code
+  8.26 calls for an independent judge or a panel containing an independent
+  member: https://www.asa.org.uk/type/non_broadcast/code_section/08.html.
+- Nobody has yet been contacted. Facebook commenters are nominators who tagged
+  nominees. The owner will personally message each nominator with the nomination
+  page link. This is not evidence that a nominee requested an invitation, and
+  does not authorise automated outreach or marketing to either person.
+- The owner wants optional promotional opt-ins for both roles: future offers
+  and nomination opportunities for nominators, and relevant offers for nominees,
+  with withdrawal at any time. Each person must give their own separate,
+  unchecked channel-specific consent; entry must not depend on it. Nominator
+  consent persistence, export and withdrawal still need implementation and
+  verification. Marketing consent does not settle retention of application
+  narratives or the outstanding privacy-request owner/retention decisions.
+- The owner accepts `https://coachcarter.uk/giveaway/` as the intended public
+  address. This records the destination, not production activation or migration
+  approval.
 
 Hosted entry and administrator review are now evidenced. Real invitation delivery,
 CRM/consent/suppression composition, controlled provider activation, final public

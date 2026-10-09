@@ -1,7 +1,7 @@
 # Community driving lesson award — working proposal, 9 October 2026
 
-Latest owner decision: applications close Sunday 11 October 2026 at 18:00 UK
-time (17:00 UTC). The winner has five days from notification to respond; after
+Latest owner decision: applications close Sunday 11 October 2026 at midnight UK
+time at the end of Sunday (23:00 UTC on 11 October). The winner has five days from notification to respond; after
 that, a new winner will be selected if no response is received, using the same
 judging criteria. This supersedes earlier deadline and replacement-approval
 notes below. No automatic winner selection or notification is activated.
