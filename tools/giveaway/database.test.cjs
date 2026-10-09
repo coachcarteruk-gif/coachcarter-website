@@ -9,6 +9,7 @@ const { processOne, crmHandler } = require('./database-worker.cjs');
 const { identity, digest } = require('./highlevel-sync.cjs');
 const { invitationHandler, resendTransport } = require('./invitation.cjs');
 const { createContactMatcher } = require('./contact-matching.cjs');
+const { createBoundedWorker } = require('./bounded-worker.cjs');
 const { subjectHash, privacyReady, exportGiveaway, learnerErasureQueries } = require('../../api/_giveaway-privacy');
 const nominate = () => ({ submission_key: crypto.randomUUID(), nominee_name: 'Alex', nominee_email: 'alex@example.test', nominee_phone: '07700900123',
   nominator_name: 'Jamie', nominator_email: 'jamie@example.test', nominator_phone: '07700900456', reason: 'Private nomination reason', relationship: 'Friend', permission: true });
@@ -31,6 +32,97 @@ async function setup(t) {
   }
   return { pg, transaction, vault, db, seeded };
 }
+
+function bounded(f, id, overrides={}) {
+  const config={schoolId:1,campaignKey:'test',nominationId:id,enabled:true,
+    invitation:{enabled:true,origin:'https://example.test',from:'hello@example.test',replyTo:'hello@example.test',testOnly:true,testRecipient:'alex@example.test'},
+    crm:{enabled:true,environment:'rehearsal',locationId:'fake-location',reviewUrl:'https://example.test/review',
+      associations:{nominee:{id:'fake-nominee',first:'nomination'},nominator:{id:'fake-nominator',first:'contact'}}}};
+  return createBoundedWorker({db:f.db,vault:f.vault,config,invitationRequested:async()=>true,
+    providerAllowsInvitation:async()=>true,...overrides});
+}
+
+test('bounded runner requires both activation gates and never claims another tenant/campaign/nomination',async t=>{
+  const f=await setup(t),{row}=await f.seeded();
+  await f.db.nominate(2,'test',nominate());
+  await f.db.nominate(1,'test',{...nominate(),nominee_email:'other@example.test',nominee_phone:'07700900789'});
+  let calls=0;
+  const transport={send:async()=>{calls++;return {accepted:true,id:'bounded'};}};
+  const base={schoolId:1,campaignKey:'test',nominationId:row.id};
+  for (const config of [base,{...base,enabled:true,invitation:{enabled:false}}])
+    assert.equal((await bounded(f,row.id,{config}).run('invitation')).status,'disabled');
+  for (const config of [{...base,schoolId:2},{...base,campaignKey:'other'},{...base,nominationId:crypto.randomUUID()}])
+    assert.equal(await f.db.claim(config.schoolId,'invitation',config),null);
+  assert.equal((await bounded(f,row.id,{invitationTransport:transport}).run('invitation')).status,'succeeded');
+  assert.equal((await bounded(f,row.id,{invitationTransport:transport}).run('invitation')).status,'idle');
+  assert.equal(calls,1);
+  assert.equal((await f.pg.query("SELECT count(*)::int AS n FROM giveaway_jobs WHERE kind='invitation' AND state='pending'")).rows[0].n,2);
+});
+
+test('bounded invitation denies missing request evidence, provider opt-out and persistent suppression before dispatch',async t=>{
+  const f=await setup(t),{row}=await f.seeded();let sends=0;
+  const invitationTransport={send:async()=>{sends++;return {accepted:true,id:'unexpected'};}};
+  for (const override of [{invitationRequested:undefined},{invitationRequested:async()=>false},
+    {providerAllowsInvitation:async()=>false},{providerAllowsInvitation:async()=>{throw Error('unavailable');}}]) {
+    assert.equal((await bounded(f,row.id,{invitationTransport,...override}).run('invitation')).status,'deferred');
+    await f.pg.exec("UPDATE giveaway_jobs SET available_at=now() WHERE state='pending'");
+  }
+  await f.pg.query("INSERT INTO giveaway_marketing_suppressions(school_id,channel,subject_hash) VALUES (1,'email',$1)",[subjectHash('email','alex@example.test')]);
+  assert.equal((await bounded(f,row.id,{invitationTransport}).run('invitation')).status,'deferred');
+  assert.equal(sends,0);
+  assert.equal((await f.pg.query("SELECT state FROM giveaway_jobs WHERE kind='invitation'")).rows[0].state,'pending');
+});
+
+test('bounded invitation rechecks permission at dispatch and never retries ambiguous acceptance',async t=>{
+  const f=await setup(t),{row}=await f.seeded();let checks=0,sends=0;
+  assert.equal((await bounded(f,row.id,{providerAllowsInvitation:async()=>++checks===1,
+    invitationTransport:{send:async()=>{sends++;}}}).run('invitation')).status,'uncertain');
+  assert.equal(checks,2);assert.equal(sends,0);
+  assert.equal((await bounded(f,row.id).run('invitation')).status,'idle');
+  // A different nomination exercises a provider timeout after a possible send.
+  await f.db.nominate(1,'test',{...nominate(),nominator_email:'second@example.test',nominator_phone:'07700900789'});
+  const other=(await f.pg.query('SELECT id FROM giveaway_nominations WHERE id<>$1',[row.id])).rows[0].id;
+  const worker=bounded(f,other,{invitationTransport:{send:async()=>{sends++;throw Error('timeout');}}});
+  assert.equal((await worker.run('invitation')).status,'uncertain');
+  assert.equal((await worker.run('invitation')).status,'idle');assert.equal(sends,1);
+});
+
+test('bounded CRM uses exact existing contacts, persists receipts and does not duplicate records',async t=>{
+  const f=await setup(t),{row}=await f.seeded();
+  const contacts=Object.values(row.nomination).filter(x=>x?.email).map((person,i)=>({...identity(person),id:'contact-'+i,locationId:'fake-location'}));
+  const calls=[],records=new Map();
+  const crmTransport={async request(method,path,body){
+    calls.push({method,path,body});
+    if(method==='GET' && path.startsWith('/contacts/'))return {contact:contacts.find(c=>c.id===path.split('/')[2])};
+    if(method==='POST' && path.endsWith('/records')){const record={...body,id:'record-1'};records.set(record.id,record);return {record};}
+    if(method==='GET' && path.includes('/records/'))return {record:records.get(path.split('/records/')[1].split('?')[0])};
+    if(method==='POST' && path==='/associations/relations')return {id:'relation-'+calls.length};
+    throw Error('Unexpected mutation');
+  }};
+  const search=async({field,value})=>{const found=contacts.filter(c=>c[field]===value);return {contacts:found,total:found.length};};
+  const worker=bounded(f,row.id,{search,crmTransport});
+  assert.equal((await worker.run('crm')).status,'succeeded');
+  assert.equal((await worker.run('crm')).status,'idle');
+  assert.equal(calls.filter(c=>c.method==='POST').length,3);
+  assert.doesNotMatch(JSON.stringify(calls),/Private nomination reason|sealed_token|customFields|tags/);
+});
+
+test('bounded CRM defers absent contacts without creating or dispatching them',async t=>{
+  const f=await setup(t),{row}=await f.seeded();let writes=0;
+  const result=await bounded(f,row.id,{search:async()=>({contacts:[],total:0}),crmTransport:{request:async()=>{writes++;}}}).run('crm');
+  assert.equal(result.status,'deferred');assert.equal(result.reason,'contact_not_found');assert.equal(writes,0);
+});
+
+test('bounded recovery quarantines only the selected expired dispatch',async t=>{
+  const f=await setup(t),{row}=await f.seeded();
+  await f.db.nominate(2,'test',nominate());
+  await f.db.nominate(1,'test',{...nominate(),nominee_email:'other@example.test',nominee_phone:'07700900789'});
+  await f.pg.exec("UPDATE giveaway_jobs SET state='dispatching',lease_until=now()-interval '1 minute'");
+  assert.equal(await f.db.claim(1,'invitation',{campaignKey:'test',nominationId:row.id}),null);
+  const jobs=(await f.pg.query('SELECT school_id,nomination_id,kind,state FROM giveaway_jobs')).rows;
+  assert.equal(jobs.filter(j=>j.state==='uncertain').length,1);
+  assert.ok(jobs.every(j=>j.state===(j.school_id===1 && j.nomination_id===row.id && j.kind==='invitation'?'uncertain':'dispatching')));
+});
 
 test('invitation outbox captures correct private link, retains receipt and never replays', async t => {
   const f=await setup(t), {token}=await f.seeded();let calls=0,message;

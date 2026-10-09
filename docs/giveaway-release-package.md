@@ -124,3 +124,13 @@ an incident measure requiring the staffed privacy route. Quarantine uncertain
 jobs; retain receipts and submissions. Do not delete records, roll back the
 database, remove ledger rows or replay jobs. Revert only compatible application
 code after checking retained schema and shared privacy hooks.
+
+## Subsequent worker preparation — 9 October
+
+The [bounded worker rehearsal](giveaway-worker-rehearsal.md) adds local operator
+composition, exact nomination queue bounds and invitation permission/suppression
+checks. It remains unscheduled and disabled by default. The hosted preview still
+uses its recorded artifact; these subsequent local changes are not deployed.
+The [hosted rehearsal evidence](giveaway-hosted-rehearsal.md) supersedes the earlier
+pending hosted-verification item above. Real-provider evidence and activation
+remain separate gates.

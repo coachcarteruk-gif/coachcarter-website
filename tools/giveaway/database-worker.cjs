@@ -1,16 +1,16 @@
 const { createSync } = require('./highlevel-sync.cjs');
 // Call only from a scoped server worker. No environment flags, timers or sends on import.
-async function processOne({ db, schoolId, kind, handler, enabled = false }) {
+async function processOne({ db, schoolId, kind, handler, enabled = false, claimScope }) {
   if (!enabled) return { status: 'disabled' };
   if (typeof handler !== 'function') throw new Error('A reviewed handler is required');
-  const job = await db.claim(schoolId, kind);
+  const job = await db.claim(schoolId, kind, claimScope);
   if (!job) return { status: 'idle' };
   let prepared;
   if (typeof handler.prepare === 'function') {
     // Trusted preparation MUST be read-only. No provider mutation before dispatch.
     try { prepared = await handler.prepare(await db.loadClaim(schoolId,job.id,job.claim_token)); }
     catch (error) {
-      const allowed=['contact_matching_disabled','contact_not_found','contact_multiple_matches','contact_identity_conflict','contact_lookup_failed'];
+      const allowed=['contact_matching_disabled','contact_not_found','contact_multiple_matches','contact_identity_conflict','contact_lookup_failed','invitation_not_authorized'];
       const reason=allowed.includes(error.code)?error.code:'contact_review_required';
       const deferred=await db.deferClaim(schoolId,job.id,job.claim_token);
       return {status:deferred?'deferred':'claim_lost',reason,job_id:job.id};
@@ -36,8 +36,7 @@ function crmHandler({ config, transport, plansFor, now }) {
     if (source.kind !== 'crm' || source.school_id !== config.schoolId || source.campaign_key !== config.campaignKey) throw new Error('CRM scope mismatch');
     if(config.enabled!==true) throw new Error('CRM disabled');
     const plans = await plansFor(source);
-    // Persistent journals are per nomination. Until a shared contact-provisioning queue
-    // exists, require reviewed existing IDs so two nominations cannot create one person twice.
+    // Provisioning is a separate gated operation. Preparation only resolves existing IDs.
     if (!['nominee', 'nominator'].every(role => plans?.[role]?.kind === 'existing')) throw new Error('Reviewed existing CRM contacts required');
     return plans;
   };

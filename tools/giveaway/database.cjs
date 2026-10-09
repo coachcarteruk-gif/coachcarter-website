@@ -116,14 +116,35 @@ function createDatabase({ transaction, vault }) {
         return consent?.granted===true && !consent.withdrawn_at && blocked.length===0;
       });
     },
-    async claim(school, kind) {
+    // Conservative invitation veto, not evidence that the nominee requested email.
+    async invitationUnblocked(school, id) {
+      scope(school); return transaction(async sql => {
+        const [row] = await sql`SELECT nomination FROM giveaway_nominations WHERE school_id=${school} AND id=${id}
+          AND erasure_requested_at IS NULL AND application IS NULL`;
+        if (!row) return false;
+        const key=subjectHash('email',row.nomination.nominee.email);
+        const blocked=await sql`SELECT 1 FROM giveaway_marketing_suppressions
+          WHERE school_id=${school} AND channel='email' AND subject_hash=${key}`;
+        return blocked.length===0;
+      });
+    },
+    async claim(school, kind, bounds = {}) {
+      const campaign = bounds.campaignKey ?? null, nominationId = bounds.nominationId ?? null;
+      if (campaign !== null && (typeof campaign !== 'string' || !campaign) ||
+          nominationId !== null && !/^[a-f0-9-]{36}$/i.test(nominationId)) throw Error('Invalid claim scope');
       scope(school); return transaction(async sql => {
         // A crash after dispatch started is ambiguous, never automatically replayed.
-        await sql`UPDATE giveaway_jobs SET state='uncertain' WHERE school_id=${school} AND state='dispatching' AND lease_until<clock_timestamp()`;
+        await sql`UPDATE giveaway_jobs j SET state='uncertain' WHERE school_id=${school} AND kind=${kind}
+          AND state='dispatching' AND lease_until<clock_timestamp()
+          AND (${nominationId}::uuid IS NULL OR nomination_id=${nominationId}::uuid)
+          AND EXISTS (SELECT 1 FROM giveaway_nominations n WHERE n.school_id=j.school_id AND n.id=j.nomination_id
+            AND (${campaign}::text IS NULL OR n.campaign_key=${campaign}))`;
         const token = uuid();
         const rows = await sql`WITH candidate AS (
           SELECT j.id FROM giveaway_jobs j JOIN giveaway_nominations n ON n.school_id=j.school_id AND n.id=j.nomination_id
           WHERE j.school_id=${school} AND j.kind=${kind} AND n.erasure_requested_at IS NULL
+          AND (${campaign}::text IS NULL OR n.campaign_key=${campaign})
+          AND (${nominationId}::uuid IS NULL OR n.id=${nominationId}::uuid)
           AND (j.state='pending' OR (j.state='claimed' AND j.lease_until<clock_timestamp())) AND j.available_at<=clock_timestamp()
           AND NOT EXISTS (SELECT 1 FROM giveaway_jobs older WHERE older.school_id=j.school_id AND older.nomination_id=j.nomination_id
             AND older.kind=j.kind AND older.id<>j.id AND (older.state IN ('dispatching','uncertain') OR
