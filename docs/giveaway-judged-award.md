@@ -1,5 +1,27 @@
 # Community driving lesson award — working proposal, 9 October 2026
 
+## Confirmed owner direction (supersedes earlier proposals below)
+
+Fraser personally offers the lessons; CoachCarter's website manages nominations
+and applications. The owner chooses the recipient himself, exercising discretion
+within the published eligibility rules and two equally weighted criteria. He has
+declined an independent panel for this round and may consider one in future.
+The draft now describes that actual arrangement rather than promising a panel.
+Whether CAP's independent-judging requirement applies remains unresolved; this
+records the owner's decision, not a finding of exemption or compliance.
+
+Fraser will handle access, correction and deletion requests at
+fraser@coachcarter.uk. He approved deletion of unsuccessful nominations and
+application answers 90 days after closing, retention of necessary winner details
+while lessons are delivered, and separate management of promotional contacts and
+consent evidence from personal stories.
+
+Operational follow-up: the existing campaign-level retention mechanism does not
+yet distinguish winners or preserve separate opted-in marketing records. Do not
+activate it as though it implements this approved policy. Winner disposition,
+post-delivery retention, consent/suppression retention and provider cleanup need
+to be resolved before activation. No deletion or production activation occurred.
+
 Latest owner decision: applications close Sunday 11 October 2026 at midnight UK
 time at the end of Sunday (23:00 UTC on 11 October). The winner has five days from notification to respond; after
 that, a new winner will be selected if no response is received, using the same

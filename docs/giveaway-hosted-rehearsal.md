@@ -1,11 +1,19 @@
 # Private hosted rehearsal — 9 October 2026
 
-Latest build: `dpl_77WikeJaZ5ZqtEaGvDCVghFT3r7h`,
-https://coachcarter-giveaway-rehearsal-fg9suw01u.vercel.app. This includes the later
+Latest build: `dpl_87ve2snCHwJN9wbQmk7YghgkbhJH`,
+https://coachcarter-giveaway-rehearsal-ng1xd4cay.vercel.app. This includes the later
 price, employment, copy, cookie notice and CTA docking fixes plus the disabled
 [integration runner](giveaway-integration-runner.md). Hosted admin login, protected
 review, unauthenticated cron rejection and disabled integration controls passed.
 Use this origin rather than the historical URLs below.
+
+Latest owner-approved copy: Fraser personally offers the lessons and chooses the
+recipient within the published eligibility and equally weighted criteria. Fraser
+handles privacy requests; unsuccessful stories/entries have a 90-day retention
+policy and necessary winner details are kept during lesson delivery. Four hosted
+pages passed copy verification. This is a wording/decision update, not activation
+of retention automation or a finding that CAP rules do not apply. See the latest
+direction in [the award document](giveaway-judged-award.md).
 
 Nominator optional email/SMS consent and staff withdrawal are implemented in this
 build; see [the consent contract](giveaway-nominator-consent.md). Hosted browser
