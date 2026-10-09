@@ -84,3 +84,26 @@ References checked 9 October 2026:
 Continue the existing release branch. A future deployment from main must include
 these giveaway changes; main has not yet been merged. Record the deployed commit,
 deployment and live gate verification below after opening.
+
+Opening completed from commit `34c5d05da603fcacdd0fe40b32bd0cd527a69153`.
+Vercel deployment `dpl_GvUoawKSh3uxQcaSZg6Aw1a4r8SA` reached READY with the
+www.coachcarter.uk and coachcarter.uk aliases assigned. Production API and worker
+flags are true; automation and retention flags remain false. A guarded Neon
+transaction enabled only school 1's entry/integration/invitation switches and
+the matching campaign. CRM and provisioning remained disabled.
+
+Both isolated browser tests passed (nomination through private application and
+staff review; cookie/tracking behaviour). Live checks returned 200 for homepage,
+admin sign-in and four campaign pages, with draft labels removed. Config reports
+open=true and the exact approved deadline. Unauthenticated review returns 401;
+a nomination request without CSRF protection returns 403. The live mobile form
+is visible, both optional consent boxes are unchecked, and no page errors were
+observed. Verification did not submit a real nomination or send an email.
+The first genuine nomination and requested email delivery still need operational
+confirmation when they occur. The ignored HTTP receipt is
+`tmp/giveaway-production-opening-http.json`.
+
+To pause new entries, disable the school giveaway entry flag and campaign row;
+keep existing private access and privacy routes available. To pause sending,
+disable the school invitation/integration switches. Prior inert deployment:
+`dpl_FjxRk55cwVWCqfjumufTe78Qgqru` (its pages still say draft).
