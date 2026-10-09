@@ -32,3 +32,18 @@ nominator's recorded confirmation, with nominee notice included in the email.
 Validation covers real SQL commit before dispatch, one invitation across retries,
 stored permission validation, public handler scoping, persistence after provider
 failure, existing suppression and tenancy boundaries, and browser form flow.
+
+## Deployment receipt
+
+Commit `133d9ba49c5b8bc89ee64bd3f24dceab7f5b0d93` deployed to production as
+`dpl_5wUHBvgzDMmtbmWP7UmsBpTqbSAc`, READY with www.coachcarter.uk assigned.
+School 1's invitation permissionMode is `nomination`; invitation sending remains
+enabled and CRM/provisioning remain false. No environment secrets or cron
+schedules changed. There were zero nominations before and after release, so no
+backfill was needed or performed.
+
+52 API/database tests and the isolated browser test passed. Live checks verified
+automatic-email wording, visible mobile form, unchecked optional consent, open
+entry config, the Sunday midnight deadline, unauthenticated review rejection and
+CSRF rejection. No production test nomination or message was created: actual
+inbox delivery remains unverified pending the first genuine nomination.
