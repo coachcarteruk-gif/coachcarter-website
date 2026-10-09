@@ -1,0 +1,457 @@
+[
+  {
+    "file": "api/giveaway.js",
+    "bytes": 1193,
+    "sha256": "6c882866791df1ad4b963a9a75b5c8e325103f3ca3efab91d6fdc87b49f6b513"
+  },
+  {
+    "file": "tools/giveaway/database.cjs",
+    "bytes": 18696,
+    "sha256": "b4982513cfe7a57951aa01139df695cdc60ff44a1ef45f66f12fba3bf8bb66a7"
+  },
+  {
+    "file": "api/_giveaway-privacy.js",
+    "bytes": 3075,
+    "sha256": "c421d7a0d761825c03fa6fbbd3c5bc0ee8b9f4a8a11a5854524d08540d4c5b98"
+  },
+  {
+    "file": "tools/giveaway/domain.cjs",
+    "bytes": 8643,
+    "sha256": "8d1f13d93906c07aa60750ec91752eba12c89ac72c6c82897c48fbdfae73f37a"
+  },
+  {
+    "file": "tools/giveaway/privacy-references.cjs",
+    "bytes": 1195,
+    "sha256": "fefb1c19831cce41bcaa1b5a3ba9cb0daefd939c0a4b004b3ca567ef5185bcce"
+  },
+  {
+    "file": "tools/giveaway/highlevel-sync.cjs",
+    "bytes": 12637,
+    "sha256": "955c089bbaa8d520a495440a44566fef61c679ed134022817fe5795f85515b31"
+  },
+  {
+    "file": "api/_giveaway-handler.js",
+    "bytes": 9120,
+    "sha256": "080552c0c5833a31ec631064439b00f8202459fc4425a1c02fe29e501c46dff1"
+  },
+  {
+    "file": "api/_auth.js",
+    "bytes": 13565,
+    "sha256": "60ec2f457380d388b835847bbed2a4a95a4dba03f5c4c74e5def19082bc97be4"
+  },
+  {
+    "file": "api/_csrf.js",
+    "bytes": 6642,
+    "sha256": "635f081009a2d822c808c248d0e29a6c80eb8d48a48d66efd62faa69fd25faee"
+  },
+  {
+    "file": "api/_tenant.js",
+    "bytes": 3701,
+    "sha256": "9b7bd2ae6dfe4230d46280d9921186957537a3797ed050edc0396240c43e056a"
+  },
+  {
+    "file": "api/_rate-limit.js",
+    "bytes": 3056,
+    "sha256": "f2eb7bb9724052aa9e601503c056ab9a2ac03d3c7bcfd407da8c06437eaa7d2a"
+  },
+  {
+    "file": "api/_audit.js",
+    "bytes": 1159,
+    "sha256": "f22cacf5600170e542c51c9d55bb112c27adcd1ebfe3c6c6873774c576dd6a60"
+  },
+  {
+    "file": "api/_error-alert.js",
+    "bytes": 7625,
+    "sha256": "8daa8a22c0a3856985d7b1029e9e6279b8dd8cddf2ac52bab9724ed80018a8ee"
+  },
+  {
+    "file": "api/_auth-helpers.js",
+    "bytes": 3596,
+    "sha256": "65ceb3b03300e7216fb5bda7f307384debe030704c688b9f0daa723cb07d096a"
+  },
+  {
+    "file": "api/_notification-log.js",
+    "bytes": 2976,
+    "sha256": "aff317c0f6f365e601307b562d2dadd48c68950d8b06081eae1eefa45cbd3c6d"
+  },
+  {
+    "file": "api/config.js",
+    "bytes": 5978,
+    "sha256": "27541e35f74bc66d3babea8f65d27ff8532f509bcea238a26ba504f9986c96bd"
+  },
+  {
+    "file": "api/_pricing-helpers.js",
+    "bytes": 13040,
+    "sha256": "7d429c4009df791712e6036cbce25be170bb268137eb551dbed994a2ad6a6629"
+  },
+  {
+    "file": "api/_post-trial-discount.js",
+    "bytes": 13905,
+    "sha256": "9dc514c96a6b0d8ae75b279ffc652bf7f74163a41367157e4aa6ba74d7238bd9"
+  },
+  {
+    "file": "api/_booking-status.js",
+    "bytes": 1613,
+    "sha256": "5eef502c780dc7d6514c94e7c1dfac7640f8dd4f42a2d0214e2adcdf074223d3"
+  },
+  {
+    "file": "api/_full-curriculum.js",
+    "bytes": 11828,
+    "sha256": "65a7cf5302c4bd09b9f4ae7598e75819a62ad95b9e19a7261958ecc2655b1ff7"
+  },
+  {
+    "file": "api/admin.js",
+    "bytes": 261935,
+    "sha256": "44a84e1082d53be3fc5e3e657cd153d4bd7b112737d0c418cfc4f9537b18a647"
+  },
+  {
+    "file": "api/_learner-test-details.js",
+    "bytes": 4835,
+    "sha256": "117f986604d05e5114b031aa2d7144976ae379107793f863c8d91eaffb3f51b7"
+  },
+  {
+    "file": "api/_instructor-schedule-warnings.js",
+    "bytes": 14916,
+    "sha256": "194f95207fd34c1e2fd3f7b6261ba23e4d81a5bde0d15394aadc1a2051fb8ff0"
+  },
+  {
+    "file": "api/_response-sanitizers.js",
+    "bytes": 419,
+    "sha256": "3dd565afc89af25179980ecb454d7d0a08cda383f284cb371c0c7a0a5349cf11"
+  },
+  {
+    "file": "api/_payout-helpers.js",
+    "bytes": 35838,
+    "sha256": "0e66ee7638d91e80516ecd8bb799027083abeccd995f3485db5cb3fd15c051f3"
+  },
+  {
+    "file": "api/_payout-engine-version.js",
+    "bytes": 1810,
+    "sha256": "45d1818eb71ce8aa4105c400815333675bb8ffd744da2238d0c211024db13cb0"
+  },
+  {
+    "file": "api/_authoritative-lesson-earning.js",
+    "bytes": 16664,
+    "sha256": "7a0f7174977f8b804d19a6ab4a24fb29670b2347c529cac8d51056a0e9838c5c"
+  },
+  {
+    "file": "api/_platform-balance.js",
+    "bytes": 29252,
+    "sha256": "b61f393d2dba07b8f4a2e71bfd20040e86e1b002ab69d72af4853c892bad72d2"
+  },
+  {
+    "file": "api/_refund-exposure-request-cycles.js",
+    "bytes": 1423,
+    "sha256": "6753b7c68920e523ac09bb83fb3c650abf13c6c86acd672b96e6e7422a695153"
+  },
+  {
+    "file": "api/_payout-email.js",
+    "bytes": 6996,
+    "sha256": "72d379d967de2943e9ab06b4ebc4abf97199cd6ef8fb5368858e2aa82bf2a7d7"
+  },
+  {
+    "file": "api/_whatsapp.js",
+    "bytes": 3121,
+    "sha256": "939b465c817cefcdd43117a475728a38cbd4e549b1d9f4782ed48923de7fef1d"
+  },
+  {
+    "file": "api/_credit-grant.js",
+    "bytes": 60496,
+    "sha256": "8eef24d4d73f0f7e1d17938f5c535a9c33ec880bed3c76bcb20dc1c33d88e431"
+  },
+  {
+    "file": "api/_stripe-clients.js",
+    "bytes": 11097,
+    "sha256": "55f43330ff12c48c9ff475f4292596436cfe1b9b46ee6138347562e5cbb60152"
+  },
+  {
+    "file": "api/_interim-v1-payout.js",
+    "bytes": 121411,
+    "sha256": "1b671f6fac61048c3521179dded7c95ed073daba30634c3bbc5baa5f2c619912"
+  },
+  {
+    "file": "api/_db-transaction.js",
+    "bytes": 2349,
+    "sha256": "93e688d502ad8660fe7296d18931853bba145127066e9eb37048d33a9d3f57ce"
+  },
+  {
+    "file": "api/_stripe-fee.js",
+    "bytes": 8764,
+    "sha256": "d0173c42d66d6e6eee6bf3cbc356b8ed358045aadf0ba77ed677f9c916b089e2"
+  },
+  {
+    "file": "api/_payout-overview.js",
+    "bytes": 3400,
+    "sha256": "695d465119a89ba358e7cebf56dfc8f0365fe461eda2b67d58834754e1cd5f7c"
+  },
+  {
+    "file": "api/_admin-credit-contracts.js",
+    "bytes": 7491,
+    "sha256": "ff7a76355b9f0fcb60fcffba2f6e14a044b02179fcc14f2c6433aab3b9a73f68"
+  },
+  {
+    "file": "api/_admin-credit-goodwill.js",
+    "bytes": 3562,
+    "sha256": "f8abe31c92023f2010cc40ae295b55edfef389072fb344d6133eef58b8fe9962"
+  },
+  {
+    "file": "api/_admin-credit-reconciliation.js",
+    "bytes": 17893,
+    "sha256": "319b557460d1fe766872b2b8de44c369c52830e54a0ad9aaa22a33570339613a"
+  },
+  {
+    "file": "api/_admin-credit-reconciliation-stripe.js",
+    "bytes": 7051,
+    "sha256": "00a0442fd6774baf1a9ffa08336dbcb452c7aa5d0a354368cb7bc37e7ca764f6"
+  },
+  {
+    "file": "api/_refund-planner.js",
+    "bytes": 30777,
+    "sha256": "06a40784a0bc3c05e2f7eb35e87d3a5d09b8d4bc6f0bce50f2db403d8b315783"
+  },
+  {
+    "file": "api/_refund-executor.js",
+    "bytes": 14939,
+    "sha256": "2d65517904df4bd04f73dcb5d3de1d8c9e0b6456d02ec39db52946f2cac29f67"
+  },
+  {
+    "file": "api/_refund-manual-bank.js",
+    "bytes": 14066,
+    "sha256": "d13af9a3c35a7f323f4a89b86fbf24a57bee0fe5a7358b15561b9965782f9a5c"
+  },
+  {
+    "file": "api/_refund-events.js",
+    "bytes": 11834,
+    "sha256": "7764fe3caaa2112de3f7fdb0b3f34b6612cb51f7b25df64cc6b70988096412cc"
+  },
+  {
+    "file": "api/_refund-incident-readiness.js",
+    "bytes": 9361,
+    "sha256": "9c06b70941403dd7cd3e3645dc62edd1c9076f1b523ab6fad3ea243ca3c9a1f3"
+  },
+  {
+    "file": "api/_refund-incident-repair.js",
+    "bytes": 18376,
+    "sha256": "fb70c40a7ded61c17b7ed3fb1191caf57c7aafddfebcd63ddb3928a5d70a3c9c"
+  },
+  {
+    "file": "api/_refund-notes.js",
+    "bytes": 6723,
+    "sha256": "9fc80a2c821bcbe6137adc126868f97bae52110cb706c0ecc931c8ed9160e290"
+  },
+  {
+    "file": "api/_gdpr.js",
+    "bytes": 19987,
+    "sha256": "b16558c3716101bcfe288e71f52de369a8e6cd6f55c53590ebd73e4aee9304b9"
+  },
+  {
+    "file": "api/_travel-time.js",
+    "bytes": 8930,
+    "sha256": "68cd6f6a9a39fd7d3b6964004322177cd4b17d5880472188093ea3b7b7dbe422"
+  },
+  {
+    "file": "api/_delivered-duration-correction.js",
+    "bytes": 19940,
+    "sha256": "eba415384c4de27d574e0901e9dd2c38ffadff0ec6b1ecfb5f271c6c72494f55"
+  },
+  {
+    "file": "api/_pence-allocator.js",
+    "bytes": 4216,
+    "sha256": "7b2e60885ef7488c3a9a6ecf3bb71a26132c7ee3425752ca758a76d7913fc5a3"
+  },
+  {
+    "file": "api/_bcs-fifo.js",
+    "bytes": 8928,
+    "sha256": "e168b3c3ffc469b72f3307c60fedbcbe336c856b9d55812ed3d3533e33dfa14c"
+  },
+  {
+    "file": "api/_flexible-package-ledger.js",
+    "bytes": 28684,
+    "sha256": "93c68501784dfdaec1a67c1396b73c61dcc0edd39bc5fcd53cd8458eb2920b49"
+  },
+  {
+    "file": "api/_payout-v2-shadow.js",
+    "bytes": 21706,
+    "sha256": "6f869d928c3a2a7c298017d07cc8cb7d746c48ea470d9e402db3d825234cd017"
+  },
+  {
+    "file": "api/_payout-v2-earning-planner.js",
+    "bytes": 31824,
+    "sha256": "6b5feb48f258aef62a607acb9ace1bb39e723bbd0841ab902888a37aeeb1af9a"
+  },
+  {
+    "file": "api/_payout-v2-contracts.js",
+    "bytes": 4821,
+    "sha256": "2c59cce46e387ca4994bb7c11aea8fa3167f7ffa7cf04845d91d5b4d4eef22b4"
+  },
+  {
+    "file": "api/_payout-v2-recovery.js",
+    "bytes": 12578,
+    "sha256": "311baa71c450fa03c43a02e76d1af47ee5e446911d7f3b4ebc6c6a915e341286"
+  },
+  {
+    "file": "api/_bcs-booking-plan.js",
+    "bytes": 4405,
+    "sha256": "494644ba66597ce04b0368e27f8ecd8fbc4993ac177e66b2141b1f4fefe9d962"
+  },
+  {
+    "file": "api/_referral-code.js",
+    "bytes": 2072,
+    "sha256": "f64146f9c59124c600310249a772ab5f6d223fd97e4751e744d35b65e3856049"
+  },
+  {
+    "file": "api/_bcs-refund-marker.js",
+    "bytes": 1587,
+    "sha256": "72a2eacf4a9abc1dd2e0221c11b572727efece55f3893ffd77b018c78205225c"
+  },
+  {
+    "file": "api/_instructor-switch-transfer.js",
+    "bytes": 4551,
+    "sha256": "d790284b4f2acac997ba43d2ee82ea168d4069277f2bd9173d6589985bb96058"
+  },
+  {
+    "file": "api/_booking-extension-invalidation.js",
+    "bytes": 1840,
+    "sha256": "fb81a16cff35c736262fbb445501c82a17278853949ddea0a80db9ed599d32b8"
+  },
+  {
+    "file": "api/_instructor-reschedule-slot.js",
+    "bytes": 16599,
+    "sha256": "fef86e57aa94276a71209a67c59963e279b461c435b9deaf76c3afce49a6b892"
+  },
+  {
+    "file": "api/_lesson-type-helpers.js",
+    "bytes": 830,
+    "sha256": "f7b13e0832466acae2f8f1ce6485ff7060fe936bff6b2f68221bf4a2b7f55e42"
+  },
+  {
+    "file": "api/_stripe-launch-shadow-fixture.js",
+    "bytes": 15969,
+    "sha256": "d7d5a75d4a91298483b528aa23dbff1a59e5afa53c69b0c3a4017f69007f99e2"
+  },
+  {
+    "file": "api/_trial-funnel-report.js",
+    "bytes": 20760,
+    "sha256": "54763daa3e4eff1f0429ce1db56fa0e1223171cf9214a812a37bafdfa1040eb4"
+  },
+  {
+    "file": "api/_contacts-export.js",
+    "bytes": 6628,
+    "sha256": "3241772bdb8c2c69e1e1bb3582f7cd43bd1ac289e19e07e92d83d3cde2390054"
+  },
+  {
+    "file": "api/_password.js",
+    "bytes": 6555,
+    "sha256": "632d8515aea9e042e278539cf735ab081fe36b4a7fb42a615168527d9b5d3527"
+  },
+  {
+    "file": "middleware.js",
+    "bytes": 7017,
+    "sha256": "558c379714fafa909056311cd8c442f1b3254d15d13215b1ddf4412db4fc86a0"
+  },
+  {
+    "file": "package.json",
+    "bytes": 3165,
+    "sha256": "923bb6df2d2661d1cdd8f75712d3a1e7fde3d9c9d2ef2359c53b83baeca65542"
+  },
+  {
+    "file": "package-lock.json",
+    "bytes": 74070,
+    "sha256": "04bb92e8d410ce022a114dbca4a0acfce7f5d8d0078947b3633df77c914ceffd"
+  },
+  {
+    "file": "public/cookie-consent.js",
+    "bytes": 10862,
+    "sha256": "47217dd68398bf69c789a380e9b1253ad65d295301d894fb8f96e55aafe49585"
+  },
+  {
+    "file": "public/posthog-loader.js",
+    "bytes": 7825,
+    "sha256": "bc7e072080f9d3dfeb9fc962189d709724098a229b0482366ce5337ab1d92415"
+  },
+  {
+    "file": "public/sidebar.js",
+    "bytes": 66643,
+    "sha256": "588e2a3e48fd66910e69f1031d09cd9b400f1eb30991543ea78df48a6a91336a"
+  },
+  {
+    "file": "public/shared/branding.js",
+    "bytes": 2365,
+    "sha256": "d6e7dcd777eb55394ea69512078cb97fb3bc7d8489ca4f01562e2e655b388a54"
+  },
+  {
+    "file": "public/shared/font-swap.js",
+    "bytes": 1023,
+    "sha256": "ad7086ffcd7d07ca6c121ce22962b7124f33faacd7b57fb6e509198db155ba5e"
+  },
+  {
+    "file": "public/admin/login.html",
+    "bytes": 8455,
+    "sha256": "9e3896a85c9fa87c8fe68ffbdd410c25dbcdd69877193540ee6e5fe8c2f9aff3"
+  },
+  {
+    "file": "public/admin/login.js",
+    "bytes": 8251,
+    "sha256": "644e5edc10dc2248067e23c936ea4618a02cddbf0ce59a48c5c28363459357e1"
+  },
+  {
+    "file": "public/Logo.png",
+    "bytes": 40988,
+    "sha256": "fe5f7a18ef9866459706ccaf880dd92fb0265730733be4475cb77686bbb8bcf5"
+  },
+  {
+    "file": "public/giveaway/app.js",
+    "bytes": 8544,
+    "sha256": "1b635a03c2b29004192f76b4c0bc40844e772a7e5dbc4e0b3a7aff2840bbe5f4"
+  },
+  {
+    "file": "public/giveaway/apply.html",
+    "bytes": 12095,
+    "sha256": "6e1d6f0d6c455b8f69ef05760a0a33ac03d3ca71a96ef34927988f2786de77ef"
+  },
+  {
+    "file": "public/giveaway/body.ttf",
+    "bytes": 656568,
+    "sha256": "d636e4683231f931eda222d588e944d082bfd3bdba02f928bee461c0f185b251"
+  },
+  {
+    "file": "public/giveaway/heading.ttf",
+    "bytes": 408496,
+    "sha256": "413e7357809ddd12fd80a96a8a396de0e401638d4acd3cb3e37532f0472ac682"
+  },
+  {
+    "file": "public/giveaway/index.html",
+    "bytes": 8240,
+    "sha256": "9f8e9b851cec1a8cbcfb035311505ccd29211e0b59a97c39960906fd13bb3e41"
+  },
+  {
+    "file": "public/giveaway/privacy.html",
+    "bytes": 5423,
+    "sha256": "d3c254256a75905edd2103feffb8c1b9ded2d3339dc0d8470ed667bed8621152"
+  },
+  {
+    "file": "public/giveaway/review.html",
+    "bytes": 1512,
+    "sha256": "4eb8318348dd4b1c44c1d8ffa81a23a84ad6981fd223e200579ca8182b622486"
+  },
+  {
+    "file": "public/giveaway/review.js",
+    "bytes": 3653,
+    "sha256": "a006d5e9afd4a3e3e89b11c791022385e5e388071e0183ef1c4af48c8dadd192"
+  },
+  {
+    "file": "public/giveaway/style.css",
+    "bytes": 10647,
+    "sha256": "37c1c6c200662bffe90bc67f07773c52440489569dfb0aa8d2430190d064eb05"
+  },
+  {
+    "file": "public/giveaway/terms.html",
+    "bytes": 6778,
+    "sha256": "dbd44ea59a032333ff895f901012ecbc15afdff27c6480314afe7bee71b05eb8"
+  },
+  {
+    "file": "vercel.json",
+    "bytes": 322,
+    "sha256": "e1af054a7c126f47aa1889f0051e8707f4907d8e9868fd850c81a172df8b18bc"
+  }
+]
