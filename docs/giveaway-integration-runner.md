@@ -1,5 +1,28 @@
 # Giveaway integration runner — 9 October 2026
 
+## Current deadlines — owner approved 10 October
+
+Nominations close Wednesday 14 October 2026 at 18:00 Europe/London
+(`2026-10-14T17:00:00Z`); applications close Saturday 17 October at 18:00
+Europe/London (`2026-10-17T17:00:00Z`). Planned winner announcement: Monday
+19 October. These replace the former shared 11 October cutoff and 12 October
+announcement wherever recorded in earlier historical receipts.
+
+The nomination cutoff is trusted school configuration `giveaway.nomination_closes_at`;
+the database nomination transaction checks it against its clock. Public config
+returns `nomination_deadline` and `nominations_open` separately from application
+`deadline`/`open`. Existing private links and applications remain open until the
+campaign's `closes_at`. Both email templates use that application deadline.
+CRM projection now takes its deadline from the loaded SQL campaign, avoiding stale
+fallback dates. No schema migration or new permission was required.
+
+The production dates were updated atomically with an admin audit. The existing
+90-day manual retention review is now due 15 January 2027 at 17:00 UTC.
+Automatic cleanup remains off. No new test submissions or emails were generated.
+Boundary/domain, SQL, API and CRM suites cover 90 passing checks after updating
+the old closure-date fixture; the changed SQL/CRM checks were rerun successfully.
+Release commit: `c60e1ef149199ae20f643371eec9eb310e6c09a0`.
+
 The server now composes invitation permission checks, the durable invitation
 queue, exact HighLevel contact matching, separately gated contact provisioning
 and CRM projection. `tools/giveaway/integration.cjs` provides a one-nomination
