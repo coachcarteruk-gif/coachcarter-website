@@ -179,3 +179,32 @@ added. Identity conflicts and uncertain outcomes still require operator review;
 activation does not promise that an ambiguous identity can be silently merged.
 Private verification evidence: ignored `tmp/giveaway-auto-sync-postflight.json`
 and `tmp/giveaway-auto-sync-http-idle.json`. Automatic cleanup remains OFF.
+
+### Final public flow verification — 10 October
+
+The owner requested a live end-to-end check. A clearly labelled `TEST ONLY`
+nominee/nominator pair was submitted through the production browser form using
+owner-controlled Gmail aliases and reserved fictional mobile numbers. Both
+marketing choices remained unchecked. Nomination
+`f3e520c1-ce48-4e1d-ad0b-b301bbfedc44` was created at 09:49:20 UTC.
+Resend reports both the nominee invitation and nominator confirmation as
+`delivered`, each sent once, with the same private application link. This verifies
+provider delivery, not whether the recipient opened the email or its inbox folder.
+
+The delivered link opened the correct application; browser submission succeeded
+at 09:50:50 UTC. Answers explicitly identify it as a system test excluded from
+judging, with a postcode outside the eligible districts. Automatic scheduling
+created the HighLevel record at 09:55:47 UTC after the ordinary five-minute
+contact-search indexing backoff. No manual CRM execution or claim reset was used.
+Record `6aca0ba182354debaaf87fc0` shows `submitted`, links the correct nominee and
+nominator, and retains only the six allowed projection fields. Detailed answers
+remain on the website behind its authorised review link.
+
+Both new contacts retain DND. Neither role has email or SMS marketing permission,
+and the earlier test's withdrawal remains effective. Production retention was
+read back as false. The labelled test is retained; no cleanup was performed.
+Readback evidence is in ignored `tmp/final-flow-verification.json`, with browser
+confirmation screenshots. Private email links and credentials are not committed.
+All three CRM events had succeeded by 09:57:45 UTC. Final readback still showed
+one object, two associations and the same two once-sent email receipts; no extra
+provider operations were created while the remaining events drained.
