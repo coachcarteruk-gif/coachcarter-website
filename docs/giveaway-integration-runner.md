@@ -151,3 +151,31 @@ that a contact conflict does not starve a later entry, withdrawn consent is
 preserved, another school is untouched, and no invitation/suppression/cleanup
 work is dispatched. Production activation evidence is recorded below after
 release verification.
+
+### Production activation verified
+
+Deployment `dpl_Hv5EDbcD2hWsRryzAsAo6n3Q2ymL` is READY on the production domains,
+from release commit `d5a4cf6b77187cc0766c73c43a1fda924babea01`; main was not merged.
+Vercel's Cron Jobs page confirms the enabled every-minute giveaway schedule.
+Production flags were read back: API/WORKER/AUTOMATION true, worker school 1,
+RETENTION false. School 1 CRM and contact provisioning are enabled with review
+reference `owner-approved-auto-sync-20261010`; invitation settings were preserved.
+Activation was audited atomically with the scoped configuration update.
+
+An explicitly named `automation-verification-20261010` CRM job for the existing
+submitted test was queued at 09:41:08 UTC. The hosted scheduler completed it at
+09:41:45 UTC on its first attempt, without a manual worker invocation after
+activation. Its ID is `c9e6dc5b-8450-46e7-ad3b-c34d6a7e4c96`. The existing three
+provider operations and their timestamps were unchanged: no duplicate object,
+association or contact write. Both contacts remain DND-enabled, both nominee
+marketing channels are blocked, original invitation receipts are unchanged,
+and the separate suppression job remains pending. There were no other pending
+CRM entries at activation. A later authenticated HTTP check returned `idle`;
+unauthenticated cron access returned 401 and public giveaway routes returned 200.
+
+The post-deploy runtime scan found only the existing pg SSL-mode compatibility
+warning, not an execution failure. No drain or separate alerting automation was
+added. Identity conflicts and uncertain outcomes still require operator review;
+activation does not promise that an ambiguous identity can be silently merged.
+Private verification evidence: ignored `tmp/giveaway-auto-sync-postflight.json`
+and `tmp/giveaway-auto-sync-http-idle.json`. Automatic cleanup remains OFF.
