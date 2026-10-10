@@ -45,18 +45,19 @@ function createDatabase({ transaction, vault }) {
       AND token_hash=${hash(String(token || ''))} AND erasure_requested_at IS NULL FOR UPDATE`;
     if (!row) unavailable(); return row;
   }
-  async function open(sql, school, campaign) {
+  async function open(sql, school, campaign, nominationDeadline = null) {
     const [row] = await sql`SELECT * FROM giveaway_campaigns WHERE school_id=${school} AND campaign_key=${campaign}
-      AND enabled=TRUE AND closes_at>clock_timestamp() FOR SHARE`;
-    if (!row) throw new InputError({}, 410, 'Applications have closed or are not yet open.');
+      AND enabled=TRUE AND closes_at>clock_timestamp()
+      AND (${nominationDeadline}::timestamptz IS NULL OR ${nominationDeadline}::timestamptz>clock_timestamp()) FOR SHARE`;
+    if (!row) throw new InputError({}, 410, nominationDeadline ? 'Nominations have closed or are not yet open.' : 'Applications have closed or are not yet open.');
     return row;
   }
   return {
-    async nominate(school, campaign, body, { afterCreated, confirmNominator = false } = {}) {
+    async nominate(school, campaign, body, { afterCreated, confirmNominator = false, nominationDeadline = null } = {}) {
       scope(school); if (body.website) return { ok: true };
       const data = nomination(body);
       const created = await transaction(async sql => {
-        await open(sql, school, campaign);
+        await open(sql, school, campaign, nominationDeadline);
         const id = uuid(), token = crypto.randomBytes(32).toString('base64url');
         const [{ timestamp }] = await sql`SELECT clock_timestamp() AS timestamp`;
         data.permission = { wording: WORDING.permission, version: 'giveaway-v1', accepted_at: timestamp };

@@ -116,14 +116,17 @@ function connectApplicationHeading() {
 
 async function start() {
   const config = await api('config');
-  const closes = new Date(config.deadline);
-  const midnight = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(closes) === '00:00:00';
-  const deadline = midnight
-    ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'full' }).format(new Date(closes.getTime() - 1)) + ' at midnight (end of Sunday)'
-    : new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'full', timeStyle: 'short' }).format(closes);
-  document.querySelectorAll('[data-deadline]').forEach(el => { el.textContent = deadline; });
+  function formatDeadline(value) {
+    const closes = new Date(value);
+    const midnight = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(closes) === '00:00:00';
+    return midnight
+      ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'full' }).format(new Date(closes.getTime() - 1)) + ' at midnight (end of day)'
+      : new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'full', timeStyle: 'short' }).format(closes);
+  }
+  document.querySelectorAll('[data-deadline]').forEach(el => { el.textContent = formatDeadline(config.deadline); });
+  document.querySelectorAll('[data-nomination-deadline]').forEach(el => { el.textContent = formatDeadline(config.nomination_deadline || config.deadline); });
   if ($('nomination')) {
-    if (!config.open) { $('nomination').hidden = true; showResult('Applications have closed.', 'Thank you for your interest in our first giveaway.'); }
+    if (!(config.nominations_open ?? config.open)) { $('nomination').hidden = true; showResult('Nominations have closed.', config.open ? 'Already nominated? You can still apply using your private email link until ' + formatDeadline(config.deadline) + ' (UK time).' : 'Thank you for your interest in our first giveaway.'); }
     else { connect($('nomination'), 'nominate'); $('nomination').hidden = false; }
   }
   if ($('application')) {

@@ -118,7 +118,7 @@ test('unexpected provider response is uncertain and secrets in errors never esca
   assert.doesNotMatch(JSON.stringify(f.store.data.giveaway_crm), /SECRET|person@example/);
 });
 test('closed incomplete state, invitation scope, unsafe URLs and disabled default', async () => {
-  const f = fixture(); assert.equal(projection(f.row, null, f.config, new Date('2026-10-12')).application_status, 'closed_incomplete');
+  const f = fixture(); assert.equal(projection(f.row, null, f.config, new Date('2026-10-17T17:00:00Z')).application_status, 'closed_incomplete');
   assert.throws(() => projection(f.row, { school_id: 2 }, f.config), { code: 'invitation_mismatch' });
   assert.throws(() => projection(f.row, null, { ...f.config, reviewUrl: 'https://example.test/?token=SECRET' }));
   delete f.config.enabled; assert.deepEqual(await f.worker().run(f.row.id, f.plans), { status: 'disabled' }); assert.equal(f.calls.length, 0);

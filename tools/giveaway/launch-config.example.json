@@ -10,6 +10,7 @@
   "giveaway": {
     "enabled": false,
     "campaign_key": "lifelong-learner-pass-2026-10",
+    "nomination_closes_at": "2026-10-14T17:00:00.000Z",
     "origin": "https://www.coachcarter.uk",
     "integration": {
       "enabled": false,
@@ -30,8 +31,8 @@
   "campaign": {
     "school_id": 1,
     "campaign_key": "lifelong-learner-pass-2026-10",
-    "closes_at": "2026-10-11T23:00:00.000Z",
-    "retain_until": "2027-01-09T23:00:00.000Z",
+    "closes_at": "2026-10-17T17:00:00.000Z",
+    "retain_until": "2027-01-15T17:00:00.000Z",
     "enabled": false
   }
 }

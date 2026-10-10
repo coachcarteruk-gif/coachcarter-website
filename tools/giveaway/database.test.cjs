@@ -43,6 +43,18 @@ function bounded(f, id, overrides={}) {
     providerAllowsInvitation:async()=>true,...overrides});
 }
 
+test('SQL nomination cutoff rejects new entries while existing nominees can still apply',async t=>{
+ const f=await setup(t);const {row,token}=await f.seeded();
+ const cutoff=new Date(Date.now()-1000).toISOString();
+ await assert.rejects(f.db.nominate(1,'test',{...nominate(),nominee_email:'new@example.test'},{nominationDeadline:cutoff}),{status:410});
+ assert.equal((await f.pg.query('SELECT count(*)::int AS count FROM giveaway_nominations')).rows[0].count,1);
+ assert.equal((await f.db.inspect(1,token)).completed,false);
+ await f.db.apply(1,token,apply());assert.equal((await f.db.inspect(1,token)).completed,true);
+ await f.pg.exec("UPDATE giveaway_campaigns SET closes_at=now()-interval '1 second' WHERE school_id=1");
+ assert.equal((await f.db.inspect(1,token)).completed,true);
+ await assert.rejects(f.db.nominate(1,'test',nominate(),{nominationDeadline:new Date(Date.now()+86400000).toISOString()}),{status:410});
+});
+
 test('automatic nomination invitation commits before sending and sends exactly once without a manual request',async t=>{
   const f=await setup(t),body=nominate();let callbacks=0,sends=0;
   const afterCreated=async nominationId=>{
@@ -448,7 +460,7 @@ test('composite foreign keys reject cross-school job associations', async t => {
 test('database-backed CRM worker persists operation receipts across application update and worker recreation', async t => {
   const f = await setup(t), { row, token } = await f.seeded();
   const config = { enabled: true, environment: 'rehearsal', schoolId: 1, locationId: 'fake-location', campaignKey: 'test', reviewUrl: 'https://example.test/review',
-    deadline: new Date(Date.now()+86400000).toISOString(), associations: { nominee: { id: 'nominee-link', first: 'nomination' }, nominator: { id: 'nominator-link', first: 'nomination' } } };
+    deadline: '2000-01-01T00:00:00Z', associations: { nominee: { id: 'nominee-link', first: 'nomination' }, nominator: { id: 'nominator-link', first: 'nomination' } } };
   const contacts = Object.fromEntries(['nominee','nominator'].map(role => [role, { id: role, locationId: config.locationId, ...identity(row.nomination[role]), dnd: true }]));
   const plans = Object.fromEntries(['nominee','nominator'].map(role => [role, { kind: 'existing', id: role, schoolId: 1, locationId: config.locationId, identityHash: digest(identity(contacts[role])) }]));
   let record, writes=0;
@@ -461,6 +473,7 @@ test('database-backed CRM worker persists operation receipts across application 
   } };
   const run = () => processOne({ db: f.db, schoolId: 1, kind: 'crm', enabled: true, handler: crmHandler({ config, transport, plansFor: async () => plans }) });
   assert.equal((await run()).status, 'succeeded'); assert.equal(writes,3);
+  assert.equal(record.properties.application_status,'awaiting_application'); // SQL campaign date overrides a stale fallback.
   await f.db.apply(1, token, apply()); assert.equal((await run()).status, 'succeeded'); assert.equal(writes,4);
   assert.equal(record.properties.application_status,'submitted'); assert.equal((await run()).status,'idle');
   const state = (await f.pg.query('SELECT crm_state FROM giveaway_nominations')).rows[0].crm_state;

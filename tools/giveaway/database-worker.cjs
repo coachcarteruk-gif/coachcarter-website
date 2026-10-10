@@ -48,7 +48,7 @@ function crmHandler({ config, transport, plansFor, now }) {
       outbox: [{ nomination_id: source.id, school_id: source.school_id, status: source.invitation_status }],
       giveaway_crm: source.crm_state.operations ? source.crm_state : { operations: {}, contacts: {} },
     }, async save() { await persist(this.data.giveaway_crm); } };
-    const result = await createSync({ store, config, transport, now }).run(source.id, plans);
+    const result = await createSync({ store, config: {...config, deadline: source.closes_at || config.deadline}, transport, now }).run(source.id, plans);
     return { accepted: result.status === 'synced' };
   };
   handler.prepare=prepare;

@@ -34,6 +34,13 @@ test('real handler and SQL cover nomination, invitation session, application, wi
   assert.equal((await call('apply',{}, {headers:{host:'giveaway.example.test',origin:'https://giveaway.example.test','content-type':'application/json'}})).code,403);
  });
  const body={submission_key:crypto.randomUUID(),nominee_name:'Alex',nominee_phone:'07700900123',nominee_email:'alex@example.test',nominator_name:'Jamie',nominator_phone:'07700900456',nominator_email:'jamie@example.test',reason:'Private reason',permission:true};
+ await t.test('nomination cutoff is server configured and cannot be bypassed by the request',async()=>{
+  const cutoff=new Date(Date.now()-1000).toISOString();
+  await pg.query("UPDATE schools SET config=jsonb_set(config,'{giveaway,nomination_closes_at}',$1::jsonb) WHERE id=1",[JSON.stringify(cutoff)]);
+  const config=(await call('config')).data;assert.equal(config.open,true);assert.equal(config.nominations_open,false);assert.equal(config.nomination_deadline,cutoff);
+  assert.equal((await call('nominate',{...body,nominationDeadline:'2099-01-01T00:00:00Z'})).code,410);
+  await pg.exec("UPDATE schools SET config=config #- '{giveaway,nomination_closes_at}' WHERE id=1");
+ });
  await t.test('nomination reaches SQL exactly once on retry',async()=>{
   await pg.query("UPDATE schools SET config=jsonb_set(config,'{giveaway,integration}',$1::jsonb) WHERE id=1",[JSON.stringify({enabled:true,invitation:{enabled:true,permissionMode:'nomination'},crm:{enabled:true}})]);
   workerFailure=true;

@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
-const DEADLINE = '2026-10-11T23:00:00.000Z'; // Midnight at the end of Sunday 11 October, Europe/London (BST).
+const DEADLINE = '2026-10-17T17:00:00.000Z'; // 6pm Europe/London (BST).
+const NOMINATION_DEADLINE = '2026-10-14T17:00:00.000Z';
 const WORDING = Object.freeze({
   nominator_email: 'Email me about CoachCarter offers and future giveaways where I can nominate someone.',
   nominator_sms: 'Text me about CoachCarter offers and future giveaways where I can nominate someone.',
@@ -66,13 +67,16 @@ function application(body) {
 function createService(store, options = {}) {
   const now = options.now || (() => new Date());
   const deadline = options.deadline || DEADLINE;
+  const nominationDeadline = options.nominationDeadline || options.deadline || NOMINATION_DEADLINE;
   const open = () => now().getTime() < Date.parse(deadline);
+  const nominationsOpen = () => open() && now().getTime() < Date.parse(nominationDeadline);
   const checkOpen = () => { if (!open()) throw new InputError({}, 410, 'Applications have closed. Thank you for your interest.'); };
   const find = (schoolId, token) => store.data.nominations.find(n => n.school_id === schoolId && n.token_hash === hash(String(token || '')));
   return {
-    config: () => ({ deadline, open: open(), prize: 'One free automatic driving lesson per week until the winner passes their practical driving test.' }),
+    config: () => ({ deadline, nomination_deadline: nominationDeadline, open: open(), nominations_open: nominationsOpen(), prize: 'One free automatic driving lesson per week until the winner passes their practical driving test.' }),
     async nominate(schoolId, body) {
       checkOpen();
+      if (!nominationsOpen()) throw new InputError({}, 410, 'Nominations have closed.');
       if (body.website) return { ok: true };
       const data = nomination(body);
       // One invitation per nominee/nominator pair. The public response never reveals duplicates.
@@ -121,4 +125,4 @@ function createService(store, options = {}) {
     },
   };
 }
-module.exports = { createService, InputError, nomination, application, WORDING, DEADLINE };
+module.exports = { createService, InputError, nomination, application, WORDING, DEADLINE, NOMINATION_DEADLINE };

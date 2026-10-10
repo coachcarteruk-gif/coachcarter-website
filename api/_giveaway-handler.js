@@ -28,13 +28,18 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
       const [campaign] = await sql`SELECT closes_at,enabled,closes_at>clock_timestamp() AS open FROM giveaway_campaigns
         WHERE school_id=${schoolId} AND campaign_key=${config.campaign_key}`;
       if (!campaign && !privacyAction) return fail(res,404,'CAMPAIGN','This giveaway is not available.');
+      const nominationDeadline = config.nomination_closes_at || campaign?.closes_at;
+      if (['config','nominate'].includes(action) && !Number.isFinite(Date.parse(nominationDeadline)))
+        return fail(res,503,'CONFIG','Please try again shortly.');
       if (req.method === 'POST') {
         if (req.headers.origin !== config.origin || !String(req.headers['content-type']).startsWith('application/json') || !verifyCsrf(req)) return fail(res,403,'CSRF','Reload this page and try again.');
         if (JSON.stringify(req.body || {}).length>20000) return fail(res,413,'SIZE','This submission is too large.');
       }
       if (action === 'config') {
         ensureCsrfCookie(req,res);
-        return res.json({ok:true,deadline:campaign.closes_at,open:config.enabled===true && campaign.enabled && campaign.open});
+        const open = config.enabled===true && campaign.enabled && campaign.open;
+        return res.json({ok:true,deadline:campaign.closes_at,open,
+          nomination_deadline:nominationDeadline, nominations_open:open && now()<Date.parse(nominationDeadline)});
       }
       if (['record-invitation-request','run-integration'].includes(action)) {
         const admin=requireAuth(req,{roles:['admin']});
@@ -110,6 +115,7 @@ function createHandler({ db, sql, vault, enabled = false, runIntegration, now = 
       if (action === 'nominate') {
         let applicationUrl;
         const result = await db.nominate(schoolId,config.campaign_key,req.body || {}, {
+        nominationDeadline,
         confirmNominator: config.integration?.invitation?.confirmationEnabled===true,
         afterCreated: async (nominationId, invitationToken) => {
           const link = new URL('/giveaway/apply.html',config.origin);
