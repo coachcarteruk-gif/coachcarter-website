@@ -96,9 +96,24 @@ async function runNextIntegration(options) {
     AND (j.state='pending' OR (j.state='claimed' AND j.lease_until<clock_timestamp())) AND j.available_at<=clock_timestamp()
     AND ((j.kind='crm' AND ${config.crm?.enabled===true}) OR (j.kind='invitation' AND ${config.invitation?.enabled===true}
       AND n.application IS NULL AND n.nomination->'permission'->'invitation_request' IS NOT NULL))
+    AND NOT EXISTS(SELECT 1 FROM giveaway_jobs older WHERE older.school_id=j.school_id AND older.nomination_id=j.nomination_id
+      AND older.kind=j.kind AND older.state IN ('pending','claimed') AND (older.created_at,older.id)<(j.created_at,j.id))
     AND NOT EXISTS(SELECT 1 FROM giveaway_jobs held WHERE held.school_id=n.school_id AND held.nomination_id=n.id
       AND (held.state IN ('dispatching','uncertain') OR (held.state='claimed' AND held.lease_until>clock_timestamp())))
     ORDER BY j.available_at,j.created_at,j.id LIMIT 1`;
-  return next?runIntegration({...options,config:{...config,nominationId:next.id}}):{status:'idle'};
+  if(!next)return {status:'idle'};
+  const result=await runIntegration({...options,config:{...config,nominationId:next.id}});
+  // Provisioning happens before CRM dispatch. Back off the still-pending job
+  // through the normal claim/defer fence so one identity conflict cannot starve
+  // other entries. Never reset a dispatch or an uncertain provider journal.
+  if(result.crm?.status==='provisioning_review_required'){
+    const job=await options.db.claim(schoolId,'crm',{campaignKey,nominationId:next.id});
+    if(job)await options.db.deferClaim(schoolId,job.id,job.claim_token);
+  }
+  return result;
 }
-module.exports={runIntegration,runNextIntegration,resendPermission,requested,nominationPermitsInvitation};
+function scheduledCrmConfig(settings,schoolId){
+  return {...settings.integration,schoolId,campaignKey:settings.campaign_key,
+    invitation:{enabled:false,confirmationEnabled:false}};
+}
+module.exports={runIntegration,runNextIntegration,scheduledCrmConfig,resendPermission,requested,nominationPermitsInvitation};

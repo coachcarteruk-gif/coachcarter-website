@@ -2,6 +2,7 @@
   "version": 2,
   "functions": { "api/schools.js": { "includeFiles": "public/test-booked.html" } },
   "crons": [
+    { "path": "/api/cron-giveaway-integrations", "schedule": "* * * * *" },
     { "path": "/api/reminders?action=send-due", "schedule": "0 * * * *" },
     { "path": "/api/reminders?action=daily-schedule", "schedule": "0 19 * * *" },
     { "path": "/api/ical-sync", "schedule": "*/15 * * * *" },

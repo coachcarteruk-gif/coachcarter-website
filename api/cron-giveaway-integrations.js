@@ -2,9 +2,10 @@ const {verifyCronAuth}=require('./_auth');
 const {withCronLock}=require('./_cron-lock');
 const {Pool}=require('pg');
 const {createDatabase,poolTransactions,tagged,tokenVault}=require('../tools/giveaway/database.cjs');
-const {runNextIntegration}=require('../tools/giveaway/integration.cjs');
+const {runNextIntegration,scheduledCrmConfig}=require('../tools/giveaway/integration.cjs');
 
-// Deployment alone never schedules or enables this worker. One nomination per tick.
+// CRM-only worker, one nomination/job per tick. Explicit environment and school
+// gates are required even when the deployment installs the cron schedule.
 module.exports=async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(req.method!=='GET')return res.status(405).json({error:true,code:'METHOD'});
@@ -19,9 +20,9 @@ module.exports=async(req,res)=>{
       const [row]=await sql`SELECT config->'giveaway' AS giveaway FROM schools WHERE id=${schoolId}`;
       const settings=row?.giveaway;
       if(settings?.integration?.enabled!==true)return {ok:true,status:'disabled'};
-      const config={...settings.integration,schoolId,campaignKey:settings.campaign_key,invitation:{...settings.integration.invitation,origin:settings.origin}};
+      const config=scheduledCrmConfig(settings,schoolId);
       const result=await runNextIntegration({db:createDatabase({transaction,vault}),sql,transaction,vault,config,
-        credentials:{resend:process.env.RESEND_API_KEY,highlevel:process.env.HIGHLEVEL_GIVEAWAY_API_KEY}});
+        credentials:{highlevel:process.env.HIGHLEVEL_GIVEAWAY_API_KEY}});
       return {ok:true,...result};
     }finally{await pool.end();}
   });

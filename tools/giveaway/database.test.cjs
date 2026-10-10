@@ -563,3 +563,40 @@ test('missing and string nominator choices never grant consent',async t=>{
  const row=(await f.pg.query('SELECT * FROM giveaway_nominations')).rows[0];assert.ok(row.nomination.nominator_consents.every(c=>c.granted===false));
  assert.equal(await f.db.mayMarket(1,row.id,'email','nominator'),false);
 });
+
+test('scheduled CRM drains other entries after identity conflict and preserves opt-outs without sending or cleanup',async t=>{
+ const f=await setup(t),{row:blocked}=await f.seeded();
+ const body={...nominate(),nominee_email:'second@example.test',nominee_phone:'07700900789',nominator_email:'second-nominator@example.test',nominator_phone:'07700900987'};
+ await f.db.nominate(1,'test',body);await f.db.nominate(2,'test',nominate());
+ const second=(await f.pg.query("SELECT * FROM giveaway_nominations WHERE school_id=1 AND id<>$1",[blocked.id])).rows[0];
+ const invitation=(await f.pg.query("SELECT payload FROM giveaway_jobs WHERE school_id=1 AND nomination_id=$1 AND kind='invitation'",[second.id])).rows[0];
+ const token=f.vault.open(invitation.payload.sealed_token,'1:'+second.id);await f.db.apply(1,token,apply());await f.db.withdraw(1,token);
+ const before=(await f.pg.query("SELECT * FROM giveaway_consents ORDER BY school_id,nomination_id,channel")).rows;
+ const {scheduledCrmConfig}=require('./integration.cjs');
+ const config=scheduledCrmConfig({campaign_key:'test',integration:{enabled:true,
+  invitation:{enabled:true,confirmationEnabled:true},provisioning:{enabled:true,creationApproved:true,reviewReference:'test-approved'},
+  crm:{enabled:true,environment:'rehearsal',locationId:'fake-location',reviewUrl:'https://example.test/review',associations:{nominee:{id:'nominee',first:'contact'},nominator:{id:'nominator',first:'contact'}}}}},1);
+ const contacts=[],writes=[];let record;
+ const providers={invitationTransport:{send:async()=>{throw Error('No scheduled email allowed');}},search:async({field,value})=>{
+  if(value===blocked.nomination.nominee.phone.replace(/^0/,'+44'))return {total:1,contacts:[{id:'conflict',locationId:'fake-location',email:'unrelated@example.test',phone:value}]};
+  const found=contacts.filter(c=>c[field]===value);return {total:found.length,contacts:found};
+ },crmTransport:{request:async(method,path,body)=>{
+  if(method!=='GET')writes.push({method,path,body});
+  if(method==='POST'&&path==='/contacts/'){const contact={...body,id:'created-'+contacts.length};contacts.push(contact);return {contact};}
+  if(method==='GET'&&path.startsWith('/contacts/'))return {contact:contacts.find(c=>c.id===path.split('/')[2])};
+  if(method==='POST'&&path.endsWith('/records')){record={...body,id:'record'};return {record};}
+  if(method==='POST'&&path==='/associations/relations')return {id:'relation-'+writes.length};
+  throw Error('Unexpected provider operation');
+ }}};
+ const run=()=>runNextIntegration({...f,sql:tagged(f.pg),config,providers});
+ assert.equal((await run()).crm.status,'provisioning_review_required');
+ assert.equal(writes.length,0);
+ assert.equal((await run()).crm.status,'succeeded');
+ assert.equal((await run()).crm.status,'succeeded');
+ assert.equal((await run()).status,'idle');
+ assert.equal(writes.length,5);assert.equal(record.properties.application_status,'submitted');assert.ok(contacts.every(c=>c.dnd===true));
+ assert.ok((await f.pg.query("SELECT state FROM giveaway_jobs WHERE kind IN ('invitation','suppression') OR school_id=2")).rows.every(j=>j.state==='pending'));
+ assert.deepEqual((await f.pg.query('SELECT * FROM giveaway_consents ORDER BY school_id,nomination_id,channel')).rows,before);
+ assert.equal(await f.db.mayMarket(1,second.id,'email'),false);assert.equal(await f.db.mayMarket(1,second.id,'sms'),false);
+ assert.doesNotMatch(JSON.stringify(writes),/Private application reason|Private nomination reason|tags|DELETE/);
+});

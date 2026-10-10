@@ -84,3 +84,70 @@ controls and unscheduled cron entry point, with all hosted integration activatio
 gates off. The existing public form-to-admin browser journey and disabled-control
 check passed locally. Across the offline suite and subsequent targeted reruns,
 107 tests passed; the browser journey also passed after the admin UI change.
+
+## 10 October: submitted production test synced
+
+Owner removed the conflicting older HighLevel contact after reviewing its linked
+history. Exact email and phone searches then returned no contacts for either test
+identity. The existing bounded integration runner was enabled in the operator's
+configuration for school 1 and nomination
+`6090a9d2-97ab-421f-8d2d-963324c84535` only. School-wide CRM/provisioning flags
+were not changed; this is not campaign-wide automatic sync activation.
+
+The run completed at 09:01 UTC with exactly five HighLevel writes: two new
+DND-enabled contacts, one giveaway object, and two role associations:
+
+- Nominee contact: `FfEHQoaEvQQwrKRyHDWv`.
+- Nominator contact: `lFI1yIpTPdMYZosePqpu`.
+- Giveaway record: `6ac9fed6552c329ceffa980e`.
+- Nominee relation: `6ac9fed7668d8db57cb1ebd6`.
+- Nominator relation: `6ac9fed71f895c120b0c2585`.
+
+Provider readback verified exact identities, both DND flags, application status
+`submitted`, invitation status `accepted_by_provider`, and the website review
+link. All three pending CRM jobs succeeded and a repeat run was idle. The newly
+created contacts initially were not yet visible in exact search; preparation
+safely deferred before object dispatch. The normal five-minute backoff was
+honoured, with no resetting of claims or uncertain operations.
+
+The nominee's email withdrawal and SMS suppression remain effective. Consent
+rows and both successful invitation job receipts were unchanged. The suppression
+outbox remains pending; it was not falsely marked processed. No invitation was
+resent, no marketing workflow was enabled, and automatic cleanup remains off.
+Current workflow inventory/dates matched the earlier trigger review and all six
+marketing workflows remained drafts. Detailed application answers remain on the
+website; the CRM object contains only the existing six-field projection.
+
+Execution and readback receipt: ignored
+`tmp/submitted-test-sync-receipt-v2.json`. An earlier pre-dispatch audit-format
+failure made no provider writes and its receipt is retained separately. Required
+operator audit entries identify the nomination in JSON details (the audit table's
+`target_id` column is numeric). No production code, schema or deployment changed.
+
+## 10 October: automatic CRM schedule
+
+The owner approved automatic HighLevel syncing for all giveaway entries while
+keeping marketing opt-outs and automatic cleanup off. The deployment now schedules
+`/api/cron-giveaway-integrations` every minute. The endpoint builds an explicitly
+CRM-only configuration: nominee and nominator invitation sending are disabled
+for cron invocations, and no Resend credential is supplied. Existing public
+invitation dispatch remains separate. This worker never processes suppression or
+cleanup jobs, changes subscriptions, removes DND, or sends marketing.
+
+The activation requires production `GIVEAWAY_AUTOMATION_ENABLED=true`, existing
+worker enablement, fixed school 1, and the school campaign's CRM/provisioning
+flags. `GIVEAWAY_RETENTION_ENABLED=false` remains the cleanup gate. Each tick
+handles at most one queued CRM job for the configured campaign; the queue also
+covers later applications and drains existing pending CRM work. Identity clashes
+are deferred for review and cannot block unrelated entries indefinitely. Held or
+uncertain provider writes retain their existing fences and are never reset.
+New contacts start with DND enabled; matching existing contacts are not overwritten.
+Website consent and persistent suppression remain authoritative. Enabling CRM
+sync does not enable marketing, even for entrants who checked optional consent.
+
+Validation: 92 existing focused API/SQL/contact/CRM checks passed, followed by
+the new SQL-backed scheduled-CRM test and cron-auth check. The new test proves
+that a contact conflict does not starve a later entry, withdrawn consent is
+preserved, another school is untouched, and no invitation/suppression/cleanup
+work is dispatched. Production activation evidence is recorded below after
+release verification.
