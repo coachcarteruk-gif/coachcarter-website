@@ -1,5 +1,40 @@
 # Qualifying questionnaire and two-route trial funnel
 
+## Live simplification handoff — 14 October 2026
+
+Owner requested removal of the video and qualifying questions from `/free`,
+explicitly retaining optional practical-test details and course preferences.
+The live CoachCarter questionnaire was disabled through its existing authenticated
+admin settings; public-config now returns `trial_questionnaire: null`. The separate
+`test_date_trial_funnel_enabled` flag remains true to preserve optional test details.
+Existing requests/intakes, booking rules and other school settings remain intact.
+
+Video removal uses `public/content/free-trial-vsl.json` (`enabled: false`). The
+loader already fetches this manifest with `cache: 'no-store'`. No schema/API change
+or migration is required. Twenty-one focused browser checks passed for direct
+booking, optional preferences, video behavior and returning-browser cache handling;
+syntax/encoding checks also passed. No live booking was submitted for testing.
+
+The active instructor continuation at `tmp/diary-integration-checkout`, branch
+`codex/instructor-diary-integration`, HEAD `f4cef74`, remains untouched with all its
+uncommitted work. Read its AGENTS.md, `docs/approved-demo-mechanics.md`, maintained
+session handoff and `preview/README.md` before resuming that separate local-only work.
+Its integrated preview remains `preview/integrated-review-server.cjs`; ports are
+session-specific. This live free-trial request does not authorise its deployment.
+
+Release checkouts under the archive workspace:
+- `tmp/free-trial-simple-live`, branch `codex/free-trial-simple-live`, based on
+  latest main `91b3e07`; draft PR #497 preserves this change for later integration.
+- `tmp/free-trial-production-hotfix`, branch `codex/free-trial-production-hotfix`,
+  commit `96d1bcaca8206996441cf02c2088af40cc0abb2d`, based on the actual live commit
+  `3053551b063cf4048f4326e7f99a0cf824f43a18`. Only the video manifest and its test
+  fixture differ. This preserves the already-live giveaway code absent from main.
+
+Vercel production deployment: `dpl_Dqq8t33u3VjuPJAt46Ycmc3B8qVS` in project
+`prj_ikyhcHbDHOR4jDQuZUeGFv3pw1Lk`. Do not deploy main to land this small PR without
+reconciling the live giveaway release. Do not merge unfinished instructor work.
+No additional product task is required for this requested simplification.
+
 ## Maintenance boundary
 
 Schools opt in through strict `config.trial_questionnaire.enabled`. When enabled, public free-trial booking requires server qualification; missing/invalid answers cannot fall back to old direct booking. General trial requests are enquiries, never slot holds, confirmed appointments, lesson requests or paid conversions. Store immutable submitted evidence separately from current profiles, and preserve original request attribution when linking a manual booking. Centres and displayed budget amounts are school configuration, never lesson-price mutations. Keep staff-authorised booking/offer and disabled-tenant behaviour. See [final contract and production gates](qualifying-trial-funnel.md).
