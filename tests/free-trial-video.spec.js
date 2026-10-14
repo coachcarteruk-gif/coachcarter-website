@@ -4,6 +4,8 @@ const manifest = require('../public/content/free-trial-vsl.json');
 
 test.use({ serviceWorkers: 'block' });
 test.beforeEach(async ({ page }) => {
+  // Exercise retained optional-player behavior independently of the live disabled default.
+  await page.route('**/content/free-trial-vsl.json', route => route.fulfill({ json: { ...manifest, enabled: true } }));
   await page.route(/^https:\/\//, route => route.fulfill({ status: 204, body: '' }));
   await page.route('**/api/schools?action=public-config**', route => route.fulfill({ json: { ok: true, trial_questionnaire: questionnaireConfig, local_date: '2026-09-22' } }));
   await page.route('**/api/slots?action=trial-window-context**', route => route.fulfill({ json: { from: '2026-09-22', to: '2026-10-20', days_ahead: 28 } }));
