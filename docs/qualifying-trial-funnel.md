@@ -31,7 +31,13 @@ Release checkouts under the archive workspace:
   fixture differ. This preserves the already-live giveaway code absent from main.
 
 Vercel production deployment: `dpl_Dqq8t33u3VjuPJAt46Ycmc3B8qVS` in project
-`prj_ikyhcHbDHOR4jDQuZUeGFv3pw1Lk`. Do not deploy main to land this small PR without
+`prj_ikyhcHbDHOR4jDQuZUeGFv3pw1Lk`, verified READY and assigned to both live domains.
+Live `/free` verification confirmed no video/questions, available dates/times,
+retained optional fields and selection updating the Book my free trial button.
+Public endpoints confirmed video disabled, questionnaire null and optional-test flag
+true. No live booking was submitted. Screenshot: production checkout's
+`tmp/live-free-trial.png` (local evidence only).
+Do not deploy main to land this small PR without
 reconciling the live giveaway release. Do not merge unfinished instructor work.
 No additional product task is required for this requested simplification.
 
