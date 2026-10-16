@@ -639,6 +639,14 @@
       "filename": "078_giveaway_privacy.sql",
       "checksum": "fed208ef29420a6c8c6d34781c42112bdd27a932c58ffd5869495a49d952bee0",
       "execution": "numbered"
+    },
+    {
+      "id": "079",
+      "order": 80,
+      "prefix": "079",
+      "filename": "079_booking_source_unknown_fee.sql",
+      "checksum": "541c10c89482987c5c830cca0224effe08a3fb05cdb0e168c43ed99fe58bc649",
+      "execution": "numbered"
     }
   ]
 }
