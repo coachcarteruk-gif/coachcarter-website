@@ -2,6 +2,13 @@
 
 ## Latest recorded status
 
+16 October 2026: owner-approved migration 079 makes the BCS processing-fee
+column nullable, matching the existing pencilled-offer handler's unknown-fee
+contract. Applied through the authoritative runner after recovery snapshot
+`snap-late-bird-abbns755`; postflight has 79 applied and no pending entries.
+Existing financial-table hashes and learner balances/bookings are unchanged.
+See [investigation and release receipt](purchase-confirmation-hotfix-20261016.md).
+
 9 October 2026: explicitly approved production giveaway migrations 077 and 078
 applied through the governed runner after snapshot `snap-lucky-thunder-abn4fwoy`.
 Preflight found exactly those two pending; postflight reports 78 applied and no

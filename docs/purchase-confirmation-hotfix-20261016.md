@@ -2,7 +2,8 @@
 
 ## Status
 
-Prepared and tested; **not applied to production**. Owner requested investigation
+**Applied and verified in production at 08:04 BST on 16 October 2026**, after
+the owner's explicit migration approval. Owner requested investigation
 and a live fix without touching unfinished branches, then clarified that accepted
 paid proposals appeared correct and missing emails were the concern.
 
@@ -65,15 +66,25 @@ This repair does not establish SMTP inbox delivery or reactivate SMS.
   postflight 79 applied, none pending, column nullable.
 - Before/after row hashes identical for all 487 BCS rows, 427 credit transactions,
   681 bookings, 82 instructor balance rows and 12 Flexible package sources.
-- Production remains at 078 with a non-nullable BCS fee. No financial mutation
-  or production migration has been performed by this task.
+- Initial production preflight was at 078 with a non-nullable BCS fee; see the
+  approved production receipt below for the completed release.
 
-## Remaining release gate
+## Approved production receipt
 
-The repository requires separate explicit production migration approval.
-After approval: revalidate the exact target and ledger (only 079 pending), create
-a recovery snapshot, apply with `scripts/migration-runner.js --apply-approved`,
-then verify the receipt, nullable column and unchanged learner balances/bookings.
+Owner explicitly approved applying the database correction to production and
+verifying it, keeping unfinished branches untouched. Read-only governed preflight
+confirmed exactly 079 pending. Recovery snapshot `snap-late-bird-abbns755` was
+created from the production branch at 07:04:03 UTC. The authoritative runner
+applied only 079 and recorded success at `2026-10-16T07:04:14.981Z`, checksum
+`541c10c89482987c5c830cca0224effe08a3fb05cdb0e168c43ed99fe58bc649`.
+Postflight reports 79 applied, none pending, nullable fee column and unchanged
+default 0. All five financial-table row hashes remained identical before/after.
+Learner 153 still has 360 Flexible minutes and scheduled bookings 792/796/797/798
+with 60/180/90/60 minutes respectively. No grant, refund, payout or message was
+created. No application redeploy was needed: the existing live handler already
+writes NULL when fee evidence is unavailable. The exact handler regression was
+verified on isolated PostgreSQL, not by creating another real customer payment.
+
 Direct production fingerprint is
 `32c8e09a13fff240b0e1af6bb4c063bce1ca02ec09b801242e9232c824123008`.
 Use private environment configuration; never print or commit credentials.
