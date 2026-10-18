@@ -384,7 +384,7 @@ test.describe('Simon interim v1 authority, isolation, and preservation', () => {
     expect(script).toContain('No Stripe read will occur.');
     expect(script).toContain('Date.now() - simonFlexibleEvidenceConfirmation.armedAt < 60000');
     expect(script).toContain('This cannot repair Viba, approve or pay a payout, create a transfer or refund, alter historical fee ledgers, or unpause Simon.');
-    expect(html).toContain('simon-payment-observation-replay');
+    expect(html).toMatch(/src="\/admin\/portal\.js\?v=[^"]+"/);
   });
 
   test('expected Flexible Hours source guard fails closed on identity drift', () => {
