@@ -197,6 +197,7 @@ async function validateInstructorRescheduleSlot(sql, {
   newDate,
   newStartTime,
   now = new Date(),
+  allowPickupTravelConflict = false,
   geocode = bulkGeocodeUK,
 }) {
   if (!isValidDate(newDate)) conflict('INVALID_NEW_DATE', 'new_date must be YYYY-MM-DD', 400);
@@ -401,7 +402,7 @@ async function validateInstructorRescheduleSlot(sql, {
     excludeBookingId: booking.id,
     geocode,
   });
-  if (travelConflict) {
+  if (travelConflict && allowPickupTravelConflict !== true) {
     conflict(
       'PICKUP_TRAVEL_CONFLICT',
       'That pickup location does not leave enough travel time from another lesson. Please choose another slot.',
@@ -410,7 +411,7 @@ async function validateInstructorRescheduleSlot(sql, {
     );
   }
 
-  return { targetInstructor, newEndTime, bookingDuration };
+  return { targetInstructor, newEndTime, bookingDuration, travelConflict };
 }
 
 module.exports = {

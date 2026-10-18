@@ -117,7 +117,6 @@ const {
   validateInstructorRescheduleSlot,
 } = require('./_instructor-reschedule-slot');
 const {
-  hoursUntilFlexibleLesson,
   moveFlexiblePackageBookingAllocations,
 } = require('./_flexible-package-ledger');
 const {
@@ -1628,7 +1627,7 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
               lt.duration_minutes,
               90
             )::int AS duration_minutes,
-           (lb.payment_method = 'flexible_package' OR EXISTS (
+           EXISTS (
              SELECT 1
                FROM recurring_slot_block_items rsbi
                JOIN recurring_slot_blocks rsb
@@ -1642,7 +1641,7 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
                 AND rsbi.instructor_id = lb.instructor_id
                 AND rsbi.status = 'booked'
            ) AS is_reserved_weekly_slot,
-           EXISTS (
+           (lb.payment_method = 'flexible_package' OR EXISTS (
              SELECT 1
                FROM flexible_package_booking_allocations fpba
               WHERE fpba.booking_id = lb.id
@@ -1671,22 +1670,6 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
   `;
   if (booking) booking.pickup_address = booking.effective_pickup_address || null;
   return booking || null;
-}
-
-function validateAdminFlexibleRescheduleNotice(booking) {
-  if (!booking?.is_flexible_package_booking) return;
-  const hoursUntil = hoursUntilFlexibleLesson({
-    scheduledDate: booking.scheduled_date,
-    startTime: booking.start_time,
-    schoolConfig: booking.school_config,
-  });
-  if (hoursUntil == null || hoursUntil < RESERVED_MOVE_NOTICE_HOURS) {
-    throw new InstructorRescheduleSlotError(
-      'FLEXIBLE_PACKAGE_RESCHEDULE_NOTICE_TOO_SHORT',
-      `Flexible Hours lessons can only be rescheduled with at least ${RESERVED_MOVE_NOTICE_HOURS} hours' notice.`,
-      409
-    );
-  }
 }
 
 async function handleAdminRescheduleOptions(req, res) {
@@ -1749,17 +1732,19 @@ async function handleAdminRescheduleAvailability(req, res) {
     if (booking.status !== SCHEDULED) {
       return res.status(409).json({ error: 'This booking is no longer available to reschedule.' });
     }
-    validateAdminFlexibleRescheduleNotice(booking);
+    // Admin-directed changes are exempt from the learner 48-hour notice rule.
     const availability = await validateInstructorRescheduleSlot(sql, {
       schoolId,
       booking,
       targetInstructorId,
       newDate,
       newStartTime,
+      allowPickupTravelConflict: true,
     });
     return res.json({
       ok: true,
       available: true,
+      travel_warning: availability.travelConflict || null,
       new_end_time: availability.newEndTime,
       instructor: { id: Number(availability.targetInstructor.id), name: availability.targetInstructor.name },
     });
@@ -1892,7 +1877,7 @@ async function handleAdminRescheduleBooking(req, res) {
       if (!booking) {
         throw new InstructorRescheduleSlotError('BOOKING_NOT_MANAGEABLE', 'Booking not found.', 404);
       }
-      validateAdminFlexibleRescheduleNotice(booking);
+      // Admin-directed changes are exempt from the learner 48-hour notice rule.
 
       const availability = await validateInstructorRescheduleSlot(txSql, {
         schoolId,
@@ -1900,6 +1885,7 @@ async function handleAdminRescheduleBooking(req, res) {
         targetInstructorId,
         newDate,
         newStartTime,
+        allowPickupTravelConflict: req.body?.confirm_pickup_travel === true,
       });
       const instructorChanged = Number(targetInstructorId) !== Number(booking.instructor_id);
 
@@ -1994,6 +1980,8 @@ async function handleAdminRescheduleBooking(req, res) {
           new_date: newDate,
           new_start_time: newStartTime,
           instructor_changed: instructorChanged,
+          pickup_travel_override: !!availability.travelConflict,
+          pickup_travel_conflict: availability.travelConflict || null,
         },
         schoolId,
         req,
