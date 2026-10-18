@@ -8,7 +8,7 @@ const { PGlite } = require('@electric-sql/pglite');
 // Execute the real loader SQL in PostgreSQL, without importing API transports.
 const source = fs.readFileSync(path.join(__dirname, '../api/admin.js'), 'utf8');
 const start = source.indexOf('async function loadAdminRescheduleBooking(');
-const end = source.indexOf('\nfunction validateAdminFlexibleRescheduleNotice', start);
+const end = source.indexOf('\nasync function handleAdminRescheduleOptions', start);
 assert.ok(start >= 0 && end > start);
 const loadBooking = vm.runInNewContext(`(${source.slice(start, end).trim()})`);
 

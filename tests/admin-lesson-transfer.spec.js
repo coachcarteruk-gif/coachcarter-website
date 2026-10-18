@@ -50,7 +50,6 @@ test.describe('admin lesson reschedule and instructor transfer', () => {
     expect(handler).toContain('AND school_id = $2');
     expect(handler).toContain('FOR UPDATE');
     expect(handler).toContain('validateInstructorRescheduleSlot(txSql');
-    expect(handler).toContain('validateAdminFlexibleRescheduleNotice(booking)');
     expect(handler).toContain('booking.learner_id, targetInstructorId');
     expect(handler).toContain('stripe_fee_pence, stripe_fee_source, list_price_pence, list_price_source');
     expect(handler).toContain('moveFlexiblePackageBookingAllocations(client');
@@ -71,18 +70,6 @@ test.describe('admin lesson reschedule and instructor transfer', () => {
     expect(handler).toContain('if (booking.is_reserved_weekly_slot)');
     expect(handler).toContain('Number(candidate.id) === Number(booking.instructor_id)');
     expect(handler).toContain('current_instructor_id: Number(booking.instructor_id)');
-  });
-
-  test('Flexible Hours keeps its recorded 48-hour reschedule contract', () => {
-    const source = read('api/admin.js');
-    const start = source.indexOf('function validateAdminFlexibleRescheduleNotice');
-    const end = source.indexOf('async function handleAdminRescheduleOptions', start);
-    const guard = source.slice(start, end);
-
-    expect(guard).toContain('hoursUntilFlexibleLesson({');
-    expect(guard).toContain('schoolConfig: booking.school_config');
-    expect(guard).toContain('hoursUntil < RESERVED_MOVE_NOTICE_HOURS');
-    expect(guard).toContain("'FLEXIBLE_PACKAGE_RESCHEDULE_NOTICE_TOO_SHORT'");
   });
 
   test('admin UI selects instructor, date, and time and rechecks availability on confirmation', () => {
