@@ -24,3 +24,15 @@
 - `book.html` shows a banner: "X slots hidden due to travel distance from your pickup address"
 - `book.html` shows an inline postcode prompt above the slot feed for learners without a pickup_address; saves to profile and re-fetches with travel filter
 - `setmore-sync.js` step 5d backfills `learner_users.pickup_address` from the learner's most recent booking if their profile field is empty
+
+## Admin rescheduling
+
+Admin availability previews show pickup-travel conflicts as warnings. The admin
+can confirm continuing after checking the journey; confirmation sends an explicit
+Boolean `confirm_pickup_travel`. Saving rechecks the schedule and travel conflict
+inside the existing transaction and records any overridden conflict in the
+`admin.reschedule_booking` audit. Without confirmation, a travel conflict still
+blocks saving. A newly detected conflict prompts confirmation before retrying.
+Changing instructor, date or time clears the prior warning acknowledgement.
+Actual lesson overlaps, other scheduling holds and instructor eligibility remain
+blocking. Instructor and learner flows do not receive this admin-only override.
