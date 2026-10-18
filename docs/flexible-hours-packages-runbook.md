@@ -21,7 +21,17 @@ it never invents Stripe identities. See [bank-transfer workflow and rollout](fle
 
 Hours are school-wide, do not expire and cannot transfer to another learner. The 10-hour option is a payment-convenience package for learners who prefer one payment over 10 separate payments when booking; at £55 per hour, it is not presented as a discount. Learners must use their spendable balance before starting another package Checkout. FIFO allocation still preserves every immutable source if historical returns or late payment success make sources coexist. A booking carries its delivering instructor and frozen allocated value into the normal scheduled/chargeable/refunded payout lifecycle. Purchase alone creates no earning or payout.
 
-Each booking uses Flexible Hours, Lesson Credit or Pay As You Go, never a blend. At 48+ hours, learner cancellation returns each exact allocation once. A 48+ hour reschedule atomically moves the exact allocation and frozen value to the replacement lesson, including a different active same-school instructor. Under 48 hours/no-show consumes it and leaves the booking payable. Durations not divisible by 30 minutes fail closed. Unused source units are refunded at their frozen rate; CoachCarter absorbs the original Stripe fee.
+Each booking uses Flexible Hours, Lesson Credit or Pay As You Go, never a blend. At 48+ hours, learner cancellation returns each exact allocation once. A learner 48+ hour reschedule atomically moves the exact allocation and frozen value to the replacement lesson, including a different active same-school instructor. Under 48 hours/no-show consumes it and leaves the booking payable. Durations not divisible by 30 minutes fail closed. Unused source units are refunded at their frozen rate; CoachCarter absorbs the original Stripe fee.
+
+Admin-directed rescheduling and instructor reassignment are exempt from the
+learner 48-hour notice rule, in both availability preview and confirmation.
+Existing authentication, school scope, future destination, instructor eligibility,
+clash checks and reserved-slot restrictions still apply. The existing atomic move
+preserves exact Flexible allocations and frozen value without a new charge or
+spendable-credit grant; `admin.reschedule_booking` records the responsible admin.
+The legacy allocation-return reason `rescheduled_48h_plus` is also used by this
+admin move and does not establish learner notice eligibility; consult its admin
+audit record. Learner late-cancellation and self-service rules are unchanged.
 
 Every learner receives access as soon as signed payment confirmation creates the entitlement. The checkout page presents the immediate-access request inside the single combined terms acceptance and records `terms_accepted = TRUE` plus `immediate_access_requested = TRUE`. The checkbox may use a concise customer-facing label only while the approved acknowledgement and immediate-access wording remain unchanged in the adjacent checkout disclosure and are programmatically associated with that checkbox; do not remove that wording or evidence when simplifying the UI.
 
