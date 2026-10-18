@@ -1628,7 +1628,7 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
               lt.duration_minutes,
               90
             )::int AS duration_minutes,
-           (lb.payment_method = 'flexible_package' OR EXISTS (
+           EXISTS (
              SELECT 1
                FROM recurring_slot_block_items rsbi
                JOIN recurring_slot_blocks rsb
@@ -1642,7 +1642,7 @@ async function loadAdminRescheduleBooking(sql, { bookingId, schoolId }) {
                 AND rsbi.instructor_id = lb.instructor_id
                 AND rsbi.status = 'booked'
            ) AS is_reserved_weekly_slot,
-           EXISTS (
+           (lb.payment_method = 'flexible_package' OR EXISTS (
              SELECT 1
                FROM flexible_package_booking_allocations fpba
               WHERE fpba.booking_id = lb.id
