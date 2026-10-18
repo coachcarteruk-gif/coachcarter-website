@@ -54,6 +54,30 @@ for (const [name, next, method] of [
   const request = { method, query: params, body: params };
   const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; } });
+  test(`${name}: travel warning requires explicit confirmation on save and is audited`, async () => {
+    const travelConflict = { direction: 'after', booking_id: 20, gap_minutes: 5, travel_minutes: 15 };
+    for (const confirmation of [undefined, false, 'true', true]) {
+      const { run, calls } = handler(name, next, { validateInstructorRescheduleSlot: async (_, args) => {
+        if (args.allowPickupTravelConflict !== true) {
+          throw new InstructorRescheduleSlotError('PICKUP_TRAVEL_CONFLICT', 'Travel warning', 409, travelConflict);
+        }
+        return { newEndTime: '19:30', targetInstructor: { id: 4, name: 'Target' }, travelConflict };
+      } });
+      const res = response();
+      await run({ ...request, body: { ...params, confirm_pickup_travel: confirmation } }, res);
+      if (method === 'GET') {
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.travel_warning, travelConflict);
+      } else if (confirmation === true) {
+        assert.equal(res.statusCode, 200);
+        assert.equal(calls.find(call => call.audit).audit.details.pickup_travel_override, true);
+        assert.equal(calls.find(call => call.audit).audit.details.pickup_travel_conflict, travelConflict);
+      } else {
+        assert.equal(res.statusCode, 409);
+        assert.equal(calls.some(call => call.move), false);
+      }
+    }
+  });
   test(`${name}: short-notice admin transfer reaches existing slot and funding checks`, async () => {
     const { run, calls } = handler(name, next);
     const res = response(); await run(request, res);

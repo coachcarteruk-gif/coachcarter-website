@@ -1739,10 +1739,12 @@ async function handleAdminRescheduleAvailability(req, res) {
       targetInstructorId,
       newDate,
       newStartTime,
+      allowPickupTravelConflict: true,
     });
     return res.json({
       ok: true,
       available: true,
+      travel_warning: availability.travelConflict || null,
       new_end_time: availability.newEndTime,
       instructor: { id: Number(availability.targetInstructor.id), name: availability.targetInstructor.name },
     });
@@ -1883,6 +1885,7 @@ async function handleAdminRescheduleBooking(req, res) {
         targetInstructorId,
         newDate,
         newStartTime,
+        allowPickupTravelConflict: req.body?.confirm_pickup_travel === true,
       });
       const instructorChanged = Number(targetInstructorId) !== Number(booking.instructor_id);
 
@@ -1977,6 +1980,8 @@ async function handleAdminRescheduleBooking(req, res) {
           new_date: newDate,
           new_start_time: newStartTime,
           instructor_changed: instructorChanged,
+          pickup_travel_override: !!availability.travelConflict,
+          pickup_travel_conflict: availability.travelConflict || null,
         },
         schoolId,
         req,

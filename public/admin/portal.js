@@ -771,6 +771,7 @@ let currentBookingFilter = '';
 let reservedGoodwillBookingId = null;
 let adminRescheduleBooking = null;
 let adminRescheduleValidationSeq = 0;
+let adminRescheduleTravelWarning = null;
 let adminRetroLessonTypes = [];
 
 async function loadBookings() {
@@ -1219,8 +1220,8 @@ function setAdminRescheduleStatus(message, type) {
   }
   el.textContent = message;
   el.style.display = 'block';
-  el.style.background = type === 'success' ? 'var(--green-bg)' : type === 'pending' ? 'var(--bg-soft, #f5f5f4)' : 'var(--red-bg)';
-  el.style.color = type === 'success' ? '#166534' : type === 'pending' ? 'var(--muted)' : '#991b1b';
+  el.style.background = type === 'success' ? 'var(--green-bg)' : type === 'warning' ? '#fff7ed' : type === 'pending' ? 'var(--bg-soft, #f5f5f4)' : 'var(--red-bg)';
+  el.style.color = type === 'success' ? '#166534' : type === 'warning' ? '#9a3412' : type === 'pending' ? 'var(--muted)' : '#991b1b';
 }
 
 async function openAdminReschedule(bookingId) {
@@ -1231,6 +1232,7 @@ async function openAdminReschedule(bookingId) {
   }
 
   adminRescheduleBooking = booking;
+  adminRescheduleTravelWarning = null;
   adminRescheduleValidationSeq += 1;
   document.getElementById('adminRescheduleSummary').innerHTML =
     '<strong>' + esc(booking.learner_name) + '</strong><br>' +
@@ -1281,6 +1283,7 @@ async function openAdminReschedule(bookingId) {
 function closeAdminReschedule() {
   adminRescheduleValidationSeq += 1;
   adminRescheduleBooking = null;
+  adminRescheduleTravelWarning = null;
   closeModal('modal-admin-reschedule');
 }
 
@@ -1292,6 +1295,7 @@ async function checkAdminRescheduleAvailability() {
   var newStartTime = document.getElementById('adminRescheduleStartTime').value.slice(0, 5);
   var submit = document.getElementById('adminRescheduleSubmitBtn');
   var sequence = ++adminRescheduleValidationSeq;
+  adminRescheduleTravelWarning = null;
   submit.disabled = true;
   document.getElementById('adminRescheduleEndTime').textContent = '-';
   if (!instructorId || !newDate || !newStartTime) {
@@ -1314,7 +1318,12 @@ async function checkAdminRescheduleAvailability() {
     if (!res.ok || !data.available) throw new Error(data.error || 'That slot is not available.');
 
     document.getElementById('adminRescheduleEndTime').textContent = String(data.new_end_time || '').slice(0, 5);
-    setAdminRescheduleStatus('Available - this will be checked again when you confirm.', 'success');
+    if (data.travel_warning) {
+      adminRescheduleTravelWarning = [bookingId, instructorId, newDate, newStartTime].join('|');
+      setAdminRescheduleStatus(adminPickupTravelWarning, 'warning');
+    } else {
+      setAdminRescheduleStatus('Available - this will be checked again when you confirm.', 'success');
+    }
     submit.disabled = false;
     var instructorChanged = instructorId !== Number(adminRescheduleBooking.currentInstructorId);
     document.getElementById('adminRescheduleTransferNote').textContent = instructorChanged
@@ -1327,6 +1336,8 @@ async function checkAdminRescheduleAvailability() {
   }
 }
 
+var adminPickupTravelWarning = 'Warning: there may not be enough travel time between this pickup and an adjacent lesson. You can continue if you have checked the journey with the instructor.';
+
 async function submitAdminReschedule() {
   if (!adminRescheduleBooking) return;
   var bookingId = adminRescheduleBooking.id;
@@ -1337,6 +1348,10 @@ async function submitAdminReschedule() {
     setAdminRescheduleStatus('Choose an instructor, date, and time.', 'error');
     return;
   }
+
+  var travelKey = [bookingId, instructorId, newDate, newStartTime].join('|');
+  var confirmPickupTravel = adminRescheduleTravelWarning === travelKey;
+  if (confirmPickupTravel && !window.confirm(adminPickupTravelWarning + '\n\nContinue with this change anyway?')) return;
 
   var btn = document.getElementById('adminRescheduleSubmitBtn');
   btn.disabled = true;
@@ -1350,10 +1365,17 @@ async function submitAdminReschedule() {
         booking_id: bookingId,
         new_instructor_id: instructorId,
         new_date: newDate,
-        new_start_time: newStartTime
+        new_start_time: newStartTime,
+        confirm_pickup_travel: confirmPickupTravel
       })
     });
     var data = await res.json();
+    if (!res.ok && data.code === 'PICKUP_TRAVEL_CONFLICT') {
+      adminRescheduleTravelWarning = travelKey;
+      setAdminRescheduleStatus(adminPickupTravelWarning + ' Select Reschedule lesson to confirm.', 'warning');
+      btn.disabled = false;
+      return;
+    }
     if (!res.ok) throw new Error(data.error || 'Failed to reschedule lesson');
     closeAdminReschedule();
     toast(data.message || 'Lesson rescheduled', 'success');
